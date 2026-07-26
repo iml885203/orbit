@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-ui test-e2e lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-ui test-e2e test-install lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -47,6 +47,9 @@ test-ui:
 test-e2e: build
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -v -count=1 ./app/ -run E2E
 
+test-install:
+	@./scripts/test-install.sh
+
 lint: lint-filenames
 	golangci-lint run ./...
 
@@ -90,6 +93,7 @@ preflight:
 	$(MAKE) ui test
 	go build ./...
 	go vet ./...
+	$(MAKE) test-install
 	$(MAKE) verify-types
 	$(MAKE) check-neutral
 	@echo "preflight OK - matches the CI gate"

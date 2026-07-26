@@ -28,6 +28,16 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 
 ## 安裝
 
+Repo 還是 private 時，請先登入 [GitHub CLI](https://cli.github.com/)：
+
+```bash
+gh api -H "Accept: application/vnd.github.raw+json" \
+  repos/iml885203/orbit/contents/scripts/install.sh | bash
+orbit init
+```
+
+Repo 公開後可改用不需登入的指令：
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init

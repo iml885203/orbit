@@ -41,6 +41,8 @@ orbit daemon restart
 從對應的 [GitHub Release](https://github.com/iml885203/orbit/releases)
 下載 `orbit-<os>-<arch>`（Windows 為 `.exe`）與 `checksums.txt`。驗證
 SHA-256 checksum 後，再把 binary 放到 `PATH`。
+Private 演練期間請從已登入的 GitHub CLI 執行 `gh release download`；匿名下載
+不可用時，installer 也會自動改用這個機制。
 
 ### Agent plugin
 

@@ -3,6 +3,9 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+# Private repository rehearsal:
+#   gh api -H "Accept: application/vnd.github.raw+json" \
+#     repos/iml885203/orbit/contents/scripts/install.sh | bash
 #
 # Env overrides:
 #   ORBIT_INSTALL_DIR   target dir (default: ~/.local/bin or /usr/local/bin)
@@ -62,6 +65,29 @@ sha256_file() {
   fi
 }
 
+download_asset() {
+  local asset="$1" destination="$2" url="$3"
+  if curl -fsSL "$url" -o "$destination"; then
+    return
+  fi
+  if [ -n "${ORBIT_BASE_URL:-}" ]; then
+    echo "download failed: ${url}" >&2
+    return 1
+  fi
+  if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+    echo "download failed: ${url}" >&2
+    echo "for a private repository, install and authenticate GitHub CLI (gh)" >&2
+    return 1
+  fi
+
+  echo "Anonymous download unavailable; retrying with authenticated GitHub CLI"
+  if [ "$VERSION" = "latest" ]; then
+    gh release download --repo "$REPO" --pattern "$asset" --output "$destination" --clobber
+  else
+    gh release download "$VERSION" --repo "$REPO" --pattern "$asset" --output "$destination" --clobber
+  fi
+}
+
 main() {
   local platform binary base_url url checksum_url dir tmp_dir tmp checksum_file
   local expected actual target
@@ -82,14 +108,8 @@ main() {
   trap 'rm -rf "$tmp_dir"' EXIT
   tmp="${tmp_dir}/${binary}"
   checksum_file="${tmp_dir}/checksums.txt"
-  if ! curl -fsSL "$url" -o "$tmp"; then
-    echo "download failed: ${url}" >&2
-    exit 1
-  fi
-  if ! curl -fsSL "$checksum_url" -o "$checksum_file"; then
-    echo "checksum download failed: ${checksum_url}" >&2
-    exit 1
-  fi
+  download_asset "$binary" "$tmp" "$url"
+  download_asset "checksums.txt" "$checksum_file" "$checksum_url"
 
   expected="$(awk -v name="$binary" '$2 == name || $2 == "*" name { print $1; exit }' "$checksum_file")"
   if [ -z "$expected" ]; then

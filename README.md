@@ -30,6 +30,17 @@ See [Why Orbit](docs/why-orbit.md) for design trade-offs and comparisons.
 
 ## Install
 
+While the repository is private, use an authenticated
+[GitHub CLI](https://cli.github.com/) session:
+
+```bash
+gh api -H "Accept: application/vnd.github.raw+json" \
+  repos/iml885203/orbit/contents/scripts/install.sh | bash
+orbit init
+```
+
+After the repository becomes public, the authentication-free command is:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init
