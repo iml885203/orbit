@@ -1,0 +1,399 @@
+package app
+
+import (
+	"fmt"
+	"os"
+	"sort"
+
+	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/spf13/cobra"
+)
+
+const inspectJSONSchemaVersion = "orbit.inspect.v1"
+
+const (
+	inspectReadinessConfigInvalid = "config_invalid"
+	inspectReadinessNeedsDaemon   = "needs_daemon"
+	inspectReadinessDegraded      = "degraded"
+	inspectReadinessConverging    = "converging"
+	inspectReadinessPartial       = "partial"
+	inspectReadinessReady         = "ready"
+)
+
+type inspectJSONData struct {
+	SchemaVersion      string                `json:"schema_version"`
+	Readiness          inspectReadiness      `json:"readiness"`
+	Daemon             inspectDaemonSummary  `json:"daemon"`
+	Env                inspectEnvSummary     `json:"env"`
+	Services           inspectServiceSummary `json:"services"`
+	Risks              []inspectRisk         `json:"risks"`
+	RecommendedActions []cli.JSONAction      `json:"recommended_actions"`
+}
+
+type inspectReadiness struct {
+	State   string `json:"state"`
+	Blocked bool   `json:"blocked"`
+	Summary string `json:"summary"`
+}
+
+type inspectDaemonSummary struct {
+	Running         bool   `json:"running"`
+	PID             int    `json:"pid,omitempty"`
+	Version         string `json:"version,omitempty"`
+	OnDisk          string `json:"on_disk,omitempty"`
+	OnDiskPath      string `json:"on_disk_path,omitempty"`
+	UpdateAvailable bool   `json:"update_available,omitempty"`
+	Dashboard       string `json:"dashboard,omitempty"`
+}
+
+type inspectEnvSummary struct {
+	Name        string `json:"name,omitempty"`
+	ConfigPath  string `json:"config_path,omitempty"`
+	PreviewOnly bool   `json:"preview_only,omitempty"`
+	DaemonEnv   string `json:"daemon_env,omitempty"`
+}
+
+type inspectServiceSummary struct {
+	Total    int                 `json:"total"`
+	ByState  map[string][]string `json:"by_state"`
+	Degraded []string            `json:"degraded"`
+	Starting []string            `json:"starting"`
+	Stopped  []string            `json:"stopped"`
+}
+
+type inspectRisk struct {
+	Code     string `json:"code"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Service  string `json:"service,omitempty"`
+}
+
+type inspectBuildOptions struct {
+	ConfigPath      string
+	ConfigErr       error
+	ConfigEnvName   string
+	PreviewOnly     bool
+	DaemonEnv       string
+	DaemonRunning   bool
+	PID             int
+	Version         string
+	OnDisk          string
+	OnDiskPath      string
+	UpdateAvailable bool
+	Dashboard       string
+	Status          *daemon.StatusResponse
+	StatusErr       error
+}
+
+func inspectCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "inspect",
+		Short:  "Show an agent-ready Orbit state snapshot",
+		Hidden: true,
+		RunE:   runInspect,
+	}
+}
+
+func runInspect(_ *cobra.Command, _ []string) error {
+	cfg, cfgErr := config.Load(configFile)
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	daemonRunning := client.Health() == nil
+	pid, alive := daemon.IsDaemonRunning()
+	if daemonRunning {
+		pid = alivePID(pid, alive)
+	}
+
+	opts := inspectBuildOptions{
+		ConfigPath:    configFile,
+		ConfigErr:     cfgErr,
+		ConfigEnvName: daemonsrv.EnvShortName(configFile),
+		DaemonRunning: daemonRunning,
+		PID:           pid,
+		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
+	}
+	if cfg != nil {
+		opts.PreviewOnly = cfg.PreviewOnly
+	}
+	if daemonRunning {
+		if status, err := client.Status(); err == nil {
+			opts.Status = status
+		} else {
+			opts.StatusErr = err
+		}
+		if version, err := client.Version(); err == nil {
+			opts.Version = version.Running
+			opts.OnDisk = version.OnDisk
+			opts.OnDiskPath = version.OnDiskPath
+			opts.UpdateAvailable = version.UpdateAvailable
+		}
+		if envs, err := client.Envs(); err == nil {
+			opts.DaemonEnv = daemonsrv.EnvShortName(envs.Current)
+		}
+	}
+
+	data := buildInspectData(opts)
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, data.RecommendedActions)
+	}
+	printInspectHuman(data)
+	return nil
+}
+
+func alivePID(pid int, alive bool) int {
+	if !alive {
+		return 0
+	}
+	return pid
+}
+
+func buildInspectData(opts inspectBuildOptions) inspectJSONData {
+	services := emptyInspectServiceSummary()
+	if opts.Status != nil {
+		services = buildInspectServiceSummary(opts.Status.Services)
+	}
+	risks := buildInspectRisks(opts, services)
+	readiness := deriveInspectReadiness(opts, services)
+	actions := inspectRecommendedActions(readiness, risks, services)
+	return inspectJSONData{
+		SchemaVersion: inspectJSONSchemaVersion,
+		Readiness:     readiness,
+		Daemon: inspectDaemonSummary{
+			Running:         opts.DaemonRunning,
+			PID:             opts.PID,
+			Version:         opts.Version,
+			OnDisk:          opts.OnDisk,
+			OnDiskPath:      opts.OnDiskPath,
+			UpdateAvailable: opts.UpdateAvailable,
+			Dashboard:       inspectDashboard(opts),
+		},
+		Env: inspectEnvSummary{
+			Name:        opts.ConfigEnvName,
+			ConfigPath:  opts.ConfigPath,
+			PreviewOnly: opts.PreviewOnly,
+			DaemonEnv:   opts.DaemonEnv,
+		},
+		Services:           services,
+		Risks:              risks,
+		RecommendedActions: actions,
+	}
+}
+
+func inspectDashboard(opts inspectBuildOptions) string {
+	if !opts.DaemonRunning {
+		return ""
+	}
+	return opts.Dashboard
+}
+
+func emptyInspectServiceSummary() inspectServiceSummary {
+	return inspectServiceSummary{
+		ByState:  map[string][]string{},
+		Degraded: []string{},
+		Starting: []string{},
+		Stopped:  []string{},
+	}
+}
+
+func buildInspectServiceSummary(services []daemon.ServiceStatus) inspectServiceSummary {
+	out := emptyInspectServiceSummary()
+	out.Total = len(services)
+	for i := range services {
+		name := services[i].Name
+		state := services[i].State
+		out.ByState[state] = append(out.ByState[state], name)
+		switch state {
+		case "degraded":
+			out.Degraded = append(out.Degraded, name)
+		case "pending", "starting", "building", "stopping", "restarting":
+			out.Starting = append(out.Starting, name)
+		case "stopped":
+			out.Stopped = append(out.Stopped, name)
+		}
+	}
+	for state := range out.ByState {
+		sort.Strings(out.ByState[state])
+	}
+	sort.Strings(out.Degraded)
+	sort.Strings(out.Starting)
+	sort.Strings(out.Stopped)
+	return out
+}
+
+func buildInspectRisks(opts inspectBuildOptions, services inspectServiceSummary) []inspectRisk {
+	if risk, ok := inspectBlockingRisk(opts); ok {
+		return []inspectRisk{risk}
+	}
+	return inspectServiceRisks(services)
+}
+
+func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
+	if opts.ConfigErr != nil {
+		return inspectRisk{
+			Code:     "config_invalid",
+			Severity: "critical",
+			Message:  opts.ConfigErr.Error(),
+		}, true
+	}
+	if inspectEnvMismatch(opts) {
+		return inspectRisk{
+			Code:     "env_mismatch",
+			Severity: "critical",
+			Message:  fmt.Sprintf("selected env %q differs from daemon env %q", opts.ConfigEnvName, opts.DaemonEnv),
+		}, true
+	}
+	if !opts.DaemonRunning {
+		return inspectRisk{
+			Code:     "daemon_unreachable",
+			Severity: "critical",
+			Message:  "daemon is not reachable",
+		}, true
+	}
+	if opts.StatusErr != nil {
+		return inspectRisk{
+			Code:     "status_unavailable",
+			Severity: "critical",
+			Message:  opts.StatusErr.Error(),
+		}, true
+	}
+	return inspectRisk{}, false
+}
+
+func inspectServiceRisks(services inspectServiceSummary) []inspectRisk {
+	risks := make([]inspectRisk, 0, len(services.Degraded)+len(services.Starting)+len(services.Stopped))
+	for _, name := range services.Degraded {
+		risks = append(risks, inspectRisk{
+			Code:     "service_degraded",
+			Severity: "high",
+			Message:  name + " is degraded",
+			Service:  name,
+		})
+	}
+	for _, name := range services.Starting {
+		risks = append(risks, inspectRisk{
+			Code:     "service_converging",
+			Severity: "medium",
+			Message:  name + " is not healthy yet",
+			Service:  name,
+		})
+	}
+	for _, name := range services.Stopped {
+		risks = append(risks, inspectRisk{
+			Code:     "service_stopped",
+			Severity: "low",
+			Message:  name + " is stopped",
+			Service:  name,
+		})
+	}
+	return risks
+}
+
+func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSummary) inspectReadiness {
+	if opts.ConfigErr != nil {
+		return inspectReadiness{State: inspectReadinessConfigInvalid, Blocked: true, Summary: "selected config cannot be loaded"}
+	}
+	if inspectEnvMismatch(opts) {
+		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is running with a different env"}
+	}
+	if !opts.DaemonRunning {
+		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is not reachable"}
+	}
+	if opts.StatusErr != nil {
+		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running, but service status is unavailable"}
+	}
+	if len(services.Degraded) > 0 {
+		return inspectReadiness{State: inspectReadinessDegraded, Summary: "daemon is running, but one or more services are degraded"}
+	}
+	if len(services.Starting) > 0 {
+		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running and services are still converging"}
+	}
+	if len(services.Stopped) > 0 {
+		return inspectReadiness{State: inspectReadinessPartial, Summary: "daemon is running, but one or more services are stopped"}
+	}
+	return inspectReadiness{State: inspectReadinessReady, Summary: "daemon is running and no service risks were detected"}
+}
+
+func inspectEnvMismatch(opts inspectBuildOptions) bool {
+	return opts.DaemonRunning && opts.ConfigEnvName != "" && opts.DaemonEnv != "" && opts.ConfigEnvName != opts.DaemonEnv
+}
+
+func inspectRecommendedActions(readiness inspectReadiness, risks []inspectRisk, services inspectServiceSummary) []cli.JSONAction {
+	actions := []cli.JSONAction{}
+	switch readiness.State {
+	case inspectReadinessConfigInvalid:
+		actions = append(actions, cli.DoctorAction())
+	case inspectReadinessNeedsDaemon:
+		if inspectHasRisk(risks, "env_mismatch") {
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit daemon restart --json",
+				Reason:      "Restart daemon to apply selected env.",
+				Destructive: false,
+			})
+		} else {
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit daemon start --json",
+				Reason:      "Start the daemon so Orbit can inspect live service state.",
+				Destructive: false,
+			})
+		}
+	case inspectReadinessDegraded:
+		for _, name := range services.Degraded {
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit logs " + name + " --json",
+				Reason:      "Inspect logs for degraded service " + name + ".",
+				Destructive: false,
+			})
+		}
+		actions = append(actions, cli.DoctorAction())
+	case inspectReadinessConverging:
+		actions = append(actions, cli.StatusAction())
+	case inspectReadinessPartial:
+		actions = append(actions, cli.JSONAction{
+			Command:     "orbit up --json",
+			Reason:      "Start stopped services and then inspect again.",
+			Destructive: false,
+		})
+	default:
+		actions = append(actions, cli.StatusAction())
+	}
+	if len(risks) > 0 && readiness.State != inspectReadinessConfigInvalid && readiness.State != inspectReadinessDegraded {
+		actions = append(actions, cli.DoctorAction())
+	}
+	return cli.MergeActions(nil, actions)
+}
+
+func inspectHasRisk(risks []inspectRisk, code string) bool {
+	for _, risk := range risks {
+		if risk.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func printInspectHuman(data inspectJSONData) {
+	fmt.Printf("Readiness: %s\n", data.Readiness.State)
+	if data.Readiness.Summary != "" {
+		fmt.Println(data.Readiness.Summary)
+	}
+	if data.Env.ConfigPath != "" {
+		fmt.Printf("Config: %s\n", data.Env.ConfigPath)
+	}
+	if data.Daemon.Running {
+		fmt.Print("Daemon: running")
+		if data.Daemon.PID != 0 {
+			fmt.Printf(" (pid %d)", data.Daemon.PID)
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("Daemon: not running")
+	}
+	if len(data.Risks) > 0 {
+		fmt.Println("Risks:")
+		for _, risk := range data.Risks {
+			fmt.Printf("  %s: %s\n", risk.Severity, risk.Message)
+		}
+	}
+}

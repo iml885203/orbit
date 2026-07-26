@@ -1,0 +1,294 @@
+// Package sqlpublish builds a SQL project on the host and publishes
+// the dacpac straight to a SQL Server port — no docker cp, no
+// container-side sqlpackage (on Apple Silicon that also means native
+// arm64 instead of amd64 emulation). It is the generic publish path:
+// any .sqlproj works, nothing here knows about any team's image build
+// flow.
+//
+// Streaming output goes to the io.Writer passed by the caller — the
+// package never touches stdout/stderr directly. The CLI passes
+// os.Stdout; the daemon passes its dbops manager which broadcasts each
+// line as SSE frames.
+package sqlpublish
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// ErrorCode is the stable, wire-facing classification of a failed
+// publish. The dashboard maps codes to actionable hints; free-form
+// error text is for humans reading logs.
+type ErrorCode string
+
+const (
+	CodeNone                   ErrorCode = ""
+	CodeToolchainMissing       ErrorCode = "toolchain_missing"
+	CodeSQLProjectNotFound     ErrorCode = "sql_project_not_found"
+	CodeBuildFailed            ErrorCode = "build_failed"
+	CodePublishBlockedDataLoss ErrorCode = "publish_blocked_data_loss"
+	CodeSQLServerUnavailable   ErrorCode = "sql_server_unavailable"
+	CodeDatabaseBusy           ErrorCode = "database_busy"
+	CodePublishFailed          ErrorCode = "publish_failed"
+	CodeCleanStateMissing      ErrorCode = "reset_clean_state_missing"
+	CodeResetRestoreFailed     ErrorCode = "reset_restore_failed"
+	CodeResetPrepareFailed     ErrorCode = "reset_prepare_failed"
+	CodeResetPartial           ErrorCode = "reset_partial"
+	// CodeReferenceUnresolved: publish couldn't resolve objects a
+	// referenced dacpac defines (SQL72033) — the shared roles/schemas
+	// aren't on the server yet. Publish self-heals by retrying with
+	// composite objects; this code is the retry trigger, rarely surfaced.
+	CodeReferenceUnresolved ErrorCode = "reference_unresolved"
+)
+
+// Opts captures everything Publish needs. SQLProj and OutDir are
+// absolute paths, pre-resolved by the caller.
+type Opts struct {
+	DB      string
+	SQLProj string // absolute path to .sqlproj
+	OutDir  string // tempdir receiving dotnet build artifacts
+	Host    string // SQL Server host as seen from this machine (e.g. "localhost")
+	Port    int    // published container port
+	// TargetID distinguishes env/image targets that reuse the same host port.
+	// Publish-state and diff caches never cross this boundary.
+	TargetID string
+	User     string // usually "sa"
+	Password string
+	Force    bool // /p:BlockOnPossibleDataLoss=false
+	// IncludeComposite deploys objects from referenced dacpacs too
+	// (/p:IncludeCompositeObjects=true). Bootstrap needs it: on an
+	// empty server the shared objects (roles, schemas) a project's
+	// references define don't exist yet; a converge publish against a
+	// prepared server deliberately leaves them alone.
+	IncludeComposite bool
+	// Analyze makes Diff compute exact object operations and data-loss
+	// warnings instead of returning the source-file approximation.
+	Analyze bool
+}
+
+// Result describes one publish attempt.
+type Result struct {
+	OK         bool
+	DurationMs int64
+	Err        error     // nil iff OK
+	Code       ErrorCode // stable classification when !OK
+	// Created is true when the publish brought a database into
+	// existence (it did not exist beforehand). A freshly created DB is
+	// clean — schema plus reference data, no test data — so the caller
+	// can declare it as the baseline reset reverts to.
+	Created bool
+}
+
+// Publish runs host `dotnet build` then host `sqlpackage
+// /Action:Publish` against Host:Port. Each step streams its native
+// stdout+stderr to out as it is produced. The publish is idempotent —
+// a second run against an unchanged project converges to a no-op.
+func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
+	start := time.Now()
+
+	// Auto-heal the empty-server case up front: a target that doesn't
+	// exist yet needs its referenced shared objects (roles, schemas)
+	// created too, which only composite deployment does. Detecting it
+	// here keeps the steady-state publish (DB present) on the default
+	// path — no composite, no reshaping objects another DB owns. A
+	// probe error (server down, etc.) is non-fatal: leave composite off
+	// and let publishDacpac surface the real failure; the reactive retry
+	// below still covers a missing shared object on an existing DB.
+	created := false
+	if exists, err := DatabaseExists(ctx, opts); err == nil && !exists {
+		opts.IncludeComposite = true
+		created = true
+	}
+
+	dacpac, fingerprint, code, err := buildDacpac(ctx, opts, out)
+	if err != nil {
+		return failed(start, err, code)
+	}
+	code, err = publishWithCompositeRetry(ctx, opts, dacpac, out)
+	if err != nil {
+		return failed(start, err, code)
+	}
+	// Remember what was just published so the next diff can short-circuit.
+	recordPublishStateBestEffort(ctx, opts, fingerprint, out)
+	return Result{OK: true, DurationMs: time.Since(start).Milliseconds(), Created: created}
+}
+
+// buildDacpac verifies the toolchain and builds the project — zero
+// side effects beyond OutDir, which is what lets PublishClean run it
+// BEFORE the destructive revert.
+//
+// A dacpac cache short-circuits the dotnet build when the project's source
+// is unchanged since a prior build: the stored dacpac is copied into OutDir
+// and returned. The cache is best-effort — any error falls through to a
+// full build (see dacpac_cache.go).
+func buildDacpac(ctx context.Context, opts Opts, out io.Writer) (string, string, ErrorCode, error) {
+	if _, err := SqlpackagePath(); err != nil {
+		return "", "", CodeToolchainMissing, err
+	}
+	if _, err := DotnetVersion(ctx); err != nil {
+		return "", "", CodeToolchainMissing, err
+	}
+	if _, err := os.Stat(opts.SQLProj); err != nil {
+		return "", "", CodeSQLProjectNotFound, fmt.Errorf("sqlproj not found at %s", opts.SQLProj)
+	}
+
+	dacpac := filepath.Join(opts.OutDir, opts.DB+".dacpac")
+	fingerprint, fpErr := projectFingerprint(opts.SQLProj, opts.DB)
+	if fpErr == nil {
+		restored, err := restoreCachedDacpac(opts, dacpac, fingerprint)
+		if err != nil {
+			return "", "", CodeBuildFailed, err
+		}
+		if restored {
+			fmt.Fprintf(out, "[build] reused cached dacpac (project unchanged)\n")
+			return dacpac, fingerprint, CodeNone, nil
+		}
+	}
+
+	if err := buildFreshDacpac(ctx, opts, dacpac, fingerprint, fpErr, out); err != nil {
+		return "", "", CodeBuildFailed, err
+	}
+	return dacpac, fingerprint, CodeNone, nil
+}
+
+// Referenced projects emit dacpacs beside the leaf, so a cache hit restores
+// the complete build output before accepting the leaf artifact.
+func restoreCachedDacpac(opts Opts, dacpac, fingerprint string) (bool, error) {
+	cacheDir, err := cachedBuildDir(fingerprint)
+	if err != nil {
+		return false, nil
+	}
+	n, err := restoreDacpacs(cacheDir, opts.OutDir)
+	if err != nil || n == 0 {
+		return false, nil
+	}
+	if _, err := os.Stat(dacpac); err != nil {
+		return false, nil
+	}
+	current, err := projectFingerprint(opts.SQLProj, opts.DB)
+	if err != nil || current != fingerprint {
+		return false, fmt.Errorf("SQL project changed while restoring its build cache; retry")
+	}
+	return true, nil
+}
+
+func buildFreshDacpac(ctx context.Context, opts Opts, dacpac, fingerprint string, fingerprintErr error, out io.Writer) error {
+	build := exec.CommandContext(ctx, "dotnet", "build", opts.SQLProj, "-o", opts.OutDir)
+	build.Stdout = out
+	build.Stderr = out
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("dotnet build: %w", err)
+	}
+	if _, err := os.Stat(dacpac); err != nil {
+		return fmt.Errorf("dacpac not produced at %s", dacpac)
+	}
+	// A build can overlap an editor save or pull. Publishing that artifact, or
+	// storing it under the pre-build key, would make the cache claim a source
+	// state the dacpac may not represent.
+	if fingerprintErr == nil {
+		current, err := projectFingerprint(opts.SQLProj, opts.DB)
+		if err != nil || current != fingerprint {
+			return fmt.Errorf("SQL project changed during build; retry")
+		}
+		if cacheDir, err := cachedBuildDir(fingerprint); err == nil {
+			_ = storeDacpacs(opts.OutDir, cacheDir)
+		}
+	}
+	return nil
+}
+
+// publishWithCompositeRetry pushes a built dacpac, retrying once with
+// composite objects when the target lacks a referenced dacpac's shared
+// objects (SQL72033) — e.g. a shared project's role was never deployed,
+// or a baseline revert just removed it. Publish and PublishClean share
+// it so every schema-advancing path self-heals the same way; a
+// steady-state publish against a prepared server never retries.
+func publishWithCompositeRetry(ctx context.Context, opts Opts, dacpac string, out io.Writer) (ErrorCode, error) {
+	code, err := publishDacpac(ctx, opts, dacpac, out)
+	if err != nil && code == CodeReferenceUnresolved && !opts.IncludeComposite {
+		fmt.Fprintf(out, "[publish] unresolved references — retrying with composite objects\n")
+		opts.IncludeComposite = true
+		return publishDacpac(ctx, opts, dacpac, out)
+	}
+	return code, err
+}
+
+// publishDacpac pushes a built dacpac to the target. Output is captured
+// alongside streaming: error classification reads the tool output
+// because sqlpackage's exit codes don't distinguish causes.
+func publishDacpac(ctx context.Context, opts Opts, dacpac string, out io.Writer) (ErrorCode, error) {
+	sqlpackage, err := SqlpackagePath()
+	if err != nil {
+		return CodeToolchainMissing, err
+	}
+	var capture bytes.Buffer
+	tee := io.MultiWriter(out, &capture)
+
+	args := sqlpackageArgs(opts, "Publish", dacpac)
+	if opts.Force {
+		args = append(args, "/p:BlockOnPossibleDataLoss=false")
+	}
+	pub := exec.CommandContext(ctx, sqlpackage, args...)
+	pub.Stdout = tee
+	pub.Stderr = tee
+	if err := pub.Run(); err != nil {
+		return classifyPublish(capture.String()), fmt.Errorf("sqlpackage publish: %w", err)
+	}
+	return CodeNone, nil
+}
+
+func sqlpackageArgs(opts Opts, action, dacpac string) []string {
+	args := []string{
+		"/Action:" + action,
+		"/SourceFile:" + dacpac,
+		fmt.Sprintf("/TargetServerName:%s,%d", opts.Host, opts.Port),
+		"/TargetDatabaseName:" + opts.DB,
+		"/TargetUser:" + opts.User,
+		"/TargetPassword:" + opts.Password,
+		"/TargetTrustServerCertificate:True",
+		"/p:DropObjectsNotInSource=true",
+	}
+	if opts.IncludeComposite {
+		args = append(args, "/p:IncludeCompositeObjects=true")
+	}
+	return args
+}
+
+// classifyPublish maps sqlpackage output to a stable error code.
+//
+// This is EXTERNAL-TOOL OUTPUT parsing, not Go error-chain
+// classification: the string-matching prohibition (error-handling.md,
+// CODE_CONVENTIONS §9) exists because %w chains make errors.Is
+// possible — sqlpackage offers no such channel (exit 1 for every
+// failure; localized text is the only signal). Matches are
+// deliberately loose — misclassification degrades to the generic
+// code, never to a wrong specific one the UI would act on.
+func classifyPublish(output string) ErrorCode {
+	lower := strings.ToLower(output)
+	switch {
+	case strings.Contains(lower, "blockonpossibledataloss") || strings.Contains(lower, "possible data loss") ||
+		(strings.Contains(lower, "sql72015") && strings.Contains(lower, "sql72045")):
+		return CodePublishBlockedDataLoss
+	case strings.Contains(lower, "could not connect") || strings.Contains(lower, "network-related") ||
+		strings.Contains(lower, "login failed") || strings.Contains(lower, "connection was refused"):
+		return CodeSQLServerUnavailable
+	case strings.Contains(lower, "deadlock") || strings.Contains(lower, "lock request time out") ||
+		strings.Contains(lower, "database is in use"):
+		return CodeDatabaseBusy
+	case strings.Contains(lower, "sql72033") || strings.Contains(lower, "unresolved reference to object"):
+		return CodeReferenceUnresolved
+	default:
+		return CodePublishFailed
+	}
+}
+
+func failed(start time.Time, err error, code ErrorCode) Result {
+	return Result{OK: false, DurationMs: time.Since(start).Milliseconds(), Err: err, Code: code}
+}

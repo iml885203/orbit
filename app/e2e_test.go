@@ -1,0 +1,494 @@
+//go:build e2e
+
+package app
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+)
+
+// These tests exercise the real orbit binary against a real Docker engine.
+// They are gated behind `//go:build e2e`. Run with:
+//
+//	make test-e2e      # or: go test -tags=e2e -v ./app/
+//
+// Every test gets its own isolated instance:
+//   - ORBIT_HOME → unique tmp dir (socket, pid, state, env config)
+//   - ORBIT_NAMESPACE → random hex (Docker container names + labels)
+//   - ORBIT_DASHBOARD_PORT → random high port (TCP listener)
+// This means e2e can run alongside the developer's regular orbit daemon and
+// workload without interfering. Containers are cleaned up via `orbit down`.
+//
+// Requirements: Docker running. The test harness uses the binary pointed
+// at by `ORBIT_BIN` (set by `make test-e2e`), falling back to PATH.
+
+const (
+	e2eBootTimeout  = 30 * time.Second
+	e2eReadyTimeout = 60 * time.Second
+)
+
+type e2eEnv struct {
+	home      string
+	binary    string
+	envYaml   string
+	namespace string
+	port      int
+}
+
+func setupE2E(t *testing.T) *e2eEnv {
+	t.Helper()
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+
+	binary := findOrbitBinary(t)
+
+	// macOS unix sockets have a 104-char path limit. t.TempDir() produces
+	// paths like /var/folders/../T/<TestName>12345/001 that easily exceed
+	// this. Use a short stable prefix in /tmp instead.
+	home, err := os.MkdirTemp("/tmp", "orb-")
+	if err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	t.Logf("ORBIT_HOME=%s", home)
+
+	// `orbit up` now runs a preflight that requires ~/.orbit/envs to exist
+	// and be non-empty. Seed it from testdata/ so we don't depend on envs/
+	// (which is the user-facing env repo contents, not a test fixture).
+	srcEnv := findRepoFile(t, filepath.Join("cmd", "orbit", "testdata", "e2e-minimal.yaml"))
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatalf("mkdir envs: %v", err)
+	}
+	data, err := os.ReadFile(srcEnv)
+	if err != nil {
+		t.Fatalf("read %s: %v", srcEnv, err)
+	}
+	envYaml := filepath.Join(envsDir, "e2e-minimal.yaml")
+	if err := os.WriteFile(envYaml, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", envYaml, err)
+	}
+
+	ns := "e2e-" + randHex(4)
+	port := 19900 + int(randByte())
+	t.Logf("ORBIT_NAMESPACE=%s ORBIT_DASHBOARD_PORT=%d", ns, port)
+
+	env := &e2eEnv{
+		home:      home,
+		binary:    binary,
+		envYaml:   envYaml,
+		namespace: ns,
+		port:      port,
+	}
+	env.run(t, "env", "use", envYaml)
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			if logData, err := os.ReadFile(filepath.Join(home, "daemon.log")); err == nil {
+				t.Logf("daemon.log:\n%s", logData)
+			}
+		}
+		// Best-effort cleanup. Errors are logged but don't fail the test.
+		_, _ = env.runNoFail(t, "down")
+		_, _ = env.runNoFail(t, "daemon", "stop")
+	})
+	return env
+}
+
+// findRepoFile walks up from cwd looking for a file path. Lets the test run
+// from any package under the repo root.
+func findRepoFile(t *testing.T, rel string) string {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	dir := cwd
+	for i := 0; i < 6; i++ {
+		candidate := filepath.Join(dir, rel)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatalf("could not locate %s from cwd %s", rel, cwd)
+	return ""
+}
+
+func (e *e2eEnv) cmd(args ...string) *exec.Cmd {
+	cmd := exec.Command(e.binary, args...)
+	cmd.Env = append(os.Environ(),
+		"ORBIT_HOME="+e.home,
+		"ORBIT_NAMESPACE="+e.namespace,
+		fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", e.port),
+	)
+	return cmd
+}
+
+func (e *e2eEnv) run(t *testing.T, args ...string) string {
+	t.Helper()
+	out, err := e.runNoFail(t, args...)
+	if err != nil {
+		t.Fatalf("orbit %s: %v\noutput:\n%s", strings.Join(args, " "), err, out)
+	}
+	return out
+}
+
+func (e *e2eEnv) runNoFail(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	var buf bytes.Buffer
+	cmd := e.cmd(args...)
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	err := cmd.Run()
+	out := buf.String()
+	if testing.Verbose() {
+		t.Logf("$ orbit %s\n%s", strings.Join(args, " "), out)
+	}
+	return out, err
+}
+
+type e2eStatus struct {
+	Daemon struct {
+		Running bool   `json:"running"`
+		Version string `json:"version,omitempty"`
+	} `json:"daemon"`
+	Services []struct {
+		Name  string `json:"name"`
+		Kind  string `json:"kind"`
+		State string `json:"state"`
+	} `json:"services"`
+}
+
+type e2eCLIEnvelope struct {
+	SchemaVersion string          `json:"schema_version"`
+	OK            bool            `json:"ok"`
+	Command       string          `json:"command"`
+	Data          json.RawMessage `json:"data"`
+	Error         *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+func parseE2EEnvelope(t *testing.T, out string) e2eCLIEnvelope {
+	t.Helper()
+	var env e2eCLIEnvelope
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("parse cli envelope: %v\n%s", err, out)
+	}
+	if env.SchemaVersion != "orbit.cli.v1" {
+		t.Fatalf("schema_version = %q", env.SchemaVersion)
+	}
+	return env
+}
+
+func (e *e2eEnv) status(t *testing.T) e2eStatus {
+	t.Helper()
+	out := e.run(t, "status", "--json")
+	var s e2eStatus
+	if err := json.Unmarshal([]byte(out), &s); err != nil {
+		t.Fatalf("parse status json: %v\n%s", err, out)
+	}
+	return s
+}
+
+func (e *e2eEnv) serviceState(t *testing.T, name string) string {
+	t.Helper()
+	for _, svc := range e.status(t).Services {
+		if svc.Name == name {
+			return svc.State
+		}
+	}
+	return "(missing)"
+}
+
+func (e *e2eEnv) waitFor(t *testing.T, desc string, timeout time.Duration, check func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if check() {
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for: %s", desc)
+}
+
+// Covers: daemon start does NOT auto-launch containers.
+func TestE2E_DaemonStartAlone(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+
+	s := env.status(t)
+	if !s.Daemon.Running {
+		t.Fatal("expected daemon running, got not running")
+	}
+	for _, svc := range s.Services {
+		if svc.State != "stopped" {
+			t.Errorf("%s state = %s, want stopped (daemon start should not auto-launch)", svc.Name, svc.State)
+		}
+	}
+}
+
+// Covers: orbit up --infra starts containers to healthy.
+func TestE2E_UpInfra(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	_, _ = env.runNoFail(t, "up", "--infra")
+
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+}
+
+// Covers: daemon stop keeps containers running; daemon start re-adopts them.
+// This is the C-refactor's headline scenario.
+func TestE2E_RestartAdoptsContainers(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	_, _ = env.runNoFail(t, "up", "--infra")
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	env.run(t, "daemon", "stop")
+
+	// Docker containers must still be running after daemon stop.
+	redisName := "orbit-" + env.namespace + "-redis"
+	if !containerRunning(t, redisName) {
+		t.Fatalf("%s container died when daemon stopped", redisName)
+	}
+
+	env.run(t, "daemon", "start")
+
+	env.waitFor(t, "redis re-adopted as healthy", e2eBootTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+}
+
+// Covers: orbit down stops containers but leaves daemon running.
+func TestE2E_DownStopsContainersKeepsDaemon(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	_, _ = env.runNoFail(t, "up", "--infra")
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	env.run(t, "down")
+
+	s := env.status(t)
+	if !s.Daemon.Running {
+		t.Error("daemon should still be running after orbit down")
+	}
+	if state := env.serviceState(t, "redis"); state != "stopped" {
+		t.Errorf("redis state = %s after down, want stopped", state)
+	}
+}
+
+// Covers: `orbit env sync --url file://<local-repo>` clones a local git repo
+// and copies its envs/ tree into ORBIT_HOME/envs/.
+func TestE2E_EnvSync(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	binary := findOrbitBinary(t)
+
+	home, err := os.MkdirTemp("/tmp", "orb-")
+	if err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+
+	// Build a local git repo containing envs/example.yaml.
+	repo, err := os.MkdirTemp("/tmp", "orb-envrepo-")
+	if err != nil {
+		t.Fatalf("mkdir repo: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(repo) })
+
+	srcEnv := findRepoFile(t, filepath.Join("envs", "example.yaml"))
+	data, err := os.ReadFile(srcEnv)
+	if err != nil {
+		t.Fatalf("read example.yaml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "envs"), 0o755); err != nil {
+		t.Fatalf("mkdir repo/envs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "envs", "example.yaml"), data, 0o644); err != nil {
+		t.Fatalf("write example.yaml: %v", err)
+	}
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		// Avoid depending on host git user config.
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com",
+			"GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	runGit("init", "-q", "-b", "main")
+	runGit("add", ".")
+	runGit("commit", "-q", "-m", "init")
+
+	// Run `orbit env sync --url file://<repo>` with isolated ORBIT_HOME.
+	cmd := exec.Command(binary, "env", "sync", "--url", "file://"+repo)
+	cmd.Env = append(os.Environ(),
+		"ORBIT_HOME="+home,
+		"ORBIT_NAMESPACE=e2e-"+randHex(4),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("orbit env sync: %v\n%s", err, out)
+	}
+	if testing.Verbose() {
+		t.Logf("$ orbit env sync --url file://%s\n%s", repo, out)
+	}
+
+	dest := filepath.Join(home, "envs", "example.yaml")
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("expected %s to exist after sync, stat err=%v\noutput:\n%s", dest, err, out)
+	}
+}
+
+// Covers: `orbit up` preflight blocks start-up when ~/.orbit/envs is missing.
+func TestE2E_UpBlockedWhenNoEnvs(t *testing.T) {
+	binary := findOrbitBinary(t)
+
+	home, err := os.MkdirTemp("/tmp", "orb-")
+	if err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+
+	ns := "e2e-" + randHex(4)
+	port := 19900 + int(randByte())
+
+	mkCmd := func(args ...string) *exec.Cmd {
+		c := exec.Command(binary, args...)
+		c.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+ns,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", port),
+		)
+		return c
+	}
+	t.Cleanup(func() {
+		_ = mkCmd("down").Run()
+		_ = mkCmd("daemon", "stop").Run()
+	})
+
+	// `orbit up` runs preflight before touching the daemon; it must abort
+	// cleanly when envs are missing, without starting containers.
+	out, err := mkCmd("up").CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected `orbit up` to fail with empty envs, got success\noutput:\n%s", out)
+	}
+	combined := string(out)
+	if !strings.Contains(combined, "not ready") && !strings.Contains(combined, "orbit init") {
+		t.Errorf("expected output to mention `not ready` or `orbit init`, got:\n%s", combined)
+	}
+}
+
+func TestE2E_AgentJSONWorkflow(t *testing.T) {
+	env := setupE2E(t)
+
+	upOut := env.run(t, "up", "--infra", "--json")
+	upEnvelope := parseE2EEnvelope(t, upOut)
+	if !upEnvelope.OK {
+		t.Fatalf("up envelope not ok: %+v\n%s", upEnvelope.Error, upOut)
+	}
+
+	statusOut := env.run(t, "status", "--json")
+	var status e2eStatus
+	if err := json.Unmarshal([]byte(statusOut), &status); err != nil {
+		t.Fatalf("status json should keep legacy shape: %v\n%s", err, statusOut)
+	}
+	if !status.Daemon.Running {
+		t.Fatal("daemon should be running after up --infra --json")
+	}
+
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	logsOut := env.run(t, "logs", "redis", "--json")
+	logsEnvelope := parseE2EEnvelope(t, logsOut)
+	if !logsEnvelope.OK {
+		t.Fatalf("logs envelope not ok: %+v\n%s", logsEnvelope.Error, logsOut)
+	}
+	var logsData struct {
+		Service string   `json:"service"`
+		Lines   []string `json:"lines"`
+	}
+	if err := json.Unmarshal(logsEnvelope.Data, &logsData); err != nil {
+		t.Fatalf("logs data: %v\n%s", err, logsEnvelope.Data)
+	}
+	if logsData.Service != "redis" {
+		t.Fatalf("logs service = %q", logsData.Service)
+	}
+}
+
+// findOrbitBinary mirrors setupE2E's binary discovery without the docker skip
+// and without creating an e2eEnv. Useful for tests that don't need a full env.
+func findOrbitBinary(t *testing.T) string {
+	t.Helper()
+	if binary := os.Getenv("ORBIT_BIN"); binary != "" {
+		return binary
+	}
+	if path, err := exec.LookPath("orbit"); err == nil {
+		return path
+	}
+	t.Fatal("orbit binary not found; set ORBIT_BIN or run `make build`")
+	return ""
+}
+
+// containerRunning returns true if a docker container with the given name
+// (exact match) is in running state.
+func containerRunning(t *testing.T, name string) bool {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "--filter", "name=^"+name+"$", "--filter", "status=running", "--format", "{{.Names}}").Output()
+	if err != nil {
+		t.Fatalf("docker ps: %v", err)
+	}
+	return strings.TrimSpace(string(out)) == name
+}
+
+func randHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func randByte() byte {
+	b := make([]byte, 1)
+	_, _ = rand.Read(b)
+	return b[0]
+}
+
+// goos reports the runtime OS (used in some conditional test assertions).
+func goos() string { return runtime.GOOS }
+
+var (
+	_ = fmt.Sprintf
+	_ = goos
+)

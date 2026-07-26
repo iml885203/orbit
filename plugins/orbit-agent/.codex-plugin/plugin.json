@@ -1,0 +1,18 @@
+{
+  "name": "orbit-agent",
+  "version": "0.0.1",
+  "description": "Operate local development environments safely with Orbit.",
+  "author": {
+    "name": "Logan Guo"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Orbit Agent",
+    "shortDescription": "Operate local environments with Orbit.",
+    "longDescription": "Inspect, start, stop, diagnose, and automate local development environments through Orbit's agent-facing CLI contract.",
+    "developerName": "Logan Guo",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use Orbit to inspect or operate this local development environment safely."
+  }
+}

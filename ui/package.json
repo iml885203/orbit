@@ -1,0 +1,48 @@
+{
+  "name": "ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "design:lint": "design.md lint ../DESIGN.md",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@google/design.md": "^0.1.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^25.8.0",
+    "@vitest/ui": "^4.1.6",
+    "eslint": "^10.4.0",
+    "eslint-plugin-check-file": "^3.3.1",
+    "eslint-plugin-svelte": "^3.17.1",
+    "globals": "^17.6.0",
+    "jsdom": "^29.1.1",
+    "svelte": "^5.55.7",
+    "svelte-check": "^4.4.8",
+    "svelte-eslint-parser": "^1.6.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
+    "@floating-ui/dom": "^1.7.6",
+    "@iconify/svelte": "^5.2.1",
+    "@lucide/svelte": "^1.16.0",
+    "@xyflow/svelte": "^1.5.2",
+    "gsap": "^3.15.0",
+    "runed": "^0.37.1",
+    "svelte-spa-router": "^5.1.0"
+  }
+}

@@ -1,0 +1,165 @@
+# 疑難排解
+
+[English](./troubleshooting.md) · [繁體中文](./troubleshooting.zh-TW.md)
+
+常見的失敗模式、它們的意思、以及如何修。先從 `orbit doctor` 開始 —— 它會抓到大部分的 setup 問題並直接告訴你怎麼修。
+
+## 啟動
+
+### `orbit up` 卡在 "waiting for <service> to be healthy"
+container 已經啟動，但 health check 一直沒成功。
+
+- **看 logs**：`orbit logs <service>`。大部分啟動失敗都會在這裡出現。
+- **第一次初始化很慢**：database 還原許多 schema 之類的重型 container,在空 volume 上可能需要幾分鐘。先持續查看 log,再判斷是否真的卡住。
+- **Apple Silicon 上的 Rosetta 模擬**：任何標 `platform: linux/amd64` 的 container 都會跑在 Rosetta 上 —— 啟動時間預期會多一倍。可以用 `docker inspect --format '{{.Platform}}'` 確認。
+
+### `port already in use`
+有別的 process 佔住了 Orbit 想用的 port。
+
+```bash
+# macOS / Linux
+lsof -i :<port>
+# Windows
+netstat -ano | findstr :<port>
+```
+
+如果是殘留的 `orbit` 子 process，`orbit down` 通常可以清掉（process-group kill）。其他情況就手動 kill 掉那個 PID。
+
+### 私有 registry `pull unauthorized` / `pull access denied`
+你的 Docker client 沒辦法 pull image。中性版 `orbit doctor` 會確認 Docker 是否可用,但不會探測 private registry。請向你的 registry provider 驗證身份,例如：
+
+```bash
+docker login <registry-host>
+```
+
+如果你沒有 registry 權限，請聯絡 image owner 或管理員開通。
+
+### `orbit up` 噴錯：「no env configs found in ~/.orbit/envs」
+你還沒跑 `orbit init`（或者 sync 失敗了）。修法：
+
+```bash
+orbit env sync --url https://git.example.com/your-env-repo.git
+orbit switch example
+```
+
+## SQL Server
+
+### `orbit db publish` 之後，DbGate 沒看到新的物件
+DbGate 是按連線快取 schema 的。在連線上右鍵 → Disconnect → Connect，或在 database 節點按重新整理。再用下面的指令確認物件真的在：
+
+```bash
+docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "<你的-sa-密碼>" -C \
+  -Q "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
+```
+
+### `publish` 失敗：`CommonFiles.dacpac could not be resolved`
+`dotnet build` 沒有把共用的 dacpac 跟那個 DB 自己的 dacpac 一起產出來。
+清理受影響的 project 後再 build：
+
+```bash
+dotnet clean /path/to/Database.sqlproj
+orbit db publish <dbname>
+```
+
+### `publish` 拒絕執行：「data loss might occur」
+你正在縮欄位、drop table，或類似的破壞性變更。要嘛接受資料遺失：
+
+```bash
+orbit db publish <dbname> --force     # 傳入 BlockOnPossibleDataLoss=false
+```
+
+要嘛把變更拆成更小的步驟。要丟棄本機資料並套用最新 schema，執行 `orbit db reset <dbname>`。
+
+### `orbit restart sql-server` 之後我的 SP 不見了
+在 volume-seeding 那個修法之後不應該再發生。如果還是遇到：
+
+1. 確認 DB 的檔案是放在 volume 裡：
+   ```bash
+   docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
+     -S localhost -U sa -P "<你的-sa-密碼>" -C \
+     -Q "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
+   ```
+   路徑應該要以 `/var/opt/mssql/data/` 開頭（持久化 volume）。如果某顆資料庫整個不見了，用 `orbit db publish <db>` 重新發佈（或用 `orbit db publish --all` 發佈全部）。
+2. 確認 volume 還在：`docker volume inspect orbit_sql_server` 應該顯示它存在、而且不是剛剛才被重建出來的。
+
+### `docker volume rm orbit_sql_server` 失敗：「volume is in use」
+sql-server container 還掛在上面。先停掉它：
+
+```bash
+orbit down
+docker volume rm orbit_sql_server
+orbit up sql-server
+```
+
+## Daemon
+
+### `orbit daemon status` 說在跑，但 `orbit up` 連不到它
+是 pid / socket 檔案殘留。Orbit 在下一次檢查時會自動偵測到死掉的 PID 並清掉這兩個檔案，所以直接重試就好：
+
+```bash
+orbit daemon status   # 或：orbit up
+```
+
+如果還是失敗，那就手動把檔案刪掉當 fallback：
+
+```bash
+rm ~/.orbit/orbit.sock ~/.orbit/orbit.pid
+orbit daemon start
+```
+
+### Dashboard 的 :19800 port 打不開
+有別的 process 在用。為這一次的 instance 換個 port：
+
+```bash
+export ORBIT_DASHBOARD_PORT=19801
+orbit daemon restart
+```
+
+### 升級 binary 之後，`orbit status` 抱怨版本對不上
+daemon 還在跑舊的 binary。把它重啟：
+
+```bash
+orbit daemon restart
+```
+
+## 檔案系統與權限
+
+### `~/.orbit/` 變成 read-only 或是 owner 不對
+通常是你之前用 root 裝了 Orbit，現在用自己帳號跑造成的。修 ownership：
+
+```bash
+sudo chown -R $(whoami) ~/.orbit
+```
+
+## CLI
+
+### `orbit exec` 抱怨 container 名字不存在
+Orbit 預設命名是 `orbit-<service>`。如果你設了 `ORBIT_NAMESPACE=foo`，名字會變成 `foo-<service>`。可以用 `docker ps --format '{{.Names}}'` 確認。
+
+### `orbit db publish` 噴錯：`SA_PASSWORD not set`
+Orbit 預設是從 `orbit-sql-server` container 的 env 讀密碼。如果 container 沒在跑、或是跑的是另一個非 orbit 的 SQL Server，就要自己設：
+
+```bash
+export SA_PASSWORD="<你的-sa-密碼>"
+orbit db publish AppDB
+```
+
+## 診斷
+
+卡住的時候：
+
+1. **`orbit doctor`** —— 檢查 Docker、Orbit 設定、daemon 狀態、ports 與必要的 host tools。每一項會回 `CheckPass` / `CheckWarn` / `CheckFail` 加一句提示。Extension 可以加入額外檢查,包括發行版專屬的 registry 或 repository 檢查。
+2. **`orbit status`** —— 確認 Orbit 認為哪些 service 是健康的、以及哪些跟實際情況對不上。
+3. **`orbit logs <service> -f`** —— 即時看實際輸出。
+4. **`ORBIT_LOG_LEVEL=debug orbit daemon restart`** —— 在 `~/.orbit/daemon.log` 打開 verbose daemon log。
+5. **`docker ps -a`** / **`docker logs <container>`** —— 完全繞過 orbit，排除是它自己記帳記錯的可能性。
+
+如果你遇到這份文件沒蓋到的失敗模式，請補上去、開 MR —— 這份清單的價值會隨著每筆新條目累積。
+
+## 延伸閱讀
+
+- [docs/architecture.zh-TW.md](architecture.zh-TW.md) —— event model 與 state machine 的背景
+- [docs/configuration.zh-TW.md](configuration.zh-TW.md) —— YAML 欄位說明
+- [docs/development.zh-TW.md](development.zh-TW.md) —— development setup 與 workflow
+- [docs/sql-workflow.zh-TW.md](sql-workflow.zh-TW.md) —— 更深入的 SQL 流程

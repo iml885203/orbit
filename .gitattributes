@@ -1,0 +1,15 @@
+# Normalize all text files to LF in the repository and the working tree.
+# Go tooling (gofmt, go.mod) and the shipped shell scripts require LF; a
+# Windows checkout under core.autocrlf=true would otherwise produce CRLF,
+# breaking scripts/*.sh (#!/bin/sh\r) and making gofmt report every file.
+* text=auto eol=lf
+
+# Shell scripts must stay LF to remain executable.
+*.sh text eol=lf
+
+# Binary assets — never convert.
+*.png binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

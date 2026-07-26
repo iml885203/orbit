@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Verify release
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
+          test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
+          make preflight
+      - name: Build release assets
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p dist
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            output="dist/orbit-${goos}-${goarch}"
+            if [ "$goos" = windows ]; then output="${output}.exe"; fi
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
+              -ldflags "-s -w -X main.version=${RELEASE_VERSION} -X main.buildTime=${build_time}" \
+              -o "$output" ./cmd/orbit
+          done
+          (cd dist && sha256sum orbit-* > checksums.txt)
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/* --generate-notes --title "${{ github.ref_name }}"

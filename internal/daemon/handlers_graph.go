@@ -1,0 +1,427 @@
+package daemon
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/env"
+)
+
+// sortedKeys returns the keys of m in stable alphabetical order so the graph
+// response is deterministic — Go map iteration is randomised, which made
+// dagre re-layout the canvas every poll tick.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// GraphResponse is the response for GET /api/graph.
+type GraphResponse struct {
+	Env string `json:"env"`
+	// PreviewOnly mirrors the env yaml's previewOnly flag so the UI can
+	// switch to the cluster-layout / icon-strip presentation reserved for
+	// preview-only envs without having to cross-look the /api/envs list.
+	PreviewOnly bool `json:"previewOnly"`
+	// Groups maps group name → service names declared in that group. The UI
+	// uses it to cluster service nodes by group (preview-only envs only).
+	// Only groups with at least one service are included. Order is
+	// deterministic (sorted by group name) so the canvas doesn't reshuffle
+	// on each poll.
+	Groups []GroupInfo `json:"groups,omitempty"`
+	Nodes  []GraphNode `json:"nodes"`
+	Edges  []GraphEdge `json:"edges"`
+}
+
+// GroupInfo is one entry in GraphResponse.Groups. Kept as a slice (not a
+// map) so the order is deterministic without the UI having to re-sort.
+// Color forwards the yaml-provided color so the UI can theme each group
+// box; empty means "derive a stable hue from the name on the client".
+type GroupInfo struct {
+	Name     string   `json:"name"`
+	Color    string   `json:"color,omitempty"`
+	Services []string `json:"services"`
+}
+
+// GraphNode is one node in the dependency graph. Kind here is the display
+// category (frontend|backend|infra), not the daemon's topology Kind which
+// is "service" vs "container".
+type GraphNode struct {
+	Name  string `json:"name"`
+	Kind  string `json:"kind"` // frontend | backend | infra | external
+	Icon  string `json:"icon,omitempty"`
+	Label string `json:"label,omitempty"` // externals only; display name
+	Color string `json:"color,omitempty"` // externals only; hex color tint
+	State string `json:"state"`
+	// StateReason says why the node is degraded; empty otherwise.
+	StateReason string              `json:"stateReason,omitempty"`
+	Mode        string              `json:"mode,omitempty"` // services only
+	URL         string              `json:"url,omitempty"`
+	Ports       map[string]int      `json:"ports,omitempty"`
+	Health      *HealthProgressInfo `json:"health,omitempty"`
+	Sidecars    []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
+	InfraDeps   []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
+	// Kafka carries the produces/consumes declarations the node owns.
+	// Services with no declared topics get nil (omitted from JSON);
+	// externals are required by validation to declare at least one
+	// topic, so the pointer is always non-nil for them.
+	Kafka *config.KafkaIO `json:"kafka,omitempty"`
+}
+
+// InfraDepRef is a compact reference to one infra container that a service
+// depends on. We pre-resolve the icon server-side so the UI doesn't need to
+// cross-look the containers map per render.
+type InfraDepRef struct {
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+}
+
+// EdgeKind distinguishes startup-time synchronous dependencies (the
+// existing model) from Kafka-mediated asynchronous producer/consumer
+// relationships introduced by Service.Kafka and Externals.
+type EdgeKind string
+
+const (
+	EdgeKindSync  EdgeKind = "sync"
+	EdgeKindAsync EdgeKind = "async"
+)
+
+// GraphEdge is one directed edge in the graph.
+type GraphEdge struct {
+	From       string   `json:"from"`
+	To         string   `json:"to"`
+	Kind       EdgeKind `json:"kind"`
+	Topic      string   `json:"topic,omitempty"`
+	Detached   bool     `json:"detached"`
+	Detachable bool     `json:"detachable"`
+	EnvVars    []string `json:"env_vars,omitempty"`
+}
+
+// currentEnvName returns the short name of the currently loaded env;
+// thin wrapper over EnvShortName so handlers don't poke at ConfigPath
+// themselves. Empty when no config is loaded yet.
+func (s *Server) currentEnvName() string {
+	return EnvShortName(s.ConfigPath())
+}
+
+// statusesByName converts a []ServiceStatus slice into a name-keyed map.
+func statusesByName(list []ServiceStatus) map[string]ServiceStatus {
+	out := make(map[string]ServiceStatus, len(list))
+	for i := range list {
+		out[list[i].Name] = list[i]
+	}
+	return out
+}
+
+func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
+	if requireMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	envName := s.currentEnvName()
+	if envQuery := r.URL.Query().Get("env"); envQuery != "" && envQuery != envName {
+		s.servePreviewGraph(w, envQuery)
+		return
+	}
+
+	// One immutable snapshot for the whole request — status assembly and
+	// graph builders must render the same config generation.
+	cfg := s.holder.Load()
+	statuses := statusesByName(s.computeStatuses(cfg))
+	resp := GraphResponse{
+		Env:         envName,
+		PreviewOnly: cfg.PreviewOnly,
+		Groups:      buildGroupInfos(cfg),
+		Nodes:       buildGraphNodes(cfg, statuses),
+		Edges:       append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// servePreviewGraph returns the graph for another env from disk, with all
+// node states forced to "pending". Read-only: never touches s.cfg or any
+// orchestrator state — the daemon manages exactly one live env at a time
+// and preview is a parallel read channel.
+func (s *Server) servePreviewGraph(w http.ResponseWriter, envName string) {
+	dir := filepath.Dir(s.ConfigPath())
+	target := filepath.Join(dir, envName+".yaml")
+	if _, err := os.Stat(target); err != nil {
+		writeJSON(w, http.StatusNotFound, APIResponse{Error: "env not found: " + envName})
+		return
+	}
+	cfg, err := config.Load(target)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "load: " + err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, GraphResponse{
+		Env:         envName,
+		PreviewOnly: cfg.PreviewOnly,
+		Groups:      buildGroupInfos(cfg),
+		Nodes:       buildGraphNodes(cfg, nil),
+		Edges:       append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
+	})
+}
+
+// buildGroupInfos extracts group → services from cfg.Groups in deterministic
+// order. Groups with no services are dropped (UI doesn't need empty
+// clusters). Services listed under a group but not defined in cfg.Services
+// are silently skipped — keeps yaml typos from breaking the graph.
+func buildGroupInfos(cfg *config.Config) []GroupInfo {
+	out := make([]GroupInfo, 0, len(cfg.Groups))
+	for _, name := range sortedKeys(cfg.Groups) {
+		g := cfg.Groups[name]
+		svcs := make([]string, 0, len(g.Services))
+		for _, s := range g.Services {
+			if _, ok := cfg.Services[s]; ok {
+				svcs = append(svcs, s)
+			}
+		}
+		if len(svcs) == 0 {
+			continue
+		}
+		out = append(out, GroupInfo{Name: name, Color: g.Color, Services: svcs})
+	}
+	return out
+}
+
+func buildGraphNodes(cfg *config.Config, statuses map[string]ServiceStatus) []GraphNode {
+	nodes := make([]GraphNode, 0, len(cfg.Containers)+len(cfg.Services))
+	for _, name := range sortedKeys(cfg.Containers) {
+		c := cfg.Containers[name]
+		n := GraphNode{
+			Name:  name,
+			Kind:  c.ResolveKind(),
+			Icon:  infraIconForContainer(c),
+			State: "pending",
+		}
+		if st, ok := statuses[name]; ok {
+			n.State = st.State
+			n.StateReason = st.StateReason
+			n.Ports = st.Ports
+			n.URL = st.URL
+			n.Health = st.HealthProgress
+			n.Sidecars = st.Sidecars
+		}
+		nodes = append(nodes, n)
+	}
+	for _, name := range sortedKeys(cfg.Services) {
+		svc := cfg.Services[name]
+		n := GraphNode{
+			Name:      name,
+			Kind:      svc.ResolveKind(),
+			State:     "pending",
+			InfraDeps: serviceInfraDeps(svc, cfg),
+		}
+		if len(svc.Kafka.Produces) > 0 || len(svc.Kafka.Consumes) > 0 {
+			k := svc.Kafka
+			n.Kafka = &k
+		}
+		if st, ok := statuses[name]; ok {
+			n.State = st.State
+			n.StateReason = st.StateReason
+			n.Mode = st.Mode
+			n.Ports = st.Ports
+			n.URL = st.URL
+			n.Health = st.HealthProgress
+		}
+		nodes = append(nodes, n)
+	}
+	for _, name := range sortedKeys(cfg.Externals) {
+		ext := cfg.Externals[name]
+		if ext == nil {
+			continue
+		}
+		label := ext.Label
+		if label == "" {
+			label = name
+		}
+		k := ext.Kafka
+		nodes = append(nodes, GraphNode{
+			Name:  name,
+			Kind:  "external",
+			Label: label,
+			Color: ext.Color,
+			State: "pending",
+			Kafka: &k,
+		})
+	}
+	return nodes
+}
+
+// serviceInfraDeps flattens a service's depends_on entries that resolve to
+// an infra-kind container into compact {name, icon} pairs. Order matches
+// the depends_on list (yaml authoring order) so the UI strip is stable.
+// Returns nil — not an empty slice — when there are no infra deps, so the
+// JSON omits the field via omitempty.
+func serviceInfraDeps(svc *config.Service, cfg *config.Config) []InfraDepRef {
+	if len(svc.DependsOn) == 0 {
+		return nil
+	}
+	var out []InfraDepRef
+	for _, dep := range svc.DependsOn {
+		c, ok := cfg.Containers[dep]
+		if !ok || c.ResolveKind() != "infra" {
+			continue
+		}
+		out = append(out, InfraDepRef{Name: dep, Icon: infraIconForContainer(c)})
+	}
+	return out
+}
+
+func buildGraphEdges(cfg *config.Config, settings *Settings, envName string) []GraphEdge {
+	edges := make([]GraphEdge, 0)
+	addEdge := func(from, fromKind string, deps []string) {
+		for _, dep := range deps {
+			edge := GraphEdge{
+				From:       from,
+				To:         dep,
+				Kind:       EdgeKindSync,
+				Detached:   settings.IsEdgeDetached(envName, from, dep),
+				Detachable: fromKind == "frontend",
+			}
+			if c, ok := cfg.Containers[dep]; ok {
+				edge.EnvVars = env.EnvVarsForDependency(dep, c)
+			}
+			edges = append(edges, edge)
+		}
+	}
+	for _, name := range sortedKeys(cfg.Containers) {
+		c := cfg.Containers[name]
+		addEdge(name, c.ResolveKind(), c.DependsOn)
+	}
+	for _, name := range sortedKeys(cfg.Services) {
+		svc := cfg.Services[name]
+		addEdge(name, svc.ResolveKind(), svc.DependsOn)
+	}
+	return edges
+}
+
+// buildAsyncEdges derives Kafka producer→consumer edges from the
+// kafka.{produces,consumes} declarations on services and externals.
+// One edge is emitted per (producer, consumer, topic) tuple. A node
+// that both produces and consumes the same topic does not emit a
+// self-loop — that case is surfaced only in NodeDrawer.
+func buildAsyncEdges(cfg *config.Config) []GraphEdge {
+	type ioSource struct {
+		name string
+		io   config.KafkaIO
+	}
+	var all []ioSource
+	for _, name := range sortedKeys(cfg.Services) {
+		svc := cfg.Services[name]
+		if svc == nil {
+			continue
+		}
+		all = append(all, ioSource{name: name, io: svc.Kafka})
+	}
+	for _, name := range sortedKeys(cfg.Externals) {
+		ext := cfg.Externals[name]
+		if ext == nil {
+			continue
+		}
+		all = append(all, ioSource{name: name, io: ext.Kafka})
+	}
+
+	producers := map[string][]string{} // topic -> producer names
+	consumers := map[string][]string{} // topic -> consumer names
+	for _, s := range all {
+		for _, t := range s.io.Produces {
+			producers[t] = append(producers[t], s.name)
+		}
+		for _, t := range s.io.Consumes {
+			consumers[t] = append(consumers[t], s.name)
+		}
+	}
+
+	topicNames := make([]string, 0, len(producers))
+	for t := range producers {
+		topicNames = append(topicNames, t)
+	}
+	sort.Strings(topicNames)
+
+	var edges []GraphEdge
+	for _, topic := range topicNames {
+		for _, p := range producers[topic] {
+			for _, c := range consumers[topic] {
+				if p == c {
+					continue
+				}
+				edges = append(edges, GraphEdge{
+					From:  p,
+					To:    c,
+					Kind:  EdgeKindAsync,
+					Topic: topic,
+				})
+			}
+		}
+	}
+	return edges
+}
+
+func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
+	if requireMethod(w, r, http.MethodPut) {
+		return
+	}
+	if s.rejectIfPreview(w) {
+		return
+	}
+
+	// from/to come from the URL path only. The legacy body form
+	// (/api/edges/detach with from/to in JSON) was removed after all clients
+	// migrated to PUT /api/edges/{from}/{to}.
+	rest := strings.TrimPrefix(r.URL.Path, "/api/edges/")
+	from, to, ok := strings.Cut(rest, "/")
+	if !ok || from == "" || to == "" || from == "detach" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "use PUT /api/edges/{from}/{to}"})
+		return
+	}
+
+	var req EdgeDetachRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})
+		return
+	}
+	// Always use the server's current env — never trust the client-supplied
+	// req.Env, which may be stale after a rapid env switch.
+	envName := s.currentEnvName()
+	if envName == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "no env loaded"})
+		return
+	}
+
+	svc, exists := s.holder.Load().Services[from]
+	if !exists || svc.ResolveKind() != "frontend" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "only frontend services can detach dependencies"})
+		return
+	}
+
+	if err := s.settings.SetEdgeDetached(envName, from, to, req.Detached); err != nil {
+		slog.Error("persist detached edge", "component", "graph", "err", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+
+	// Propagate the change to the running orchestrator so calcPendingDeps
+	// picks up the new state immediately — without this the orchestrator
+	// held a stale snapshot until the next `orbit up`.
+	s.app.Orchestrator.UpdateDetachedDeps(s.settings.GetDetachedEdges(envName))
+
+	action := "attached"
+	if req.Detached {
+		action = "detached"
+	}
+	writeJSON(w, http.StatusOK, APIResponse{
+		OK:      true,
+		Message: from + "→" + to + " " + action + ". Takes effect on next `orbit up` or restart.",
+	})
+}

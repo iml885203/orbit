@@ -1,0 +1,48 @@
+# Quickstart env — a complete, runnable orbit environment with no repo
+# checkouts and no team-specific assumptions. Try it straight from a clone:
+#
+#   orbit -c docs/examples/quickstart/dev.yaml up
+#   orbit -c docs/examples/quickstart/dev.yaml status
+#   orbit dashboard
+#   orbit -c docs/examples/quickstart/dev.yaml down
+#
+# Host ports use a 2xxxx prefix so they don't collide with anything you
+# already run locally. Each container demonstrates a different health_check
+# type; see docs/configuration.md for the full schema.
+
+version: "2"
+
+containers:
+  redis:
+    image: redis:7.4
+    ports:
+      redis: "26379:6379"
+    health_check:
+      type: tcp
+      port: 26379
+
+  postgres:
+    image: postgres:16
+    ports:
+      postgres: "25432:5432"
+    environment:
+      POSTGRES_PASSWORD: quickstart
+    health_check:
+      type: log
+      pattern: "database system is ready to accept connections"
+
+  web:
+    image: nginx:alpine
+    kind: frontend
+    ports:
+      http: "28080:80"
+    depends_on: [redis, postgres]
+    health_check:
+      type: http
+      path: /
+      port: 28080
+
+# Next step: add your own services (dotnet / node / shell) alongside the
+# containers — see the minimal example in docs/team-adoption.md. Services
+# get connection info injected automatically (REDIS_HOST, SQL_SERVER_CONNECTION,
+# …) based on the container images they depend on.

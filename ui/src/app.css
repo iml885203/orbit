@@ -1,0 +1,227 @@
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --dim: #8b949e;
+  --white: #ffffff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --blue: #58a6ff;
+  /* Kind tints — distinct from state colors (green/yellow/red)
+     so the graph node background never reads as "success/warning/error". */
+  --kind-frontend: #a371f7; /* purple */
+  --kind-backend:  #39c5cf; /* teal   */
+  --kind-infra:    #8b949e; /* same hue as --dim */
+
+  /* Spacing scale (4px grid). Use these instead of hard-coded values. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Border radius scale. */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-pill: 999px;
+
+  /* Type scale. Don't introduce sizes outside this set. */
+  --text-xs:   10px;
+  --text-sm:   11px;
+  --text-md:   12px;
+  --text-base: 13px;
+  --text-lg:   14px;
+  --text-xl:   16px;
+
+  /* Font stacks. */
+  --font-body: -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* Hit-target floor for icon-only buttons. Keep ≥30 (desktop) /
+     ≥44 (touch) — currently 30 because this is desktop-only. */
+  --hit-target: 30px;
+  --history-bar-height: 30px;
+
+  /* Motion. */
+  --transition-fast: 0.15s;
+  --transition-press: 0.08s;
+}
+
+* { margin: 0; box-sizing: border-box; }
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+body {
+  overflow: hidden;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Global keyboard focus ring. Apply to anything with :focus-visible
+   (real keyboard focus only — mouse clicks don't trigger it on most
+   browsers, so this doesn't add visual noise for pointer users). */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.badge-healthy { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge-building { background: rgba(88,166,255,0.15); color: var(--blue); }
+.badge-starting { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.badge-degraded { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge-stopped, .badge-pending { background: rgba(139,148,158,0.15); color: var(--dim); }
+.badge-stopping { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+/* Pill — compact status/tag chip used by the tracing surfaces (trace table,
+   span inspector, detail header, playback bar). State variants only; kind
+   colours never ride on pills. */
+.pill { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-pill); font-size: var(--text-xs); }
+.pill-ok { background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); }
+.pill-err { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+.pill-info { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); }
+.pill-warn { background: color-mix(in srgb, var(--yellow) 18%, transparent); color: var(--yellow); }
+.pill-muted { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--dim); }
+
+.log-line { white-space: pre-wrap; word-break: break-all; color: var(--dim); }
+.log-line:hover { color: var(--fg); }
+
+.section-title {
+  padding: 1rem 1.5rem 0.5rem;
+  font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim);
+}
+.section-toggle { cursor: pointer; user-select: none; }
+.section-toggle:hover { color: var(--fg); }
+.section-toggle .arrow { display: inline-block; transition: transform 0.2s; margin-left: 0.4rem; font-size: 0.65rem; }
+.section-toggle .arrow.open { transform: rotate(90deg); }
+
+button {
+  background: none; color: var(--dim); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; min-height: 32px;
+}
+button:hover { color: var(--fg); border-color: var(--dim); }
+button.danger:hover { color: var(--red); border-color: var(--red); }
+button:disabled { opacity: 0.3; cursor: not-allowed; }
+button:active { transform: scale(0.96); opacity: 0.8; }
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.8rem; opacity: 0;
+  transition: opacity 0.3s; pointer-events: none;
+  z-index: 1100; /* above LogModal backdrop (1000) */
+}
+.toast.show { opacity: 1; }
+
+/* Tooltip — populated by the `tooltip` Svelte action (lib/tooltip.svelte.ts)
+   which uses @floating-ui/dom for placement, flip, shift, and arrow positioning. */
+.fui-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-md);
+  line-height: 1.3;
+  font-family: var(--font-body);
+  max-width: 420px;
+  white-space: pre-line;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 80ms ease-out;
+}
+.fui-tooltip.open { opacity: 1; }
+.fui-tooltip-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+.fui-tooltip[data-placement^="top"] .fui-tooltip-arrow {
+  /* arrow pokes out the bottom edge, only bottom-right border visible */
+}
+.fui-tooltip[data-placement^="bottom"] .fui-tooltip-arrow {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-right: 0;
+}
+.fui-tooltip[data-placement^="left"] .fui-tooltip-arrow {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-left: 0;
+}
+.fui-tooltip[data-placement^="right"] .fui-tooltip-arrow {
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-right: 0;
+}
+
+.db-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.db-tag {
+  padding: 2px 7px; border-radius: 999px; font-size: 0.7rem;
+  color: var(--dim); background: rgba(139,148,158,0.12); border: 1px solid rgba(139,148,158,0.16);
+}
+
+/* SvelteFlow dark theme override — uses the same palette as the rest of orbit. */
+.svelte-flow {
+  --xy-background-color-default: var(--bg);
+  --xy-background-pattern-color-default: var(--border);
+  --xy-edge-stroke-default: var(--dim);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-edge-stroke-selected-default: var(--blue);
+  --xy-connectionline-stroke-default: var(--dim);
+  --xy-attribution-background-color-default: transparent;
+
+  --xy-node-color-default: var(--fg);
+  --xy-node-border-default: 1px solid var(--border);
+  --xy-node-background-color-default: var(--card);
+  --xy-node-boxshadow-hover-default: 0 0 0 1px var(--dim);
+  --xy-node-boxshadow-selected-default: 0 0 0 2px var(--blue);
+
+  --xy-handle-background-color-default: var(--dim);
+  --xy-handle-border-color-default: var(--bg);
+
+  --xy-controls-button-background-color-default: var(--card);
+  --xy-controls-button-background-color-hover-default: var(--border);
+  --xy-controls-button-color-default: var(--fg);
+  --xy-controls-button-color-hover-default: var(--fg);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-controls-box-shadow-default: none;
+
+  --xy-minimap-background-color-default: var(--card);
+  --xy-minimap-mask-background-color-default: rgba(13, 17, 23, 0.6);
+}
+
+/* Force all canvas panes to the page background colour. */
+.svelte-flow__background { background-color: var(--bg); }
+.svelte-flow__pane,
+.svelte-flow__viewport { background-color: var(--bg); }
+.svelte-flow__controls button {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  fill: var(--fg);
+}
+.svelte-flow__controls button:hover { background: var(--border); }

@@ -1,0 +1,11 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Orbit logo badge</title>
+  <desc id="desc">Orbit O mark on a dark rounded background, optimized for favicons and README.</desc>
+
+  <rect width="96" height="96" rx="21" ry="21" fill="#0D1117"/>
+  <path d="M75.6 36.3A30 30 0 0 1 38.2 76.4" stroke="#8EC5FF" stroke-width="7.5" stroke-linecap="round"/>
+  <path d="M20.4 59.7A30 30 0 0 1 57.8 19.6" stroke="#8EC5FF" stroke-width="7.5" stroke-linecap="round"/>
+  <circle cx="27.5" cy="70" r="7" fill="#7EE787"/>
+  <circle cx="68.5" cy="26" r="7" fill="#7EE787"/>
+  <circle cx="48" cy="48" r="6.5" fill="#E6EDF3"/>
+</svg>

@@ -1,0 +1,58 @@
+#!/bin/sh
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx "DESIGN.md"; then
+    echo "  DESIGN.md lint..."
+    if command -v pnpm >/dev/null 2>&1; then
+        pnpm --dir ui design:lint
+    else
+        echo "❌ pnpm not found; install pnpm to lint DESIGN.md"
+        exit 1
+    fi
+fi
+
+# Filename hygiene
+echo "  filenames..."
+./scripts/check-filenames.sh
+
+# Format check
+echo "  gofmt..."
+UNFORMATTED=$(gofmt -l . 2>&1 | grep -v vendor || true)
+if [ -n "$UNFORMATTED" ]; then
+    echo "❌ Files not formatted:"
+    echo "$UNFORMATTED"
+    echo "Run: gofmt -w ."
+    exit 1
+fi
+
+# Build check
+echo "  go build..."
+go build ./... 2>&1
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed"
+    exit 1
+fi
+
+# Lint
+echo "  golangci-lint..."
+if command -v golangci-lint >/dev/null 2>&1; then
+    golangci-lint run ./...
+    if [ $? -ne 0 ]; then
+        echo "❌ Lint failed"
+        exit 1
+    fi
+else
+    echo "  ⚠ golangci-lint not found, skipping (install: brew install golangci-lint)"
+fi
+
+# Vet
+echo "  go vet..."
+go vet ./...
+if [ $? -ne 0 ]; then
+    echo "❌ Vet failed"
+    exit 1
+fi
+
+echo "✅ All checks passed"

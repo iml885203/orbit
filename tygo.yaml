@@ -1,0 +1,124 @@
+# Each package writes its own file under ui/src/lib/types/ — tygo truncate-
+# writes per package, so packages must NOT share an output_path (a shared path
+# keeps only the last stanza). ui/src/lib/types.gen.ts is a hand-maintained
+# barrel that re-exports every file below; add a line there when adding a
+# package here.
+packages:
+  - path: "github.com/iml885203/orbit/config"
+    output_path: "ui/src/lib/types/config.gen.ts"
+    type_mappings:
+      time.Time: "string"
+      time.Duration: "number"
+    exclude_files:
+      - "config.go"
+      - "validate.go"
+      # holder.go is a Go concurrency primitive, not a wire type — an empty
+      # `interface Holder {}` in the UI types would be noise.
+      - "holder.go"
+      - "holder_test.go"
+      # extensions.go is the section registry (func-typed fields), not
+      # wire data.
+      - "extensions.go"
+      - "extensions_test.go"
+      - "schema_test.go"
+      - "config_test.go"
+      - "validate_test.go"
+  - path: "github.com/iml885203/orbit/daemon"
+    output_path: "ui/src/lib/types/wire.gen.ts"
+    # The public daemon package: the wire contract (status/doctor/envs/
+    # resources/settings responses) that moved out of internal/daemon in
+    # the repo split (spec D3). Client/lifecycle/host plumbing excluded —
+    # not wire data.
+    type_mappings:
+      time.Time: "string"
+      time.Duration: "number"
+    exclude_files:
+      - "client.go"
+      - "client_test.go"
+      - "lifecycle.go"
+      - "lifecycle_startdaemon_test.go"
+      - "lifecycle_tail_test.go"
+      - "dashboard_port.go"
+      - "dashboard_port_test.go"
+      - "paths.go"
+      - "host.go"
+      - "host_tools.go"
+      - "settings_namespace.go"
+      - "settings_test.go"
+  - path: "github.com/iml885203/orbit/internal/daemon"
+    output_path: "ui/src/lib/types/daemon.gen.ts"
+    # KafkaIO lives in config.gen.ts — the one cross-package reference.
+    frontmatter: |
+      import type { HealthProgressInfo, SidecarInfo } from './wire.gen'
+      import type { KafkaIO } from "./config.gen";
+    type_mappings:
+      time.Time: "string"
+      time.Duration: "number"
+      error: "string"
+      daemon.ServiceKind: '"container" | "service"'
+      daemon.DoctorCheckStatus: '"pass" | "fail" | "warn" | "info"'
+      daemon.EdgeKind: '"sync" | "async"'
+      config.KafkaIO: "KafkaIO"
+    exclude_files:
+      # wire_aliases.go re-exports the public daemon wire types for the
+      # server-side handlers — tygo must not emit them as any-typed dupes.
+      - "wire_aliases.go"
+      # server_host.go carries Go-internal capability types (Host impl,
+      # ResourceRegistrar), not wire data.
+      - "server_host.go"
+      - "client.go"
+      - "state.go"
+      - "lifecycle.go"
+      - "dashboard.go"
+      - "settings_test.go"
+      - "handlers_traces_test.go"
+      # Event here is the daemon-internal SSE frame envelope, not a wire type
+      # (clients see event:/data: text); it also collides with dbstate.Event
+      # in the barrel.
+      - "handlers_events.go"
+  - path: "github.com/iml885203/orbit/internal/tracing"
+    output_path: "ui/src/lib/types/tracing.gen.ts"
+    exclude_files:
+      - "tracing.go"
+      - "otlp.go"
+      - "tracing_test.go"
+      - "otlp_test.go"
+  - path: "github.com/iml885203/orbit/internal/dbstate"
+    output_path: "ui/src/lib/types/dbstate.gen.ts"
+    type_mappings:
+      time.Time: "string"
+    exclude_files:
+      - "store.go"
+      - "store_test.go"
+  - path: "github.com/iml885203/orbit/internal/devdb"
+    output_path: "ui/src/lib/types/devdb.gen.ts"
+    # DB-workflow wire types (projects, meta, publish/reset, diff, db-state).
+    # Only the wire-shape files generate; the CLI/command files are excluded.
+    frontmatter: |
+      // DiffResult comes from the hand-maintained sqlpublish types (see the
+      // sqlpublish note in tygo.yaml) — DBDiffResponse.result references it.
+      import type { DiffResult } from './sqlpublish.gen'
+    type_mappings:
+      time.Time: "string"
+      time.Duration: "number"
+      # DBDiffResponse embeds the sqlpublish schema-diff result; map the
+      # cross-package ref to the type the sqlpublish stanza emits (re-exported
+      # through the types.gen barrel).
+      sqlpublish.DiffResult: "DiffResult"
+    exclude_files:
+      - "db.go"
+      - "db_diff.go"
+      - "db_reset.go"
+      - "db_workflow.go"
+  - path: "github.com/iml885203/orbit/internal/tunnel"
+    output_path: "ui/src/lib/types/tunnel.gen.ts"
+    # Tunnel wire types (tunnel views, claim config, access lines). The
+    # CLI command + client files are excluded — only wire shapes generate.
+    type_mappings:
+      time.Time: "string"
+      time.Duration: "number"
+    exclude_files:
+      - "claim.go"
+      - "claim_lifecycle.go"
+      - "client_tunnel.go"
+      - "tunnel_output.go"

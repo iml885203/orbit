@@ -1,0 +1,122 @@
+// Config staleness detection: the daemon runs on the config it loaded at
+// startup (or the last API env switch), while the user keeps editing env
+// files and switching selections. This file answers "does what I loaded
+// still match reality?" so status can say `run 'orbit daemon restart'`
+// instead of silently serving stale state (the Elastiflix pilot's M4).
+
+package daemon
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"time"
+)
+
+// configBaseline captures what the daemon loaded, for later comparison.
+// Guarded by Server.pathMu (the same mutex that guards configPath —
+// path and baseline always change together).
+type configBaseline struct {
+	// fromCurrent records whether the loaded path came from the
+	// ~/.orbit/current selection. A daemon started with an explicit -c
+	// flag intentionally diverges from current, so selection-changed
+	// staleness never fires for it (it would be a permanent false alarm).
+	fromCurrent bool
+	hash        string // sha256 of the raw file bytes (pre-substitution)
+	mtime       time.Time
+	size        int64
+}
+
+// fileStamp hashes a config file. ok=false when the file can't be read —
+// callers treat that as "unknown", never as stale (transient editor saves
+// and atomic-rename windows shouldn't flap the flag).
+func fileStamp(path string) (hash string, mtime time.Time, size int64, ok bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", time.Time{}, 0, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", time.Time{}, 0, false
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), info.ModTime(), info.Size(), true
+}
+
+// recordConfigBaselineLocked snapshots the just-loaded config file. Caller
+// must hold s.pathMu (write) — SetConfigPath is the single choke point.
+func (s *Server) recordConfigBaselineLocked(path string) {
+	hash, mtime, size, ok := fileStamp(path)
+	if !ok {
+		s.baseline = configBaseline{}
+		return
+	}
+	s.baseline = configBaseline{
+		fromCurrent: path == ReadCurrentEnv(),
+		hash:        hash,
+		mtime:       mtime,
+		size:        size,
+	}
+}
+
+// fileEdited reports whether the config file's bytes changed since the
+// baseline. One stat owns both the mtime+size fast path and the rehash
+// decision — status polls every couple of seconds, and hashing yaml on
+// each poll would be wasted work. A touch that doesn't change bytes
+// refreshes the cached stamp so the fast path recovers instead of
+// rehashing forever.
+func (s *Server) fileEdited(path string, base configBaseline) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if info.ModTime().Equal(base.mtime) && info.Size() == base.size {
+		return false
+	}
+	hash, mtime, size, ok := fileStamp(path)
+	if !ok {
+		return false
+	}
+	if hash == base.hash {
+		s.pathMu.Lock()
+		// Re-check the path under the lock: an env switch may have moved
+		// the baseline to a different file while we hashed this one.
+		if s.configPath == path {
+			s.baseline.mtime, s.baseline.size = mtime, size
+		}
+		s.pathMu.Unlock()
+		return false
+	}
+	return true
+}
+
+// configStale reports whether the daemon's loaded config has fallen behind
+// reality, and why — in the spec's order: selection changed, file edited,
+// then the sticky engine flag. Known limits (per the config-holder spec):
+// process-env substitution inputs and the shared data/claim.yaml are not
+// covered.
+func (s *Server) configStale() (bool, string) {
+	s.pathMu.RLock()
+	path := s.configPath
+	base := s.baseline
+	s.pathMu.RUnlock()
+	if path == "" || base.hash == "" {
+		if s.engineStale.Load() {
+			return true, "env switched — restart to rebuild the service graph"
+		}
+		return false, ""
+	}
+
+	if base.fromCurrent {
+		if cur := ReadCurrentEnv(); cur != "" && cur != path {
+			return true, "env selection changed"
+		}
+	}
+	if s.fileEdited(path, base) {
+		return true, "env file edited"
+	}
+	if s.engineStale.Load() {
+		return true, "env switched — restart to rebuild the service graph"
+	}
+	return false, ""
+}

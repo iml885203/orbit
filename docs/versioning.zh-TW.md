@@ -1,0 +1,46 @@
+# 版本與相容性
+
+Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
+[語義化版本](https://semver.org/lang/zh-TW/)。
+
+## 發布順序
+
+- GitHub private 演練版從 `v0.0.1` 開始。
+- 第一個 public release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
+  已有文件與測試，並已準備好提供外部使用者使用。
+- Release tag 不可修改；修正必須發布成新版本。
+
+GitHub private 階段的 `0.0.x` 版本之間可以有 breaking change。從
+`v1.0.0` 起：
+
+- PATCH：向後相容的修正；
+- MINOR：向後相容的新功能；
+- MAJOR：可能不相容地修改穩定契約。
+
+## v1 起的穩定契約
+
+以下介面屬於相容性契約：
+
+- CLI command 名稱、flags、exit 行為與文件化操作流程；
+- Agent 使用的 JSON envelope 與具名 schema version；
+- Environment YAML schema 與 validation 行為；
+- 儲存於本機的 user settings；
+- Daemon HTTP API；
+- Public extension API。
+
+MINOR release 可以加入 additive change。JSON 與 HTTP consumer 必須忽略
+未知欄位。移除或重新命名欄位、command、flag、設定 key 或 public Go symbol，
+必須建立新的具名 schema version，或發布新的 MAJOR Orbit 版本。
+
+未文件化的 internal implementation、dashboard markup 與 styling、log 文字及
+test fixtures 不屬於相容性契約。
+
+## Plugin 版本
+
+每次發布都必須把以下兩份 plugin manifest 更新成 Orbit release 版本：
+
+- `plugins/orbit-agent/.codex-plugin/plugin.json`
+- `plugins/orbit-agent/.claude-plugin/plugin.json`
+
+Plugin 只能使用同版 Orbit 已提供的 command 與 contract。任何一份 manifest
+與 Orbit tag 不一致時，該 release 就尚未完成。

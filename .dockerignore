@@ -1,0 +1,7 @@
+.git
+.gradle-local
+.antigravitycli
+bin
+ui/node_modules
+internal/daemon/dist
+plugins/**/build

@@ -1,0 +1,559 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/preflight"
+	"github.com/mattn/go-isatty"
+	"github.com/spf13/cobra"
+)
+
+func printLogo() {
+	if !isTerminal() {
+		return
+	}
+
+	stars := cli.Faint.Sprint
+	frame := cli.Faint.Sprint
+	block := cli.Bold.Sprint
+
+	fmt.Println(stars("                  .  ·  *  .  ·"))
+	fmt.Println(stars("             .                    ."))
+	fmt.Println(frame("  ╭───────────────────────────────────────╮"))
+	fmt.Println(frame("  │ ") + block(" ██████╗ ██████╗ ██████╗ ██╗████████╗") + frame(" │"))
+	fmt.Println(frame("  │ ") + block("██╔═══██╗██╔══██╗██╔══██╗██║╚══██╔══╝") + frame(" │"))
+	fmt.Println(frame("  │ ") + block("██║   ██║██████╔╝██████╔╝██║   ██║   ") + frame(" │"))
+	fmt.Println(frame("  │ ") + block("██║   ██║██╔══██╗██╔══██╗██║   ██║   ") + frame(" │"))
+	fmt.Println(frame("  │ ") + block("╚██████╔╝██║  ██║██████╔╝██║   ██║   ") + frame(" │"))
+	fmt.Println(frame("  │ ") + block(" ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚═╝   ╚═╝   ") + frame(" │"))
+	fmt.Println(frame("  ╰───────────────────────────────────────╯"))
+	fmt.Println(stars("             *                    ·"))
+	fmt.Println(stars("                  ·  .  *  ·"))
+	_, _ = cli.Faint.Println("        local dev orchestrator")
+	fmt.Println()
+}
+
+func isTerminal() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
+func runUp(_ *cobra.Command, args []string) error {
+	if err := preflightOrAbort(); err != nil {
+		return err
+	}
+
+	if cli.JSONOutput {
+		return runUpJSON(args)
+	}
+
+	client, err := daemon.EnsureDaemon(configFile, groups)
+	if err != nil {
+		return renderDaemonStartError(err)
+	}
+
+	req := daemon.UpRequest{
+		Services:  args,
+		InfraOnly: infraOnly,
+		Groups:    groups,
+	}
+
+	resp, err := client.Up(req)
+	if err != nil {
+		return fmt.Errorf("up failed: %w", err)
+	}
+	fmt.Println(resp.Message)
+
+	if infraOnly {
+		return waitForInfraHealthy(client)
+	}
+	if len(args) > 0 {
+		return waitForServicesHealthy(client, args)
+	}
+	return waitForAllHealthy(client)
+}
+
+func runUpJSON(args []string) error {
+	client, err := daemon.EnsureDaemon(configFile, groups)
+	if err != nil {
+		return renderDaemonStartError(err)
+	}
+	req := daemon.UpRequest{Services: args, InfraOnly: infraOnly, Groups: groups}
+	resp, err := client.Up(req)
+	if err != nil {
+		return fmt.Errorf("up failed: %w", err)
+	}
+	status, err := client.Status()
+	if err != nil {
+		return err
+	}
+	names := lifecycleNamesForUp(status, args, infraOnly)
+	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
+	if err != nil {
+		return cli.WithJSONActions(err, lifecycleRecommendedActions(names))
+	}
+	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
+		Operation:         "up",
+		Message:           resp.Message,
+		RequestedServices: names,
+		InfraOnly:         infraOnly,
+		FinalStatus:       finalStatus,
+	}), lifecycleRecommendedActions(names))
+}
+
+func lifecycleNamesForUp(status *daemon.StatusResponse, args []string, infraOnly bool) []string {
+	if len(args) > 0 {
+		return args
+	}
+	names := []string{}
+	if status == nil {
+		return names
+	}
+	for i := range status.Services {
+		svc := &status.Services[i]
+		if infraOnly && svc.Kind != daemon.ServiceKindContainer {
+			continue
+		}
+		names = append(names, svc.Name)
+	}
+	return names
+}
+
+// pollLoop runs an onTick callback every 2s with the latest status snapshot
+// until onTick returns done=true, returns an error, the timeout fires, or
+// the user sends SIGINT/SIGTERM (treated as detach, not failure).
+// Caller-owned state (reported maps, snapshots, etc.) is captured via the
+// onTick closure — pollLoop holds none of it.
+func pollLoop(
+	client *daemon.Client,
+	timeoutDur time.Duration,
+	timeoutErr error,
+	onTick func(t time.Time, status *daemon.StatusResponse) (done bool, err error),
+) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case <-sigCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	const frameInterval = 100 * time.Millisecond
+	const pollInterval = 2 * time.Second
+	frame := time.NewTicker(frameInterval)
+	defer frame.Stop()
+	deadline := time.After(effectiveTimeout(timeoutDur))
+
+	var lastPoll time.Time
+	var status *daemon.StatusResponse
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println()
+			_, _ = cli.Faint.Println("Detached. Daemon is still running — use 'orbit status' to check progress.")
+			return nil
+		case <-deadline:
+			return timeoutErr
+		case t := <-frame.C:
+			// Poll only every pollInterval; the frame ticker still fires
+			// every 100ms so the caller can animate (spinner, seconds).
+			if t.Sub(lastPoll) >= pollInterval || status == nil {
+				if s, err := client.Status(); err == nil {
+					status = s
+					lastPoll = t
+				}
+			}
+			if status == nil {
+				continue
+			}
+			done, err := onTick(t, status)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
+		}
+	}
+}
+
+// waitOptions parameterises the boilerplate every waitFor* function shares:
+// renderer selection, frame counter, snapshot/diff/render plumbing, and
+// finalize-on-error wrapping. Callers supply only the bits that differ —
+// filter, commit predicate, done predicate, optional post-done acceptance,
+// optional grace polling, and a tick handler that decides whether the
+// caller's terminal condition is satisfied.
+type waitOptions struct {
+	// filter selects which services from the daemon status to track.
+	// If nil, all services are tracked.
+	filter func(*daemon.ServiceStatus) bool
+	// commit returns true when an event should be promoted into the
+	// renderer's permanent log above the in-place region.
+	commit func(progressEvent) bool
+	// doneOn returns true when an event marks a service as completed.
+	doneOn func(progressEvent) bool
+	// pastDone, if non-nil, accepts a snapshot state as "already past
+	// the awaited transition" — used by waitForServicesStopped's
+	// restart-race handling. Without it, only doneOn promotes services.
+	pastDone func(state string) bool
+	// gracePolls is how many initial polls to skip before considering
+	// degraded states as failures. Zero disables the grace window.
+	gracePolls int
+	// onTick is called after each poll. It decides whether the wait is
+	// finished, by inspecting the current snapshots and done map. It may
+	// also fail the wait with an error.
+	onTick func(snapshots map[string]progressSnapshot, done map[string]bool, gracePollsLeft int) (bool, error)
+	// timeoutErr is returned when the overall deadline expires.
+	timeoutErr error
+}
+
+// runProgressWait is the shared driver behind every waitFor* function. It
+// owns the renderer, snapshot/done state, frame counter, and finalize
+// wrapping; the caller controls filter / commit / done / terminal
+// condition through waitOptions.
+func runProgressWait(client *daemon.Client, opts waitOptions) error {
+	var renderer progressRenderer
+	if isTerminal() {
+		renderer = newLiveRenderer(os.Stdout)
+	} else {
+		renderer = newAppendRenderer(os.Stdout)
+	}
+
+	gracePolls := opts.gracePolls
+	snapshots := make(map[string]progressSnapshot)
+	done := make(map[string]bool)
+	frame := 0
+
+	err := pollLoop(client, timeout, opts.timeoutErr,
+		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
+			frame++
+			watched := make([]daemon.ServiceStatus, 0, len(status.Services))
+			progressByName := make(map[string]*daemon.HealthProgressInfo, len(status.Services))
+			for i := range status.Services {
+				s := &status.Services[i]
+				if opts.filter != nil && !opts.filter(s) {
+					continue
+				}
+				watched = append(watched, *s)
+				progressByName[s.Name] = s.HealthProgress
+			}
+			prev := snapshots
+			next := nextSnapshots(prev, watched, t)
+			if snapshotsChanged(prev, next) && gracePolls > 0 {
+				gracePolls--
+			}
+
+			for _, evt := range diffProgress(prev, next, t) {
+				line := formatProgressEvent(evt)
+				if opts.commit != nil && opts.commit(evt) {
+					renderer.commit(coloredEvent(evt, line))
+				}
+				if opts.doneOn != nil && opts.doneOn(evt) {
+					done[evt.name] = true
+				}
+				if evt.kind == eventHeartbeat {
+					s := next[evt.name]
+					s.lastHeartbeat = t
+					next[evt.name] = s
+				}
+			}
+			snapshots = next
+			renderer.render(snapshots, progressByName, t, frame)
+
+			if opts.pastDone != nil {
+				for i := range watched {
+					name := watched[i].Name
+					if done[name] {
+						continue
+					}
+					if opts.pastDone(watched[i].State) {
+						done[name] = true
+					}
+				}
+			}
+
+			finished, err := opts.onTick(snapshots, done, gracePolls)
+			if err != nil {
+				renderer.finalize(false)
+				return false, err
+			}
+			if finished {
+				renderer.finalize(true)
+				return true, nil
+			}
+			return false, nil
+		},
+	)
+	if err != nil {
+		renderer.finalize(false)
+	}
+	return err
+}
+
+// announceRecovering prints a one-time notice per service that entered
+// recovery probing. Without it the wait goes silent: the degraded line is
+// already committed, and the next visible change (recovery or timeout) can
+// be minutes away — silence reads as a hang.
+func announceRecovering(snapshots map[string]progressSnapshot, announced map[string]bool) {
+	for name, s := range snapshots {
+		if s.state == "degraded" && s.recovering && !announced[name] {
+			announced[name] = true
+			_, _ = cli.Faint.Printf("  … %s degraded — daemon keeps probing for recovery\n", name)
+		}
+	}
+}
+
+func waitForInfraHealthy(client *daemon.Client) error {
+	announced := map[string]bool{}
+	return runProgressWait(client, waitOptions{
+		filter:     func(s *daemon.ServiceStatus) bool { return s.Kind == "container" },
+		commit:     commitOnHealthyOrDegraded,
+		doneOn:     doneOnHealthy,
+		timeoutErr: cli.NewTimeoutError("timeout waiting for infrastructure to become healthy"),
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, _ int) (bool, error) {
+			announceRecovering(snapshots, announced)
+			total := 0
+			hasDegraded := false
+			for _, s := range snapshots {
+				total++
+				if s.state == "degraded" && !s.recovering {
+					hasDegraded = true
+				}
+			}
+			if hasDegraded {
+				return false, fmt.Errorf("infrastructure has degraded containers")
+			}
+			if total > 0 && len(done) == total {
+				fmt.Println("All infrastructure healthy.")
+				_, _ = cli.Faint.Println("  orbit open                open web UI")
+				return true, nil
+			}
+			return false, nil
+		},
+	})
+}
+
+func waitForAllHealthy(client *daemon.Client) error {
+	announced := map[string]bool{}
+	return runProgressWait(client, waitOptions{
+		commit:     commitOnHealthyOrDegraded,
+		doneOn:     doneOnHealthy,
+		gracePolls: 3,
+		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, gracePolls int) (bool, error) {
+			announceRecovering(snapshots, announced)
+			total := 0
+			hasDegraded := false
+			for _, s := range snapshots {
+				total++
+				// degraded-but-recovering means the daemon is still probing
+				// and may flip the service back on its own — keep waiting
+				// (the overall wait timeout still bounds us).
+				if s.state == "degraded" && !s.recovering {
+					hasDegraded = true
+				}
+			}
+			if gracePolls == 0 && hasDegraded {
+				return false, fmt.Errorf("some services are degraded")
+			}
+			if total > 0 && len(done) == total {
+				fmt.Println("All services healthy.")
+				_, _ = cli.Faint.Println("  orbit open                open web UI")
+				return true, nil
+			}
+			return false, nil
+		},
+	})
+}
+
+func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error {
+	if len(serviceNames) == 0 {
+		return nil
+	}
+	watch := watchSet(serviceNames)
+	announced := map[string]bool{}
+	return runProgressWait(client, waitOptions{
+		filter:     watchFilter(watch),
+		commit:     commitOnHealthyOrDegraded,
+		doneOn:     doneOnHealthy,
+		gracePolls: 3,
+		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, gracePolls int) (bool, error) {
+			announceRecovering(snapshots, announced)
+			if gracePolls == 0 {
+				for name := range watch {
+					if done[name] {
+						continue
+					}
+					s, ok := snapshots[name]
+					if !ok {
+						continue
+					}
+					if s.state == "stopped" || (s.state == "degraded" && !s.recovering) {
+						return false, fmt.Errorf("service %s is %s", name, s.state)
+					}
+				}
+			}
+			if len(done) == len(watch) {
+				fmt.Println("All requested services are healthy.")
+				return true, nil
+			}
+			return false, nil
+		},
+	})
+}
+
+// waitForServicesStopped polls until every service in serviceNames has
+// reached the "stopped" state. When acceptPastStop is true (used by
+// restart), services that are already past stopping (pending/starting/
+// healthy/...) also count as done — this handles the race where the
+// daemon's restart goroutine moves stop→start before our first poll
+// lands. For stop/down, acceptPastStop should be false: we want the
+// real "stopped" transition to render.
+func waitForServicesStopped(client *daemon.Client, serviceNames []string, acceptPastStop bool) error {
+	if len(serviceNames) == 0 {
+		return nil
+	}
+	watch := watchSet(serviceNames)
+	// A watched service that moves stopping → degraded failed its stop
+	// (StopService parks it there). Waiting for "stopped" would burn the
+	// whole timeout, so count it as done-with-failure and report once the
+	// remaining services settle. Restart (acceptPastStop) keeps the old
+	// behavior: its stop phase re-enters pending even when the stop errors.
+	var stopFailed []string
+	isStopFailure := func(e progressEvent) bool {
+		return !acceptPastStop && e.kind == eventTransition && e.from == "stopping" && e.to == "degraded"
+	}
+	opts := waitOptions{
+		filter: watchFilter(watch),
+		commit: func(e progressEvent) bool {
+			return (e.kind == eventTransition && e.to == "stopped") || isStopFailure(e)
+		},
+		doneOn: func(e progressEvent) bool {
+			if isStopFailure(e) {
+				stopFailed = append(stopFailed, e.name)
+				return true
+			}
+			return e.kind == eventTransition && e.to == "stopped"
+		},
+		timeoutErr: cli.NewTimeoutError("timeout waiting for services to stop"),
+		onTick: func(_ map[string]progressSnapshot, done map[string]bool, _ int) (bool, error) {
+			if len(done) == len(watch) {
+				if len(stopFailed) > 0 {
+					return false, fmt.Errorf("stop failed for %s — check 'orbit status' and 'docker ps'", strings.Join(stopFailed, ", "))
+				}
+				return true, nil
+			}
+			return false, nil
+		},
+	}
+	if acceptPastStop {
+		opts.pastDone = isPostStopState
+	}
+	return runProgressWait(client, opts)
+}
+
+// watchSet builds the set used by filter / done-count comparisons.
+func watchSet(names []string) map[string]bool {
+	m := make(map[string]bool, len(names))
+	for _, n := range names {
+		m[n] = true
+	}
+	return m
+}
+
+// watchFilter returns a waitOptions.filter that keeps only services
+// whose name is in watch.
+func watchFilter(watch map[string]bool) func(*daemon.ServiceStatus) bool {
+	return func(s *daemon.ServiceStatus) bool { return watch[s.Name] }
+}
+
+// commitOnHealthyOrDegraded is the commit predicate shared by every
+// "wait for healthy" caller: promote both terminal-success and
+// terminal-failure transitions into the renderer's permanent log.
+func commitOnHealthyOrDegraded(e progressEvent) bool {
+	return e.kind == eventTransition && (e.to == "healthy" || e.to == "degraded")
+}
+
+// doneOnHealthy marks a service as completed once its transition
+// reaches the healthy state.
+func doneOnHealthy(e progressEvent) bool {
+	return e.kind == eventTransition && e.to == "healthy"
+}
+
+// snapshotsChanged reports whether any service in next is in a different
+// state from its prev entry, used to decide when a poll-driven event
+// (like gracePolls decrement) should fire vs a frame-only render tick.
+func snapshotsChanged(prev, next map[string]progressSnapshot) bool {
+	if len(prev) != len(next) {
+		return true
+	}
+	for name, n := range next {
+		p, ok := prev[name]
+		if !ok || p.state != n.state {
+			return true
+		}
+	}
+	return false
+}
+
+// coloredEvent applies the existing colour scheme to a commit line so
+// healthy/degraded transitions keep their visual weight when committed.
+func coloredEvent(e progressEvent, line string) string {
+	switch {
+	case e.kind == eventTransition && e.to == "healthy":
+		return cli.Green.Sprint(line)
+	case e.kind == eventTransition && e.to == "degraded":
+		return cli.Red.Sprint(line)
+	case e.kind == eventTransition && e.to == "stopped":
+		return cli.Faint.Sprint(line)
+	}
+	return line
+}
+
+// isPostStopState reports whether a state indicates the stop phase has
+// completed (or never started). Empty string is the zero value seen
+// when a status response omits an unknown service — treat as
+// indeterminate, NOT past-stop, so the caller keeps polling.
+func isPostStopState(state string) bool {
+	return state != "" && state != "stopping"
+}
+
+// preflightOrAbort runs readiness checks and returns a user-friendly error if
+// any block start-up.
+func preflightOrAbort() error {
+	checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
+	var failures []preflight.Check
+	for _, c := range checks {
+		if !c.OK {
+			failures = append(failures, c)
+		}
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	var msg string
+	for _, c := range failures {
+		msg += fmt.Sprintf("  %s %s: %s\n", cli.Red.Sprint("✗"), c.Name, c.Message)
+		if c.Fix != "" {
+			msg += fmt.Sprintf("    → %s\n", c.Fix)
+		}
+	}
+	return fmt.Errorf("environment not ready:\n%s", msg)
+}

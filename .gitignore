@@ -1,0 +1,14 @@
+bin/
+/orbit
+*.exe
+.DS_Store
+envs/*.local.yaml
+cmd/orbit/dist/
+.claude/worktrees/
+.claude/*.local.json
+.claude/scheduled_tasks.lock
+.codex/
+.agents/
+.superpowers/
+.playwright-cli/
+ui/node_modules/

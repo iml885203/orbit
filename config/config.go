@@ -1,0 +1,271 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+// envVarPattern matches the innermost ${...} — content has no "${" — so
+// repeated application unwraps nested expressions like
+// ${OUTER:-${INNER:-default}} from the inside out.
+var envVarPattern = regexp.MustCompile(`\$\{((?:[^${}]|\$[^{])+)\}`)
+
+// Load reads orbit.yaml from path, substitutes env vars, and validates.
+func Load(path string) (*Config, error) {
+	if path == "" {
+		return nil, fmt.Errorf("no env selected — run 'orbit init', 'orbit switch <env>', or pass --config")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading config: %w", err)
+	}
+
+	expanded := substituteEnvVars(string(data))
+
+	var cfg Config
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+
+	if err := CheckVersion(cfg.Version, path); err != nil {
+		return nil, err
+	}
+
+	// Registered extension sections (allowlist + decoders): the inline
+	// Extensions map absorbed every non-core top-level key, so this is
+	// where unknown keys fail and where feature sections (e.g. claim)
+	// decode and validate.
+	if err := decodeExtensionSections(&cfg, path); err != nil {
+		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+
+	applyDefaults(&cfg)
+	populateNames(&cfg)
+	applyPathResolution(&cfg, path)
+
+	if err := Validate(&cfg); err != nil {
+		return nil, fmt.Errorf("validating config: %w", err)
+	}
+
+	return &cfg, nil
+}
+
+// applyPathResolution normalizes every path-valued field in cfg by first
+// expanding leading "~/" segments to the user's home directory, then
+// resolving any still-relative paths against the config file's directory.
+// The order matters: "~/foo.yaml" must become "/home/user/foo.yaml" before
+// the relative-path resolver runs, otherwise it would be joined to baseDir
+// as "baseDir/~/foo.yaml".
+func applyPathResolution(cfg *Config, cfgPath string) {
+	expandHomePaths(cfg)
+	resolveRelativePaths(cfg, cfgPath)
+}
+
+// resolveRelativePaths rewrites path-valued fields inside cfg so they are
+// absolute, interpreted relative to the config file's directory. This lets
+// an env yaml live at ~/.orbit/envs/example.yaml and still reference
+// ./data/kafka-topics.yaml next to it. Volumes are intentionally skipped:
+// a "./data:/container/path" mount is rare locally and the host-side
+// resolution semantics depend on docker context, not yaml dir.
+func resolveRelativePaths(cfg *Config, cfgPath string) {
+	absCfg, err := filepath.Abs(cfgPath)
+	if err != nil {
+		return
+	}
+	baseDir := filepath.Dir(absCfg)
+	resolve := func(p string) string {
+		if p == "" || filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(baseDir, p)
+	}
+	for _, s := range cfg.Services {
+		s.Path = resolve(s.Path)
+	}
+	for _, c := range cfg.Containers {
+		if c.Init != nil {
+			c.Init.TopicsFile = resolve(c.Init.TopicsFile)
+		}
+		if c.Seed != nil {
+			for i, f := range c.Seed.Files {
+				c.Seed.Files[i] = resolve(f)
+			}
+		}
+	}
+}
+
+// expandHome replaces a leading "~/" (or bare "~") with the user's home
+// directory. Other forms (e.g. "~user/") are left untouched — matching the
+// subset shells expand unambiguously without parsing /etc/passwd. Yaml
+// authors expect "~/dev/foo" to behave like in the shell; without this,
+// the literal "~" reaches os.Chdir/exec.Dir and fails with a confusing
+// "no such file or directory" error.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	if p == "~" {
+		return home
+	}
+	return filepath.Join(home, p[2:])
+}
+
+// expandHomeVolume expands a leading "~/" in the host side of a
+// "host:container[:mode]" volume string, leaving the container path untouched.
+// Running the whole string through expandHome would filepath.Join the tail and
+// flip the container path's "/" to "\" on Windows (e.g.
+// "~/db:/var/lib/pg" -> "C:\Users\me\db:\var\lib\pg"), breaking the mount — the
+// container path is always a Linux path. A leading "~" never carries a
+// drive-letter colon, so the first ":" delimits the host side unambiguously.
+func expandHomeVolume(v string) string {
+	if v != "~" && !strings.HasPrefix(v, "~/") {
+		return v
+	}
+	host, rest := v, ""
+	if i := strings.Index(v, ":"); i != -1 {
+		host, rest = v[:i], v[i:]
+	}
+	return expandHome(host) + rest
+}
+
+// expandHomePaths walks every path-valued field in cfg and rewrites leading
+// "~/" segments using the current user's home directory.
+func expandHomePaths(cfg *Config) {
+	expandVolumes := func(s []string) {
+		for i, v := range s {
+			s[i] = expandHomeVolume(v)
+		}
+	}
+	for _, s := range cfg.Services {
+		s.Path = expandHome(s.Path)
+	}
+	for _, c := range cfg.Containers {
+		expandVolumes(c.Volumes)
+		if c.Init != nil {
+			c.Init.TopicsFile = expandHome(c.Init.TopicsFile)
+		}
+		if c.Seed != nil {
+			for i, f := range c.Seed.Files {
+				c.Seed.Files[i] = expandHome(f)
+			}
+		}
+		for i := range c.Sidecars {
+			expandVolumes(c.Sidecars[i].Volumes)
+		}
+	}
+}
+
+func substituteEnvVars(input string) string {
+	// Repeated passes from the inside out: each pass replaces the
+	// innermost ${...} occurrences; nested expressions become eligible
+	// once their inner siblings collapse. Bounded by a max iteration
+	// to avoid runaway loops on pathological input.
+	const maxPasses = 16
+	for i := 0; i < maxPasses; i++ {
+		next := envVarPattern.ReplaceAllStringFunc(input, expandOne)
+		if next == input {
+			return input
+		}
+		input = next
+	}
+	return input
+}
+
+func expandOne(match string) string {
+	parts := envVarPattern.FindStringSubmatch(match)
+	if len(parts) < 2 {
+		return match
+	}
+	varExpr := parts[1]
+	if idx := strings.Index(varExpr, ":-"); idx != -1 {
+		name := varExpr[:idx]
+		def := varExpr[idx+2:]
+		if val, ok := os.LookupEnv(name); ok {
+			return val
+		}
+		return def
+	}
+	if val, ok := os.LookupEnv(varExpr); ok {
+		return val
+	}
+	return match
+}
+
+// DefaultHealthRetries sizes the startup probe budget at roughly one minute
+// with the default 5s interval. The old default of 3 (≈15s) was routinely
+// spent before a source-run service finished its first-request warm-up
+// (measured 45s for a Flask app in the Elastiflix pilot — see
+// docs/pilot-elastiflix.md). For http/tcp checks exhaustion is no longer
+// terminal either way: health recovery probing keeps watching after the
+// budget runs out. Exported because the health checker's fallback shares it.
+const DefaultHealthRetries = 12
+
+func applyDefaults(cfg *Config) {
+	if cfg.Settings.ShutdownTimeout == 0 {
+		cfg.Settings.ShutdownTimeout = 30 * time.Second
+	}
+	if cfg.Settings.HealthCheckInterval == 0 {
+		cfg.Settings.HealthCheckInterval = 5 * time.Second
+	}
+	if cfg.Settings.DockerPollInterval == 0 {
+		cfg.Settings.DockerPollInterval = 2 * time.Second
+	}
+
+	for _, c := range cfg.Containers {
+		if c.PullPolicy == "" {
+			c.PullPolicy = "always"
+		}
+		applyHealthCheckDefaults(c.HealthCheck, cfg.Settings.HealthCheckInterval)
+	}
+
+	for _, s := range cfg.Services {
+		applyHealthCheckDefaults(s.HealthCheck, cfg.Settings.HealthCheckInterval)
+		if s.Type == "dotnet" && s.Command == "" {
+			s.Command = "dotnet watch run"
+		}
+	}
+}
+
+// applyHealthCheckDefaults fills the zero fields of a health_check stanza.
+// Shared by the container and service loops so the two can't drift.
+func applyHealthCheckDefaults(hc *HealthCheckConfig, interval time.Duration) {
+	if hc == nil {
+		return
+	}
+	if hc.Interval == 0 {
+		hc.Interval = interval
+	}
+	if hc.Timeout == 0 {
+		hc.Timeout = 5 * time.Second
+	}
+	if hc.Retries == 0 {
+		hc.Retries = DefaultHealthRetries
+	}
+}
+
+func populateNames(cfg *Config) {
+	for name, c := range cfg.Containers {
+		c.Name = name
+	}
+	for name, s := range cfg.Services {
+		s.Name = name
+	}
+	for name, ext := range cfg.Externals {
+		if ext == nil {
+			continue
+		}
+		ext.Name = name
+	}
+}

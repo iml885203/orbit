@@ -1,0 +1,346 @@
+package daemon
+
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/platform"
+)
+
+// Sentinel errors classifying daemon start failures so callers can render
+// user-facing hints (see cmd/orbit/daemon_start_errors.go) without string
+// matching.
+var (
+	// ErrInvalidConfig means the config file failed to load/validate
+	// before the daemon was forked. The wrapped error has the parser
+	// diagnostic.
+	ErrInvalidConfig = errors.New("invalid config")
+	// ErrDaemonExitedEarly means the daemon process died before
+	// reaching ready. The wrapped error includes the previously-running
+	// PID and a tail of ~/.orbit/daemon.log.
+	ErrDaemonExitedEarly = errors.New("daemon exited early")
+	// ErrDaemonNotReady means the daemon process is still alive but
+	// did not pass health checks within the timeout. The wrapped error
+	// includes the PID and a tail of ~/.orbit/daemon.log.
+	ErrDaemonNotReady = errors.New("daemon not ready")
+)
+
+// DefaultPIDPath returns ~/.orbit/orbit.pid.
+func DefaultPIDPath() string {
+	return filepath.Join(OrbitDir(), "orbit.pid")
+}
+
+// DefaultLogPath returns ~/.orbit/daemon.log.
+func DefaultLogPath() string {
+	return filepath.Join(OrbitDir(), "daemon.log")
+}
+
+// WritePID writes the current process PID to the PID file.
+func WritePID() error {
+	path := DefaultPIDPath()
+	return os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0644)
+}
+
+// ReadPID reads the PID from the PID file. Returns 0 if not found.
+func ReadPID() int {
+	data, err := os.ReadFile(DefaultPIDPath())
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return pid
+}
+
+// RemovePID removes the PID file.
+func RemovePID() {
+	_ = os.Remove(DefaultPIDPath())
+}
+
+// IsProcessAlive checks if a process with the given PID exists.
+func IsProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	return platform.IsProcessAlive(pid)
+}
+
+// IsDaemonRunning checks if a daemon is already running by checking the PID file
+// and verifying the process is alive.
+func IsDaemonRunning() (int, bool) {
+	pid := ReadPID()
+	if pid == 0 {
+		return 0, false
+	}
+	if !IsProcessAlive(pid) {
+		// Stale PID file — clean up
+		RemovePID()
+		_ = os.Remove(DefaultSocketPath())
+		return 0, false
+	}
+	return pid, true
+}
+
+// EnsureDaemon checks if a daemon is running. If not, starts one.
+// Returns a Client connected to the daemon.
+//
+// On failure the error is wrapped with one of the sentinels above so the
+// CLI can render an actionable hint. Failures that surface a daemon-side
+// problem (early exit, not ready) also carry the last lines written to
+// ~/.orbit/daemon.log since the fork, so the user does not have to
+// `cat` the log to see why.
+func EnsureDaemon(configPath string, features []string) (*Client, error) {
+	if pid, alive := IsDaemonRunning(); alive {
+		// Verify we can actually connect
+		client := NewClient(DefaultSocketPath())
+		if err := client.Health(); err == nil {
+			return client, nil
+		}
+		// Process alive but socket dead — kill and restart
+		_ = platform.SendTermSignal(pid)
+		time.Sleep(500 * time.Millisecond)
+		RemovePID()
+		_ = os.Remove(DefaultSocketPath())
+	}
+
+	// Pre-validate config before forking. A schema/parse error here would
+	// otherwise kill the daemon child in its first 100ms and leave the
+	// CLI staring at a 30s WaitForReady timeout with no on-screen reason.
+	if _, err := config.Load(configPath); err != nil {
+		return nil, fmt.Errorf("%w %s: %w", ErrInvalidConfig, configPath, err)
+	}
+
+	// Capture the daemon log offset before fork so we can tail only the
+	// lines written by *this* attempt on failure.
+	logOffset := daemonLogSize()
+
+	pid, err := StartDaemon(configPath, features)
+	if err != nil {
+		return nil, fmt.Errorf("starting daemon: %w", err)
+	}
+
+	client := NewClient(DefaultSocketPath())
+	if err := waitForReadyOrDeath(client, pid, 30*time.Second); err != nil {
+		tail := tailDaemonLog(logOffset, 20)
+		switch {
+		case errors.Is(err, ErrDaemonExitedEarly):
+			return nil, fmt.Errorf("%w (pid %d)%s", ErrDaemonExitedEarly, pid, formatLogTail(tail))
+		default:
+			return nil, fmt.Errorf("%w within 30s (pid %d still alive)%s", ErrDaemonNotReady, pid, formatLogTail(tail))
+		}
+	}
+
+	return client, nil
+}
+
+// StartDaemon forks a new daemon process in a new session. Returns the
+// child PID so callers can poll for early exit while waiting for ready.
+func StartDaemon(configPath string, features []string) (int, error) {
+	// Fail fast if the dashboard port is held by another process. A
+	// silent-no-dashboard daemon start is the exact failure mode that
+	// masks stale/zombie daemon instances. The close/fork gap is a
+	// TOCTOU race, but the daemon child also calls listenDashboard and
+	// surfaces the same error — this pre-check exists so the user sees
+	// the conflict at the CLI instead of having to grep daemon.log.
+	probe, err := ListenDashboard(DashboardPort())
+	if err != nil {
+		return 0, err
+	}
+	_ = probe.Close()
+
+	configPath = strings.TrimSpace(configPath)
+
+	// Resolve to absolute path so the daemon (with different cwd) can find it
+	if !filepath.IsAbs(configPath) {
+		if abs, err := filepath.Abs(configPath); err == nil {
+			configPath = abs
+		}
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return 0, fmt.Errorf("finding executable: %w", err)
+	}
+
+	args := []string{"daemon", "run", "--config", configPath}
+	for _, f := range features {
+		args = append(args, "--feature", f)
+	}
+
+	logFile, err := os.OpenFile(DefaultLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return 0, fmt.Errorf("opening daemon log: %w", err)
+	}
+
+	cmd := exec.Command(exe, args...)
+	if configPath != "" {
+		cmd.Dir = filepath.Dir(configPath)
+	}
+	platform.DetachProcess(cmd)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	// Detach stdin so daemon doesn't hold terminal
+	cmd.Stdin = nil
+
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		return 0, fmt.Errorf("starting daemon process: %w", err)
+	}
+
+	pid := cmd.Process.Pid
+	// Let the daemon process run independently
+	_ = cmd.Process.Release()
+	_ = logFile.Close()
+
+	return pid, nil
+}
+
+// WaitForReady polls the daemon's health endpoint until it responds OK.
+func WaitForReady(client *Client, timeout time.Duration) error {
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-deadline:
+			return fmt.Errorf("daemon did not become ready within %s", timeout)
+		case <-ticker.C:
+			if err := client.Health(); err == nil {
+				return nil
+			}
+		}
+	}
+}
+
+// waitForReadyOrDeath polls health and process liveness in lockstep so a
+// daemon that dies in its first second surfaces a sub-second
+// ErrDaemonExitedEarly instead of a 30s timeout. Returns nil on ready,
+// ErrDaemonExitedEarly if the PID disappears, or a plain timeout error
+// (which EnsureDaemon converts to ErrDaemonNotReady) on deadline.
+func waitForReadyOrDeath(client *Client, pid int, timeout time.Duration) error {
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-deadline:
+			return fmt.Errorf("daemon did not become ready within %s", timeout)
+		case <-ticker.C:
+			if err := client.Health(); err == nil {
+				return nil
+			}
+			if !platform.IsProcessAlive(pid) {
+				return ErrDaemonExitedEarly
+			}
+		}
+	}
+}
+
+// daemonLogSize returns the current size of ~/.orbit/daemon.log in
+// bytes, or 0 if the file doesn't exist yet. Used as a marker so
+// tailDaemonLog can return only lines written after this point.
+func daemonLogSize() int64 {
+	info, err := os.Stat(DefaultLogPath())
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// tailDaemonLog reads daemon.log starting at offset and returns up to
+// maxLines of the most recent lines. Returns "" if the file is missing,
+// empty since offset, or unreadable — callers should not depend on
+// content being present.
+func tailDaemonLog(offset int64, maxLines int) string {
+	f, err := os.Open(DefaultLogPath())
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Seek(offset, 0); err != nil {
+		return ""
+	}
+	// Ring buffer of the last maxLines lines. Daemon failures usually
+	// write < 50 lines before exiting, so a full read is acceptable.
+	lines := make([]string, 0, maxLines)
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		if len(lines) == maxLines {
+			lines = lines[1:]
+		}
+		lines = append(lines, sc.Text())
+	}
+	return strings.Join(lines, "\n")
+}
+
+// formatLogTail prepends a header to the tail content so error messages
+// have a consistent shape. Returns "" if tail is empty so the caller's
+// format string doesn't leave a dangling header.
+func formatLogTail(tail string) string {
+	if tail == "" {
+		return ""
+	}
+	return "\n\nLast lines from " + DefaultLogPath() + ":\n" + indentLines(tail, "  ")
+}
+
+func indentLines(s, prefix string) string {
+	if s == "" {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Cleanup removes socket and PID file. Called on daemon exit.
+func Cleanup() {
+	_ = os.Remove(DefaultSocketPath())
+	RemovePID()
+}
+
+// RedirectLogToFile redirects the standard log output to the daemon log file.
+func RedirectLogToFile() (*os.File, error) {
+	logPath := DefaultLogPath()
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// SocketPath returns the socket path, checking ORBIT_SOCKET env var first.
+func SocketPath() string {
+	if s := os.Getenv("ORBIT_SOCKET"); s != "" {
+		return s
+	}
+	return DefaultSocketPath()
+}
+
+// defaultDashboardPort is the TCP port the dashboard listens on by default.
+const defaultDashboardPort = 19800
+
+// DashboardPort returns the dashboard TCP port, honoring the
+// ORBIT_DASHBOARD_PORT env var for isolation in e2e runs.
+func DashboardPort() int {
+	if s := os.Getenv("ORBIT_DASHBOARD_PORT"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultDashboardPort
+}

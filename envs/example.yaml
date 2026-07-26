@@ -1,0 +1,49 @@
+version: "2"
+
+settings:
+  shutdown_timeout: 10s
+  health_check_interval: 3s
+  docker_poll_interval: 2s
+
+containers:
+  redis:
+    image: redis:7.4
+    ports:
+      redis: 6379
+    health_check:
+      type: tcp
+      port: 6379
+
+  mongo:
+    image: mongo:8.0
+    ports:
+      mongo: 27017
+    # Cap WiredTiger cache: mongod defaults to ~half the Docker VM's RAM per
+    # instance, and the suite starts several mongos back-to-back — uncapped,
+    # later tests get OOM-killed mid rs-init (same lesson as the real envs'
+    # MONGO_WIREDTIGER_CACHE_SIZE_GB).
+    command: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    health_check:
+      type: tcp
+      port: 27017
+      # Cold starts under Docker churn (several e2e tests starting/stopping
+      # containers back-to-back) can exceed the default 3×3s budget — give
+      # mongo a real one so late tests in the suite don't flake degraded.
+      retries: 20
+    init:
+      type: mongo_rs
+      rs_members:
+        - "localhost:27017"
+
+services:
+  echo-server:
+    type: node
+    path: /tmp/orbit-test
+    command: node server.js
+    ports:
+      http: 3999
+    health_check:
+      type: http
+      path: /
+      port: 3999
+    depends_on: [redis]
