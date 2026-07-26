@@ -31,6 +31,7 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 Repo 還是 private 時，請先登入 [GitHub CLI](https://cli.github.com/)：
 
 ```bash
+gh auth setup-git
 gh api -H "Accept: application/vnd.github.raw+json" \
   repos/iml885203/orbit/contents/scripts/install.sh | bash
 orbit init

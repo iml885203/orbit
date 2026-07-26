@@ -34,6 +34,7 @@ While the repository is private, use an authenticated
 [GitHub CLI](https://cli.github.com/) session:
 
 ```bash
+gh auth setup-git
 gh api -H "Accept: application/vnd.github.raw+json" \
   repos/iml885203/orbit/contents/scripts/install.sh | bash
 orbit init
