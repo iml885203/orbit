@@ -42,8 +42,16 @@ are not removed.
 
 ### Manual download
 
-Download `orbit-<os>-<arch>` (or the Windows `.exe`) from the current project
-Pages site and move the binary onto your `PATH`.
+Download `orbit-<os>-<arch>` (or the Windows `.exe`) and `checksums.txt` from
+the matching [GitHub Release](https://github.com/iml885203/orbit/releases).
+Verify the SHA-256 checksum before moving the binary onto your `PATH`.
+
+### Agent plugin
+
+Each source release includes `plugins/orbit-agent`, with manifests for both
+Codex and Claude Code. Add that directory as a local plugin using your agent's
+plugin command. The two manifests and Orbit release always carry the same
+version; do not mix a plugin from one release with an older binary.
 
 ## Contributing to Orbit
 

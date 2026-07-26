@@ -33,6 +33,10 @@ curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/instal
 orbit init
 ```
 
+預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
+在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。Orbit
+不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
+
 升級、rollback、移除、手動下載與從 source build
 請見[安裝與開發](docs/development.zh-TW.md)。
 

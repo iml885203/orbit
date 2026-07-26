@@ -38,8 +38,16 @@ orbit daemon restart
 
 ### 手動下載
 
-從目前專案的 Pages site 下載 `orbit-<os>-<arch>`（Windows 為 `.exe`），
-再把 binary 放到 `PATH`。
+從對應的 [GitHub Release](https://github.com/iml885203/orbit/releases)
+下載 `orbit-<os>-<arch>`（Windows 為 `.exe`）與 `checksums.txt`。驗證
+SHA-256 checksum 後，再把 binary 放到 `PATH`。
+
+### Agent plugin
+
+每個 source release 都包含 `plugins/orbit-agent`，內有 Codex 與 Claude Code
+兩份 manifest。使用 agent 的 plugin 指令，把該目錄加入為 local plugin。
+兩份 manifest 與 Orbit release 必須維持相同版本；不要讓新版 plugin 搭配舊版
+binary。
 
 ## 貢獻 Orbit
 

@@ -29,7 +29,9 @@ func Extensions() []extension.Extension {
 			Steps: devdb.InitSteps,
 		},
 		Distribution: &extension.Distribution{
+			EnvRepoURL: "https://github.com/iml885203/orbit-demo.git",
 			InstallURL: "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
+			DefaultEnv: "quickstart.yaml",
 		},
 	}}
 }

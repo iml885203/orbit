@@ -38,6 +38,12 @@ orbit init
 Upgrade, rollback, uninstall, manual downloads, and source builds are documented
 in [Installation and development](docs/development.md).
 
+The default setup uses the
+[Orbit demo environment](https://github.com/iml885203/orbit-demo): a
+standard-library Python service running on the host with Redis in a container.
+Orbit does not install Python or other project runtimes; `orbit doctor` reports
+what the selected environment expects.
+
 ## Common workflows
 
 ```bash
@@ -82,6 +88,11 @@ plugin. Its operational skill teaches agents to inspect state first, use
 Without installing the plugin, point an agent to
 [the skill](plugins/orbit-agent/skills/orbit/SKILL.md) and
 [the JSON contract](docs/agent-cli.md).
+
+To use the bundled plugin directly from a source checkout, add
+`plugins/orbit-agent` as a local Codex plugin or Claude Code plugin. The plugin
+version always matches the Orbit release tag; see
+[Versioning and compatibility](docs/versioning.md).
 
 ## Dashboard
 
