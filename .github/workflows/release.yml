@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,10 +17,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -29,14 +37,14 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
       - name: Verify release
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
         run: |
           test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
           test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
           make preflight
       - name: Build release assets
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
         run: |
           set -eu
           build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -54,4 +62,5 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/* --generate-notes --title "${{ github.ref_name }}"
+          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+        run: gh release create "$RELEASE_VERSION" dist/* --generate-notes --title "$RELEASE_VERSION"
