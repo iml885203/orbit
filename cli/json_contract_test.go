@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/daemon"
@@ -113,6 +114,26 @@ func TestWriteJSONErrorClassifiesDependencyBlocked(t *testing.T) {
 	}
 	if !got.Error.Retryable {
 		t.Fatal("retryable = false, want true")
+	}
+}
+
+func TestWriteJSONErrorClassifiesDashboardPortConflict(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit up --json", &daemon.PortConflictError{
+		Port:          19800,
+		PID:           123,
+		SuggestedPort: 29800,
+		Err:           fmt.Errorf("bind"),
+	})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "dashboard_port_conflict" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable || !strings.Contains(got.Error.NextCommand, "ORBIT_DASHBOARD_PORT=29800") {
+		t.Fatalf("error recovery = %+v", got.Error)
 	}
 }
 

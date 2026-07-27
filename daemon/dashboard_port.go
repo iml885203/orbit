@@ -8,19 +8,26 @@ import (
 )
 
 // PortConflictError describes why the dashboard TCP port could not be
-// bound. It carries the offending PID so the caller can tell the user
-// which process to kill.
+// bound. It carries owner evidence and a verified free alternative so the
+// caller can offer recovery without asking the user to investigate ports.
 type PortConflictError struct {
-	Port int
-	PID  int
-	Err  error `tstype:"string"`
+	Port          int
+	PID           int
+	SuggestedPort int
+	Err           error `tstype:"string"`
 }
 
 func (e *PortConflictError) Error() string {
 	if e.PID > 0 {
-		return fmt.Sprintf("dashboard port %d already in use (held by pid %d)", e.Port, e.PID)
+		if e.SuggestedPort <= 0 {
+			return fmt.Sprintf("dashboard port %d already in use (held by pid %d)", e.Port, e.PID)
+		}
+		return fmt.Sprintf("dashboard port %d already in use (held by pid %d); port %d is available", e.Port, e.PID, e.SuggestedPort)
 	}
-	return fmt.Sprintf("dashboard port %d already in use: %v", e.Port, e.Err)
+	if e.SuggestedPort <= 0 {
+		return fmt.Sprintf("dashboard port %d already in use: %v", e.Port, e.Err)
+	}
+	return fmt.Sprintf("dashboard port %d already in use; port %d is available: %v", e.Port, e.SuggestedPort, e.Err)
 }
 
 func (e *PortConflictError) Unwrap() error { return e.Err }
@@ -36,7 +43,29 @@ func ListenDashboard(port int) (net.Listener, error) {
 		if holders := process.FindPortHolders([]int{port}); len(holders) > 0 {
 			pid = holders[0].PID
 		}
-		return nil, &PortConflictError{Port: port, PID: pid, Err: err}
+		return nil, &PortConflictError{
+			Port:          port,
+			PID:           pid,
+			SuggestedPort: availableDashboardPort(port),
+			Err:           err,
+		}
 	}
 	return ln, nil
+}
+
+func availableDashboardPort(after int) int {
+	for candidate := after + 1; candidate <= after+100 && candidate <= 65535; candidate++ {
+		listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", candidate))
+		if err != nil {
+			continue
+		}
+		_ = listener.Close()
+		return candidate
+	}
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = listener.Close() }()
+	return listener.Addr().(*net.TCPAddr).Port
 }

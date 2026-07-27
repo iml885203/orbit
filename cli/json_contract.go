@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"runtime"
+	"strconv"
 
 	"github.com/iml885203/orbit/daemon"
 )
@@ -99,6 +101,24 @@ func classify(err error) JSONError {
 			Hint:        "Start Orbit with 'orbit up' or inspect daemon state with 'orbit daemon status --json'.",
 			Retryable:   true,
 			NextCommand: "orbit status --json",
+		}
+	}
+	var portConflict *daemon.PortConflictError
+	if errors.As(err, &portConflict) {
+		nextCommand := ""
+		if portConflict.SuggestedPort > 0 {
+			if runtime.GOOS == "windows" {
+				nextCommand = "$env:ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + "; orbit up"
+			} else {
+				nextCommand = "ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + " orbit up"
+			}
+		}
+		return JSONError{
+			Code:        "dashboard_port_conflict",
+			Message:     msg,
+			Hint:        "Use the suggested free dashboard port or stop the reported port owner.",
+			Retryable:   true,
+			NextCommand: nextCommand,
 		}
 	}
 	switch {

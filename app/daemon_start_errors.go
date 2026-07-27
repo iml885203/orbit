@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
@@ -46,7 +47,10 @@ func writeDaemonStartError(w io.Writer, err error) {
 }
 
 func hintFor(err error) string {
+	var portConflict *daemon.PortConflictError
 	switch {
+	case errors.As(err, &portConflict):
+		return dashboardPortConflictHint(portConflict.SuggestedPort)
 	case errors.Is(err, daemon.ErrInvalidConfig):
 		return "Next steps:\n" +
 			"  orbit env list                # see available envs\n" +
@@ -62,4 +66,20 @@ func hintFor(err error) string {
 			"  orbit daemon restart                      # try again\n"
 	}
 	return ""
+}
+
+func dashboardPortConflictHint(port int) string {
+	if port <= 0 {
+		return "Next step:\n  choose another ORBIT_DASHBOARD_PORT, then retry\n"
+	}
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf(
+			"Next steps:\n  $env:ORBIT_DASHBOARD_PORT=%d\n  orbit up\n",
+			port,
+		)
+	}
+	return fmt.Sprintf(
+		"Next steps:\n  export ORBIT_DASHBOARD_PORT=%d\n  orbit up\n",
+		port,
+	)
 }

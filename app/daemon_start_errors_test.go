@@ -58,3 +58,20 @@ func TestWriteDaemonStartError_UnknownErrorNoHint(t *testing.T) {
 		t.Errorf("expected Error line, got:\n%s", out)
 	}
 }
+
+func TestWriteDaemonStartError_PortConflictShowsCopyableRecovery(t *testing.T) {
+	err := fmt.Errorf("starting daemon: %w", &daemon.PortConflictError{
+		Port:          19800,
+		PID:           123,
+		SuggestedPort: 29800,
+		Err:           errors.New("bind"),
+	})
+	var buf bytes.Buffer
+	writeDaemonStartError(&buf, err)
+	out := buf.String()
+	for _, want := range []string{"held by pid 123", "ORBIT_DASHBOARD_PORT=29800", "orbit up"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}

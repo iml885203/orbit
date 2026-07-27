@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -39,6 +40,14 @@ func TestListenDashboard_FailsWhenPortHeld(t *testing.T) {
 	if conflict.Port != port {
 		t.Errorf("conflict.Port = %d, want %d", conflict.Port, port)
 	}
+	if conflict.SuggestedPort <= 0 || conflict.SuggestedPort == port {
+		t.Errorf("conflict.SuggestedPort = %d, want a different usable port", conflict.SuggestedPort)
+	}
+	suggested, suggestedErr := net.Listen("tcp", fmt.Sprintf("localhost:%d", conflict.SuggestedPort))
+	if suggestedErr != nil {
+		t.Fatalf("suggested port %d is not available: %v", conflict.SuggestedPort, suggestedErr)
+	}
+	_ = suggested.Close()
 	if msg := conflict.Error(); !strings.Contains(msg, "already in use") {
 		t.Errorf("error text should hint at port-in-use, got %q", msg)
 	}
