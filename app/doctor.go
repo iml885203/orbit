@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -116,19 +115,20 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	warn := cli.Yellow.Sprint("!")
-	for _, t := range daemonsrv.HostToolChecks {
-		path, err := exec.LookPath(t.Binary)
-		if err != nil {
-			icon := warn
-			if t.Critical {
+	if cfg != nil {
+		for _, check := range daemonsrv.HostEnvironmentChecks(cfg) {
+			icon := pass
+			switch check.Status {
+			case daemon.CheckFail:
 				icon = fail
+			case daemon.CheckWarn:
+				icon = cli.Yellow.Sprint("!")
 			}
-			fmt.Printf("  %s %s not found on PATH\n", icon, t.Name)
-			_, _ = cli.Faint.Printf("      → %s\n", t.Hint)
-			continue
+			fmt.Printf("  %s %s: %s\n", icon, check.Name, check.Message)
+			if check.Hint != "" && check.Status != daemon.CheckPass {
+				_, _ = cli.Faint.Printf("      → %s\n", check.Hint)
+			}
 		}
-		fmt.Printf("  %s %s found at %s\n", pass, t.Name, path)
 	}
 
 	if daemonRunning {
@@ -182,6 +182,7 @@ func localDoctorResponse() *daemon.DoctorResponse {
 	} else {
 		cfg = loaded
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckPass, Message: configFile})
+		checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
 	}
 	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running"})
 	// Feature-owned offline checks (the DB workflow) come from the

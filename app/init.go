@@ -49,9 +49,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	root := detectWorkspaceRoot(settings)
 	if root != "" {
-		if initYes {
-			fmt.Printf("  %s %s\n", cli.Green.Sprint("✓"), root)
-		} else {
+		if !initYes {
 			fmt.Printf("  Found: %s\n", root)
 			input := prompt(fmt.Sprintf("  Workspace root [%s]: ", root))
 			if input != "" {
@@ -204,16 +202,16 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// Step 5: Next steps
 	fmt.Println()
 	_, _ = cli.Bold.Println("Setup complete!")
-	_, _ = cli.Faint.Println("  orbit up --infra      start infrastructure")
-	_, _ = cli.Faint.Println("  orbit up              start all services")
-	_, _ = cli.Faint.Println("  orbit open            open web UI")
+	_, _ = cli.Faint.Println("  Next: orbit up        start the environment")
+	_, _ = cli.Faint.Println("        orbit open      open the dashboard")
 
 	return nil
 }
 
 // detectWorkspaceRoot tries to find the workspace root automatically.
 func detectWorkspaceRoot(settings *daemon.Settings) string {
-	if cwd, err := os.Getwd(); err == nil {
+	cwd, _ := os.Getwd()
+	if cwd != "" {
 		if info, statErr := os.Stat(filepath.Join(cwd, "envs")); statErr == nil && info.IsDir() {
 			return cwd
 		}
@@ -238,7 +236,10 @@ func detectWorkspaceRoot(settings *daemon.Settings) string {
 		}
 	}
 
-	return ""
+	// A clean checkout has no Orbit markers yet. Falling back to where the
+	// user invoked init keeps first use aligned with every other project CLI:
+	// the current directory is the workspace unless they say otherwise.
+	return cwd
 }
 
 // workspaceCandidates aggregates the extensions' auto-detect candidate

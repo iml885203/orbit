@@ -22,7 +22,7 @@ import (
 // informational skip.
 func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 	if !f.dbWorkflowConfigured() {
-		return []daemon.DoctorCheck{DBWorkflowSkippedCheck()}
+		return nil
 	}
 
 	_, rootCheck, _ := f.host.ResolveWorkspaceRoot()
@@ -135,26 +135,39 @@ func loginHint(registry string) string {
 	return "run: docker login " + registry
 }
 
-// publishToolchainChecks reports whether sqlpackage — the one publish
-// prerequisite the shared host-tool registry doesn't cover — is present.
-// The dotnet SDK is already checked by the daemon's HostToolChecks;
-// duplicating it here would print two contradictory doctor rows.
-// Informational when missing — the legacy build/reset flow works
-// without it.
+// publishToolchainChecks reports the host tools required by the configured
+// SQL Server project workflow. Core doctor checks stay environment-specific,
+// so an env without this optional workflow never sees .NET or sqlpackage.
 func publishToolchainChecks() []daemon.DoctorCheck {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	var checks []daemon.DoctorCheck
+	if v, err := sqlpublish.DotnetVersion(ctx); err != nil {
+		checks = append(checks, daemon.DoctorCheck{
+			Name:    "SQL Server .NET SDK",
+			Status:  daemon.CheckFail,
+			Message: "dotnet SDK not found — SQL project commands unavailable",
+			Hint:    "Install the .NET SDK: https://dotnet.microsoft.com/download",
+		})
+	} else {
+		checks = append(checks, daemon.DoctorCheck{
+			Name:    "SQL Server .NET SDK",
+			Status:  daemon.CheckPass,
+			Message: v,
+		})
+	}
+
 	v, err := sqlpublish.SqlpackageVersion(ctx)
 	if err != nil {
-		return []daemon.DoctorCheck{{
+		return append(checks, daemon.DoctorCheck{
 			Name: "Publish Toolchain", Status: daemon.CheckWarn,
 			Message: "sqlpackage not found — `orbit db publish` unavailable",
 			Hint:    sqlpublish.InstallHint,
-		}}
+		})
 	}
-	return []daemon.DoctorCheck{{
+	return append(checks, daemon.DoctorCheck{
 		Name: "Publish Toolchain", Status: daemon.CheckPass,
 		Message: "sqlpackage " + v,
-	}}
+	})
 }

@@ -13,7 +13,10 @@ type HostToolCheck struct {
 	Binary   string
 	Critical bool
 	Hint     string
-	Version  func(path string) (string, error)
+	// RequiredBy lists active services that need the tool. An empty list
+	// denotes a core Orbit dependency rather than an environment requirement.
+	RequiredBy []string
+	Version    func(path string) (string, error)
 }
 
 // WorkspaceRootCheck renders a workspace root value as a DoctorCheck.

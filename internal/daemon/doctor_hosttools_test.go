@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/iml885203/orbit/config"
 )
 
 // TestCheckHostTool_MissingCritical verifies a critical tool absent from PATH
@@ -108,20 +110,23 @@ func TestDotnetSDKVersion_EmptyIsError(t *testing.T) {
 	}
 }
 
-func TestCheckNode_MissingWarns(t *testing.T) {
+func TestCheckNode_MissingFailsWhenRequired(t *testing.T) {
 	t.Setenv("PATH", "")
-	got := checkNode()
-	if got.Status != CheckWarn {
-		t.Errorf("want CheckWarn, got %s", got.Status)
+	got := checkNode([]string{"web"})
+	if got.Status != CheckFail {
+		t.Errorf("want CheckFail, got %s", got.Status)
+	}
+	if !strings.Contains(got.Message, "required by web") {
+		t.Errorf("want service context, got %q", got.Message)
 	}
 }
 
-func TestCheckNode_OldVersionWarns(t *testing.T) {
+func TestCheckNode_ProjectOwnsVersionPolicy(t *testing.T) {
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v18.0.0'\n")
 	t.Setenv("PATH", dir)
-	got := checkNode()
-	if got.Status != CheckWarn {
-		t.Fatalf("want CheckWarn for old version, got %s (%s)", got.Status, got.Message)
+	got := checkNode([]string{"web"})
+	if got.Status != CheckPass {
+		t.Fatalf("Orbit should not override the project's version policy, got %s (%s)", got.Status, got.Message)
 	}
 	if !strings.Contains(got.Message, "v18") {
 		t.Errorf("want version in message, got %q", got.Message)
@@ -131,18 +136,32 @@ func TestCheckNode_OldVersionWarns(t *testing.T) {
 func TestCheckNode_ModernVersionPasses(t *testing.T) {
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v22.3.1'\n")
 	t.Setenv("PATH", dir)
-	got := checkNode()
+	got := checkNode([]string{"web"})
 	if got.Status != CheckPass {
 		t.Fatalf("want CheckPass, got %s (%s)", got.Status, got.Message)
 	}
 }
 
-func TestParseNodeMajor(t *testing.T) {
-	cases := map[string]int{"v22.3.1": 22, "v18.0.0": 18, "": 0, "garbage": 0, "v20": 0}
-	for in, want := range cases {
-		if got := parseNodeMajor(in); got != want {
-			t.Errorf("parseNodeMajor(%q) = %d, want %d", in, got, want)
+func TestRequiredHostTools_OnlyReportsSelectedEnvironment(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"demo-api": {Type: "python", Command: "python3 -m http.server 8080"},
+	}}
+
+	tools, nodeServices := requiredHostTools(cfg)
+	if len(nodeServices) != 0 {
+		t.Fatalf("node services = %v, want none", nodeServices)
+	}
+	var names []string
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+		if tool.Binary == "python3" {
+			if len(tool.RequiredBy) != 1 || tool.RequiredBy[0] != "demo-api" {
+				t.Errorf("Python required by = %v, want [demo-api]", tool.RequiredBy)
+			}
 		}
+	}
+	if got := strings.Join(names, ","); got != "Git,Python" {
+		t.Errorf("tools = %s, want Git,Python", got)
 	}
 }
 

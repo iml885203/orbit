@@ -18,7 +18,7 @@ import (
 // the DB-workflow gate applied to the offline local doctor response.
 func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
 	if !DBWorkflowConfigured(cfg) {
-		return []daemon.DoctorCheck{DBWorkflowSkippedCheck()}
+		return nil
 	}
 	rootCheck, _ := daemon.WorkspaceRootCheck(daemon.WorkspaceRootFromEnv())
 	return []daemon.DoctorCheck{rootCheck}
@@ -26,14 +26,13 @@ func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
 
 // PrintDBWorkflowChecks is the human-rendered twin of the daemon's
 // dbWorkflowChecks: workspace root, the optional db-root override, SQL
-// image presence, and the db build repos. Envs without a
-// sql-server container get one skip line instead of red noise.
+// image presence, and the db build repos. Envs without this optional
+// workflow stay silent.
 func PrintDBWorkflowChecks(cfg *config.Config) {
 	pass := cli.Green.Sprint("✓")
 	fail := cli.Red.Sprint("✗")
 
 	if !DBWorkflowConfigured(cfg) {
-		fmt.Printf("  %s %s\n", cli.Faint.Sprint("—"), DBWorkflowSkippedCheck().Message)
 		return
 	}
 

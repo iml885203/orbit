@@ -43,14 +43,6 @@ func (f *dbFeature) rejectIfDBNotConfigured(w http.ResponseWriter) bool {
 	return true
 }
 
-// DBWorkflowSkippedCheck is the informational entry both doctor surfaces
-// (daemon runDoctorChecks and the CLI daemon-down fallback) emit when the
-// active env has no sql-server container. One constructor so the wording
-// can't drift between the daemon-up and daemon-down paths.
-func DBWorkflowSkippedCheck() daemon.DoctorCheck {
-	return daemon.DoctorCheck{Name: "DB Workflow", Status: daemon.CheckInfo, Message: "not configured (no sql-server container or sql_projects in the active env) — db checks skipped"}
-}
-
 // SQLServerContainerName is the container name that opts an env into the
 // DB workflow. Exported so consumers (snapshots, doctor, CLI) reference
 // the concept instead of repeating the literal. Owned by the DB-workflow

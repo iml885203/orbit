@@ -88,20 +88,11 @@ func TestDBWorkflowGate_MetaReportsConfigured(t *testing.T) {
 	}
 }
 
-func TestDBWorkflowGate_DoctorSkipsDBChecksWhenUnconfigured(t *testing.T) {
+func TestDBWorkflowGate_DoctorIsSilentWhenUnconfigured(t *testing.T) {
 	s := newTestDBFeature(t, testConfig())
 	checks := s.dbWorkflowChecks()
-	var sawSkip bool
-	for _, c := range checks {
-		if c.Name == "DB Workflow" && c.Status == daemon.CheckInfo {
-			sawSkip = true
-		}
-		if c.Name == "WORKSPACE_ROOT" || c.Name == "SQL Image" {
-			t.Errorf("unconfigured env still ran db check %q", c.Name)
-		}
-	}
-	if !sawSkip {
-		t.Error("expected an informational 'DB Workflow' skip check")
+	if len(checks) != 0 {
+		t.Errorf("unconfigured env reported DB checks: %+v", checks)
 	}
 }
 

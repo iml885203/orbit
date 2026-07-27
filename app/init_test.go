@@ -99,6 +99,57 @@ func TestDetectWorkspaceRoot_PrefersCurrentDirectoryWithEnvs(t *testing.T) {
 	}
 }
 
+func TestDetectWorkspaceRoot_FallsBackToCurrentDirectory(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	current := t.TempDir()
+	if err := os.Chdir(current); err != nil {
+		t.Fatal(err)
+	}
+	current, err = os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
+	if got := detectWorkspaceRoot(settings); got != current {
+		t.Errorf("detectWorkspaceRoot = %q, want current directory %q", got, current)
+	}
+}
+
+func TestDetectWorkspaceRoot_PrefersSavedRootOverUnmarkedCurrentDirectory(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	saved := t.TempDir()
+	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
+	if err := settings.Set("workspace_root", saved); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := detectWorkspaceRoot(settings); got != saved {
+		t.Errorf("detectWorkspaceRoot = %q, want saved root %q", got, saved)
+	}
+}
+
 // setTestExtensions swaps the package extensions for one test.
 func setTestExtensions(t *testing.T, exts []extension.Extension) {
 	t.Helper()

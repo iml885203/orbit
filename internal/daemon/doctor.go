@@ -8,39 +8,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/dockerctx"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/moby/moby/client"
 )
 
-// HostToolChecks is the ordered list of host CLI dependencies orbit expects on
-// PATH. Critical tools (docker, dotnet) produce CheckFail when missing; the
-// rest warn.
-var HostToolChecks = []HostToolCheck{
+// CoreHostToolChecks is the ordered list of host dependencies Orbit itself
+// needs independently of the active environment.
+var CoreHostToolChecks = []HostToolCheck{
 	{
-		Name:     "dotnet",
-		Binary:   "dotnet",
-		Critical: true,
-		Hint:     "Install the .NET SDK: https://dotnet.microsoft.com/download",
-		Version:  dotnetSDKVersion,
-	},
-	{
-		Name:     "git",
+		Name:     "Git",
 		Binary:   "git",
 		Critical: false,
 		Hint:     "Install git (brew install git or your distro's package manager)",
-		Version:  versionFromCmd("--version"),
-	},
-	{
-		Name:     "pnpm",
-		Binary:   "pnpm",
-		Critical: false,
-		Hint:     "Install pnpm: npm install -g pnpm (or brew install pnpm)",
 		Version:  versionFromCmd("--version"),
 	},
 }
@@ -86,6 +72,10 @@ func dotnetSDKVersion(path string) (string, error) {
 // its version. A missing critical tool fails; a missing non-critical tool
 // warns. Version probe errors are tolerated — they do not flip a pass to fail.
 func checkHostTool(c HostToolCheck) DoctorCheck {
+	requiredBy := ""
+	if len(c.RequiredBy) > 0 {
+		requiredBy = " (required by " + strings.Join(c.RequiredBy, ", ") + ")"
+	}
 	path, err := exec.LookPath(c.Binary)
 	if err != nil {
 		status := CheckWarn
@@ -95,7 +85,7 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 		return DoctorCheck{
 			Name:    c.Name,
 			Status:  status,
-			Message: c.Binary + " not found on PATH",
+			Message: c.Binary + " not found on PATH" + requiredBy,
 			Hint:    c.Hint,
 		}
 	}
@@ -108,7 +98,167 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 			msg = fmt.Sprintf("%s (%s)", msg, v)
 		}
 	}
+	msg += requiredBy
 	return DoctorCheck{Name: c.Name, Status: CheckPass, Message: msg}
+}
+
+// HostEnvironmentChecks reports only the tools the selected environment
+// actually needs. Optional Orbit features contribute their own checks, so a
+// Python-only project never has to understand Node, .NET, or SQL tooling.
+func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
+	tools, nodeServices := requiredHostTools(cfg)
+	results := make([]DoctorCheck, len(tools), len(tools)+1)
+
+	var wg sync.WaitGroup
+	for i, tool := range tools {
+		wg.Add(1)
+		go func(i int, tool HostToolCheck) {
+			defer wg.Done()
+			results[i] = checkHostTool(tool)
+		}(i, tool)
+	}
+	wg.Wait()
+
+	if len(nodeServices) > 0 {
+		results = append(results, checkNode(nodeServices))
+	}
+	return results
+}
+
+func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {
+	requirements := map[string]map[string]bool{}
+	add := func(binary, service string) {
+		if requirements[binary] == nil {
+			requirements[binary] = map[string]bool{}
+		}
+		requirements[binary][service] = true
+	}
+
+	var nodeServices []string
+	if cfg != nil {
+		names := make([]string, 0, len(cfg.Services))
+		for name := range cfg.Services {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			service := cfg.Services[name]
+			if service == nil {
+				continue
+			}
+			binary := commandBinary(service.Command)
+			switch service.Type {
+			case "dotnet":
+				add("dotnet", name)
+			case "node":
+				nodeServices = append(nodeServices, name)
+				if isNodePackageManager(binary) {
+					add(binary, name)
+				}
+			case "python":
+				if binary == "" {
+					binary = "python3"
+				}
+				add(binary, name)
+			default:
+				if isKnownRuntime(binary) {
+					add(binary, name)
+				}
+			}
+		}
+	}
+
+	tools := append([]HostToolCheck(nil), CoreHostToolChecks...)
+	for _, binary := range []string{"dotnet", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
+		services := sortedRequirementNames(requirements[binary])
+		if len(services) == 0 {
+			continue
+		}
+		tools = append(tools, hostToolDefinition(binary, services))
+	}
+	return tools, nodeServices
+}
+
+func commandBinary(command string) string {
+	fields := strings.Fields(command)
+	for len(fields) > 0 && strings.Contains(fields[0], "=") {
+		fields = fields[1:]
+	}
+	if len(fields) > 1 && fields[0] == "env" {
+		fields = fields[1:]
+		for len(fields) > 0 && strings.Contains(fields[0], "=") {
+			fields = fields[1:]
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	return filepath.Base(fields[0])
+}
+
+func isNodePackageManager(binary string) bool {
+	switch binary {
+	case "npm", "pnpm", "yarn", "bun":
+		return true
+	default:
+		return false
+	}
+}
+
+func isKnownRuntime(binary string) bool {
+	switch binary {
+	case "dotnet", "python", "python3", "uv", "poetry", "node", "npm", "pnpm", "yarn", "bun":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortedRequirementNames(set map[string]bool) []string {
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func hostToolDefinition(binary string, requiredBy []string) HostToolCheck {
+	tool := HostToolCheck{
+		Name:       binary,
+		Binary:     binary,
+		Critical:   true,
+		RequiredBy: requiredBy,
+		Version:    versionFromCmd("--version"),
+	}
+	switch binary {
+	case "dotnet":
+		tool.Name = ".NET SDK"
+		tool.Hint = "Install the .NET SDK: https://dotnet.microsoft.com/download"
+		tool.Version = dotnetSDKVersion
+	case "python", "python3":
+		tool.Name = "Python"
+		tool.Hint = "Install Python 3: https://www.python.org/downloads/"
+	case "uv":
+		tool.Name = "uv"
+		tool.Hint = "Install uv: https://docs.astral.sh/uv/getting-started/installation/"
+	case "poetry":
+		tool.Name = "Poetry"
+		tool.Hint = "Install Poetry: https://python-poetry.org/docs/#installation"
+	case "pnpm":
+		tool.Name = "pnpm"
+		tool.Hint = "Install pnpm: https://pnpm.io/installation"
+	case "npm":
+		tool.Name = "npm"
+		tool.Hint = "Install Node.js (includes npm): https://nodejs.org/"
+	case "yarn":
+		tool.Name = "Yarn"
+		tool.Hint = "Install Yarn: https://yarnpkg.com/getting-started/install"
+	case "bun":
+		tool.Name = "Bun"
+		tool.Hint = "Install Bun: https://bun.sh/docs/installation"
+	}
+	return tool
 }
 
 // DockerCheck resolves the docker CLI on PATH and, if present, pings the
@@ -198,53 +348,26 @@ func checkOrbitOnPath() DoctorCheck {
 	}
 }
 
-// minNodeMajor is the lowest Node.js major version orbit-managed services
-// are known to run on.
-const minNodeMajor = 22
-
-// checkNode probes for a node binary on PATH and its major version. Missing
-// binary warns (non-critical); binary present but major < minNodeMajor also
-// warns; otherwise passes with the reported version.
-func checkNode() DoctorCheck {
+// checkNode probes the runtime only when the selected environment has a Node
+// service. Project-specific version files are the authority for acceptable
+// versions; Orbit does not impose its own Node release on user services.
+func checkNode(requiredBy []string) DoctorCheck {
+	suffix := " (required by " + strings.Join(requiredBy, ", ") + ")"
 	path, err := exec.LookPath("node")
 	if err != nil {
 		return DoctorCheck{
 			Name:    "Node.js",
-			Status:  CheckWarn,
-			Message: "node not found on PATH",
-			Hint:    "Install Node.js >=22 (https://nodejs.org or `brew install node`)",
+			Status:  CheckFail,
+			Message: "node not found on PATH" + suffix,
+			Hint:    "Install the version required by your project: https://nodejs.org/",
 		}
 	}
 	version, err := versionFromCmd("--version")(path)
 	if err != nil {
 		slog.Debug("version probe failed", "component", "doctor", "tool", "node", "err", err)
-		return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: "found at " + path}
+		return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: "found at " + path + suffix}
 	}
-	major := parseNodeMajor(version)
-	if major > 0 && major < minNodeMajor {
-		return DoctorCheck{
-			Name:    "Node.js",
-			Status:  CheckWarn,
-			Message: fmt.Sprintf("found at %s (%s) — orbit services expect >=%d", path, version, minNodeMajor),
-			Hint:    fmt.Sprintf("Upgrade Node.js to >=%d", minNodeMajor),
-		}
-	}
-	return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: fmt.Sprintf("found at %s (%s)", path, version)}
-}
-
-// parseNodeMajor extracts the leading major number from "v22.3.1" style
-// output. Returns 0 on unparseable input (caller treats as pass).
-func parseNodeMajor(v string) int {
-	v = strings.TrimPrefix(v, "v")
-	dot := strings.Index(v, ".")
-	if dot <= 0 {
-		return 0
-	}
-	n, err := strconv.Atoi(v[:dot])
-	if err != nil {
-		return 0
-	}
-	return n
+	return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: fmt.Sprintf("found at %s (%s)%s", path, version, suffix)}
 }
 
 func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
@@ -275,21 +398,8 @@ func (s *Server) runDoctorChecks() []DoctorCheck {
 	}
 	checks = append(checks, DoctorCheck{Name: "Daemon", Status: CheckPass, Message: formatDaemonMsg(healthy, len(services))})
 
-	// Host CLI tools orbit shells out to. Probes run in parallel so a slow
-	// or hung binary cannot stall the whole doctor response; ordering is
-	// preserved via index-keyed result slots.
-	hostResults := make([]DoctorCheck, len(HostToolChecks))
-	var hostWG sync.WaitGroup
-	for i, tool := range HostToolChecks {
-		hostWG.Add(1)
-		go func(i int, t HostToolCheck) {
-			defer hostWG.Done()
-			hostResults[i] = checkHostTool(t)
-		}(i, tool)
-	}
-	hostWG.Wait()
-	checks = append(checks, hostResults...)
-	checks = append(checks, checkNode(), checkOrbitOnPath())
+	checks = append(checks, HostEnvironmentChecks(s.Config())...)
+	checks = append(checks, checkOrbitOnPath())
 
 	// Feature-owned check groups (the DB workflow) come from registered
 	// contributors.

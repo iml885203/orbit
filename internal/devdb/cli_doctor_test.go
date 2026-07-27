@@ -4,30 +4,20 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/daemon"
 )
 
 // Regression (moved from the old cmd/orbit doctor test): the offline
 // doctor's DB-workflow gate — an env without a sql-server container
-// gets an informational skip, never a WORKSPACE_ROOT warn/fail.
-func TestCLIDoctorChecks_UnconfiguredEnvSkips(t *testing.T) {
+// stays silent instead of exposing an irrelevant feature concept.
+func TestCLIDoctorChecks_UnconfiguredEnvIsSilent(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{
 			"redis": {Name: "redis", Image: "redis:7.4"},
 		},
 	}
 	checks := CLIDoctorChecks(cfg)
-	var sawSkip bool
-	for _, c := range checks {
-		if c.Name == "WORKSPACE_ROOT" {
-			t.Errorf("unconfigured env still ran WORKSPACE_ROOT check (%s)", c.Status)
-		}
-		if c.Name == "DB Workflow" && c.Status == daemon.CheckInfo {
-			sawSkip = true
-		}
-	}
-	if !sawSkip {
-		t.Error("expected informational 'DB Workflow' skip check")
+	if len(checks) != 0 {
+		t.Errorf("unconfigured env reported DB checks: %+v", checks)
 	}
 }
 
