@@ -135,6 +135,14 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit doctor --json",
 		}
+	case errors.Is(err, ErrDependencyBlocked):
+		return JSONError{
+			Code:        "dependency_blocked",
+			Message:     msg,
+			Hint:        "Restore the unhealthy dependency, then retry the requested service.",
+			Retryable:   true,
+			NextCommand: "orbit status --json",
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",

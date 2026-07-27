@@ -311,6 +311,57 @@ func TestLastServiceLogLineSkipsOrbitNarration(t *testing.T) {
 	}
 }
 
+func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:        "redis",
+			State:       "degraded",
+			StateReason: "container exited unexpectedly",
+		},
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+	}}
+	err := blockedDependencyError(nil, status, "api", progressSnapshot{
+		state:               "pending",
+		pendingDependencies: []string{"redis"},
+	})
+	if err == nil {
+		t.Fatal("blocked dependency should fail instead of waiting for the global timeout")
+	}
+	for _, want := range []string{
+		"api cannot start because dependency redis is unhealthy",
+		"redis failed to become healthy: container exited unexpectedly",
+		"orbit logs redis",
+		"orbit restart redis",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q:\n%s", want, err)
+		}
+	}
+}
+
+func TestBlockedDependencyErrorWaitsForRecoveringDependency(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:  "redis",
+			State: "degraded",
+			HealthProgress: &daemon.HealthProgressInfo{
+				Recovering: true,
+			},
+		},
+	}}
+	err := blockedDependencyError(nil, status, "api", progressSnapshot{
+		state:               "pending",
+		pendingDependencies: []string{"redis"},
+	})
+	if err != nil {
+		t.Fatalf("recovering dependency should remain waitable: %v", err)
+	}
+}
+
 func TestDiffProgress_HeartbeatOnlyOncePerInterval(t *testing.T) {
 	// Once we've emitted a heartbeat at 30s, the next one shouldn't fire
 	// at 31s — it should wait another full interval. lastHeartbeat

@@ -100,6 +100,12 @@ export interface ServiceStatus {
   kind: ServiceKind;
   state: string;
   /**
+   * PendingDependencies identifies exactly what keeps a pending service
+   * from starting, so clients can distinguish useful waiting from a
+   * terminal dependency failure.
+   */
+  pending_dependencies?: string[];
+  /**
    * StateReason says why the service is degraded (crash message, health
    * failure, build failure); empty in every other state.
    */

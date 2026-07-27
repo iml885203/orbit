@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -75,20 +76,26 @@ func (s *Server) computeStatuses(cfg *config.Config) []ServiceStatus {
 				Recovering: p.Recovering,
 			}
 		}
+		pendingDependencies := make([]string, 0, len(svc.PendingDeps))
+		for dependency := range svc.PendingDeps {
+			pendingDependencies = append(pendingDependencies, dependency)
+		}
+		sort.Strings(pendingDependencies)
 		out = append(out, ServiceStatus{
-			Name:           svc.Name,
-			Kind:           ServiceKind(svc.Kind),
-			State:          svc.State.String(),
-			StateReason:    svc.StateReason,
-			RestartCount:   svc.RestartCount,
-			Ports:          ports,
-			URL:            url,
-			Image:          image,
-			StartupTime:    startupTime,
-			Uptime:         uptime,
-			Sidecars:       sidecars,
-			Mode:           mode,
-			HealthProgress: hp,
+			Name:                svc.Name,
+			Kind:                ServiceKind(svc.Kind),
+			State:               svc.State.String(),
+			PendingDependencies: pendingDependencies,
+			StateReason:         svc.StateReason,
+			RestartCount:        svc.RestartCount,
+			Ports:               ports,
+			URL:                 url,
+			Image:               image,
+			StartupTime:         startupTime,
+			Uptime:              uptime,
+			Sidecars:            sidecars,
+			Mode:                mode,
+			HealthProgress:      hp,
 		})
 	}
 	return out

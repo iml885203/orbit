@@ -101,6 +101,21 @@ func TestWriteJSONErrorClassifiesTimeout(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesDependencyBlocked(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit restart api --json", NewDependencyBlockedError("api is blocked by redis"))
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "dependency_blocked" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable {
+		t.Fatal("retryable = false, want true")
+	}
+}
+
 func TestWriteJSONFailurePreservesChecks(t *testing.T) {
 	var buf bytes.Buffer
 	data := map[string]any{"checks": []string{"Daemon"}}

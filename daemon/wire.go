@@ -58,6 +58,10 @@ type ServiceStatus struct {
 	Name  string      `json:"name"`
 	Kind  ServiceKind `json:"kind"`
 	State string      `json:"state"`
+	// PendingDependencies identifies exactly what keeps a pending service
+	// from starting, so clients can distinguish useful waiting from a
+	// terminal dependency failure.
+	PendingDependencies []string `json:"pending_dependencies,omitempty"`
 	// StateReason says why the service is degraded (crash message, health
 	// failure, build failure); empty in every other state.
 	StateReason    string              `json:"state_reason,omitempty"`

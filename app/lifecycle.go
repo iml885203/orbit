@@ -80,6 +80,37 @@ func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
 	return actions
 }
 
+func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {
+	actions := lifecycleRecommendedActions(serviceNames)
+	if status == nil {
+		return actions
+	}
+	watched := watchSet(serviceNames)
+	for i := range status.Services {
+		service := &status.Services[i]
+		if !watched[service.Name] || service.State != "pending" {
+			continue
+		}
+		dependency := terminalDependencyBlocker(status, service.PendingDependencies)
+		if dependency == nil {
+			continue
+		}
+		actions = cli.MergeActions(actions, []cli.JSONAction{
+			{
+				Command:     "orbit logs " + dependency.Name + " --json",
+				Reason:      "Inspect recent logs for " + dependency.Name + ".",
+				Destructive: false,
+			},
+			{
+				Command:     "orbit restart " + dependency.Name + " --json",
+				Reason:      "Restore the dependency blocking " + service.Name + ".",
+				Destructive: false,
+			},
+		})
+	}
+	return actions
+}
+
 func waitForLifecycleJSON(client *daemon.Client, names []string, wantState string) (*daemon.StatusResponse, error) {
 	return waitForLifecycleJSONOrPast(client, names, wantState, nil)
 }
@@ -204,6 +235,23 @@ func lifecycleTerminalError(status *daemon.StatusResponse, names []string, failS
 				message += ": " + reason
 			}
 			return fmt.Errorf("%s", message)
+		case "pending":
+			dependency := terminalDependencyBlocker(status, svc.PendingDependencies)
+			if dependency == nil {
+				continue
+			}
+			reason := dependency.StateReason
+			if reason == "" && dependency.HealthProgress != nil {
+				reason = dependency.HealthProgress.LastErr
+			}
+			if reason == "" {
+				reason = dependency.State
+			}
+			message := fmt.Sprintf("%s cannot start because dependency %s is unhealthy", svc.Name, dependency.Name)
+			if reason != "" {
+				message += ": " + reason
+			}
+			return cli.NewDependencyBlockedError(message)
 		case "stopped":
 			if failStopped {
 				return fmt.Errorf("%s stopped before becoming healthy", svc.Name)
@@ -211,6 +259,44 @@ func lifecycleTerminalError(status *daemon.StatusResponse, names []string, failS
 		}
 	}
 	return nil
+}
+
+func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencies []string) *daemon.ServiceStatus {
+	if status == nil {
+		return nil
+	}
+	byName := make(map[string]*daemon.ServiceStatus, len(status.Services))
+	for i := range status.Services {
+		byName[status.Services[i].Name] = &status.Services[i]
+	}
+	visited := make(map[string]bool, len(status.Services))
+	var find func([]string) *daemon.ServiceStatus
+	find = func(names []string) *daemon.ServiceStatus {
+		for _, name := range names {
+			if visited[name] {
+				continue
+			}
+			visited[name] = true
+			service := byName[name]
+			if service == nil {
+				continue
+			}
+			switch service.State {
+			case "stopped":
+				return service
+			case "degraded":
+				if service.HealthProgress == nil || !service.HealthProgress.Recovering {
+					return service
+				}
+			case "pending":
+				if blocker := find(service.PendingDependencies); blocker != nil {
+					return blocker
+				}
+			}
+		}
+		return nil
+	}
+	return find(pendingDependencies)
 }
 
 func lifecycleServicesDone(status *daemon.StatusResponse, names []string, wantState string) bool {

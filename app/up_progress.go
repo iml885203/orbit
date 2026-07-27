@@ -10,12 +10,13 @@ import (
 // progressSnapshot is what we remember about each service between status
 // polls so we can detect transitions and emit timely progress events.
 type progressSnapshot struct {
-	state         string
-	reason        string
-	recovering    bool
-	since         time.Time // when we first observed this state
-	firstSeen     time.Time // when the service first appeared in any non-terminal state
-	lastHeartbeat time.Time // when we last emitted a heartbeat for this service in this state
+	state               string
+	reason              string
+	recovering          bool
+	pendingDependencies []string
+	since               time.Time // when we first observed this state
+	firstSeen           time.Time // when the service first appeared in any non-terminal state
+	lastHeartbeat       time.Time // when we last emitted a heartbeat for this service in this state
 }
 
 type progressEventKind int
@@ -72,10 +73,11 @@ func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ServiceSt
 	for i := range statuses {
 		svc := &statuses[i]
 		snap := progressSnapshot{
-			state:     svc.State,
-			reason:    svc.StateReason,
-			since:     now,
-			firstSeen: now,
+			state:               svc.State,
+			reason:              svc.StateReason,
+			pendingDependencies: append([]string{}, svc.PendingDependencies...),
+			since:               now,
+			firstSeen:           now,
 		}
 		if svc.HealthProgress != nil {
 			snap.recovering = svc.HealthProgress.Recovering

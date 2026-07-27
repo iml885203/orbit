@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -176,6 +177,74 @@ func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
 	err := lifecycleTerminalError(status, []string{"worker"}, true)
 	if err == nil || err.Error() != "worker failed to become healthy: failed to start: address already in use" {
 		t.Fatalf("lifecycleTerminalError = %v", err)
+	}
+}
+
+func TestLifecycleTerminalErrorFailsOnTerminalDependency(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		{
+			Name:        "redis",
+			State:       "degraded",
+			StateReason: "container exited unexpectedly",
+		},
+	}}
+	err := lifecycleTerminalError(status, []string{"api"}, true)
+	want := "api cannot start because dependency redis is unhealthy: container exited unexpectedly"
+	if err == nil || err.Error() != want {
+		t.Fatalf("lifecycleTerminalError = %v, want %q", err, want)
+	}
+	if !errors.Is(err, cli.ErrDependencyBlocked) {
+		t.Fatalf("error = %v, want dependency-blocked classification", err)
+	}
+}
+
+func TestLifecycleTerminalErrorFailsOnStoppedTransitiveDependency(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"worker"},
+		},
+		{
+			Name:                "worker",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		{Name: "redis", State: "stopped"},
+	}}
+	err := lifecycleTerminalError(status, []string{"api"}, true)
+	want := "api cannot start because dependency redis is unhealthy: stopped"
+	if err == nil || err.Error() != want {
+		t.Fatalf("lifecycleTerminalError = %v, want %q", err, want)
+	}
+}
+
+func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		{Name: "redis", State: "degraded"},
+	}}
+	actions := lifecycleRecommendedActionsForStatus([]string{"api"}, status)
+	var foundLogs, foundRestart bool
+	for _, action := range actions {
+		if action.Command == "orbit logs redis --json" {
+			foundLogs = true
+		}
+		if action.Command == "orbit restart redis --json" {
+			foundRestart = true
+		}
+	}
+	if !foundLogs || !foundRestart {
+		t.Fatalf("actions = %+v, want dependency logs and restart", actions)
 	}
 }
 

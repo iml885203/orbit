@@ -370,12 +370,14 @@ The daemon itself keeps running. Use 'orbit daemon stop' if you want to stop the
 }
 
 func restartCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "restart <service>",
 		Short: "Restart a service",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runRestart,
 	}
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "exit after duration (e.g. 60s)")
+	return cmd
 }
 
 func logsCmd() *cobra.Command {
@@ -516,15 +518,15 @@ func runRestart(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("restart failed: %w", err)
 		}
-		if _, err := waitForLifecycleRestartObserved(client, name, priorRestartCount); err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActions([]string{name}))
+		if observedStatus, err := waitForLifecycleRestartObserved(client, name, priorRestartCount); err != nil {
+			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, observedStatus))
 		}
-		if _, err := waitForLifecycleJSONOrPast(client, []string{name}, "stopped", lifecycleRestartPastStopState); err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActions([]string{name}))
+		if stoppedStatus, err := waitForLifecycleJSONOrPast(client, []string{name}, "stopped", lifecycleRestartPastStopState); err != nil {
+			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, stoppedStatus))
 		}
 		finalStatus, err := waitForLifecycleRestartHealthyJSON(client, []string{name})
 		if err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActions([]string{name}))
+			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, finalStatus))
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 			Operation:         "restart",

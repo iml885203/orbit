@@ -100,7 +100,7 @@ func runUpJSON(args []string) error {
 	names := lifecycleNamesForUp(status, args, infraOnly)
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
-		return cli.WithJSONActions(err, lifecycleRecommendedActions(names))
+		return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
 	}
 	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 		Operation:         "up",
@@ -215,7 +215,7 @@ type waitOptions struct {
 	// onTick is called after each poll. It decides whether the wait is
 	// finished, by inspecting the current snapshots and done map. It may
 	// also fail the wait with an error.
-	onTick func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error)
+	onTick func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error)
 	// timeoutErr is returned when the overall deadline expires.
 	timeoutErr error
 }
@@ -280,7 +280,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 				}
 			}
 
-			finished, err := opts.onTick(snapshots, done)
+			finished, err := opts.onTick(snapshots, done, status)
 			if err != nil {
 				renderer.finalize(false)
 				return false, err
@@ -322,11 +322,14 @@ func waitForInfraHealthy(client *daemon.Client) error {
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for infrastructure to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			total := 0
 			for name, s := range snapshots {
 				total++
+				if err := blockedDependencyError(client, status, name, s); err != nil {
+					return false, err
+				}
 				if s.state == "degraded" && !s.recovering {
 					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
@@ -347,11 +350,14 @@ func waitForAllHealthy(client *daemon.Client) error {
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			total := 0
 			for name, s := range snapshots {
 				total++
+				if err := blockedDependencyError(client, status, name, s); err != nil {
+					return false, err
+				}
 				if s.state == "degraded" && !s.recovering {
 					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
@@ -377,7 +383,7 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			for name := range watch {
 				if done[name] {
@@ -386,6 +392,9 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 				s, ok := snapshots[name]
 				if !ok {
 					continue
+				}
+				if err := blockedDependencyError(client, status, name, s); err != nil {
+					return false, err
 				}
 				if s.state == "stopped" {
 					return false, fmt.Errorf("%s stopped before becoming healthy", name)
@@ -437,7 +446,7 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 			return e.kind == eventTransition && e.to == "stopped"
 		},
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to stop"),
-		onTick: func(_ map[string]progressSnapshot, done map[string]bool) (bool, error) {
+		onTick: func(_ map[string]progressSnapshot, done map[string]bool, _ *daemon.StatusResponse) (bool, error) {
 			if len(done) == len(watch) {
 				if len(stopFailed) > 0 {
 					return false, fmt.Errorf("stop failed for %s — check 'orbit status' and 'docker ps'", strings.Join(stopFailed, ", "))
@@ -451,6 +460,30 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 		opts.pastDone = isPostStopState
 	}
 	return runProgressWait(client, opts)
+}
+
+func blockedDependencyError(client *daemon.Client, status *daemon.StatusResponse, serviceName string, snapshot progressSnapshot) error {
+	if snapshot.state != "pending" || len(snapshot.pendingDependencies) == 0 || status == nil {
+		return nil
+	}
+	dependency := terminalDependencyBlocker(status, snapshot.pendingDependencies)
+	if dependency == nil {
+		return nil
+	}
+	reason := dependency.StateReason
+	if reason == "" && dependency.HealthProgress != nil {
+		reason = dependency.HealthProgress.LastErr
+	}
+	if reason == "" {
+		reason = dependency.State
+	}
+	dependencySnapshot := progressSnapshot{reason: reason}
+	return fmt.Errorf(
+		"%s cannot start because dependency %s is unhealthy\n  %w",
+		serviceName,
+		dependency.Name,
+		serviceStartError(dependency.Name, dependencySnapshot, recentLogEvidence(client, dependency.Name)),
+	)
 }
 
 // watchSet builds the set used by filter / done-count comparisons.
@@ -498,6 +531,9 @@ func serviceStartError(name string, snapshot progressSnapshot, evidence string) 
 }
 
 func recentLogEvidence(client *daemon.Client, name string) string {
+	if client == nil {
+		return ""
+	}
 	response, err := client.Logs(name, 20)
 	if err != nil || response == nil {
 		return ""
