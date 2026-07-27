@@ -47,7 +47,8 @@ func TestWindowsUninstallHelperReadsEveryManifestPath(t *testing.T) {
 		"-OrbitManifest", manifestPath,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("run uninstall helper: %v\n%s", err, output)
+		failures, readErr := os.ReadFile(helperPath + ".failed")
+		t.Fatalf("run uninstall helper: %v\noutput: %s\nfailures: %s\nread failures: %v", err, output, failures, readErr)
 	}
 
 	for _, path := range append(targets, manifestPath, helperPath) {
