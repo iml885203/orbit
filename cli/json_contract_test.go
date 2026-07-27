@@ -101,6 +101,37 @@ func TestWriteJSONErrorClassifiesTimeout(t *testing.T) {
 	}
 }
 
+func TestWriteJSONFailurePreservesChecks(t *testing.T) {
+	var buf bytes.Buffer
+	data := map[string]any{"checks": []string{"Daemon"}}
+	err := NewChecksFailedError("doctor found 1 failed check: Daemon")
+	actions := []JSONAction{{Command: "orbit logs api", Reason: "Inspect the failed service."}}
+
+	if writeErr := WriteJSONFailure(&buf, "orbit doctor --json", data, err, actions); writeErr != nil {
+		t.Fatalf("WriteJSONFailure: %v", writeErr)
+	}
+
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.OK {
+		t.Fatal("ok = true, want false")
+	}
+	if got.Data == nil {
+		t.Fatal("data missing from failure")
+	}
+	if got.Error == nil || got.Error.Code != "checks_failed" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	foundLogs := false
+	for _, action := range got.RecommendedActions {
+		if action.Command == "orbit logs api" {
+			foundLogs = true
+		}
+	}
+	if !foundLogs {
+		t.Fatalf("recommended_actions = %+v, want orbit logs api", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONUnsupportedDestructiveCommandEnvelope(t *testing.T) {
 	var buf bytes.Buffer
 	err := NewUnsupportedDestructiveJSONCommandError(

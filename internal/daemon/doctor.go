@@ -391,13 +391,7 @@ func (s *Server) runDoctorChecks() []DoctorCheck {
 	}
 
 	services := s.app.Orchestrator.GetAllServices()
-	healthy := 0
-	for i := range services {
-		if services[i].State == engine.StateHealthy {
-			healthy++
-		}
-	}
-	checks = append(checks, DoctorCheck{Name: "Daemon", Status: CheckPass, Message: formatDaemonMsg(healthy, len(services))})
+	checks = append(checks, serviceHealthCheck(services))
 
 	checks = append(checks, HostEnvironmentChecks(s.Config())...)
 	checks = append(checks, checkOrbitOnPath())
@@ -428,9 +422,53 @@ func (s *Server) resolveWorkspaceRoot() (string, DoctorCheck, bool) {
 	return root, check, ok
 }
 
-func formatDaemonMsg(healthy, total int) string {
-	if healthy == total {
-		return fmt.Sprintf("All healthy (%d/%d)", healthy, total)
+func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
+	var healthy, stopped int
+	var degraded, degradedNames, changing []string
+	for i := range services {
+		service := &services[i]
+		switch service.State {
+		case engine.StateHealthy:
+			healthy++
+		case engine.StateStopped:
+			stopped++
+		case engine.StateDegraded:
+			degradedNames = append(degradedNames, service.Name)
+			detail := service.Name
+			if service.StateReason != "" {
+				detail += " — " + service.StateReason
+			}
+			degraded = append(degraded, detail)
+		default:
+			changing = append(changing, fmt.Sprintf("%s (%s)", service.Name, service.State))
+		}
 	}
-	return fmt.Sprintf("%d/%d healthy", healthy, total)
+	if len(degraded) > 0 {
+		hint := "run: orbit status"
+		if len(degraded) == 1 {
+			hint = "run: orbit logs " + degradedNames[0]
+		}
+		return DoctorCheck{
+			Name:    "Daemon",
+			Status:  CheckFail,
+			Message: fmt.Sprintf("%d degraded: %s", len(degraded), strings.Join(degraded, "; ")),
+			Hint:    hint,
+		}
+	}
+	if len(changing) > 0 {
+		return DoctorCheck{
+			Name:    "Daemon",
+			Status:  CheckWarn,
+			Message: fmt.Sprintf("%d still changing: %s", len(changing), strings.Join(changing, "; ")),
+			Hint:    "run: orbit status",
+		}
+	}
+	if healthy == len(services) {
+		return DoctorCheck{Name: "Daemon", Status: CheckPass, Message: fmt.Sprintf("All healthy (%d/%d)", healthy, len(services))}
+	}
+	return DoctorCheck{
+		Name:    "Daemon",
+		Status:  CheckPass,
+		Message: fmt.Sprintf("Daemon running; %d healthy, %d stopped", healthy, stopped),
+	}
 }

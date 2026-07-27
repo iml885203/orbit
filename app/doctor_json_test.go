@@ -47,6 +47,40 @@ func TestDoctorRecommendedActionsRunnableHint(t *testing.T) {
 	}
 }
 
+func TestDoctorFailureIgnoresHiddenServiceCheck(t *testing.T) {
+	resp := &daemon.DoctorResponse{
+		Checks: []daemon.DoctorCheck{
+			{Name: "Daemon", Status: daemon.CheckFail, Message: "api degraded"},
+			{Name: "Config", Status: daemon.CheckPass, Message: "ok"},
+		},
+	}
+
+	if err := doctorFailure(resp, false); err != nil {
+		t.Fatalf("hidden service check failed init doctor: %v", err)
+	}
+	if err := doctorFailure(resp, true); err == nil {
+		t.Fatal("visible failed service check returned nil")
+	}
+}
+
+func TestDoctorFailureIncludesAllFailedCheckNames(t *testing.T) {
+	resp := &daemon.DoctorResponse{
+		Checks: []daemon.DoctorCheck{
+			{Name: "Daemon", Status: daemon.CheckFail},
+			{Name: "Docker", Status: daemon.CheckFail},
+			{Name: "Node.js", Status: daemon.CheckWarn},
+		},
+	}
+
+	err := doctorFailure(resp, true)
+	if err == nil {
+		t.Fatal("doctorFailure returned nil")
+	}
+	if got := err.Error(); got != "doctor found 2 failed check(s): Daemon, Docker" {
+		t.Fatalf("error = %q", got)
+	}
+}
+
 // Regression: the daemon-down doctor fallback (used by doctor --json)
 // consults the injected extensions' CLIDoctor hooks with the loaded
 // config — and skips them entirely when the config failed to load. The

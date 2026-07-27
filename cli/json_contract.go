@@ -50,8 +50,15 @@ func WriteJSONSuccess(w io.Writer, command string, data any, actions []JSONActio
 }
 
 func WriteJSONError(w io.Writer, command string, err error) error {
+	return WriteJSONFailure(w, command, nil, err, nil)
+}
+
+// WriteJSONFailure preserves diagnostic data alongside a machine-classified
+// failure so callers do not have to choose between useful evidence and a
+// truthful exit result.
+func WriteJSONFailure(w io.Writer, command string, data any, err error, actions []JSONAction) error {
 	classified := classify(err)
-	actions := recommendedActionsForError(classified)
+	actions = MergeActions(recommendedActionsForError(classified), actions)
 	if withActions, ok := err.(interface{ CLIJSONActions() []JSONAction }); ok {
 		actions = MergeActions(actions, withActions.CLIJSONActions())
 	}
@@ -59,6 +66,7 @@ func WriteJSONError(w io.Writer, command string, err error) error {
 		SchemaVersion:      SchemaVersion,
 		OK:                 false,
 		Command:            command,
+		Data:               data,
 		Error:              &classified,
 		RecommendedActions: actions,
 	})
@@ -118,6 +126,14 @@ func classify(err error) JSONError {
 			// e.g. ErrMsgDBNotConfigured) already carries one.
 			Hint:      "This feature requires configuration the active env does not provide.",
 			Retryable: false,
+		}
+	case errors.Is(err, ErrChecksFailed):
+		return JSONError{
+			Code:        "checks_failed",
+			Message:     msg,
+			Hint:        "Resolve the failed checks, then run doctor again.",
+			Retryable:   true,
+			NextCommand: "orbit doctor --json",
 		}
 	default:
 		return JSONError{

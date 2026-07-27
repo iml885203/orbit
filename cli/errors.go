@@ -8,6 +8,7 @@ var (
 	ErrUnknownService = errors.New("unknown service")
 	ErrTimeout        = errors.New("timeout")
 	ErrNotConfigured  = errors.New("not configured")
+	ErrChecksFailed   = errors.New("checks failed")
 )
 
 type classifiedError struct {
@@ -33,4 +34,8 @@ func NewTimeoutError(msg string) error {
 
 func NewNotConfiguredError(msg string) error {
 	return classifiedError{kind: ErrNotConfigured, msg: msg}
+}
+
+func NewChecksFailedError(msg string) error {
+	return classifiedError{kind: ErrChecksFailed, msg: msg}
 }

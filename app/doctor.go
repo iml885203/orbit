@@ -32,148 +32,56 @@ type doctorOptions struct {
 }
 
 func runDoctorWithOptions(options doctorOptions) error {
-	// If daemon is running, delegate to API for consistent results
 	client := daemon.NewClient(daemon.DefaultSocketPath())
+	resp := doctorResponse(client)
+	failure := doctorFailure(resp, options.showDaemon)
 	if cli.JSONOutput {
-		resp := doctorResponse(client)
+		if failure != nil {
+			if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, doctorRecommendedActions(resp)); err != nil {
+				return err
+			}
+			return errCLIJSONAlreadyRendered{err: failure}
+		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), resp, doctorRecommendedActions(resp))
 	}
-	if client.Health() == nil {
-		resp, err := client.Doctor()
-		if err == nil {
-			_, _ = cli.Bold.Println("Checks:")
-			for _, c := range resp.Checks {
-				if !options.showDaemon && c.Name == "Daemon" {
-					continue
-				}
-				icon := cli.Faint.Sprint("—")
-				switch c.Status {
-				case "pass":
-					icon = cli.Green.Sprint("✓")
-				case "fail":
-					icon = cli.Red.Sprint("✗")
-				case "warn":
-					icon = cli.Yellow.Sprint("!")
-				}
-				fmt.Printf("  %s %s: %s\n", icon, c.Name, c.Message)
-				if c.Hint != "" && (c.Status == "fail" || c.Status == "warn") {
-					_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
-				}
-			}
-			return nil
-		}
-	}
-
-	// Fallback: run checks locally
-	pass := cli.Green.Sprint("✓")
-	fail := cli.Red.Sprint("✗")
-
 	_, _ = cli.Bold.Println("Checks:")
-
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		fmt.Printf("  %s Config file error: %v\n", fail, err)
-	} else {
-		fmt.Printf("  %s Config file found (%s)\n", pass, configFile)
-		if err := config.Validate(cfg); err != nil {
-			fmt.Printf("  %s Config validation failed: %v\n", fail, err)
-			// Match localDoctorResponse: never evaluate the DB gate against
-			// a config the tool just declared invalid.
-			cfg = nil
-		} else {
-			fmt.Printf("  %s Config is valid\n", pass)
+	for _, c := range resp.Checks {
+		if !options.showDaemon && c.Name == "Daemon" {
+			continue
+		}
+		icon := cli.Faint.Sprint("—")
+		switch c.Status {
+		case daemon.CheckPass:
+			icon = cli.Green.Sprint("✓")
+		case daemon.CheckFail:
+			icon = cli.Red.Sprint("✗")
+		case daemon.CheckWarn:
+			icon = cli.Yellow.Sprint("!")
+		}
+		fmt.Printf("  %s %s: %s\n", icon, c.Name, c.Message)
+		if c.Hint != "" && (c.Status == daemon.CheckFail || c.Status == daemon.CheckWarn) {
+			_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
 		}
 	}
+	return failure
+}
 
-	if cfg != nil && len(cfg.Containers) > 0 {
-		dc := daemonsrv.DockerCheck()
-		dockerIcon := pass
-		if dc.Status == daemon.CheckFail {
-			dockerIcon = fail
-		}
-		fmt.Printf("  %s %s: %s\n", dockerIcon, dc.Name, dc.Message)
-		if dc.Hint != "" && dc.Status == daemon.CheckFail {
-			_, _ = cli.Faint.Printf("      → %s\n", dc.Hint)
-		}
-	}
-
-	daemonClient := daemon.NewClient(daemon.DefaultSocketPath())
-	daemonRunning := daemonClient.Health() == nil
-
-	if cfg != nil && !daemonRunning {
-		type portEntry struct {
-			port int
-			name string
-		}
-		var ports []portEntry
-		for name, c := range cfg.Containers {
-			for _, p := range c.Ports {
-				ports = append(ports, portEntry{p.Host, name})
+func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
+	var failed []string
+	if resp != nil {
+		for _, check := range resp.Checks {
+			if !showDaemon && check.Name == "Daemon" {
+				continue
 			}
-		}
-		for name, s := range cfg.Services {
-			for _, p := range s.Ports {
-				ports = append(ports, portEntry{p.Host, name})
-			}
-		}
-		sort.Slice(ports, func(i, j int) bool { return ports[i].port < ports[j].port })
-		for _, pe := range ports {
-			ln, err := net.Listen("tcp", fmt.Sprintf(":%d", pe.port))
-			if err != nil {
-				fmt.Printf("  %s Port %d is already in use (needed by %s)\n", fail, pe.port, pe.name)
-			} else {
-				_ = ln.Close()
-				fmt.Printf("  %s Port %d is available (%s)\n", pass, pe.port, pe.name)
+			if check.Status == daemon.CheckFail {
+				failed = append(failed, check.Name)
 			}
 		}
 	}
-
-	if cfg != nil {
-		for _, check := range daemonsrv.HostEnvironmentChecks(cfg) {
-			icon := pass
-			switch check.Status {
-			case daemon.CheckFail:
-				icon = fail
-			case daemon.CheckWarn:
-				icon = cli.Yellow.Sprint("!")
-			}
-			fmt.Printf("  %s %s: %s\n", icon, check.Name, check.Message)
-			if check.Hint != "" && check.Status != daemon.CheckPass {
-				_, _ = cli.Faint.Printf("      → %s\n", check.Hint)
-			}
-		}
-	}
-
-	if options.showDaemon && daemonRunning {
-		status, err := daemonClient.Status()
-		if err != nil {
-			fmt.Printf("  %s Orbit daemon is running but status unavailable (%v)\n", fail, err)
-		} else {
-			healthy := 0
-			for i := range status.Services {
-				svc := &status.Services[i]
-				if svc.State == "healthy" {
-					healthy++
-				}
-			}
-			fmt.Printf("  %s Orbit daemon is running (%d/%d services healthy)\n", pass, healthy, len(status.Services))
-		}
-	} else if options.showDaemon {
-		fmt.Printf("  %s Orbit daemon is not running\n", cli.Faint.Sprint("—"))
-	}
-
-	// A nil cfg means config loading failed — that error is already printed
-	// above, and claiming "no sql-server container" about an env we couldn't
-	// read would mislead.
-	if cfg == nil {
+	if len(failed) == 0 {
 		return nil
 	}
-	for _, ext := range extensions {
-		if ext.CLIDoctor != nil {
-			ext.CLIDoctor.PrintHuman(cfg)
-		}
-	}
-	return nil
+	return cli.NewChecksFailedError(fmt.Sprintf("doctor found %d failed check(s): %s", len(failed), strings.Join(failed, ", ")))
 }
 
 func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
@@ -198,6 +106,7 @@ func localDoctorResponse() *daemon.DoctorResponse {
 		if len(cfg.Containers) > 0 {
 			checks = append(checks, daemonsrv.DockerCheck())
 		}
+		checks = append(checks, localPortChecks(cfg)...)
 		checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
 	}
 	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running"})
@@ -215,6 +124,43 @@ func localDoctorResponse() *daemon.DoctorResponse {
 		Checks: checks,
 		RanAt:  time.Now().UTC().Format(time.RFC3339),
 	}
+}
+
+func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
+	type portEntry struct {
+		port int
+		name string
+	}
+	var ports []portEntry
+	for name, container := range cfg.Containers {
+		for _, port := range container.Ports {
+			ports = append(ports, portEntry{port: port.Host, name: name})
+		}
+	}
+	for name, service := range cfg.Services {
+		for _, port := range service.Ports {
+			ports = append(ports, portEntry{port: port.Host, name: name})
+		}
+	}
+	sort.Slice(ports, func(i, j int) bool { return ports[i].port < ports[j].port })
+	checks := make([]daemon.DoctorCheck, 0, len(ports))
+	for _, entry := range ports {
+		check := daemon.DoctorCheck{
+			Name:    fmt.Sprintf("Port %d", entry.port),
+			Status:  daemon.CheckPass,
+			Message: "available (" + entry.name + ")",
+		}
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", entry.port))
+		if err != nil {
+			check.Status = daemon.CheckFail
+			check.Message = "already in use (needed by " + entry.name + ")"
+			check.Hint = fmt.Sprintf("Stop the process using port %d or change %s's host port.", entry.port, entry.name)
+		} else {
+			_ = listener.Close()
+		}
+		checks = append(checks, check)
+	}
+	return checks
 }
 
 func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
