@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/devdb"
+	"github.com/iml885203/orbit/internal/tunnel"
+)
 
 func TestOfficialDistributionDefaults(t *testing.T) {
 	extensions := Extensions()
@@ -20,5 +26,23 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 	}
 	if distribution.InstallURL != "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh" {
 		t.Errorf("install URL = %q", distribution.InstallURL)
+	}
+}
+
+func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
+	visibility := Extensions()[0].CommandVisibility
+	if visibility == nil {
+		t.Fatal("official command visibility is not configured")
+	}
+	if got := visibility(nil); got["db"] || got["tunnel"] {
+		t.Fatalf("optional commands visible without environment: %v", got)
+	}
+
+	cfg := (&config.Config{}).
+		WithExtension("sqlserver", &devdb.SQLServerConfig{}).
+		WithExtension("claim", &tunnel.ClaimConfig{})
+	got := visibility(cfg)
+	if !got["db"] || !got["tunnel"] {
+		t.Fatalf("configured optional commands hidden: %v", got)
 	}
 }

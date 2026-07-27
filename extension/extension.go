@@ -29,6 +29,11 @@ type Extension struct {
 	// commands emit the shared output contract via internal/cli.
 	Commands func() []*cobra.Command
 
+	// CommandVisibility returns whether each extension command belongs in
+	// root help for the selected environment. Hidden commands remain
+	// callable, so explicit discovery and automation do not depend on help.
+	CommandVisibility func(cfg *config.Config) map[string]bool
+
 	// DaemonSetup is invoked once from the daemon's route setup (before
 	// any listener serves). It constructs the extension's daemon state,
 	// registers routes on mux, and returns the hooks the daemon honours.

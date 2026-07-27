@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
 	"github.com/iml885203/orbit/internal/history"
@@ -138,6 +139,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.AddCommand(settingsCmd())
 	rootCmd.AddCommand(traceCmd())
 	rootCmd.AddCommand(tracingCmd())
+	configureContextualRootHelp(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		printExecutionError(os.Stderr, err)
@@ -145,6 +147,67 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+}
+
+func configureContextualRootHelp(root *cobra.Command) {
+	defaultHelp := root.HelpFunc()
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd == root {
+			settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+			settings.ApplyToEnv()
+			path := configFile
+			if path == "" {
+				path = resolveConfigFile()
+			}
+			cfg, _ := config.Load(path)
+			applyContextualCommandVisibility(root, cfg, extensions)
+		}
+		defaultHelp(cmd, args)
+	})
+}
+
+func applyContextualCommandVisibility(root *cobra.Command, cfg *config.Config, exts []extension.Extension) {
+	visibility := coreCommandVisibility(cfg)
+	for _, ext := range exts {
+		if ext.CommandVisibility == nil {
+			continue
+		}
+		for name, visible := range ext.CommandVisibility(cfg) {
+			visibility[name] = visible
+		}
+	}
+	for name, visible := range visibility {
+		if cmd, _, err := root.Find([]string{name}); err == nil && cmd != root {
+			cmd.Hidden = !visible
+		}
+	}
+}
+
+func coreCommandVisibility(cfg *config.Config) map[string]bool {
+	visibility := map[string]bool{
+		"exec":   false,
+		"query":  false,
+		"seed":   false,
+		"topics": false,
+		"trace":  false,
+	}
+	if cfg == nil {
+		return visibility
+	}
+
+	visibility["exec"] = len(cfg.Containers) > 0
+	visibility["query"] = findContainer(cfg, "mongo") != "" || findContainer(cfg, "redis") != ""
+	if _, err := findKafkaContainer(cfg); err == nil {
+		visibility["topics"] = true
+	}
+	for _, container := range cfg.Containers {
+		if container.Seed != nil && len(container.Seed.Files) > 0 {
+			visibility["seed"] = true
+			break
+		}
+	}
+	visibility["trace"] = cfg.TracingEnabled()
+	return visibility
 }
 
 // printExecutionError renders a CLI failure for the user. In --json mode it

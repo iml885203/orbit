@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
 	"github.com/iml885203/orbit/internal/devdb"
 	"github.com/iml885203/orbit/internal/tunnel"
@@ -19,6 +20,12 @@ func Extensions() []extension.Extension {
 		Name: "official",
 		Commands: func() []*cobra.Command {
 			return []*cobra.Command{devdb.DBCmd(), tunnel.TunnelCmd()}
+		},
+		CommandVisibility: func(cfg *config.Config) map[string]bool {
+			return map[string]bool{
+				"db":     cfg != nil && devdb.SQLServerFrom(cfg) != nil,
+				"tunnel": cfg != nil && tunnel.ClaimFrom(cfg) != nil,
+			}
 		},
 		DaemonSetup: officialDaemonSetup,
 		CLIDoctor: &extension.CLIDoctor{

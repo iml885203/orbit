@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/extension"
 	"github.com/spf13/cobra"
 )
 
@@ -102,5 +104,62 @@ func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	}
 	if commandRequiresMatchingDaemonConfig(status) {
 		t.Fatal("unrelated command required the db-specific guard")
+	}
+}
+
+func TestContextualHelpHidesCommandsWithoutASelectedEnvironment(t *testing.T) {
+	root := commandVisibilityTestRoot()
+	applyContextualCommandVisibility(root, nil, []extension.Extension{{
+		CommandVisibility: func(*config.Config) map[string]bool {
+			return map[string]bool{"db": false, "tunnel": false}
+		},
+	}})
+
+	for _, name := range []string{"db", "exec", "query", "seed", "topics", "trace", "tunnel"} {
+		assertCommandHidden(t, root, name, true)
+	}
+	assertCommandHidden(t, root, "up", false)
+}
+
+func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
+	root := commandVisibilityTestRoot()
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{
+			"redis": {
+				Ports: map[string]config.PortDef{"redis": {Host: 6379, Target: 6379}},
+				Seed:  &config.SeedConfig{Files: []string{"users.json"}},
+			},
+		},
+	}
+	applyContextualCommandVisibility(root, cfg, []extension.Extension{{
+		CommandVisibility: func(*config.Config) map[string]bool {
+			return map[string]bool{"db": false, "tunnel": true}
+		},
+	}})
+
+	for _, name := range []string{"exec", "query", "seed", "trace", "tunnel"} {
+		assertCommandHidden(t, root, name, false)
+	}
+	for _, name := range []string{"db", "topics"} {
+		assertCommandHidden(t, root, name, true)
+	}
+}
+
+func commandVisibilityTestRoot() *cobra.Command {
+	root := &cobra.Command{Use: "orbit"}
+	for _, name := range []string{"db", "exec", "query", "seed", "topics", "trace", "tunnel", "up"} {
+		root.AddCommand(&cobra.Command{Use: name})
+	}
+	return root
+}
+
+func assertCommandHidden(t *testing.T, root *cobra.Command, name string, want bool) {
+	t.Helper()
+	cmd, _, err := root.Find([]string{name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Hidden != want {
+		t.Errorf("%s hidden = %v, want %v", name, cmd.Hidden, want)
 	}
 }
