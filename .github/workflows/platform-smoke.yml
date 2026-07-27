@@ -112,14 +112,14 @@ jobs:
           & $target uninstall
           if (-not (Test-Path $target)) { throw "preview removed the binary" }
           & $target uninstall --yes
-          for ($attempt = 0; $attempt -lt 50 -and (Test-Path $target); $attempt++) {
+          for ($attempt = 0; $attempt -lt 150 -and (Test-Path $target); $attempt++) {
             Start-Sleep -Milliseconds 100
           }
           if (Test-Path $target) { throw "binary was not removed" }
           if (-not (Test-Path (Join-Path $orbitHome "preserved"))) { throw "user data was not preserved" }
           Copy-Item bin/orbit.exe $target
           & $target uninstall --yes --purge
-          for ($attempt = 0; $attempt -lt 50 -and ((Test-Path $target) -or (Test-Path $orbitHome)); $attempt++) {
+          for ($attempt = 0; $attempt -lt 150 -and ((Test-Path $target) -or (Test-Path $orbitHome)); $attempt++) {
             Start-Sleep -Milliseconds 100
           }
           if (Test-Path $target) { throw "binary was not removed during purge" }

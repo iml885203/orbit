@@ -15,8 +15,21 @@ const windowsUninstallHelper = `param(
     [Parameter(ValueFromRemainingArguments=$true)][string[]]$OrbitPaths
 )
 Wait-Process -Id $OrbitParentPID -ErrorAction SilentlyContinue
+$OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
-    Remove-Item -LiteralPath $OrbitPath -Recurse -Force -ErrorAction SilentlyContinue
+    for ($OrbitAttempt = 0; $OrbitAttempt -lt 100 -and (Test-Path -LiteralPath $OrbitPath); $OrbitAttempt++) {
+        Remove-Item -LiteralPath $OrbitPath -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $OrbitPath) {
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    if (Test-Path -LiteralPath $OrbitPath) {
+        $OrbitFailures += $OrbitPath
+    }
+}
+if ($OrbitFailures.Count -gt 0) {
+    Set-Content -LiteralPath "$PSCommandPath.failed" -Value $OrbitFailures
+    exit 1
 }
 Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 `
@@ -37,7 +50,7 @@ func removeUninstallArtifacts(paths []string) (bool, error) {
 		return false, fmt.Errorf("close Windows uninstall helper: %w", err)
 	}
 
-	args := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helperPath, strconv.Itoa(os.Getpid())}
+	args := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helperPath, "-OrbitParentPID", strconv.Itoa(os.Getpid()), "-OrbitPaths"}
 	args = append(args, paths...)
 	cmd := exec.Command("powershell.exe", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
