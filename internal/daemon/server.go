@@ -32,6 +32,7 @@ type Server struct {
 	// would lose updates (e.g. a SQL restart rolling back an env switch).
 	holder        *config.Holder
 	configWriteMu sync.Mutex
+	background    sync.WaitGroup
 	settings      *Settings
 	// extHooks holds the registered feature seams (SSE event sources,
 	// daemon-exit hooks). Appended in NewServer and ListenAndServe's
@@ -65,6 +66,18 @@ type Server struct {
 	// staticFS holds the dashboard assets (already rooted at the dist
 	// contents); nil when the build embeds none. See staticHandler.
 	staticFS fs.FS
+}
+
+func (s *Server) startBackground(work func()) {
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		work()
+	}()
+}
+
+func (s *Server) waitForBackground() {
+	s.background.Wait()
 }
 
 // NewServer creates a new daemon server. version is the build string

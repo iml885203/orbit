@@ -51,14 +51,8 @@ func TestHandleStop_ReturnsBeforeStopServiceCompletes(t *testing.T) {
 		t.Fatalf("handleStop did not return within 500ms; it is still blocking on StopService")
 	}
 
-	// Release the inner goroutine and give it time to finish before the
-	// test (and t.TempDir cleanup) returns. This avoids a goroutine racing
-	// with cleanup under -race.
 	close(released)
-	// Best-effort wait; if the inner goroutine doesn't finish in 2s
-	// something is wrong, but don't fail the test on it — the assertion
-	// above is the real signal.
-	time.Sleep(200 * time.Millisecond)
+	srv.waitForBackground()
 }
 
 // TestHandleDown_ReturnsPresentTenseAcknowledgment verifies the down
@@ -88,8 +82,7 @@ func TestHandleDown_ReturnsPresentTenseAcknowledgment(t *testing.T) {
 		t.Errorf("response should not say 'stopped' (past tense implies sync completion), got %q", body)
 	}
 
-	// Let the inner goroutine finish before t.TempDir cleanup fires.
-	time.Sleep(200 * time.Millisecond)
+	srv.waitForBackground()
 }
 
 // TestHandleRestart_ReturnsPresentTenseAcknowledgment verifies the
@@ -116,6 +109,5 @@ func TestHandleRestart_ReturnsPresentTenseAcknowledgment(t *testing.T) {
 		t.Errorf("expected 'restarting svc' in response, got %q", body)
 	}
 
-	// Let the inner goroutine finish before t.TempDir cleanup fires.
-	time.Sleep(200 * time.Millisecond)
+	srv.waitForBackground()
 }

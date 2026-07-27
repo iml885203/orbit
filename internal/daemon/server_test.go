@@ -36,7 +36,9 @@ func newTestServer(t *testing.T, cfg *config.Config) *Server {
 
 	settings := LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
 	stateFile := NewStateFile(filepath.Join(t.TempDir(), "state.json"))
-	return NewServer(app, holder, stateFile, settings, "test-version", nil, nil)
+	server := NewServer(app, holder, stateFile, settings, "test-version", nil, nil)
+	t.Cleanup(server.waitForBackground)
+	return server
 }
 
 func testConfig() *config.Config {
