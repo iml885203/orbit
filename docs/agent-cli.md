@@ -94,12 +94,13 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
 | `orbit down <service> --json` | Returns final lifecycle result for the requested service. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
-| `orbit switch <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
+| `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon running state, and restart recommendation. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, and dashboard URL. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
+| `orbit uninstall --json` | Previews binary artifacts and whether user data is preserved; `--yes` is required before removal. |
 | `orbit trace --json` | Returns recent trace summaries in `data.traces`, newest first. |
 | `orbit trace -f --json` | Streams NDJSON trace-summary events, one JSON object per line. |
 | `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |
@@ -112,12 +113,13 @@ Stable `data.operation` values for converted control commands:
 
 | Command | `data.operation` |
 |---|---|
-| `orbit switch <env> --json` | `env_use` |
+| `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit uninstall --json` | `uninstall` |
 
 For `switch`, `daemon_running` means a daemon was already running when the
 env was changed, so `restart_required` tells the agent whether that daemon

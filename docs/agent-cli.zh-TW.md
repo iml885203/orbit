@@ -88,12 +88,13 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
 | `orbit down <service> --json` | 回傳指定 service 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
-| `orbit switch <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
+| `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
 | `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態，以及 restart 建議。 |
 | `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path 與 dashboard URL。 |
 | `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |
 | `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
 | `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
+| `orbit uninstall --json` | 預覽 binary artifacts 與 user data 是否保留；只有加上 `--yes` 才會移除。 |
 | `orbit trace --json` | 回傳近期 trace summaries 於 `data.traces`，最新在前。 |
 | `orbit trace -f --json` | 串流 NDJSON trace-summary event，一行一個 JSON 物件。 |
 | `orbit trace <id> --json` | 回傳一條完整 trace（summary 欄位 + `spans`）於 `data`。 |
@@ -105,12 +106,13 @@ Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout
 
 | Command | `data.operation` |
 |---|---|
-| `orbit switch <env> --json` | `env_use` |
+| `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit uninstall --json` | `uninstall` |
 
 對 `switch` 而言，`daemon_running` 代表切換 env 當下已經有 daemon 在跑，所以 `restart_required` 會告訴 agent 是否還需要用 `orbit daemon restart --json` 套用新的 env。
 

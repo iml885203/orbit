@@ -73,18 +73,18 @@ orbit daemon restart
 先預覽實際路徑，再移除 binary；environments、settings 與本機狀態會保留：
 
 ```bash
-./scripts/uninstall.sh
-./scripts/uninstall.sh --yes
+orbit uninstall
+orbit uninstall --yes
 ```
 
 只有確定要永久移除 `~/.orbit/` 時才加上 `--purge`：
 
 ```bash
-./scripts/uninstall.sh --yes --purge
+orbit uninstall --yes --purge
 ```
 
-兩種方式都會先停止 Orbit。Docker images 與 workspace 底下的 git checkout
-不會被移除。
+命令會先停止 Orbit。Windows Beta 會在命令結束後立即移除仍被執行中程序
+鎖定的 `.exe`。Docker images 與 workspace 底下的 git checkout 永遠不會被移除。
 
 ### 手動下載
 

@@ -83,6 +83,12 @@ func TestUpdateUsesShortPublicName(t *testing.T) {
 	}
 }
 
+func TestUninstallUsesShortPublicName(t *testing.T) {
+	if got := uninstallCmd().Name(); got != "uninstall" {
+		t.Fatalf("uninstall command name = %q", got)
+	}
+}
+
 func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
 	db := &cobra.Command{Use: "db"}

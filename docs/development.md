@@ -80,18 +80,19 @@ Preview the exact paths first, then remove the binary while preserving
 environments, settings, and local state:
 
 ```bash
-./scripts/uninstall.sh
-./scripts/uninstall.sh --yes
+orbit uninstall
+orbit uninstall --yes
 ```
 
 Add `--purge` only when you also intend to permanently remove `~/.orbit/`:
 
 ```bash
-./scripts/uninstall.sh --yes --purge
+orbit uninstall --yes --purge
 ```
 
-Both forms stop Orbit first. Docker images and git checkouts under your
-workspace are not removed.
+The command stops Orbit first. Windows Beta schedules removal of the running
+`.exe` immediately after the command exits. Docker images and git checkouts
+under your workspace are never removed.
 
 ### Manual download
 

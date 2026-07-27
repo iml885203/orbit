@@ -69,6 +69,25 @@ jobs:
           mkdir -p bin
           go build -ldflags "-s -w -X main.version=${ORBIT_SMOKE_VERSION}" -o bin/orbit ./cmd/orbit
           ORBIT_BIN="$PWD/bin/orbit" go test -tags=platformsmoke -run TestPlatformSmokeCleanUserJourney -v ./app
+      - name: Exercise native Unix uninstall command
+        if: ${{ !matrix.windows }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_root="$(mktemp -d)"
+          trap 'rm -rf "$test_root"' EXIT
+          mkdir -p "$test_root/bin" "$test_root/home"
+          touch "$test_root/home/preserved"
+          cp bin/orbit "$test_root/bin/orbit"
+          ORBIT_HOME="$test_root/home" "$test_root/bin/orbit" uninstall
+          test -x "$test_root/bin/orbit"
+          ORBIT_HOME="$test_root/home" "$test_root/bin/orbit" uninstall --yes
+          test ! -e "$test_root/bin/orbit"
+          test -e "$test_root/home/preserved"
+          cp bin/orbit "$test_root/bin/orbit"
+          ORBIT_HOME="$test_root/home" "$test_root/bin/orbit" uninstall --yes --purge
+          test ! -e "$test_root/bin/orbit"
+          test ! -e "$test_root/home"
       - name: Build and smoke Windows binary
         if: ${{ matrix.windows }}
         shell: pwsh
@@ -77,3 +96,32 @@ jobs:
           go build -ldflags "-s -w -X main.version=$env:ORBIT_SMOKE_VERSION" -o bin/orbit.exe ./cmd/orbit
           $env:ORBIT_BIN = "$PWD\bin\orbit.exe"
           go test -tags=platformsmoke -run TestPlatformSmokeCleanUserJourney -v ./app
+      - name: Exercise native Windows uninstall command
+        if: ${{ matrix.windows }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "orbit-uninstall-$PID"
+          $installDir = Join-Path $testRoot "bin"
+          $orbitHome = Join-Path $testRoot "home"
+          New-Item -ItemType Directory -Force $installDir, $orbitHome | Out-Null
+          Set-Content -Path (Join-Path $orbitHome "preserved") -Value "yes"
+          $target = Join-Path $installDir "orbit.exe"
+          Copy-Item bin/orbit.exe $target
+          $env:ORBIT_HOME = $orbitHome
+          & $target uninstall
+          if (-not (Test-Path $target)) { throw "preview removed the binary" }
+          & $target uninstall --yes
+          for ($attempt = 0; $attempt -lt 50 -and (Test-Path $target); $attempt++) {
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $target) { throw "binary was not removed" }
+          if (-not (Test-Path (Join-Path $orbitHome "preserved"))) { throw "user data was not preserved" }
+          Copy-Item bin/orbit.exe $target
+          & $target uninstall --yes --purge
+          for ($attempt = 0; $attempt -lt 50 -and ((Test-Path $target) -or (Test-Path $orbitHome)); $attempt++) {
+            Start-Sleep -Milliseconds 100
+          }
+          if (Test-Path $target) { throw "binary was not removed during purge" }
+          if (Test-Path $orbitHome) { throw "user data was not purged" }
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $testRoot

@@ -194,9 +194,8 @@ main() {
     echo "To remove it later, re-run with --yes --purge."
   fi
   echo
-  echo "Note: Docker images (example.db:latest, sql-server, redis, kafka, ...)"
-  echo "      were not removed — other projects may share them."
-  echo "      Run 'docker image prune' or remove specific images manually if desired."
+  echo "Docker images were preserved because other projects may share them."
+  echo "Run 'docker image prune' or remove specific images manually if desired."
   if [ -n "${WORKSPACE_ROOT:-}" ]; then
     echo
     echo "Note: \$WORKSPACE_ROOT (${WORKSPACE_ROOT}) was not touched — it's your git checkout."

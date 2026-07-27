@@ -131,6 +131,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.AddCommand(switchCmd())
 	rootCmd.AddCommand(daemonCmd())
 	rootCmd.AddCommand(selfUpdateCmd())
+	rootCmd.AddCommand(uninstallCmd())
 	rootCmd.AddCommand(historyCmd())
 	rootCmd.AddCommand(edgeCmd())
 	rootCmd.AddCommand(serviceCmd())
