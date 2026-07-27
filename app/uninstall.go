@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -68,7 +69,7 @@ func runUninstall(opts uninstallOptions) error {
 		if cli.JSONOutput {
 			return cli.WriteJSONSuccess(os.Stdout, commandString(), data, nil)
 		}
-		printUninstallPlan(data)
+		printUninstallPlan(os.Stdout, data)
 		return nil
 	}
 
@@ -91,7 +92,7 @@ func runUninstall(opts uninstallOptions) error {
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, nil)
 	}
-	printUninstallResult(data)
+	printUninstallResult(os.Stdout, data)
 	return nil
 }
 
@@ -133,32 +134,34 @@ func validatePurgeTarget(path string) error {
 	return nil
 }
 
-func printUninstallPlan(data uninstallData) {
-	fmt.Println("This will remove:")
+func printUninstallPlan(w io.Writer, data uninstallData) {
+	fmt.Fprintln(w, "This will remove:")
 	for _, artifact := range data.Artifacts {
 		if artifact == data.UserData && !data.UserDataPreserved {
-			fmt.Printf("  user data: %s\n", artifact)
+			fmt.Fprintf(w, "  user data: %s\n", artifact)
 			continue
 		}
-		fmt.Printf("  binary artifact: %s\n", artifact)
+		fmt.Fprintf(w, "  binary artifact: %s\n", artifact)
 	}
+	fmt.Fprintln(w, "This will preserve:")
 	if data.UserDataPreserved {
-		fmt.Println("This will preserve:")
-		fmt.Printf("  user data: %s\n", data.UserData)
+		fmt.Fprintf(w, "  user data: %s\n", data.UserData)
 	}
-	fmt.Println("  Docker images and project workspaces")
-	fmt.Println()
-	fmt.Println("Preview only. Run 'orbit uninstall --yes' to apply.")
+	fmt.Fprintln(w, "  Docker images and project workspaces")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Preview only. Run 'orbit uninstall --yes' to apply.")
 }
 
-func printUninstallResult(data uninstallData) {
+func printUninstallResult(w io.Writer, data uninstallData) {
 	if data.Scheduled {
-		fmt.Println("Orbit will finish removing its binary after this command exits.")
+		fmt.Fprintln(w, "Orbit will finish removing its binary after this command exits.")
 	} else {
-		fmt.Println("Orbit uninstalled.")
+		fmt.Fprintln(w, "Orbit uninstalled.")
 	}
 	if data.UserDataPreserved {
-		fmt.Printf("User data preserved at %s.\n", data.UserData)
+		fmt.Fprintf(w, "User data preserved at %s.\n", data.UserData)
+	} else {
+		fmt.Fprintf(w, "User data removed from %s.\n", data.UserData)
 	}
-	fmt.Println("Docker images and project workspaces were preserved.")
+	fmt.Fprintln(w, "Docker images and project workspaces were preserved.")
 }
