@@ -195,7 +195,15 @@ func lifecycleTerminalError(status *daemon.StatusResponse, names []string, failS
 			if svc.HealthProgress != nil && svc.HealthProgress.Recovering {
 				continue
 			}
-			return fmt.Errorf("%s degraded", svc.Name)
+			reason := svc.StateReason
+			if reason == "" && svc.HealthProgress != nil {
+				reason = svc.HealthProgress.LastErr
+			}
+			message := svc.Name + " failed to become healthy"
+			if reason != "" {
+				message += ": " + reason
+			}
+			return fmt.Errorf("%s", message)
 		case "stopped":
 			if failStopped {
 				return fmt.Errorf("%s stopped before becoming healthy", svc.Name)

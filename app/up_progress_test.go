@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
-	"github.com/fatih/color"
 )
 
 func TestNextSnapshots_FirstAppearanceRecordsAllTimestampsAtNow(t *testing.T) {
@@ -22,6 +22,19 @@ func TestNextSnapshots_FirstAppearanceRecordsAllTimestampsAtNow(t *testing.T) {
 	}
 	if s.state != "pending" || !s.since.Equal(now) || !s.firstSeen.Equal(now) {
 		t.Errorf("snapshot = %+v, want state=pending and both timestamps at %v", s, now)
+	}
+}
+
+func TestNextSnapshots_CarriesFailureEvidence(t *testing.T) {
+	now := time.Unix(100, 0)
+	got := nextSnapshots(nil, []daemon.ServiceStatus{{
+		Name:        "worker",
+		State:       "degraded",
+		StateReason: "failed to start: address already in use",
+	}}, now)
+
+	if got["worker"].reason != "failed to start: address already in use" {
+		t.Fatalf("reason = %q", got["worker"].reason)
 	}
 }
 
@@ -259,6 +272,42 @@ func TestFormatProgressEvent_HeartbeatShowsStillElapsed(t *testing.T) {
 	want := "  ⋯ worker still building (30s)"
 	if line != want {
 		t.Errorf("\n got: %q\nwant: %q", line, want)
+	}
+}
+
+func TestServiceStartErrorExplainsEvidenceAndRecovery(t *testing.T) {
+	err := serviceStartError("worker", progressSnapshot{
+		state:  "degraded",
+		reason: "failed to start: address already in use",
+	}, "OSError: Address already in use")
+	for _, want := range []string{
+		"worker failed to become healthy",
+		"address already in use",
+		"Last log: OSError: Address already in use",
+		"orbit logs worker",
+		"orbit restart worker",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestTruncateEvidenceBoundsLongLogs(t *testing.T) {
+	got := truncateEvidence(strings.Repeat("x", 500))
+	if len(got) != 240 || !strings.HasSuffix(got, "...") {
+		t.Fatalf("truncated evidence length=%d value=%q", len(got), got)
+	}
+}
+
+func TestLastServiceLogLineSkipsOrbitNarration(t *testing.T) {
+	got := lastServiceLogLine([]string{
+		"Traceback (most recent call last):",
+		"OSError: Address already in use",
+		"[orbit] exited: exit status 1",
+	})
+	if got != "OSError: Address already in use" {
+		t.Fatalf("evidence = %q", got)
 	}
 }
 

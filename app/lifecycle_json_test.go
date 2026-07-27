@@ -164,8 +164,18 @@ func TestLifecycleTerminalErrorFailsOnDegraded(t *testing.T) {
 		},
 	}
 	err := lifecycleTerminalError(status, []string{"worker"}, true)
-	if err == nil || err.Error() != "worker degraded" {
-		t.Fatalf("lifecycleTerminalError = %v, want worker degraded", err)
+	if err == nil || err.Error() != "worker failed to become healthy" {
+		t.Fatalf("lifecycleTerminalError = %v, want worker failure", err)
+	}
+}
+
+func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{Name: "worker", State: "degraded", StateReason: "failed to start: address already in use"},
+	}}
+	err := lifecycleTerminalError(status, []string{"worker"}, true)
+	if err == nil || err.Error() != "worker failed to become healthy: failed to start: address already in use" {
+		t.Fatalf("lifecycleTerminalError = %v", err)
 	}
 }
 

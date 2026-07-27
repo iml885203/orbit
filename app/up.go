@@ -212,13 +212,10 @@ type waitOptions struct {
 	// the awaited transition" — used by waitForServicesStopped's
 	// restart-race handling. Without it, only doneOn promotes services.
 	pastDone func(state string) bool
-	// gracePolls is how many initial polls to skip before considering
-	// degraded states as failures. Zero disables the grace window.
-	gracePolls int
 	// onTick is called after each poll. It decides whether the wait is
 	// finished, by inspecting the current snapshots and done map. It may
 	// also fail the wait with an error.
-	onTick func(snapshots map[string]progressSnapshot, done map[string]bool, gracePollsLeft int) (bool, error)
+	onTick func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error)
 	// timeoutErr is returned when the overall deadline expires.
 	timeoutErr error
 }
@@ -235,7 +232,6 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 		renderer = newAppendRenderer(os.Stdout)
 	}
 
-	gracePolls := opts.gracePolls
 	snapshots := make(map[string]progressSnapshot)
 	done := make(map[string]bool)
 	frame := 0
@@ -255,10 +251,6 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 			}
 			prev := snapshots
 			next := nextSnapshots(prev, watched, t)
-			if snapshotsChanged(prev, next) && gracePolls > 0 {
-				gracePolls--
-			}
-
 			for _, evt := range diffProgress(prev, next, t) {
 				line := formatProgressEvent(evt)
 				if opts.commit != nil && opts.commit(evt) {
@@ -288,7 +280,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 				}
 			}
 
-			finished, err := opts.onTick(snapshots, done, gracePolls)
+			finished, err := opts.onTick(snapshots, done)
 			if err != nil {
 				renderer.finalize(false)
 				return false, err
@@ -314,7 +306,11 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 	for name, s := range snapshots {
 		if s.state == "degraded" && s.recovering && !announced[name] {
 			announced[name] = true
-			_, _ = cli.Faint.Printf("  … %s degraded — daemon keeps probing for recovery\n", name)
+			_, _ = cli.Faint.Printf(
+				"  … %s degraded — retrying health checks for up to %s\n",
+				name,
+				effectiveTimeout(timeout),
+			)
 		}
 	}
 }
@@ -326,18 +322,14 @@ func waitForInfraHealthy(client *daemon.Client) error {
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for infrastructure to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, _ int) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
 			announceRecovering(snapshots, announced)
 			total := 0
-			hasDegraded := false
-			for _, s := range snapshots {
+			for name, s := range snapshots {
 				total++
 				if s.state == "degraded" && !s.recovering {
-					hasDegraded = true
+					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
-			}
-			if hasDegraded {
-				return false, fmt.Errorf("infrastructure has degraded containers")
 			}
 			if total > 0 && len(done) == total {
 				fmt.Println("All infrastructure healthy.")
@@ -354,23 +346,15 @@ func waitForAllHealthy(client *daemon.Client) error {
 	return runProgressWait(client, waitOptions{
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		gracePolls: 3,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, gracePolls int) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
 			announceRecovering(snapshots, announced)
 			total := 0
-			hasDegraded := false
-			for _, s := range snapshots {
+			for name, s := range snapshots {
 				total++
-				// degraded-but-recovering means the daemon is still probing
-				// and may flip the service back on its own — keep waiting
-				// (the overall wait timeout still bounds us).
 				if s.state == "degraded" && !s.recovering {
-					hasDegraded = true
+					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
-			}
-			if gracePolls == 0 && hasDegraded {
-				return false, fmt.Errorf("some services are degraded")
 			}
 			if total > 0 && len(done) == total {
 				fmt.Println("All services healthy.")
@@ -392,22 +376,22 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		gracePolls: 3,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, gracePolls int) (bool, error) {
+		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool) (bool, error) {
 			announceRecovering(snapshots, announced)
-			if gracePolls == 0 {
-				for name := range watch {
-					if done[name] {
-						continue
-					}
-					s, ok := snapshots[name]
-					if !ok {
-						continue
-					}
-					if s.state == "stopped" || (s.state == "degraded" && !s.recovering) {
-						return false, fmt.Errorf("service %s is %s", name, s.state)
-					}
+			for name := range watch {
+				if done[name] {
+					continue
+				}
+				s, ok := snapshots[name]
+				if !ok {
+					continue
+				}
+				if s.state == "stopped" {
+					return false, fmt.Errorf("%s stopped before becoming healthy", name)
+				}
+				if s.state == "degraded" && !s.recovering {
+					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
 			}
 			if len(done) == len(watch) {
@@ -453,7 +437,7 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 			return e.kind == eventTransition && e.to == "stopped"
 		},
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to stop"),
-		onTick: func(_ map[string]progressSnapshot, done map[string]bool, _ int) (bool, error) {
+		onTick: func(_ map[string]progressSnapshot, done map[string]bool) (bool, error) {
 			if len(done) == len(watch) {
 				if len(stopFailed) > 0 {
 					return false, fmt.Errorf("stop failed for %s — check 'orbit status' and 'docker ps'", strings.Join(stopFailed, ", "))
@@ -497,20 +481,47 @@ func doneOnHealthy(e progressEvent) bool {
 	return e.kind == eventTransition && e.to == "healthy"
 }
 
-// snapshotsChanged reports whether any service in next is in a different
-// state from its prev entry, used to decide when a poll-driven event
-// (like gracePolls decrement) should fire vs a frame-only render tick.
-func snapshotsChanged(prev, next map[string]progressSnapshot) bool {
-	if len(prev) != len(next) {
-		return true
+func serviceStartError(name string, snapshot progressSnapshot, evidence string) error {
+	message := name + " failed to become healthy"
+	if snapshot.reason != "" {
+		message += ": " + snapshot.reason
 	}
-	for name, n := range next {
-		p, ok := prev[name]
-		if !ok || p.state != n.state {
-			return true
+	if evidence != "" && evidence != snapshot.reason {
+		message += "\n  Last log: " + evidence
+	}
+	return fmt.Errorf(
+		"%s\n  → View logs: orbit logs %s\n  → Retry after fixing it: orbit restart %s",
+		message,
+		name,
+		name,
+	)
+}
+
+func recentLogEvidence(client *daemon.Client, name string) string {
+	response, err := client.Logs(name, 20)
+	if err != nil || response == nil {
+		return ""
+	}
+	return lastServiceLogLine(response.Lines)
+}
+
+func lastServiceLogLine(lines []string) string {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || strings.HasPrefix(line, "[orbit]") {
+			continue
 		}
+		return truncateEvidence(line)
 	}
-	return false
+	return ""
+}
+
+func truncateEvidence(line string) string {
+	const maxEvidenceLength = 240
+	if len(line) <= maxEvidenceLength {
+		return line
+	}
+	return line[:maxEvidenceLength-3] + "..."
 }
 
 // coloredEvent applies the existing colour scheme to a commit line so

@@ -11,7 +11,8 @@ import (
 // polls so we can detect transitions and emit timely progress events.
 type progressSnapshot struct {
 	state         string
-	recovering    bool      // degraded but the daemon is still probing (health recovery)
+	reason        string
+	recovering    bool
 	since         time.Time // when we first observed this state
 	firstSeen     time.Time // when the service first appeared in any non-terminal state
 	lastHeartbeat time.Time // when we last emitted a heartbeat for this service in this state
@@ -70,9 +71,17 @@ func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ServiceSt
 	out := make(map[string]progressSnapshot, len(statuses))
 	for i := range statuses {
 		svc := &statuses[i]
-		snap := progressSnapshot{state: svc.State, since: now, firstSeen: now}
+		snap := progressSnapshot{
+			state:     svc.State,
+			reason:    svc.StateReason,
+			since:     now,
+			firstSeen: now,
+		}
 		if svc.HealthProgress != nil {
 			snap.recovering = svc.HealthProgress.Recovering
+			if snap.reason == "" {
+				snap.reason = svc.HealthProgress.LastErr
+			}
 		}
 		if p, ok := prev[svc.Name]; ok {
 			snap.firstSeen = p.firstSeen
