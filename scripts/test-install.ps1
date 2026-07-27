@@ -72,9 +72,23 @@ function Assert-Version {
         [Parameter(Mandatory)] [string] $Version
     )
 
-    $actual = & $Path --version
-    if ($LASTEXITCODE -ne 0 -or $actual -ne "v$Version") {
-        throw "$Path reports '$actual', expected v$Version"
+    $executable = $Path
+    $temporaryExecutable = $null
+    if ([System.IO.Path]::GetExtension($Path) -ne ".exe") {
+        $temporaryExecutable = "$Path.test.exe"
+        Copy-Item -Force $Path $temporaryExecutable
+        $executable = $temporaryExecutable
+    }
+    try {
+        $actual = & $executable --version
+        if ($LASTEXITCODE -ne 0 -or $actual -ne "v$Version") {
+            throw "$Path reports '$actual', expected v$Version"
+        }
+    }
+    finally {
+        if ($temporaryExecutable) {
+            Remove-Item -Force -ErrorAction SilentlyContinue $temporaryExecutable
+        }
     }
 }
 
