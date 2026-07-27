@@ -130,7 +130,7 @@ try {
     Assert-Version "$target.prev" "0.0.0"
 
     $leftovers = @(Get-ChildItem $installDirectory -Force |
-        Where-Object { $_.Name -like ".*.download" -or $_.Name -like ".orbit-checksums.*" })
+        Where-Object { $_.Name -like ".orbit-download.*" -or $_.Name -like ".orbit-checksums.*" })
     if ($leftovers.Count -ne 0) {
         throw "installer left temporary files: $($leftovers.Name -join ', ')"
     }

@@ -166,7 +166,7 @@ function Install-Orbit {
     }
     $null = New-Item -ItemType Directory -Force -Path $directory
     $target = Join-Path $directory "orbit.exe"
-    $download = Join-Path $directory ".$asset.$PID.download"
+    $download = Join-Path $directory ".orbit-download.$PID.exe"
     $checksumFile = Join-Path $directory ".orbit-checksums.$PID.txt"
 
     try {
