@@ -43,7 +43,6 @@ func TestWindowsUninstallHelperReadsEveryManifestPath(t *testing.T) {
 		"powershell.exe",
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-File", helperPath,
-		"-OrbitParentPID", "2147483647",
 		"-OrbitManifest", manifestPath,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {

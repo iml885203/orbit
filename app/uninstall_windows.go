@@ -7,16 +7,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"syscall"
 )
 
 const windowsUninstallHelper = `param(
-    [Parameter(Mandatory=$true)][int]$OrbitParentPID,
     [Parameter(Mandatory=$true)][string]$OrbitManifest
 )
 $OrbitPaths = Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json
-Wait-Process -Id $OrbitParentPID -ErrorAction SilentlyContinue
 $OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
     $OrbitLastError = ""
@@ -79,7 +76,6 @@ func removeUninstallArtifacts(paths []string) (bool, error) {
 	args := []string{
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-File", helperPath,
-		"-OrbitParentPID", strconv.Itoa(os.Getpid()),
 		"-OrbitManifest", manifestPath,
 	}
 	cmd := exec.Command("powershell.exe", args...)
