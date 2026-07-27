@@ -68,3 +68,34 @@ func TestRunBoundedPublish(t *testing.T) {
 		t.Errorf("all-success run should return nil; got %v", err)
 	}
 }
+
+func TestForcedPublishRequiresVisibleApproval(t *testing.T) {
+	previousForce, previousYes := publishForce, publishYes
+	t.Cleanup(func() {
+		publishForce = previousForce
+		publishYes = previousYes
+	})
+	targets := []publishTargetRef{{DB: "Accounts"}, {DB: "Orders"}}
+
+	publishForce, publishYes = false, false
+	if !authorizeForcedPublish(targets) {
+		t.Fatal("ordinary data-preserving publish must not prompt")
+	}
+
+	publishForce, publishYes = true, true
+	if !authorizeForcedPublish(targets) {
+		t.Fatal("--force --yes must count as explicit approval")
+	}
+
+	publishForce, publishYes = true, false
+	if authorizeForcedPublish(targets) {
+		t.Fatal("non-interactive --force without --yes must abort")
+	}
+
+	prompt := forcedPublishPrompt(targets)
+	for _, want := range []string{"Accounts, Orders", "permanently delete data"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt %q does not make scope and consequence visible; missing %q", prompt, want)
+		}
+	}
+}

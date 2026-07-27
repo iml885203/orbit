@@ -50,7 +50,9 @@ preserved (destructive changes are blocked unless `--force`).
 The database schema converges to the project: adding, changing, or deleting a
 stored procedure, table, or other project object produces the corresponding
 create, alter, or drop. Drops that could lose data are reported by `db diff`
-and blocked by publish until the user explicitly passes `--force`.
+and blocked by publish until the user explicitly passes `--force`. A forced
+publish shows every affected database and asks for confirmation; use
+`--force --yes` only after reviewing the impact when running non-interactively.
 
 Requirements (checked by `orbit doctor`): the .NET SDK and sqlpackage on
 the host — `dotnet tool install -g microsoft.sqlpackage`.

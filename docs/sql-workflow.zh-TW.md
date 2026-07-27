@@ -47,7 +47,8 @@ port——不重建 image、不用 container 內工具,Apple Silicon 上是原�
 DB schema 會收斂到 project：新增、修改或刪除 stored procedure、table
 或其他 project object，都會產生對應的 create、alter 或 drop。可能造成
 資料遺失的 drop 會顯示在 `db diff`，publish 預設擋下，直到使用者明確
-加上 `--force`。
+加上 `--force`。Force publish 會列出所有受影響的 database 並再次要求確認；
+非互動執行時，只有在檢視影響後才使用 `--force --yes`。
 
 前置需求(`orbit doctor` 會檢查):host 上的 .NET SDK 與 sqlpackage——
 `dotnet tool install -g microsoft.sqlpackage`。

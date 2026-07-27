@@ -64,10 +64,12 @@ orbit db publish <dbname>
 你正在縮欄位、drop table，或類似的破壞性變更。要嘛接受資料遺失：
 
 ```bash
-orbit db publish <dbname> --force     # 傳入 BlockOnPossibleDataLoss=false
+orbit db publish <dbname> --force     # 顯示影響範圍並再次確認
 ```
 
-要嘛把變更拆成更小的步驟。要丟棄本機資料並套用最新 schema，執行 `orbit db reset <dbname>`。
+要嘛把變更拆成更小的步驟。已檢視影響的非互動執行可使用
+`--force --yes`。要丟棄本機資料並套用最新 schema，執行
+`orbit db reset <dbname>`。
 
 ### 重新啟動設定指定的 SQL Server target 後，我的 SP 不見了
 在 volume-seeding 那個修法之後不應該再發生。如果還是遇到：

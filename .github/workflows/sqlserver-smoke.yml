@@ -1,0 +1,50 @@
+name: SQL Server smoke
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  live-workflow:
+    name: Publish, protect data, and reset
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ORBIT_SQL_E2E_PASSWORD: Orbit-E2E-Only_2026!
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - name: Install sqlpackage
+        run: dotnet tool install --global microsoft.sqlpackage
+      - name: Start isolated SQL Server
+        run: |
+          set -euo pipefail
+          docker run --detach --name orbit-sql-e2e \
+            --env ACCEPT_EULA=Y \
+            --env "MSSQL_SA_PASSWORD=$ORBIT_SQL_E2E_PASSWORD" \
+            --publish 127.0.0.1:11433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for attempt in {1..90}; do
+            if docker logs orbit-sql-e2e 2>&1 | grep -q "SQL Server is now ready for client connections"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs orbit-sql-e2e
+          exit 1
+      - name: Exercise the real SQL workflow
+        env:
+          ORBIT_E2E_SQL: localhost:11433:${{ env.ORBIT_SQL_E2E_PASSWORD }}
+        run: go test ./internal/sqlpublish -run TestE2E_QuickDiff -v -count=1
+      - name: Remove isolated SQL Server
+        if: always()
+        run: docker rm --force orbit-sql-e2e

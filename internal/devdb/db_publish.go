@@ -25,6 +25,7 @@ var (
 	publishForce    bool
 	publishAll      bool
 	publishParallel int
+	publishYes      bool
 )
 
 func dbPublishCmd() *cobra.Command {
@@ -56,14 +57,18 @@ host dotnet SDK and sqlpackage
 		},
 		RunE: runDBPublish,
 	}
-	cmd.Flags().BoolVar(&publishForce, "force", false, "allow destructive changes (BlockOnPossibleDataLoss=false)")
+	cmd.Flags().BoolVar(&publishForce, "force", false, "allow schema changes that can permanently delete data")
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
+	cmd.Flags().BoolVar(&publishYes, "yes", false, "confirm the data-loss risk when used with --force")
 	return cmd
 }
 
 func runDBPublish(_ *cobra.Command, args []string) error {
+	if publishYes && !publishForce {
+		return fmt.Errorf("--yes requires --force")
+	}
 	// Input validation outranks the destructive-command recommendation: a
 	// malformed argument is a plain input error in every output mode, decided
 	// before we reach the --json destructive gate (or dial the daemon).
@@ -99,6 +104,9 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 	if resolved.FromProject() {
 		return runDBPublishProject(client, projects, resolved)
 	}
+	if publishParallel > 0 {
+		return fmt.Errorf("--parallel applies only to --all or a project with multiple databases")
+	}
 
 	dbName := resolved.DBs[0]
 	if !safeDBName.MatchString(dbName) {
@@ -115,6 +123,10 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 		return err
 	}
 	opts.Force = publishForce
+	if !authorizeForcedPublish([]publishTargetRef{{DB: dbName}}) {
+		fmt.Println("Aborted.")
+		return nil
+	}
 	// A publish prepares fast reset state for a database it just created.
 	return publishOne(client, opts, true, os.Stdout)
 }
@@ -127,6 +139,10 @@ func runDBPublishProject(client *daemon.Client, projects []DevDBProject, resolve
 	if len(targets) == 0 {
 		return fmt.Errorf("project %q has no resolvable databases — check `orbit db list`", resolved.Project)
 	}
+	if !authorizeForcedPublish(targets) {
+		fmt.Println("Aborted.")
+		return nil
+	}
 	return runPublishTargets(client, targets, resolved.Project)
 }
 
@@ -136,7 +152,30 @@ func runDBPublishAll(client *daemon.Client) error {
 	if err != nil {
 		return err
 	}
+	if !authorizeForcedPublish(targets) {
+		fmt.Println("Aborted.")
+		return nil
+	}
 	return runPublishTargets(client, targets, "")
+}
+
+func authorizeForcedPublish(targets []publishTargetRef) bool {
+	if !publishForce || publishYes {
+		return true
+	}
+	return cli.Confirm(forcedPublishPrompt(targets))
+}
+
+func forcedPublishPrompt(targets []publishTargetRef) string {
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, target.DB)
+	}
+	scope := strings.Join(names, ", ")
+	return fmt.Sprintf(
+		"Force-publish %s? This allows schema changes that can permanently delete data.",
+		scope,
+	)
 }
 
 // runPublishTargets is the shared body of the multi-target publish paths

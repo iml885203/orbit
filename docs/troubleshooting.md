@@ -64,10 +64,12 @@ orbit db publish <dbname>
 You're narrowing a column, dropping a table, or similar. Either accept the loss:
 
 ```bash
-orbit db publish <dbname> --force     # passes BlockOnPossibleDataLoss=false
+orbit db publish <dbname> --force     # shows scope and asks for confirmation
 ```
 
-or refactor the change in smaller steps. To discard local data and apply the latest schema, run `orbit db reset <dbname>`.
+or refactor the change in smaller steps. For an already reviewed
+non-interactive run, use `--force --yes`. To discard local data and apply the
+latest schema, run `orbit db reset <dbname>`.
 
 ### My SP disappeared after restarting the configured SQL Server target
 Should not happen after the volume-seeding fix. If it does:

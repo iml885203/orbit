@@ -52,8 +52,12 @@ jobs:
     needs: approval
     uses: ./.github/workflows/platform-smoke.yml
 
+  sqlserver-smoke:
+    needs: approval
+    uses: ./.github/workflows/sqlserver-smoke.yml
+
   release:
-    needs: [approval, platform-smoke]
+    needs: [approval, platform-smoke, sqlserver-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
