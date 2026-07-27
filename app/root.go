@@ -17,7 +17,6 @@ import (
 	"github.com/iml885203/orbit/extension"
 	"github.com/iml885203/orbit/internal/history"
 	"github.com/iml885203/orbit/internal/shellquote"
-	"github.com/iml885203/orbit/platform"
 	"github.com/spf13/cobra"
 )
 
@@ -808,8 +807,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 			if svc.State != "healthy" {
 				return fmt.Errorf("%s is %s, not healthy", name, svc.State)
 			}
-			fmt.Printf("Opening %s\n", svc.URL)
-			return platform.OpenBrowser(svc.URL)
+			return openURL(svc.URL, "service", name)
 		}
 	}
 	return fmt.Errorf("service %s not found", name)
