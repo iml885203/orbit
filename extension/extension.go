@@ -69,8 +69,9 @@ type CLIInit struct {
 	MarkerHint string
 	// Steps runs the feature's settings prompts right after the
 	// workspace-root step. yes mirrors --yes (accept defaults, no
-	// prompting); prompt reads one trimmed line from the user.
-	Steps func(settings *daemon.Settings, yes bool, prompt func(label string) string) error
+	// prompting); prompt reads one trimmed line from the user. quiet asks
+	// the extension to keep stdout machine-readable for --json.
+	Steps func(settings *daemon.Settings, yes bool, prompt func(label string) string, quiet bool) error
 }
 
 // Distribution names where a distribution of the binary gets its

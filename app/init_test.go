@@ -170,7 +170,7 @@ func TestCLIInitAggregation(t *testing.T) {
 				WorkspaceCandidates: func(home string) []string { return []string{home + "/a"} },
 				WorkspaceMarkers:    func(root string) []string { return []string{"a/"} },
 				MarkerHint:          "a/ expected",
-				Steps: func(*daemon.Settings, bool, func(string) string) error {
+				Steps: func(*daemon.Settings, bool, func(string) string, bool) error {
 					stepOrder = append(stepOrder, "a")
 					return nil
 				},
@@ -182,7 +182,7 @@ func TestCLIInitAggregation(t *testing.T) {
 				WorkspaceCandidates: func(home string) []string { return []string{home + "/b"} },
 				WorkspaceMarkers:    func(root string) []string { return []string{"b/"} },
 				MarkerHint:          "b/ expected",
-				Steps: func(*daemon.Settings, bool, func(string) string) error {
+				Steps: func(*daemon.Settings, bool, func(string) string, bool) error {
 					stepOrder = append(stepOrder, "b")
 					return nil
 				},
@@ -200,7 +200,7 @@ func TestCLIInitAggregation(t *testing.T) {
 		t.Errorf("hint = %q, want first extension's", got)
 	}
 	for _, ext := range extensions {
-		if err := ext.CLIInit.Steps(nil, true, nil); err != nil {
+		if err := ext.CLIInit.Steps(nil, true, nil, false); err != nil {
 			t.Fatal(err)
 		}
 	}

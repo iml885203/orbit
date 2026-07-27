@@ -18,7 +18,7 @@ import (
 
 // InitSteps runs the DB workflow settings prompts (init wizard step 1b):
 // the db-projects root. Optional; a blank answer skips the write.
-func InitSteps(settings *daemon.Settings, yes bool, prompt func(string) string) error {
+func InitSteps(settings *daemon.Settings, yes bool, prompt func(string) string, quiet bool) error {
 	// ORBIT_DB_ROOT — directory containing SQL project subdirectories.
 	// Optional; if left blank, devdb falls back to scanning
 	// <workspace_root> and <workspace_root>/dbprojects.
@@ -33,12 +33,14 @@ func InitSteps(settings *daemon.Settings, yes bool, prompt func(string) string) 
 		}
 	}
 	if dbRoot != "" {
-		if _, err := os.Stat(dbRoot); err != nil {
-			_, _ = cli.Yellow.Printf("  ! ORBIT_DB_ROOT=%s (path not found — saved anyway)\n", dbRoot)
-		} else if projects := findSQLProjectDirs(dbRoot); len(projects) > 0 {
-			fmt.Printf("  %s ORBIT_DB_ROOT=%s (contains %s)\n", cli.Green.Sprint("✓"), dbRoot, strings.Join(projects, ", "))
-		} else {
-			fmt.Printf("  %s ORBIT_DB_ROOT=%s (no SQL projects found)\n", cli.Yellow.Sprint("!"), dbRoot)
+		if !quiet {
+			if _, err := os.Stat(dbRoot); err != nil {
+				_, _ = cli.Yellow.Printf("  ! ORBIT_DB_ROOT=%s (path not found — saved anyway)\n", dbRoot)
+			} else if projects := findSQLProjectDirs(dbRoot); len(projects) > 0 {
+				fmt.Printf("  %s ORBIT_DB_ROOT=%s (contains %s)\n", cli.Green.Sprint("✓"), dbRoot, strings.Join(projects, ", "))
+			} else {
+				fmt.Printf("  %s ORBIT_DB_ROOT=%s (no SQL projects found)\n", cli.Yellow.Sprint("!"), dbRoot)
+			}
 		}
 		if err := settings.Set("db_root", dbRoot); err != nil {
 			return fmt.Errorf("saving settings: %w", err)

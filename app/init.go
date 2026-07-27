@@ -21,6 +21,59 @@ var (
 	initEnvName string
 )
 
+type initResult struct {
+	WorkspaceRoot string               `json:"workspace_root"`
+	EnvsDir       string               `json:"envs_dir"`
+	EnvRepoURL    string               `json:"env_repo_url,omitempty"`
+	EnvSource     string               `json:"env_source"`
+	SyncedFiles   []string             `json:"synced_files"`
+	ActiveEnv     string               `json:"active_env,omitempty"`
+	ConfigPath    string               `json:"config_path,omitempty"`
+	Checks        []daemon.DoctorCheck `json:"checks"`
+	Warnings      []string             `json:"warnings"`
+	Ready         bool                 `json:"ready"`
+}
+
+type initPrinter struct {
+	enabled bool
+}
+
+func (p initPrinter) printf(format string, args ...any) {
+	if p.enabled {
+		fmt.Printf(format, args...)
+	}
+}
+
+func (p initPrinter) println(args ...any) {
+	if p.enabled {
+		fmt.Println(args...)
+	}
+}
+
+func (p initPrinter) boldln(text string) {
+	if p.enabled {
+		_, _ = cli.Bold.Println(text)
+	}
+}
+
+func (p initPrinter) faintln(text string) {
+	if p.enabled {
+		_, _ = cli.Faint.Println(text)
+	}
+}
+
+func (p initPrinter) warnln(text string) {
+	if p.enabled {
+		_, _ = cli.Yellow.Println(text)
+	}
+}
+
+func (p initPrinter) warnf(format string, args ...any) {
+	if p.enabled {
+		_, _ = cli.Yellow.Printf(format, args...)
+	}
+}
+
 func initCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -40,17 +93,28 @@ For non-interactive setup (CI, scripts):
 }
 
 func runInit(_ *cobra.Command, _ []string) error {
-	printLogo()
+	if cli.JSONOutput && !initYes {
+		return fmt.Errorf("--json requires --yes so init never waits for interactive input")
+	}
+	output := initPrinter{enabled: !cli.JSONOutput}
+	if output.enabled {
+		printLogo()
+	}
+	result := initResult{
+		EnvSource:   "none",
+		SyncedFiles: []string{},
+		Checks:      []daemon.DoctorCheck{},
+		Warnings:    []string{},
+	}
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
 
-	// Step 1: workspace root
-	_, _ = cli.Bold.Println("Step 1: Workspace root")
+	output.boldln("Step 1: Workspace root")
 
 	root := detectWorkspaceRoot(settings)
 	if root != "" {
 		if !initYes {
-			fmt.Printf("  Found: %s\n", root)
+			output.printf("  Found: %s\n", root)
 			input := prompt(fmt.Sprintf("  Workspace root [%s]: ", root))
 			if input != "" {
 				root = expandHome(input)
@@ -60,7 +124,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		if initYes {
 			return fmt.Errorf("could not auto-detect the workspace root — run without --yes")
 		}
-		_, _ = cli.Faint.Println("  Could not auto-detect the workspace root (the directory holding your repo checkouts).")
+		output.faintln("  Could not auto-detect the workspace root (the directory holding your repo checkouts).")
 		root = expandHome(prompt(fmt.Sprintf("  Enter path (e.g. %s): ", workspaceExample())))
 	}
 
@@ -75,12 +139,13 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// an unbranded build accepts any existing directory silently).
 	markers := workspaceMarkers(root)
 	if len(markers) > 0 {
-		fmt.Printf("  %s workspace root %s (contains %s)\n", cli.Green.Sprint("✓"), root, strings.Join(markers, ", "))
+		output.printf("  %s workspace root %s (contains %s)\n", cli.Green.Sprint("✓"), root, strings.Join(markers, ", "))
 	} else if hint := workspaceMarkerHint(); hint != "" {
-		fmt.Printf("  %s workspace root %s (no known repos found — %s)\n", cli.Yellow.Sprint("!"), root, hint)
+		output.printf("  %s workspace root %s (no known repos found — %s)\n", cli.Yellow.Sprint("!"), root, hint)
 	} else {
-		fmt.Printf("  %s workspace root %s\n", cli.Green.Sprint("✓"), root)
+		output.printf("  %s workspace root %s\n", cli.Green.Sprint("✓"), root)
 	}
+	result.WorkspaceRoot = root
 
 	if err := settings.Set("workspace_root", root); err != nil {
 		return fmt.Errorf("saving settings: %w", err)
@@ -92,15 +157,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// flow, the extension owns its steps.
 	for _, ext := range extensions {
 		if ext.CLIInit != nil && ext.CLIInit.Steps != nil {
-			if err := ext.CLIInit.Steps(settings, initYes, prompt); err != nil {
+			if err := ext.CLIInit.Steps(settings, initYes, prompt, cli.JSONOutput); err != nil {
 				return err
 			}
 		}
 	}
 
-	// Step 2: Environment
-	fmt.Println()
-	_, _ = cli.Bold.Println("Step 2: Env repo")
+	output.println()
+	output.boldln("Step 2: Env repo")
 
 	currentURL := settings.Get(settingKeyEnvRepoURL)
 	repoURL := currentURL
@@ -128,37 +192,50 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	envsDir := envsDestDir()
+	result.EnvsDir = envsDir
+	result.EnvRepoURL = repoURL
 	localEnvsDir := filepath.Join(root, "envs")
 	if info, err := os.Stat(localEnvsDir); err == nil && info.IsDir() && initEnvRepo == "" {
-		fmt.Printf("  Syncing local %s → %s\n", localEnvsDir, envsDir)
+		result.EnvSource = "local"
+		output.printf("  Syncing local %s → %s\n", localEnvsDir, envsDir)
 		syncRes, err := envsync.Sync(localEnvsDir, envsDir, envsync.Options{})
 		if err != nil {
-			_, _ = cli.Yellow.Printf("  ! sync failed: %v\n", err)
-			_, _ = cli.Faint.Println("    you can retry later with `orbit env sync`")
+			warning := "env sync failed: " + err.Error()
+			result.Warnings = append(result.Warnings, warning)
+			output.warnf("  ! sync failed: %v\n", err)
+			output.faintln("    you can retry later with `orbit env sync`")
 		} else {
-			fmt.Printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
+			result.SyncedFiles = syncRes.Written
+			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
 		}
 	} else if repoURL == "" {
-		_, _ = cli.Yellow.Println("  ! no env repo configured — skipping sync")
-		_, _ = cli.Faint.Println("    set one later with `orbit env sync --url <git-url>`")
+		warning := "no env repo configured; sync skipped"
+		result.Warnings = append(result.Warnings, warning)
+		output.warnln("  ! no env repo configured — skipping sync")
+		output.faintln("    set one later with `orbit env sync --url <git-url>`")
 	} else {
-		fmt.Printf("  Syncing %s → %s\n", repoURL, envsDir)
+		result.EnvSource = "remote"
+		output.printf("  Syncing %s → %s\n", repoURL, envsDir)
 		syncRes, err := envsync.SyncFromRepo(repoURL, envsDir, envsync.Options{})
 		if err != nil {
-			_, _ = cli.Yellow.Printf("  ! sync failed: %v\n", err)
-			_, _ = cli.Faint.Println("    you can retry later with `orbit env sync`")
+			warning := "env sync failed: " + err.Error()
+			result.Warnings = append(result.Warnings, warning)
+			output.warnf("  ! sync failed: %v\n", err)
+			output.faintln("    you can retry later with `orbit env sync`")
 		} else {
-			fmt.Printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
+			result.SyncedFiles = syncRes.Written
+			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
 		}
 	}
 
-	fmt.Println()
-	_, _ = cli.Bold.Println("Step 3: Environment")
+	output.println()
+	output.boldln("Step 3: Environment")
 
 	envFiles := listEnvFiles(envsDir)
 	if len(envFiles) == 0 {
-		_, _ = cli.Yellow.Printf("  ! No environment configs found in %s\n", envsDir)
-		_, _ = cli.Faint.Println("    retry `orbit env sync` once the repo is reachable")
+		result.Warnings = append(result.Warnings, "no environment configs found in "+envsDir)
+		output.warnf("  ! No environment configs found in %s\n", envsDir)
+		output.faintln("    retry `orbit env sync` once the repo is reachable")
 	} else {
 		var chosen string
 		switch {
@@ -168,13 +245,13 @@ func runInit(_ *cobra.Command, _ []string) error {
 				return fmt.Errorf("--env %q not found in %s (available: %s)",
 					initEnvName, envsDir, strings.Join(envFiles, ", "))
 			}
-			fmt.Printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
 		case initYes || len(envFiles) == 1:
 			chosen = pickDefault(envFiles)
-			fmt.Printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
 		default:
 			for i, f := range envFiles {
-				fmt.Printf("  %d) %s\n", i+1, f)
+				output.printf("  %d) %s\n", i+1, f)
 			}
 			input := prompt("  Select environment [1]: ")
 			idx := 0
@@ -184,7 +261,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 				}
 			}
 			chosen = envFiles[idx]
-			fmt.Printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
 		}
 
 		absPath := filepath.Join(envsDir, chosen)
@@ -192,20 +269,46 @@ func runInit(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("writing env: %w", err)
 		}
 		configFile = absPath
+		result.ActiveEnv = chosen
+		result.ConfigPath = absPath
 	}
 
-	// Step 4: Health check
-	fmt.Println()
-	_, _ = cli.Bold.Println("Step 4: Health check")
-	_ = runDoctorWithOptions(doctorOptions{})
+	output.println()
+	output.boldln("Step 4: Health check")
+	if output.enabled {
+		_ = runDoctorWithOptions(doctorOptions{})
+	}
+	health := doctorResponse(daemon.NewClient(daemon.DefaultSocketPath()))
+	result.Checks = health.Checks
+	result.Ready = result.ActiveEnv != "" && doctorFailure(health, false) == nil
 
-	// Step 5: Next steps
-	fmt.Println()
-	_, _ = cli.Bold.Println("Setup complete!")
-	_, _ = cli.Faint.Println("  Next: orbit up        start the environment")
-	_, _ = cli.Faint.Println("        orbit open      open the dashboard")
+	output.println()
+	output.boldln("Setup complete!")
+	output.faintln("  Next: orbit up        start the environment")
+	output.faintln("        orbit open      open the dashboard")
 
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), result, initRecommendedActions(result))
+	}
 	return nil
+}
+
+func initRecommendedActions(result initResult) []cli.JSONAction {
+	if result.ActiveEnv == "" {
+		return []cli.JSONAction{{
+			Command:     "orbit env sync --json",
+			Reason:      "Fetch environment configs before starting Orbit.",
+			Destructive: false,
+		}}
+	}
+	if !result.Ready {
+		return []cli.JSONAction{cli.DoctorAction()}
+	}
+	return []cli.JSONAction{{
+		Command:     "orbit up --json",
+		Reason:      "Start the selected environment.",
+		Destructive: false,
+	}}
 }
 
 // detectWorkspaceRoot tries to find the workspace root automatically.

@@ -17,7 +17,7 @@ func TestInitSteps_YesWithNothingDetected(t *testing.T) {
 	err := InitSteps(settings, true, func(string) string {
 		t.Fatal("prompt called despite --yes")
 		return ""
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("InitSteps: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestInitSteps_YesPersistsDetectedDBRoot(t *testing.T) {
 	dbRoot := t.TempDir()
 	t.Setenv("ORBIT_DB_ROOT", dbRoot)
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
-	if err := InitSteps(settings, true, func(string) string { return "" }); err != nil {
+	if err := InitSteps(settings, true, func(string) string { return "" }, false); err != nil {
 		t.Fatalf("InitSteps: %v", err)
 	}
 	if got := settings.Get("db_root"); got != dbRoot {
