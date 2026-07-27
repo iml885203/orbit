@@ -39,6 +39,10 @@ orbit update
 After upgrading, the running daemon is still the old build. `orbit status` flags this with `⚠ newer orbit … — orbit daemon restart`. Run `orbit daemon restart` to pick up the new binary.
 
 Each upgrade keeps the previous binary at `<path>.prev` (e.g. `~/.local/bin/orbit.prev`).
+The installer verifies the checksum and the downloaded binary's reported
+version before touching the current install. Replacement is staged beside the
+target for an atomic rename. It refuses to replace a newer installed version
+unless the downgrade is explicit.
 
 ### Rollback
 
@@ -54,12 +58,35 @@ mv ~/.local/bin/orbit.prev ~/.local/bin/orbit
 orbit daemon restart
 ```
 
+To return to a specific release rather than the immediately previous one:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh |
+  ORBIT_VERSION=v0.9.0 ORBIT_ALLOW_DOWNGRADE=1 bash
+orbit daemon restart
+```
+
+The named artifact still has to pass its release checksum and version check;
+the replaced binary becomes the new `.prev`.
+
 ### Uninstall
 
-Run `orbit down` to stop services and containers, then remove the `orbit`
-binary from your `PATH` and delete `~/.orbit/` if you also want to remove local
-configuration and state. Docker images and git checkouts under your workspace
-are not removed.
+Preview the exact paths first, then remove the binary while preserving
+environments, settings, and local state:
+
+```bash
+./scripts/uninstall.sh
+./scripts/uninstall.sh --yes
+```
+
+Add `--purge` only when you also intend to permanently remove `~/.orbit/`:
+
+```bash
+./scripts/uninstall.sh --yes --purge
+```
+
+Both forms stop Orbit first. Docker images and git checkouts under your
+workspace are not removed.
 
 ### Manual download
 

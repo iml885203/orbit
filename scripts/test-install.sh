@@ -20,10 +20,13 @@ case "$platform" in
   *) echo "unsupported test platform: $platform" >&2; exit 1 ;;
 esac
 
-printf '#!/usr/bin/env bash\necho "orbit v0.0.1"\n' >"$fixtures/$asset"
-chmod +x "$fixtures/$asset"
-checksum="$(shasum -a 256 "$fixtures/$asset" | awk '{print $1}')"
-printf '%s  %s\n' "$checksum" "$asset" >"$fixtures/checksums.txt"
+write_release() {
+  local version="$1" checksum
+  printf '#!/usr/bin/env bash\necho "orbit v%s"\n' "$version" >"$fixtures/$asset"
+  chmod +x "$fixtures/$asset"
+  checksum="$(shasum -a 256 "$fixtures/$asset" | awk '{print $1}')"
+  printf '%s  %s\n' "$checksum" "$asset" >"$fixtures/checksums.txt"
+}
 
 cat >"$mock_bin/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -51,16 +54,61 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ "${ORBIT_INSTALL_TEST_FAIL_ASSET:-}" = "$pattern" ]; then
+  printf 'partial download' >"$output"
+  exit 1
+fi
 cp "$ORBIT_INSTALL_TEST_FIXTURES/$pattern" "$output"
 EOF
 chmod +x "$mock_bin/curl" "$mock_bin/gh"
 
-PATH="$mock_bin:$PATH" \
-  ORBIT_INSTALL_DIR="$install_dir" \
-  ORBIT_INSTALL_TEST_FIXTURES="$fixtures" \
-  ORBIT_VERSION="v0.0.1" \
-  bash "$repo_root/scripts/install.sh"
+install_version() {
+  local version="$1"
+  PATH="$mock_bin:$PATH" \
+    ORBIT_INSTALL_DIR="$install_dir" \
+    ORBIT_INSTALL_TEST_FIXTURES="$fixtures" \
+    ORBIT_VERSION="v${version}" \
+    bash "$repo_root/scripts/install.sh"
+}
 
+write_release "0.0.1"
+install_version "0.0.1"
 test -x "$install_dir/orbit"
 test "$("$install_dir/orbit" --version)" = "orbit v0.0.1"
-echo "private installer fallback OK"
+
+write_release "0.0.0"
+if install_version "0.0.0" >/dev/null 2>&1; then
+  echo "installer unexpectedly downgraded an existing binary" >&2
+  exit 1
+fi
+test "$("$install_dir/orbit" --version)" = "orbit v0.0.1"
+
+ORBIT_ALLOW_DOWNGRADE=1 install_version "0.0.0" >/dev/null
+test "$("$install_dir/orbit" --version)" = "orbit v0.0.0"
+test "$("$install_dir/orbit.prev" --version)" = "orbit v0.0.1"
+
+write_release "0.0.2"
+printf 'bad-checksum  %s\n' "$asset" >"$fixtures/checksums.txt"
+if install_version "0.0.2" >/dev/null 2>&1; then
+  echo "installer accepted a bad checksum" >&2
+  exit 1
+fi
+test "$("$install_dir/orbit" --version)" = "orbit v0.0.0"
+test "$("$install_dir/orbit.prev" --version)" = "orbit v0.0.1"
+test -z "$(find "$install_dir" -maxdepth 1 -name '.orbit-install.*' -print -quit)"
+
+write_release "0.0.3"
+if ORBIT_INSTALL_TEST_FAIL_ASSET="$asset" install_version "0.0.3" >/dev/null 2>&1; then
+  echo "installer accepted an interrupted download" >&2
+  exit 1
+fi
+test "$("$install_dir/orbit" --version)" = "orbit v0.0.0"
+test "$("$install_dir/orbit.prev" --version)" = "orbit v0.0.1"
+test -z "$(find "$install_dir" -maxdepth 1 -name '.orbit-install.*' -print -quit)"
+
+write_release "0.0.2"
+install_version "0.0.2" >/dev/null
+test "$("$install_dir/orbit" --version)" = "orbit v0.0.2"
+test "$("$install_dir/orbit.prev" --version)" = "orbit v0.0.0"
+
+echo "installer fallback, downgrade guard, interrupted-download safety, checksum safety, and rollback backup OK"

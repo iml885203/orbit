@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 # Uninstall the Orbit CLI.
 #
-# Stops services/containers via `orbit down`, then removes the binary and
-# ~/.orbit state dir. Docker images and $WORKSPACE_ROOT repo clones are left
-# alone — they may be shared with other projects / are user-owned.
+# Stops services/containers via `orbit down`, then removes the binary.
+# User configuration and state are preserved unless --purge is explicit.
+# Docker images and $WORKSPACE_ROOT repo clones are always left alone.
 #
 # Usage:
 #   curl -fsSL <url>/uninstall.sh | bash              # dry-run (preview)
 #   curl -fsSL <url>/uninstall.sh | bash -s -- --yes  # actually remove
-#   ./scripts/uninstall.sh --yes
+#   ./scripts/uninstall.sh --yes --purge               # also remove user data
 
 set -euo pipefail
 
 DRY_RUN=1
+PURGE=0
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) DRY_RUN=0 ;;
+    --purge) PURGE=1 ;;
     -h|--help)
       sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -24,17 +26,19 @@ for arg in "$@"; do
   esac
 done
 
-ORBIT_HOME="${HOME}/.orbit"
+ORBIT_HOME="${ORBIT_HOME:-${HOME}/.orbit}"
 DOWN_TIMEOUT=30
 
 find_binaries() {
   local seen=""
   local candidates=(
     "${HOME}/.local/bin/orbit"
+    "${HOME}/.local/bin/orbit.exe"
     "/usr/local/bin/orbit"
+    "/usr/local/bin/orbit.exe"
   )
-  if command -v orbit >/dev/null 2>&1; then
-    candidates+=("$(command -v orbit)")
+  if [ -n "${ORBIT_INSTALL_DIR:-}" ]; then
+    candidates+=("${ORBIT_INSTALL_DIR}/orbit" "${ORBIT_INSTALL_DIR}/orbit.exe")
   fi
   for p in "${candidates[@]}"; do
     [ -e "$p" ] || continue
@@ -106,8 +110,11 @@ bring_down() {
 list_plan() {
   local bins
   bins="$(find_binaries || true)"
-  if [ -z "$bins" ] && [ ! -e "$ORBIT_HOME" ]; then
+  if [ -z "$bins" ] && { [ "$PURGE" -eq 0 ] || [ ! -e "$ORBIT_HOME" ]; }; then
     echo "Nothing to remove — orbit is not installed."
+    if [ -e "$ORBIT_HOME" ]; then
+      echo "User data preserved at $ORBIT_HOME. Re-run with --yes --purge to remove it."
+    fi
     return 1
   fi
   echo "This will remove:"
@@ -119,9 +126,14 @@ list_plan() {
     echo "  binary:  (none found)"
   fi
   if [ -e "$ORBIT_HOME" ]; then
-    echo "  config:  $ORBIT_HOME"
+    if [ "$PURGE" -eq 1 ]; then
+      echo "  user data: $ORBIT_HOME"
+    else
+      echo "This will preserve:"
+      echo "  user data: $ORBIT_HOME"
+    fi
   else
-    echo "  config:  (not present)"
+    echo "  user data: (not present)"
   fi
   if daemon_running; then
     local pid
@@ -134,6 +146,15 @@ list_plan() {
 }
 
 main() {
+  if [ "$PURGE" -eq 1 ]; then
+    case "$ORBIT_HOME" in
+      ""|"/"|"."|".."|"$HOME"|"$HOME/"|*/..|*/.)
+        echo "refusing unsafe ORBIT_HOME purge target: $ORBIT_HOME" >&2
+        exit 2
+        ;;
+    esac
+  fi
+
   if ! list_plan; then
     exit 0
   fi
@@ -160,7 +181,7 @@ main() {
     fi
   done < <(find_binaries || true)
 
-  if [ -e "$ORBIT_HOME" ]; then
+  if [ "$PURGE" -eq 1 ] && [ -e "$ORBIT_HOME" ]; then
     echo "Removing $ORBIT_HOME..."
     rm -rf "$ORBIT_HOME"
     echo "  done."
@@ -168,6 +189,10 @@ main() {
 
   echo
   echo "Orbit uninstalled."
+  if [ "$PURGE" -eq 0 ] && [ -e "$ORBIT_HOME" ]; then
+    echo "User data preserved at $ORBIT_HOME."
+    echo "To remove it later, re-run with --yes --purge."
+  fi
   echo
   echo "Note: Docker images (example.db:latest, sql-server, redis, kafka, ...)"
   echo "      were not removed — other projects may share them."

@@ -49,6 +49,7 @@ test-e2e: build
 
 test-install:
 	@./scripts/test-install.sh
+	@./scripts/test-uninstall.sh
 
 lint: lint-filenames
 	golangci-lint run ./...
