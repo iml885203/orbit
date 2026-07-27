@@ -75,10 +75,15 @@ function Get-OrbitBinaryVersion {
     param([Parameter(Mandatory)] [string] $Path)
 
     $output = & $Path --version 2>$null
-    if ($LASTEXITCODE -ne 0 -or $output -notmatch '^orbit v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$') {
+    $versionText = ([string]::Join("`n", @($output))).Trim()
+    $match = [regex]::Match(
+        $versionText,
+        '^orbit v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$'
+    )
+    if ($LASTEXITCODE -ne 0 -or -not $match.Success) {
         throw "$Path does not report a valid Orbit semantic version"
     }
-    return $Matches[1]
+    return $match.Groups[1].Value
 }
 
 function ConvertTo-SemVerParts {
