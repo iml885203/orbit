@@ -79,6 +79,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 
 | Command | JSON 行為 |
 |---|---|
+| `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、service risks，以及建議後續指令。 |
 | `orbit status --json` | 在 `data` 中回傳 daemon 與已設定 service 的狀態。 |

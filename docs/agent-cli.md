@@ -85,6 +85,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 
 | Command | JSON behavior |
 |---|---|
+| `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, service risks, and recommended follow-up commands. |
 | `orbit status --json` | Returns daemon and configured service state in `data`. |

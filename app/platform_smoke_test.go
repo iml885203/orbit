@@ -25,6 +25,10 @@ func TestPlatformSmokeCleanUserJourney(t *testing.T) {
 	if !strings.Contains(version, expectedVersion) {
 		t.Fatalf("version output %q does not contain %q", version, expectedVersion)
 	}
+	versionCommand := runPlatformSmokeCommand(t, "", nil, binary, "version")
+	if versionCommand != version {
+		t.Fatalf("version command output %q does not match --version output %q", versionCommand, version)
+	}
 
 	root := t.TempDir()
 	envRepo := filepath.Join(root, "environment repo")
