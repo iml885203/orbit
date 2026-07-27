@@ -1,28 +1,72 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to rebuild
+        description: Existing release tag at the current main commit
+        required: true
+        type: string
+      confirmation:
+        description: Type RELEASE followed by the tag, for example RELEASE v1.0.0
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  approval:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    environment: release
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag || github.ref }}
+      - name: Verify explicit release approval
+        env:
+          RELEASE_VERSION: ${{ inputs.tag }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE_CONFIRMATION" != "RELEASE $RELEASE_VERSION" ]; then
+            echo "confirmation must be exactly: RELEASE $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          if ! [[ "$RELEASE_VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag is not a semantic version: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          git fetch --force origin main "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
+          tag_commit="$(git rev-list -n 1 "$RELEASE_VERSION")"
+          main_commit="$(git rev-parse origin/main)"
+          if [ "$tag_commit" != "$main_commit" ]; then
+            echo "$RELEASE_VERSION points to $tag_commit, but main is $main_commit" >&2
+            exit 1
+          fi
+          test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
+          test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
+
+  platform-smoke:
+    needs: approval
+    uses: ./.github/workflows/platform-smoke.yml
+
+  release:
+    needs: [approval, platform-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -37,16 +81,16 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
       - name: Verify release
         env:
-          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.tag }}
         run: |
           test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
           test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
           make preflight
       - name: Build release assets
         env:
-          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.tag }}
         run: |
-          set -eu
+          set -euo pipefail
           build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           mkdir -p dist
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
@@ -57,10 +101,34 @@ jobs:
             CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
               -ldflags "-s -w -X main.version=${RELEASE_VERSION} -X main.buildTime=${build_time}" \
               -o "$output" ./cmd/orbit
+            go version -m "$output" | grep -F "vcs.revision=$GITHUB_SHA"
           done
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/orbit.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Create and verify checksums
+        run: |
+          set -euo pipefail
           (cd dist && sha256sum orbit-* > checksums.txt)
+          (cd dist && sha256sum --check checksums.txt)
+      - name: Attest build provenance
+        if: ${{ github.event.repository.visibility == 'public' }}
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/checksums.txt
+      - name: Attest release SBOM
+        if: ${{ github.event.repository.visibility == 'public' }}
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/checksums.txt
+          sbom-path: dist/orbit.spdx.json
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
-        run: gh release create "$RELEASE_VERSION" dist/* --generate-notes --title "$RELEASE_VERSION"
+          RELEASE_VERSION: ${{ inputs.tag }}
+        run: gh release create "$RELEASE_VERSION" dist/* --verify-tag --generate-notes --title "$RELEASE_VERSION"
