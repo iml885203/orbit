@@ -30,6 +30,7 @@ write_release() {
 
 cat >"$mock_bin/curl" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >>"$ORBIT_INSTALL_TEST_CURL_LOG"
 exit 22
 EOF
 
@@ -67,12 +68,15 @@ install_version() {
   PATH="$mock_bin:$PATH" \
     ORBIT_INSTALL_DIR="$install_dir" \
     ORBIT_INSTALL_TEST_FIXTURES="$fixtures" \
+    ORBIT_INSTALL_TEST_CURL_LOG="$test_root/curl.log" \
     ORBIT_VERSION="v${version}" \
     bash "$repo_root/scripts/install.sh"
 }
 
 write_release "0.0.1"
+rm -f "$test_root/curl.log"
 install_version "0.0.1"
+test "$(wc -l <"$test_root/curl.log" | tr -d ' ')" = "1"
 test -x "$install_dir/orbit"
 test "$("$install_dir/orbit" --version)" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
 

@@ -19,6 +19,7 @@ set -euo pipefail
 REPO="${ORBIT_REPO:-iml885203/orbit}"
 VERSION="${ORBIT_VERSION:-latest}"
 INSTALL_TMP_DIR=""
+USE_AUTHENTICATED_DOWNLOAD=0
 
 cleanup_install_temp() {
   case "$INSTALL_TMP_DIR" in
@@ -126,12 +127,17 @@ version_is_newer() {
 
 download_asset() {
   local asset="$1" destination="$2" url="$3"
-  if curl -fsSL "$url" -o "$destination"; then
-    return
-  fi
   if [ -n "${ORBIT_BASE_URL:-}" ]; then
+    if curl -fsSL "$url" -o "$destination"; then
+      return
+    fi
     echo "download failed: ${url}" >&2
     return 1
+  fi
+  if [ "$USE_AUTHENTICATED_DOWNLOAD" != "1" ]; then
+    if curl -fsSL "$url" -o "$destination" 2>/dev/null; then
+      return
+    fi
   fi
   if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
     echo "download failed: ${url}" >&2
@@ -139,7 +145,10 @@ download_asset() {
     return 1
   fi
 
-  echo "Anonymous download unavailable; retrying with authenticated GitHub CLI"
+  if [ "$USE_AUTHENTICATED_DOWNLOAD" != "1" ]; then
+    echo "Private release detected; downloading with authenticated GitHub CLI"
+    USE_AUTHENTICATED_DOWNLOAD=1
+  fi
   if [ "$VERSION" = "latest" ]; then
     gh release download --repo "$REPO" --pattern "$asset" --output "$destination" --clobber
   else
