@@ -19,8 +19,11 @@ dashboard hot reload). For the basic day-to-day workflow, see the
 
 Container-based environments require Docker Desktop on macOS and Windows, or
 Docker Engine on Linux. Every environment may declare additional host runtimes;
-`orbit doctor` names them and provides installation guidance. Git is required
-to sync environment repositories.
+`orbit doctor` names them and provides installation guidance. For Node services
+started through npm, pnpm, Yarn, or Bun, it also distinguishes a missing runtime
+from project packages that have not been installed and reports the exact install
+command. `orbit switch` reports these checks for the newly selected environment
+before the user runs `orbit up`. Git is required to sync environment repositories.
 
 Windows builds receive release smoke coverage, but do not yet promise full
 macOS/Linux runtime parity. The native PowerShell installer verifies the

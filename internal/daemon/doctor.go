@@ -16,6 +16,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/dockerctx"
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/moby/moby/client"
 )
 
@@ -122,7 +123,89 @@ func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	if len(nodeServices) > 0 {
 		results = append(results, checkNode(nodeServices))
 	}
+	results = append(results, projectDependencyChecks(cfg)...)
 	return results
+}
+
+func projectDependencyChecks(cfg *config.Config) []DoctorCheck {
+	if cfg == nil {
+		return nil
+	}
+	names := make([]string, 0, len(cfg.Services))
+	for name := range cfg.Services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var checks []DoctorCheck
+	for _, name := range names {
+		service := cfg.Services[name]
+		if service == nil || service.Type != "node" {
+			continue
+		}
+		manager := commandBinary(service.Command)
+		if !isNodePackageManager(manager) {
+			continue
+		}
+		checks = append(checks, nodeProjectDependencyCheck(name, service.Path, manager))
+	}
+	return checks
+}
+
+func nodeProjectDependencyCheck(service, path, manager string) DoctorCheck {
+	check := DoctorCheck{Name: "Packages (" + service + ")"}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		check.Status = CheckFail
+		check.Message = "service path not found: " + path
+		check.Hint = "Update services." + service + ".path to the project directory"
+		return check
+	}
+	if _, err := os.Stat(filepath.Join(path, "package.json")); err != nil {
+		check.Status = CheckFail
+		check.Message = "package.json not found in " + path
+		check.Hint = "Update services." + service + ".path to the Node project directory"
+		return check
+	}
+	if nodePackagesInstalled(path, manager) {
+		check.Status = CheckPass
+		check.Message = "installed in " + path
+		return check
+	}
+	command := nodeInstallCommand(manager, path)
+	check.Status = CheckFail
+	check.Message = "project packages are not installed"
+	check.Hint = "run: " + command
+	return check
+}
+
+func nodePackagesInstalled(path, manager string) bool {
+	if info, err := os.Stat(filepath.Join(path, "node_modules")); err == nil && info.IsDir() {
+		return true
+	}
+	if manager == "yarn" {
+		for _, marker := range []string{".pnp.cjs", ".pnp.js"} {
+			if _, err := os.Stat(filepath.Join(path, marker)); err == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func nodeInstallCommand(manager, path string) string {
+	quotedPath := shellquote.Quote(path)
+	switch manager {
+	case "npm":
+		return "npm --prefix " + quotedPath + " install"
+	case "pnpm":
+		return "pnpm --dir " + quotedPath + " install"
+	case "yarn":
+		return "yarn --cwd " + quotedPath + " install"
+	case "bun":
+		return "bun --cwd " + quotedPath + " install"
+	default:
+		return manager + " install"
+	}
 }
 
 func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {

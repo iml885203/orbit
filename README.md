@@ -90,7 +90,8 @@ orbit down                   # stop the environment
 intentionally want containers without host services.
 
 For a team environment, replace `demo-api` and `quickstart` with names shown by
-`orbit status` and `orbit env list`.
+`orbit status` and `orbit env list`. After a switch, Orbit reports any runtime
+or project-package setup required before `orbit up`.
 
 ### Database workflow
 

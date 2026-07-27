@@ -96,7 +96,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon running state, and restart recommendation. |
-| `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, and dashboard URL. |
+| `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
@@ -121,9 +121,11 @@ Stable `data.operation` values for converted control commands:
 | `orbit daemon restart --json` | `daemon_restart` |
 | `orbit uninstall --json` | `uninstall` |
 
-For `switch`, `daemon_running` means a daemon was already running when the
-env was changed, so `restart_required` tells the agent whether that daemon
-still needs `orbit daemon restart --json` to apply the new env.
+For `switch`, `daemon_running_before` and `daemon_running_after` describe the
+daemon transition. `prerequisites_ready` is false when the newly selected env
+is missing a required runtime or package installation; `prerequisites` carries
+the same checks as Doctor, and `recommended_actions` includes exact runnable
+remedies when Orbit can determine one.
 
 Daemon stop/restart payloads may include `stop_method` when a prior daemon was
 running. Stable values are `graceful`, `terminated`, and `killed`.

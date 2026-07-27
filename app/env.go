@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/spf13/cobra"
@@ -242,6 +243,10 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	if err := ensureDaemonStarted(abs); err != nil {
 		return err
 	}
+	prerequisites, prerequisitesReady, err := switchPrerequisites(abs)
+	if err != nil {
+		return err
+	}
 	if cli.JSONOutput {
 		pid, running := daemon.IsDaemonRunning()
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildSwitchJSONData(switchJSONOptions{
@@ -252,8 +257,11 @@ func runSwitch(_ *cobra.Command, args []string) error {
 			PID:                  pid,
 			ConfigPath:           abs,
 			RequestedConfigApply: true,
-		}), []cli.JSONAction{cli.StatusAction()})
+			Prerequisites:        prerequisites,
+			PrerequisitesReady:   prerequisitesReady,
+		}), switchRecommendedActions(prerequisites))
 	}
+	printSwitchPrerequisites(prerequisites, prerequisitesReady)
 	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
 	fmt.Printf("✓ switched to %s\n", filepath.Base(abs))
 	return nil
@@ -267,19 +275,23 @@ type switchJSONOptions struct {
 	PID                  int
 	ConfigPath           string
 	RequestedConfigApply bool
+	Prerequisites        []daemon.DoctorCheck
+	PrerequisitesReady   bool
 }
 
 type switchJSONData struct {
-	Operation            string `json:"operation"`
-	SelectedEnv          string `json:"selected_env"`
-	EnvName              string `json:"env_name"`
-	DaemonAction         string `json:"daemon_action"`
-	DaemonRunningBefore  bool   `json:"daemon_running_before"`
-	DaemonRunningAfter   bool   `json:"daemon_running_after"`
-	PID                  int    `json:"pid,omitempty"`
-	ConfigPath           string `json:"config_path"`
-	Dashboard            string `json:"dashboard,omitempty"`
-	RequestedConfigApply bool   `json:"requested_config_apply"`
+	Operation            string               `json:"operation"`
+	SelectedEnv          string               `json:"selected_env"`
+	EnvName              string               `json:"env_name"`
+	DaemonAction         string               `json:"daemon_action"`
+	DaemonRunningBefore  bool                 `json:"daemon_running_before"`
+	DaemonRunningAfter   bool                 `json:"daemon_running_after"`
+	PID                  int                  `json:"pid,omitempty"`
+	ConfigPath           string               `json:"config_path"`
+	Dashboard            string               `json:"dashboard,omitempty"`
+	RequestedConfigApply bool                 `json:"requested_config_apply"`
+	Prerequisites        []daemon.DoctorCheck `json:"prerequisites"`
+	PrerequisitesReady   bool                 `json:"prerequisites_ready"`
 }
 
 func buildSwitchJSONData(opts switchJSONOptions) switchJSONData {
@@ -293,11 +305,54 @@ func buildSwitchJSONData(opts switchJSONOptions) switchJSONData {
 		PID:                  opts.PID,
 		ConfigPath:           opts.ConfigPath,
 		RequestedConfigApply: opts.RequestedConfigApply,
+		Prerequisites:        opts.Prerequisites,
+		PrerequisitesReady:   opts.PrerequisitesReady,
 	}
 	if opts.DaemonRunningAfter {
 		out.Dashboard = fmt.Sprintf("http://localhost:%d", daemon.DashboardPort())
 	}
 	return out
+}
+
+func switchPrerequisites(path string) ([]daemon.DoctorCheck, bool, error) {
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, false, err
+	}
+	checks := make([]daemon.DoctorCheck, 0)
+	if len(cfg.Containers) > 0 {
+		checks = append(checks, daemonsrv.DockerCheck())
+	}
+	checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
+	ready := true
+	for _, check := range checks {
+		if check.Status == daemon.CheckFail {
+			ready = false
+			break
+		}
+	}
+	return checks, ready, nil
+}
+
+func printSwitchPrerequisites(checks []daemon.DoctorCheck, ready bool) {
+	if ready {
+		fmt.Printf("%s prerequisites ready\n", cli.Green.Sprint("✓"))
+		return
+	}
+	fmt.Printf("%s setup required before `orbit up`\n", cli.Yellow.Sprint("!"))
+	for _, check := range checks {
+		if check.Status != daemon.CheckFail {
+			continue
+		}
+		fmt.Printf("  %s %s: %s\n", cli.Red.Sprint("✗"), check.Name, check.Message)
+		if check.Hint != "" {
+			_, _ = cli.Faint.Printf("      → %s\n", check.Hint)
+		}
+	}
+}
+
+func switchRecommendedActions(checks []daemon.DoctorCheck) []cli.JSONAction {
+	return doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
 }
 
 func resolveConfigFile() string {

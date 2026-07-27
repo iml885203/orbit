@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/shellquote"
 )
 
 // These tests exercise the real orbit binary against a real Docker engine.
@@ -752,6 +754,125 @@ func TestE2E_EnvSyncClassifiesRepositoryAccessFailure(t *testing.T) {
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit env sync --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
+}
+
+func TestE2E_DoctorDistinguishesMissingNodePackages(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	project := filepath.Join(t.TempDir(), "web project")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"scripts":{"dev":"vite"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(t.TempDir(), "node.yaml")
+	raw := fmt.Sprintf(`
+version: "2"
+services:
+  web:
+    type: node
+    path: %q
+    command: pnpm dev
+`, project)
+	if err := os.WriteFile(envPath, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command(binary, "doctor", "--config", envPath, "--json")
+	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
+	output, err := command.Output()
+	if err == nil {
+		t.Fatalf("doctor unexpectedly passed without project packages:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != "checks_failed" {
+		t.Fatalf("envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		Checks []daemon.DoctorCheck `json:"checks"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode doctor data: %v\n%s", err, envelope.Data)
+	}
+	for _, check := range data.Checks {
+		if check.Name == "Packages (web)" && check.Status == daemon.CheckFail && check.Message == "project packages are not installed" {
+			want := "pnpm --dir " + shellquote.Quote(project) + " install"
+			for _, action := range envelope.RecommendedActions {
+				if action.Command == want {
+					return
+				}
+			}
+			t.Fatalf("recommended_actions missing %q: %+v", want, envelope.RecommendedActions)
+		}
+	}
+	t.Fatalf("package check missing: %+v", data.Checks)
+}
+
+func TestE2E_SwitchReportsSelectedEnvironmentPrerequisites(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home, err := os.MkdirTemp("/tmp", "orb-switch-prereq-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stop := exec.Command(binary, "daemon", "stop")
+		stop.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		_ = stop.Run()
+		_ = os.RemoveAll(home)
+	})
+	project := filepath.Join(t.TempDir(), "web project")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"scripts":{"dev":"vite"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw := fmt.Sprintf(`
+version: "2"
+services:
+  web:
+    type: node
+    path: %q
+    command: pnpm dev
+`, project)
+	if err := os.WriteFile(filepath.Join(envsDir, "node.yaml"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command(binary, "switch", "node", "--json")
+	command.Env = append(os.Environ(),
+		"ORBIT_HOME="+home,
+		"ORBIT_DASHBOARD_PORT="+strconv.Itoa(22000+int(randByte())),
+	)
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("switch failed: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if !envelope.OK {
+		t.Fatalf("envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		PrerequisitesReady bool                 `json:"prerequisites_ready"`
+		Prerequisites      []daemon.DoctorCheck `json:"prerequisites"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode switch data: %v\n%s", err, envelope.Data)
+	}
+	if data.PrerequisitesReady {
+		t.Fatal("switch hid missing project packages")
+	}
+	for _, check := range data.Prerequisites {
+		if check.Name == "Packages (web)" && check.Status == daemon.CheckFail {
+			return
+		}
+	}
+	t.Fatalf("prerequisites = %+v", data.Prerequisites)
 }
 
 // findOrbitBinary mirrors setupE2E's binary discovery without the docker skip

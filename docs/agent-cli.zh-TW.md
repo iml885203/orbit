@@ -90,7 +90,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
 | `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
 | `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態，以及 restart 建議。 |
-| `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path 與 dashboard URL。 |
+| `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
 | `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |
 | `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
 | `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
@@ -114,7 +114,10 @@ Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout
 | `orbit daemon restart --json` | `daemon_restart` |
 | `orbit uninstall --json` | `uninstall` |
 
-對 `switch` 而言，`daemon_running` 代表切換 env 當下已經有 daemon 在跑，所以 `restart_required` 會告訴 agent 是否還需要用 `orbit daemon restart --json` 套用新的 env。
+對 `switch` 而言，`daemon_running_before` 與 `daemon_running_after` 描述
+daemon transition。新 env 缺少必要 runtime 或 package installation 時，
+`prerequisites_ready` 會是 false；`prerequisites` 使用與 Doctor 相同的 checks，
+而 Orbit 能判斷修復方式時，`recommended_actions` 會包含可直接執行的指令。
 
 當先前已有 daemon 在跑時，daemon stop/restart payload 可能包含 `stop_method`。穩定值為 `graceful`、`terminated`、`killed`。
 

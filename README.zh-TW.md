@@ -71,7 +71,8 @@ orbit down                   # 停止環境
 services 時，才使用 `orbit up --infra`。
 
 使用團隊自己的 environment 時，請把 `demo-api` 與 `quickstart` 換成
-`orbit status` 和 `orbit env list` 顯示的名稱。
+`orbit status` 和 `orbit env list` 顯示的名稱。切換後，Orbit 會在
+`orbit up` 前回報缺少的 runtime 或尚未安裝的 project packages。
 
 ### Database workflow
 

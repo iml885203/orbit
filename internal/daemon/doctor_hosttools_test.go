@@ -165,6 +165,68 @@ func TestRequiredHostTools_OnlyReportsSelectedEnvironment(t *testing.T) {
 	}
 }
 
+func TestNodeProjectDependencyCheckDistinguishesMissingPackages(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"scripts":{"dev":"vite"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := nodeProjectDependencyCheck("web", project, "pnpm")
+	if got.Status != CheckFail {
+		t.Fatalf("status = %s, want fail: %+v", got.Status, got)
+	}
+	if got.Message != "project packages are not installed" {
+		t.Fatalf("message = %q", got.Message)
+	}
+	want := "run: pnpm --dir " + project + " install"
+	if got.Hint != want {
+		t.Fatalf("hint = %q, want %q", got.Hint, want)
+	}
+}
+
+func TestNodeProjectDependencyCheckPassesInstalledPackages(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(project, "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := nodeProjectDependencyCheck("web", project, "npm")
+	if got.Status != CheckPass {
+		t.Fatalf("status = %s, want pass: %+v", got.Status, got)
+	}
+}
+
+func TestNodeProjectDependencyCheckAcceptsYarnPnP(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".pnp.cjs"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := nodeProjectDependencyCheck("web", project, "yarn")
+	if got.Status != CheckPass {
+		t.Fatalf("status = %s, want pass: %+v", got.Status, got)
+	}
+}
+
+func TestProjectDependencyChecksOnlyInspectPackageManagerServices(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"app":    {Type: "node", Command: "pnpm dev", Path: project},
+		"script": {Type: "node", Command: "node index.js", Path: project},
+		"api":    {Type: "python", Command: "python3 app.py", Path: project},
+	}}
+	checks := projectDependencyChecks(cfg)
+	if len(checks) != 1 || checks[0].Name != "Packages (app)" {
+		t.Fatalf("checks = %+v", checks)
+	}
+}
+
 // fakeBin writes an executable script to a temp dir and returns (dir, name).
 func fakeBin(t *testing.T, name, body string) (string, string) {
 	t.Helper()

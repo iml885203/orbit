@@ -18,7 +18,10 @@
 
 使用 container 的環境在 macOS 與 Windows 需要 Docker Desktop，在 Linux
 需要 Docker Engine。每個環境也可能宣告額外的 host runtime；`orbit doctor`
-會列出並提供安裝提示。同步 environment repository 需要 Git。
+會列出並提供安裝提示。透過 npm、pnpm、Yarn 或 Bun 啟動的 Node service，
+也會區分缺少 runtime 與尚未安裝 project packages，並提供精確的 install
+指令。`orbit switch` 會在使用者執行 `orbit up` 前，回報新 environment 的
+這些 checks。同步 environment repository 需要 Git。
 
 Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
 完全同等。原生 PowerShell installer 會驗證 release checksum 與版本、保留
