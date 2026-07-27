@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/internal/envsync"
 )
 
 func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
@@ -80,6 +82,32 @@ func TestInitJSONRequiresNonInteractiveMode(t *testing.T) {
 
 	if err := runInit(nil, nil); err == nil {
 		t.Fatal("runInit returned nil without --yes")
+	}
+}
+
+func TestIncompleteInitJSONIsFailureWithRecoveryActions(t *testing.T) {
+	var buf bytes.Buffer
+	result := initResult{Ready: false, Warnings: []string{"env sync failed"}}
+	syncFailure := envRepoSyncError(&envsync.CloneError{
+		URL: "https://github.com/example/private-env.git",
+		Err: errors.New("exit status 128"),
+	})
+	failure := initFailure(result, syncFailure)
+	if err := cli.WriteJSONFailure(&buf, "orbit init --yes --json", result, failure, initRecommendedActions(result)); err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, buf.Bytes())
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
+		t.Fatalf("envelope = %+v", envelope)
+	}
+	commands := make(map[string]bool, len(envelope.RecommendedActions))
+	for _, action := range envelope.RecommendedActions {
+		commands[action.Command] = true
+	}
+	for _, command := range []string{"gh auth login", "gh auth setup-git", "orbit init --yes --json"} {
+		if !commands[command] {
+			t.Fatalf("recommended_actions missing %q: %+v", command, envelope.RecommendedActions)
+		}
 	}
 }
 

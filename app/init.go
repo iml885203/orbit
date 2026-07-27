@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -201,6 +202,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	envsDir := envsDestDir()
+	var syncFailure error
 	result.EnvsDir = envsDir
 	result.EnvRepoURL = repoURL
 	localEnvsDir := filepath.Join(root, "envs")
@@ -209,6 +211,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		output.printf("  Syncing local %s → %s\n", localEnvsDir, envsDir)
 		syncRes, err := envsync.Sync(localEnvsDir, envsDir, envsync.Options{})
 		if err != nil {
+			syncFailure = err
 			warning := "env sync failed: " + err.Error()
 			result.Warnings = append(result.Warnings, warning)
 			output.warnf("  ! sync failed: %v\n", err)
@@ -228,6 +231,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		syncRes, err := envsync.SyncFromRepo(repoURL, envsDir, envsync.Options{})
 		if err != nil {
 			err = envRepoSyncError(err)
+			syncFailure = err
 			warning := "env sync failed: " + err.Error()
 			result.Warnings = append(result.Warnings, warning)
 			output.warnf("  ! sync failed: %v\n", err)
@@ -305,9 +309,32 @@ func runInit(_ *cobra.Command, _ []string) error {
 	output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
 
 	if cli.JSONOutput {
+		if !result.Ready {
+			failure := initFailure(result, syncFailure)
+			if err := cli.WriteJSONFailure(os.Stdout, commandString(), result, failure, initRecommendedActions(result)); err != nil {
+				return err
+			}
+			return errCLIJSONAlreadyRendered{err: failure}
+		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), result, initRecommendedActions(result))
 	}
+	if !result.Ready {
+		return initFailure(result, syncFailure)
+	}
 	return nil
+}
+
+func initFailure(result initResult, syncFailure error) error {
+	if syncFailure != nil {
+		if errors.Is(syncFailure, cli.ErrEnvRepoAccess) {
+			return syncFailure
+		}
+		return cli.NewInitIncompleteError("environment sync failed: " + syncFailure.Error())
+	}
+	if result.ActiveEnv == "" {
+		return cli.NewInitIncompleteError("initialization did not select an environment")
+	}
+	return cli.NewChecksFailedError("initialization saved settings, but required checks failed")
 }
 
 func initRecommendedActions(result initResult) []cli.JSONAction {

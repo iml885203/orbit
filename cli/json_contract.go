@@ -189,6 +189,14 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit env sync --json",
 		}
+	case errors.Is(err, ErrInitIncomplete):
+		return JSONError{
+			Code:        "init_incomplete",
+			Message:     msg,
+			Hint:        "Complete the reported setup step, then retry initialization.",
+			Retryable:   true,
+			NextCommand: "orbit init --yes --json",
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",
@@ -208,6 +216,13 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		return []JSONAction{{
 			Command:     "orbit env sync --json",
 			Reason:      "Retry after restoring Git access to the environment repository.",
+			Destructive: false,
+		}}
+	}
+	if err.Code == "init_incomplete" {
+		return []JSONAction{{
+			Command:     "orbit init --yes --json",
+			Reason:      "Retry initialization after resolving the reported setup issue.",
 			Destructive: false,
 		}}
 	}

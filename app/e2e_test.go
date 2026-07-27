@@ -683,8 +683,8 @@ func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
 	command.Dir = workspace
 	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
 	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("init should preserve partial setup for retry: %v\n%s", err, output)
+	if err == nil {
+		t.Fatalf("incomplete init must return non-zero:\n%s", output)
 	}
 	for _, wanted := range []string{
 		"Setup is incomplete",
@@ -697,6 +697,41 @@ func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
 	}
 	if bytes.Contains(output, []byte("Setup complete!")) {
 		t.Fatalf("init falsely claims success:\n%s", output)
+	}
+}
+
+func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	workspace := t.TempDir()
+	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
+
+	command := exec.Command(binary, "init", "--yes", "--env-repo", missingRepo, "--json")
+	command.Dir = workspace
+	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
+	output, err := command.Output()
+	if err == nil {
+		t.Fatalf("incomplete JSON init must return non-zero:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
+		t.Fatalf("envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		Ready bool `json:"ready"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode diagnostic data: %v\n%s", err, envelope.Data)
+	}
+	if data.Ready {
+		t.Fatalf("diagnostic data = %s", envelope.Data)
+	}
+	commands := make(map[string]bool, len(envelope.RecommendedActions))
+	for _, action := range envelope.RecommendedActions {
+		commands[action.Command] = true
+	}
+	if !commands["orbit init --yes --json"] {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }
 

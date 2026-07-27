@@ -135,6 +135,11 @@ func envRepoSyncError(err error) error {
 	}
 	if cloneErr.IsGitHub() {
 		message += "\nFor a private GitHub repo, run 'gh auth login' and 'gh auth setup-git', then retry 'orbit env sync'."
+		return cli.WithJSONActions(cli.NewEnvRepoAccessError(message), []cli.JSONAction{
+			{Command: "gh auth login", Reason: "Authenticate GitHub CLI for private repository access.", Destructive: false},
+			{Command: "gh auth setup-git", Reason: "Configure Git to use the authenticated GitHub CLI credentials.", Destructive: false},
+			{Command: "orbit env sync --json", Reason: "Retry the environment sync after restoring Git access.", Destructive: false},
+		})
 	} else {
 		message += "\nVerify the repository URL and Git access, then retry 'orbit env sync'."
 	}
