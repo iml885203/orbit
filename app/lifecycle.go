@@ -145,7 +145,7 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 			}
 			last = status
 			if wantState == "healthy" {
-				if err := lifecycleTerminalError(status, names, failStopped); err != nil {
+				if err := lifecycleTerminalError(client, status, names, failStopped); err != nil {
 					return last, err
 				}
 			}
@@ -206,7 +206,7 @@ func waitForLifecycleRestartObserved(client *daemon.Client, name string, priorRe
 	}
 }
 
-func lifecycleTerminalError(status *daemon.StatusResponse, names []string, failStopped bool) error {
+func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse, names []string, failStopped bool) error {
 	if status == nil {
 		return nil
 	}
@@ -234,7 +234,10 @@ func lifecycleTerminalError(status *daemon.StatusResponse, names []string, failS
 			if reason != "" {
 				message += ": " + reason
 			}
-			return fmt.Errorf("%s", message)
+			if evidence := recentLogEvidence(client, svc.Name); evidence != "" && evidence != reason {
+				message += "\nLast log: " + evidence
+			}
+			return cli.NewServiceStartFailedError(message)
 		case "pending":
 			dependency := terminalDependencyBlocker(status, svc.PendingDependencies)
 			if dependency == nil {

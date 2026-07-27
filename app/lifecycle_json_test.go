@@ -164,9 +164,12 @@ func TestLifecycleTerminalErrorFailsOnDegraded(t *testing.T) {
 			{Name: "worker", State: "degraded"},
 		},
 	}
-	err := lifecycleTerminalError(status, []string{"worker"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
 	if err == nil || err.Error() != "worker failed to become healthy" {
 		t.Fatalf("lifecycleTerminalError = %v, want worker failure", err)
+	}
+	if !errors.Is(err, cli.ErrServiceStartFailed) {
+		t.Fatalf("error = %v, want service-start-failed classification", err)
 	}
 }
 
@@ -174,7 +177,7 @@ func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
 	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
 		{Name: "worker", State: "degraded", StateReason: "failed to start: address already in use"},
 	}}
-	err := lifecycleTerminalError(status, []string{"worker"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
 	if err == nil || err.Error() != "worker failed to become healthy: failed to start: address already in use" {
 		t.Fatalf("lifecycleTerminalError = %v", err)
 	}
@@ -193,7 +196,7 @@ func TestLifecycleTerminalErrorFailsOnTerminalDependency(t *testing.T) {
 			StateReason: "container exited unexpectedly",
 		},
 	}}
-	err := lifecycleTerminalError(status, []string{"api"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"api"}, true)
 	want := "api cannot start because dependency redis is unhealthy: container exited unexpectedly"
 	if err == nil || err.Error() != want {
 		t.Fatalf("lifecycleTerminalError = %v, want %q", err, want)
@@ -217,7 +220,7 @@ func TestLifecycleTerminalErrorFailsOnStoppedTransitiveDependency(t *testing.T) 
 		},
 		{Name: "redis", State: "stopped"},
 	}}
-	err := lifecycleTerminalError(status, []string{"api"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"api"}, true)
 	want := "api cannot start because dependency redis is unhealthy: stopped"
 	if err == nil || err.Error() != want {
 		t.Fatalf("lifecycleTerminalError = %v, want %q", err, want)
@@ -254,7 +257,7 @@ func TestLifecycleTerminalErrorFailsOnStopped(t *testing.T) {
 			{Name: "worker", State: "stopped"},
 		},
 	}
-	err := lifecycleTerminalError(status, []string{"worker"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
 	if err == nil || err.Error() != "worker stopped before becoming healthy" {
 		t.Fatalf("lifecycleTerminalError = %v, want stopped error", err)
 	}
@@ -266,7 +269,7 @@ func TestLifecycleTerminalErrorAllowsStoppedWhenConfigured(t *testing.T) {
 			{Name: "worker", State: "stopped"},
 		},
 	}
-	if err := lifecycleTerminalError(status, []string{"worker"}, false); err != nil {
+	if err := lifecycleTerminalError(nil, status, []string{"worker"}, false); err != nil {
 		t.Fatalf("lifecycleTerminalError = %v, want nil", err)
 	}
 }
@@ -277,7 +280,7 @@ func TestLifecycleRestartHealthyWaitUsesStoppedAsTerminal(t *testing.T) {
 			{Name: "worker", State: "stopped"},
 		},
 	}
-	err := lifecycleTerminalError(status, []string{"worker"}, true)
+	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
 	if err == nil || err.Error() != "worker stopped before becoming healthy" {
 		t.Fatalf("lifecycleTerminalError = %v, want stopped error", err)
 	}

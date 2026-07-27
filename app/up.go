@@ -478,11 +478,15 @@ func blockedDependencyError(client *daemon.Client, status *daemon.StatusResponse
 		reason = dependency.State
 	}
 	dependencySnapshot := progressSnapshot{reason: reason}
+	evidence := ""
+	if dependency.State != "stopped" {
+		evidence = recentLogEvidence(client, dependency.Name)
+	}
 	return fmt.Errorf(
 		"%s cannot start because dependency %s is unhealthy\n  %w",
 		serviceName,
 		dependency.Name,
-		serviceStartError(dependency.Name, dependencySnapshot, recentLogEvidence(client, dependency.Name)),
+		serviceStartError(dependency.Name, dependencySnapshot, evidence),
 	)
 }
 

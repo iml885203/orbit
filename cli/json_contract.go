@@ -163,6 +163,14 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit status --json",
 		}
+	case errors.Is(err, ErrServiceStartFailed):
+		return JSONError{
+			Code:        "service_start_failed",
+			Message:     msg,
+			Hint:        "Fix the reported service error, then retry the service.",
+			Retryable:   true,
+			NextCommand: "orbit status --json",
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",

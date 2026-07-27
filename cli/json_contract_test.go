@@ -117,6 +117,21 @@ func TestWriteJSONErrorClassifiesDependencyBlocked(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesServiceStartFailed(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit restart api --json", NewServiceStartFailedError("api failed: address already in use"))
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "service_start_failed" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable {
+		t.Fatal("retryable = false, want true")
+	}
+}
+
 func TestWriteJSONErrorClassifiesDashboardPortConflict(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit up --json", &daemon.PortConflictError{
