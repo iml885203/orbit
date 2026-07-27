@@ -68,7 +68,7 @@ func fileHash(path string) (string, error) {
 }
 
 // RunSeed executes seed files for a container. Returns results for each file.
-func RunSeed(name string, cfg *config.Container, allCfg *config.Config, force bool) []SeedResult {
+func RunSeed(name string, cfg *config.Container, force bool) []SeedResult {
 	if cfg.Seed == nil || len(cfg.Seed.Files) == 0 {
 		return nil
 	}
@@ -97,12 +97,16 @@ func RunSeed(name string, cfg *config.Container, allCfg *config.Config, force bo
 			}
 		}
 
-		// Determine executor based on container type
 		var execErr error
 		containerName := ContainerName(os.Getenv("ORBIT_NAMESPACE"), name)
-		switch detectDBType(name, cfg) {
-		case "mssql":
-			execErr = seedSQLServer(containerName, cfg.SAPassword(), file)
+		switch cfg.Seed.Type {
+		case "sqlserver":
+			execErr = seedSQLServer(
+				containerName,
+				cfg.Seed.Username,
+				cfg.Seed.PasswordEnv,
+				file,
+			)
 		case "mongo":
 			db := cfg.Seed.Database
 			execErr = seedMongoDB(containerName, db, file)
@@ -128,38 +132,34 @@ func RunSeed(name string, cfg *config.Container, allCfg *config.Config, force bo
 	return results
 }
 
-func detectDBType(name string, cfg *config.Container) string {
-	for label := range cfg.Ports {
-		switch label {
-		case "mssql":
-			return "mssql"
-		case "mongo":
-			return "mongo"
-		}
-	}
-	if strings.Contains(name, "sql") {
-		return "mssql"
-	}
-	if strings.Contains(name, "mongo") {
-		return "mongo"
-	}
-	return ""
-}
-
-func seedSQLServer(containerName, password, file string) error {
+func seedSQLServer(containerName, username, passwordEnv, file string) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", file, err)
 	}
 
-	cmd := exec.Command("docker", "exec", "-i", containerName,
-		"/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", password, "-C", "-I")
+	cmd := exec.Command("docker", sqlServerSeedDockerArgs(containerName, username, passwordEnv)...)
 	cmd.Stdin = strings.NewReader(string(data))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", filepath.Base(file), strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+func sqlServerSeedDockerArgs(containerName, username, passwordEnv string) []string {
+	const runSQLCmd = `password="$(printenv "$1")"
+if [ -z "$password" ]; then
+  echo "$1 is empty in the SQL Server container" >&2
+  exit 2
+fi
+export SQLCMDPASSWORD="$password"
+exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U "$2" -C -I`
+	return []string{
+		"exec", "-i", containerName,
+		"/bin/sh", "-c", runSQLCmd,
+		"orbit-seed", passwordEnv, username,
+	}
 }
 
 func seedMongoDB(containerName, database, file string) error {

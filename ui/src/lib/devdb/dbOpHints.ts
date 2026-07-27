@@ -19,7 +19,7 @@ const HINTS: Array<{ re: RegExp; hint: string }> = [
   },
   {
     re: /Login failed|Cannot open database|error connecting|connection was refused|target platform|network-related/i,
-    hint: 'sql-server unreachable — check `orbit status`, restart sql-server if degraded',
+    hint: 'configured SQL Server target is unreachable — check `orbit status` and restart that target if degraded',
   },
   {
     re: /deadlocked|is in use|exclusive access|being used by another/i,
@@ -33,10 +33,10 @@ const HINTS: Array<{ re: RegExp; hint: string }> = [
 
 const ERROR_CODE_HINTS: Record<string, string> = {
   toolchain_missing: 'sqlpackage is missing — install it with `dotnet tool install -g microsoft.sqlpackage`, then retry',
-  sql_project_not_found: 'no SQL project was found for this database — configure it under `sql_projects` in the active environment',
+  sql_project_not_found: 'no SQL project was found for this database — add its .sqlproj path under `sqlserver.projects`',
   build_failed: 'the SQL project build failed — fix the build errors in the log, then retry',
   publish_blocked_data_loss: 'publish was blocked to avoid data loss — review what would be dropped (view the log), then use "Publish anyway" on the row (or `orbit db publish <db> --force`) if the change is intentional',
-  sql_server_unavailable: 'sql-server is unavailable — run `orbit up sql-server`, then retry',
+  sql_server_unavailable: 'the configured SQL Server target is unavailable — run `orbit status`, start the target, then retry',
   database_busy: 'the database is busy — close DbGate and other active connections, then retry',
   publish_failed: 'publish failed — inspect the operation log for the sqlpackage error, then retry',
   reset_partial: 'Reset discarded local data, but the schema update failed. Fix the publish error in the log, then run Reset again.',

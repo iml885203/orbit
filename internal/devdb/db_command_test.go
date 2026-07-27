@@ -15,7 +15,7 @@ func TestDBCommand_ExposesOnlyUserWorkflow(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"list", "diff", "publish", "reset"} {
+	for _, name := range []string{"list", "query", "diff", "publish", "reset"} {
 		if !visible[name] {
 			t.Errorf("%s must be visible", name)
 		}

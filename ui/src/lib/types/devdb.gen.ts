@@ -14,15 +14,7 @@ import type { DiffResult } from './sqlpublish.gen'
  * ErrMsgDBNotConfigured is returned by every DB-workflow endpoint (and
  * reused verbatim by the CLI) when the active env doesn't opt in.
  */
-export const ErrMsgDBNotConfigured = "db workflow not configured: the active env declares neither a sql-server container nor sql_projects — see docs/team-adoption.md";
-/**
- * SQLServerContainerName is the container name that opts an env into the
- * DB workflow. Exported so consumers (snapshots, doctor, CLI) reference
- * the concept instead of repeating the literal. Owned by the DB-workflow
- * gate domain — the core config schema no longer knows the convention
- * (spec B5/B6).
- */
-export const SQLServerContainerName = "sql-server";
+export const ErrMsgDBNotConfigured = "SQL Server workflow not configured: add a sqlserver section to the active environment";
 
 //////////
 // source: db_name_resolve.go
@@ -33,17 +25,8 @@ export const SQLServerContainerName = "sql-server";
 
 
 //////////
-// source: db_projects_config.go
+// source: db_query.go
 
-/**
- * DBProjectsConfig is the allowlist of SQL-project directory names the DB
- * workflow publishes. Matching is case-insensitive (see dbProjectAllowlist):
- * the same project is cased differently across checkouts (billing.payment
- * vs Billing.Payment) and no one list spelling can be right for everyone.
- */
-export interface DBProjectsConfig {
-  projects: string[];
-}
 
 //////////
 // source: dbops.go
@@ -88,18 +71,27 @@ export interface DevDBMetaResponse {
   sql_server_port?: number /* int */;
   /**
    * SQLServerTarget is the publish target's runtime docker name. The
-   * CLI resolves SA_PASSWORD by inspecting THIS container so port and
-   * credentials always come from the same declared target. Empty on
-   * daemons predating the field — consumers fall back to the legacy
-   * sql-server name.
+   * CLI resolves the configured password key by inspecting this container
+   * so port and credentials always come from the same declared target.
    */
   sql_server_target?: string;
+  /**
+   * SQLServerService is the target's environment service name. The dashboard
+   * uses it for health and navigation instead of assuming a conventional
+   * container name.
+   */
+  sql_server_service?: string;
+  /**
+   * SQLServerUsername and SQLServerPasswordEnv identify the configured
+   * login without exposing its secret value.
+   */
+  sql_server_username?: string;
+  sql_server_password_env?: string;
   workspace_root: string;
   /**
-   * DBConfigured mirrors the DB-workflow gate: false when the active
-   * env has neither a sql-server container nor a declared sql_projects
-   * target. CLI and dashboard hide the
-   * DB workflow behind it. A pointer so consumers can fail OPEN when the
+   * DBConfigured mirrors the DB-workflow gate: false when the active env
+   * has no explicit sqlserver section. CLI and dashboard hide the DB
+   * workflow behind it. A pointer so consumers can fail OPEN when the
    * field is absent — a CLI newer than its daemon must not lock
    * users out of db commands just because the old daemon doesn't report it.
    * Interpret via WorkflowConfigured, not by dereferencing directly.
@@ -108,7 +100,7 @@ export interface DevDBMetaResponse {
   /**
    * ClaimConfigured is false when the active env has no claim section
    * (Tunlease tunnel support). The dashboard hides the Tunnels tab behind
-   * it, the same way DBConfigured gates Local DB. Same pointer +
+   * it, the same way DBConfigured gates the SQL Server workflow. Same pointer +
    * fail-open rule: nil (a daemon predating the field) counts as
    * configured so the tab never wrongly vanishes for
    * users on an older daemon. Interpret via ClaimSupported.
@@ -118,10 +110,6 @@ export interface DevDBMetaResponse {
    */
   claim_configured?: boolean;
 }
-
-//////////
-// source: devdb_discovery.go
-
 
 //////////
 // source: drift_cache.go
@@ -250,5 +238,19 @@ export interface DBResetRequest {
 }
 
 //////////
-// source: settings.go
+// source: sqlserver_config.go
 
+/**
+ * SQLServerConfig is the explicit opt-in for SQL Server Database Projects.
+ * Project paths are relative to the workspace so one shared env works across
+ * developer machines without a second allowlist or DB-root setting.
+ */
+export interface SQLServerConfig {
+  target: string;
+  username: string;
+  password_env: string;
+  projects: SQLServerProjectConfig[];
+}
+export interface SQLServerProjectConfig {
+  path: string;
+}

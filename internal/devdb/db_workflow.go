@@ -58,11 +58,7 @@ func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish
 	}
 	target := meta.SQLServerTarget
 	if target == "" {
-		// REACHABLE version skew, not dead code: sql_server_port shipped
-		// before sql_server_target. An older daemon reports a port and no
-		// target, and it only ever
-		// published to the legacy sql-server container.
-		target = sqlServerContainer
+		return sqlpublish.Opts{}, fmt.Errorf("SQL Server target unavailable from the active environment")
 	}
 	serviceName := strings.TrimPrefix(target, "orbit-")
 	if !containerRunning(target) {
@@ -85,10 +81,13 @@ func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish
 		}
 		return sqlpublish.Opts{}, fmt.Errorf("SQL Server target %s is %s — start it with `orbit up %s`", serviceName, state, serviceName)
 	}
-	saPassword, err := resolveSAPassword(target)
+	if meta.SQLServerUsername == "" || meta.SQLServerPasswordEnv == "" {
+		return sqlpublish.Opts{}, fmt.Errorf("SQL Server credentials unavailable from the active environment")
+	}
+	password, err := resolveContainerPassword(target, meta.SQLServerPasswordEnv)
 	if err != nil {
 		return sqlpublish.Opts{}, err
 	}
 	targetID := publishTargetIdentity(meta.EnvironmentPath, target, meta.SQLServerImage)
-	return sqlpublish.Opts{DB: dbName, Host: "localhost", Port: meta.SQLServerPort, TargetID: targetID, User: "sa", Password: saPassword}, nil
+	return sqlpublish.Opts{DB: dbName, Host: "localhost", Port: meta.SQLServerPort, TargetID: targetID, User: meta.SQLServerUsername, Password: password}, nil
 }

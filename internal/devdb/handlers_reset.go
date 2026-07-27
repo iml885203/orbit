@@ -55,7 +55,7 @@ func (f *dbFeature) handleDBResetState(w http.ResponseWriter, r *http.Request) {
 		daemon.WriteJSON(w, http.StatusInternalServerError, daemon.APIResponse{Error: err.Error()})
 		return
 	}
-	host, port, saPassword, ok := f.resolveSQLServerConn(w)
+	host, port, username, password, ok := f.resolveSQLServerConn(w)
 	if !ok {
 		return
 	}
@@ -64,7 +64,7 @@ func (f *dbFeature) handleDBResetState(w http.ResponseWriter, r *http.Request) {
 
 	states := make(map[string]DBResetState, len(targets))
 	for _, t := range targets {
-		opts := sqlpublish.Opts{DB: t.DB, Host: host, Port: port, User: "sa", Password: saPassword}
+		opts := sqlpublish.Opts{DB: t.DB, Host: host, Port: port, User: username, Password: password}
 		exists, err := sqlpublish.DatabaseExists(ctx, opts)
 		if err != nil {
 			// A transient per-DB probe error: omit it rather than fail the
@@ -106,11 +106,11 @@ func (f *dbFeature) handleDBOpReset(w http.ResponseWriter, r *http.Request) {
 		daemon.WriteJSON(w, http.StatusBadRequest, daemon.APIResponse{Error: err.Error()})
 		return
 	}
-	host, port, saPassword, ok := f.resolveSQLServerConn(w)
+	host, port, username, password, ok := f.resolveSQLServerConn(w)
 	if !ok {
 		return
 	}
-	opts := sqlpublish.Opts{DB: req.DB, SQLProj: sqlProj, Host: host, Port: port, TargetID: f.publishTargetID(), User: "sa", Password: saPassword}
+	opts := sqlpublish.Opts{DB: req.DB, SQLProj: sqlProj, Host: host, Port: port, TargetID: f.publishTargetID(), User: username, Password: password}
 
 	// The server owns the standard-vs-recreate decision from the live
 	// database. A DB that doesn't exist can't be reset (publish creates

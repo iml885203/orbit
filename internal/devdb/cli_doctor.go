@@ -20,14 +20,16 @@ func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
 	if !DBWorkflowConfigured(cfg) {
 		return nil
 	}
-	rootCheck, _ := daemon.WorkspaceRootCheck(daemon.WorkspaceRootFromEnv())
-	return []daemon.DoctorCheck{rootCheck}
+	root := daemon.WorkspaceRootFromEnv()
+	rootCheck, _ := daemon.WorkspaceRootCheck(root)
+	checks := []daemon.DoctorCheck{rootCheck}
+	checks = append(checks, sqlProjectChecks(cfg, root)...)
+	checks = append(checks, publishToolchainChecks()...)
+	return checks
 }
 
 // PrintDBWorkflowChecks is the human-rendered twin of the daemon's
-// dbWorkflowChecks: workspace root, the optional db-root override, SQL
-// image presence, and the db build repos. Envs without this optional
-// workflow stay silent.
+// dbWorkflowChecks. Envs without this optional workflow stay silent.
 func PrintDBWorkflowChecks(cfg *config.Config) {
 	pass := cli.Green.Sprint("✓")
 	fail := cli.Red.Sprint("✗")
@@ -45,26 +47,14 @@ func PrintDBWorkflowChecks(cfg *config.Config) {
 		fmt.Printf("  %s workspace root %s\n", pass, workspaceRoot)
 	}
 
-	// DB projects root (optional override). Resolved via the same 3-tier
-	// precedence as the daemon so offline and online doctor agree, and only
-	// reported when set (ORBIT_DB_ROOT / legacy env / db_root setting).
-	if dbRoot := resolveDBRootPath(daemon.LoadSettings(daemon.DefaultSettingsPath())); dbRoot != "" {
-		if _, err := os.Stat(dbRoot); err != nil {
-			fmt.Printf("  %s DB root %s (path not found)\n", fail, dbRoot)
-		} else {
-			fmt.Printf("  %s DB root %s\n", pass, dbRoot)
-		}
-	}
-
 	containerMgr, containerErr := container.NewManager(os.Getenv("ORBIT_NAMESPACE"))
 	if containerErr != nil {
 		return
 	}
 	defer func() { _ = containerMgr.Close() }()
 
-	// The gate also passes generic sql_projects envs whose target container
-	// isn't named sql-server, so a passing gate doesn't guarantee one here —
-	// nothing to report on the image in that case (mirrors sqlImageChecks).
+	// The target name and image are arbitrary; only the explicit section
+	// identifies the SQL Server workflow.
 	c, ok := SQLServerContainer(cfg)
 	if !ok {
 		return

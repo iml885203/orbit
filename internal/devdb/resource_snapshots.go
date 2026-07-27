@@ -15,8 +15,11 @@ import (
 // dbResources is the registered contributor: databases.
 func (f *dbFeature) dbResources(_ context.Context) []daemon.ResourceSnapshot {
 	var out []daemon.ResourceSnapshot
-	if f.dbState != nil && DBWorkflowConfigured(f.host.Config()) {
-		out = append(out, snapshotDatabases(f.dbState.Snapshot())...)
+	if f.dbState != nil {
+		section := SQLServerFrom(f.host.Config())
+		if section != nil {
+			out = append(out, snapshotDatabases(f.dbState.Snapshot(), section.Target)...)
+		}
 	}
 	return out
 }
@@ -24,7 +27,7 @@ func (f *dbFeature) dbResources(_ context.Context) []daemon.ResourceSnapshot {
 // snapshotDatabases derives a per-database state from the dbstate event
 // log: baseline (matches the image), modified (a local apply sits on top),
 // or reset_pending (a post-build reset failed and needs attention).
-func snapshotDatabases(snap dbstate.Snapshot) []daemon.ResourceSnapshot {
+func snapshotDatabases(snap dbstate.Snapshot, parent string) []daemon.ResourceSnapshot {
 	out := make([]daemon.ResourceSnapshot, 0, len(snap.DBs))
 	for name, db := range snap.DBs {
 		state, reason := db.DerivedState()
@@ -43,7 +46,7 @@ func snapshotDatabases(snap dbstate.Snapshot) []daemon.ResourceSnapshot {
 			Type:        "database",
 			State:       state,
 			StateReason: reason,
-			Parent:      SQLServerContainerName,
+			Parent:      parent,
 			Properties:  emptyAsNil(props),
 		})
 	}

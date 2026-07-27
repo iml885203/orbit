@@ -25,8 +25,7 @@ func TestSettings_TranslateKey(t *testing.T) {
 		want  string
 		isErr bool
 	}{
-		{"sql-server-image", "sql_server_image", false},
-		{"sql-server-pull-policy", "sql_server_pull_policy", false},
+		{"workspace-root", "workspace_root", false},
 		{"show-history", "show_history", false},
 		{"unknown-key", "", true},
 	}
@@ -50,8 +49,8 @@ func TestSettings_CoerceValue(t *testing.T) {
 	if err != nil || v != false {
 		t.Errorf("show_history off: v=%v err=%v", v, err)
 	}
-	v, err = coerceSettingsValue("sql_server_image", "example.db:latest")
-	if err != nil || v != "example.db:latest" {
+	v, err = coerceSettingsValue("workspace_root", "/work/project")
+	if err != nil || v != "/work/project" {
 		t.Errorf("string passthrough: v=%v err=%v", v, err)
 	}
 	if _, err := coerceSettingsValue("show_history", "maybe"); err == nil {

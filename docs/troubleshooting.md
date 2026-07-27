@@ -48,9 +48,7 @@ orbit switch example
 DbGate caches the schema per connection. Right-click the connection → Disconnect → Connect, or click the refresh icon on the database node. Verify the object is really there:
 
 ```bash
-docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "<your-sa-password>" -C \
-  -Q "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
+orbit db query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
 ```
 
 ### `publish` fails: `CommonFiles.dacpac could not be resolved`
@@ -71,25 +69,26 @@ orbit db publish <dbname> --force     # passes BlockOnPossibleDataLoss=false
 
 or refactor the change in smaller steps. To discard local data and apply the latest schema, run `orbit db reset <dbname>`.
 
-### My SP disappeared after `orbit restart sql-server`
+### My SP disappeared after restarting the configured SQL Server target
 Should not happen after the volume-seeding fix. If it does:
 
 1. Confirm the DB's files live in the volume:
    ```bash
-   docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
-     -S localhost -U sa -P "<your-sa-password>" -C \
-     -Q "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
+   orbit db query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
    ```
    Paths should start with `/var/opt/mssql/data/` (the persistent volume). If a database is missing entirely, republish it with `orbit db publish <db>` (or use `orbit db publish --all` for every configured database).
-2. Check the volume survived: `docker volume inspect orbit_sql_server` should show it exists and wasn't recreated recently.
+2. Check that the volume or bind mount declared by your environment still
+   exists and was not recreated recently.
 
-### `docker volume rm orbit_sql_server` fails: "volume is in use"
-The sql-server container is still attached. Stop it first:
+### Removing a SQL Server volume fails: "volume is in use"
+The configured SQL Server target is still attached. If you intend to
+permanently discard every local database, stop the environment before removing
+the volume declared by its config:
 
 ```bash
 orbit down
-docker volume rm orbit_sql_server
-orbit up sql-server
+docker volume rm <volume-name>
+orbit up <sqlserver.target>
 ```
 
 ## Daemon
@@ -137,13 +136,12 @@ sudo chown -R $(whoami) ~/.orbit
 ### `orbit exec` complains the container name doesn't exist
 Orbit's default naming is `orbit-<service>`. If you set `ORBIT_NAMESPACE=foo`, the name becomes `foo-<service>`. Check `docker ps --format '{{.Names}}'`.
 
-### `orbit db publish` errors: `SA_PASSWORD not set`
-Orbit reads the password from the `orbit-sql-server` container's env by default. If the container isn't running, or is running a non-orbit SQL Server, set it explicitly:
+### `orbit db publish` reports unavailable SQL Server credentials
 
-```bash
-export SA_PASSWORD="<your-sa-password>"
-orbit db publish AppDB
-```
+Check that `sqlserver.password_env` names a non-empty environment key on the
+configured target container, then restart that target with `orbit restart
+<target>`. Orbit does not accept a second password override because that could
+silently connect to a different target than the active environment declares.
 
 ## Diagnosis
 

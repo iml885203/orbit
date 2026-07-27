@@ -71,7 +71,7 @@ func TestBuildEnv_ExplicitOverride(t *testing.T) {
 	}
 }
 
-func TestBuildEnv_SqlServer(t *testing.T) {
+func TestBuildEnv_DoesNotInferSQLServerCredentials(t *testing.T) {
 	svc := &config.Service{
 		Name:      "worker",
 		DependsOn: []string{"sql-server"},
@@ -87,12 +87,11 @@ func TestBuildEnv_SqlServer(t *testing.T) {
 
 	env := BuildEnv(svc, containers, nil)
 
-	want := "Server=localhost,1433;User Id=sa;Password=test123;TrustServerCertificate=true"
-	if env["SQL_SERVER_CONNECTION"] != want {
-		t.Errorf("SQL_SERVER_CONNECTION = %q, want %q", env["SQL_SERVER_CONNECTION"], want)
+	if _, ok := env["SQL_SERVER_CONNECTION"]; ok {
+		t.Fatal("image detection leaked SQL Server credentials into a dependent service")
 	}
-	if env["ConnectionStrings__sql-server"] != want {
-		t.Errorf("ConnectionStrings__sql-server = %q, want %q", env["ConnectionStrings__sql-server"], want)
+	if env["SQL_SERVER_MSSQL_PORT"] != "1433" {
+		t.Errorf("generic declared port missing: %+v", env)
 	}
 }
 
@@ -139,8 +138,8 @@ func TestEnvVarsForDependency(t *testing.T) {
 	}
 
 	got = EnvVarsForDependency("sql-server", containers["sql-server"])
-	if !contains(got, "SQL_SERVER_CONNECTION") || !contains(got, "ConnectionStrings__sql-server") {
-		t.Errorf("EnvVarsForDependency(sql-server): missing expected keys in %v", got)
+	if contains(got, "SQL_SERVER_CONNECTION") || contains(got, "ConnectionStrings__sql-server") {
+		t.Errorf("EnvVarsForDependency(sql-server) inferred credential-bearing keys: %v", got)
 	}
 }
 

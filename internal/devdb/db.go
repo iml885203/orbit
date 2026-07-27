@@ -13,12 +13,11 @@ func DBCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db",
 		Short: "Manage local databases via host-side schema publish",
-		Long: `Manage local databases via host-side schema publish. The projects come
-from the team-shared allowlist (envs/data/db-projects.yaml) — one list for
-every env, matched case-insensitively against your workspace folders.
+		Long: `Manage SQL Server Database Projects declared by the active environment.
 
 Examples:
-  orbit db list                        # show the allowlisted projects and databases
+  orbit db list                        # show configured projects and databases
+  orbit db query "SELECT @@VERSION"    # query the configured SQL Server
   orbit db diff SampleDB               # check pending schema changes
   orbit db publish SampleDB            # push schema changes, preserving data
   orbit db reset SampleDB              # discard local data, return to a clean state`,
@@ -30,6 +29,7 @@ Examples:
 		},
 	}
 	cmd.AddCommand(dbListCmd())
+	cmd.AddCommand(dbQueryCmd())
 	cmd.AddCommand(dbDiffCmd())
 	cmd.AddCommand(dbPublishCmd())
 	cmd.AddCommand(dbResetCmd())
@@ -39,7 +39,7 @@ Examples:
 func dbListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List the allowlisted SQL projects and their databases",
+		Short: "List configured SQL projects and their databases",
 		RunE:  runDBList,
 	}
 }
@@ -60,7 +60,7 @@ func runDBList(_ *cobra.Command, _ []string) error {
 	}
 
 	if len(resp.Projects) == 0 {
-		fmt.Println("No SQL projects found. Add them to the shared allowlist (envs/data/db-projects.yaml) and check the folders exist in your workspace.")
+		fmt.Println("No SQL projects configured. Add .sqlproj paths to sqlserver.projects in the active environment.")
 		return nil
 	}
 	for _, p := range resp.Projects {

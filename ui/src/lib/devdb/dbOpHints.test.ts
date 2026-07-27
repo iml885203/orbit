@@ -6,10 +6,10 @@ describe('dbOpHint', () => {
 
   it.each([
     ['toolchain_missing', /dotnet tool install -g microsoft\.sqlpackage/],
-    ['sql_project_not_found', /sql_projects/],
+    ['sql_project_not_found', /sqlserver\.projects/],
     ['build_failed', /build errors/],
     ['publish_blocked_data_loss', /--force/],
-    ['sql_server_unavailable', /orbit up sql-server/],
+    ['sql_server_unavailable', /configured SQL Server target/],
     ['database_busy', /active connections/],
     ['publish_failed', /operation log/],
     ['reset_clean_state_missing', /Run Reset again/],

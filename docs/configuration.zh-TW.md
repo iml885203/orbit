@@ -13,12 +13,11 @@ orbit env 檔案完整的 YAML schema。檔案放在 `~/.orbit/envs/`，透過 `
 - [`services`](#services)
 - [`groups`](#groups)
 - [`externals`](#externals)
-- [`sql_projects`](#sql_projects)
+- [`sqlserver`](#sqlserver)
 - [Extension 擁有的 section](#extension-擁有的-section)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [變數替換](#變數替換)
 - [Per-instance 覆寫](#per-instance-覆寫)
-- [SQL Server 模式設定](#sql-server-模式設定)
 
 ## 最上層結構
 
@@ -44,7 +43,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | `services` | map | no | dev process service 定義 |
 | `groups` | map | no | 具名 service 集合 — 批次啟動與 dashboard 分群 |
 | `externals` | map | no | 非 orbit 管理的 producer/consumer，畫成佔位 graph 節點 |
-| `sql_projects` | object | no | `orbit db publish` 發佈到哪個容器（唯一欄位是 `target`） |
+| `sqlserver` | object | no | 明確啟用 SQL Server Database Projects |
 | `<extension-key>` | any | no | 由編譯進此 binary 的 extension 註冊並擁有；可接受的 key 與形狀依發行版而定 |
 
 ## `settings`
@@ -183,13 +182,24 @@ health_check:
 
 ```yaml
 seed:
-  database: PlatformDB          # 僅 MongoDB：目標資料庫
+  type: mongo
+  database: PlatformDB
   files:
-    - envs/seeds/sql-server/001-something.sql
+    - envs/seeds/mongo/001-something.js
 ```
 
 當 container 進入 `Healthy` 後，依序套用每個檔案。已套用的 seed 會被記錄；
 之後重跑 `orbit seed` 會跳過，除非加 `--force`（這是 CLI flag，不是 config 欄位）。
+SQL Server seed 必須明確指定登入資訊與 container env key：
+
+```yaml
+seed:
+  type: sqlserver
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
+  files:
+    - envs/seeds/sqlserver/001-something.sql
+```
 
 ### `init`
 
@@ -322,36 +332,32 @@ externals:
       consumes: []
 ```
 
-## `sql_projects`
+## `sqlserver`
 
-指定 `orbit db publish` 的資料庫要發佈到哪個容器。它唯一的欄位是 `target` ——
-省略時,DB workflow 會自動偵測 `sql-server` 容器。
-
-```yaml
-sql_projects:
-  target: sql-server
-```
-
-這**不是**指定要發佈哪些專案。專案集合是 team-shared allowlist,放在
-`envs/data/db-projects.yaml`(隨 env repo 出貨的 sibling 檔,與 `claim.yaml`
-同一慣例),一份清單涵蓋所有 env:
+明確為這個環境啟用 SQL Server Database Projects。沒有這個 section 時，
+Orbit 不會顯示 SQL Server UI、檢查或設定提示。
 
 ```yaml
-### `envs/data/db-projects.yaml`
-projects:
-  - billing.payment
-  - billing.wallet
+sqlserver:
+  target: database
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
+  projects:
+    - path: database/Accounts/Accounts.sqlproj
+    - path: database/Orders/Orders.sqlproj
 ```
 
-allowlist 列出 SQL 專案的目錄名,以大小寫不敏感方式對應你 workspace 底下的
-資料夾。沒有 allowlist 就沒有任何資料庫 —— 沒有掃描猜測的 fallback。見
-[sql-workflow.zh-TW.md](sql-workflow.zh-TW.md)。
+`target` 指向同一個 env 裡的 container；`username` 預設為 `sa`。
+`password_env` 是 target container 裡存放密碼的環境變數名稱，Orbit
+只在執行時讀取解析後的值，不會儲存或輸出密碼。每個 project path 都是
+workspace-relative 的 `.sqlproj` 檔案。Orbit 不會掃描相鄰目錄，也不會從
+container 名稱或 image 猜測。見 [sql-workflow.zh-TW.md](sql-workflow.zh-TW.md)。
 
 ## Extension 擁有的 section
 
 Core schema 會保留由目前 binary 所編譯進的功能 package 註冊之最上層 section。
 它們的名稱與形狀不屬於中性 core schema；請查閱該發行版的功能文件。例如,
-`claim`(tunnel)與 `db_projects`(SQL workflow)由受 gate 掃描的功能 package
+`claim`(tunnel)與 `sqlserver`(SQL workflow)由受 gate 掃描的功能 package
 註冊。若 binary 沒有註冊對應的 handler,就會拒絕該 feature 擁有的 section。
 
 ## User settings (`~/.orbit/settings.json`)
@@ -380,13 +386,13 @@ orbit daemon restart
 Orbit 在載入時對所有 string 欄位進行 `${VAR}` 與 `${VAR:-default}` 替換。替換來源依優先順序：
 
 1. `orbit` 執行當下的環境變數
-2. `~/.orbit/settings.json` 裡的 user settings（例如 `WORKSPACE_ROOT` 與 `SQL_SERVER_IMAGE`）
+2. `~/.orbit/settings.json` 裡的 user settings（例如 `WORKSPACE_ROOT`）
 3. config 內 `:-default` fallback
 
 沒宣告的變數會被當作空字串 —— 用 `:-` 給它一個合理的預設值：
 
 ```yaml
-image: ${SQL_SERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
+path: ${API_ROOT:-~/dev/api}
 ```
 
 ## Per-instance 覆寫
@@ -401,17 +407,6 @@ image: ${SQL_SERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
 | `ORBIT_LOG_LEVEL` | Daemon log 等級（`debug`/`info`/`warn`/`error`） | `info` |
 
 請在 `orbit up` 之前設定 —— daemon 已經跑起來後再改的話，需要 `orbit daemon restart`。
-
-## SQL Server 模式設定
-
-sql-server container 的 image 透過兩個 env var 決定（deploy-time 設定，沒有 dashboard toggle）：
-
-| Variable | Values | 效果 |
-|---|---|---|
-| `SQL_SERVER_IMAGE` | image reference | sql-server container 實際跑的 image；預設用 env 宣告的 image |
-| `SQL_SERVER_PULL_POLICY` | `always` / `if_not_present` / `never` | `always` 會在每次 `orbit up` 重新檢查 registry |
-
-改動任一個會在下次 `orbit up`（或 `orbit daemon restart`）生效。image 與其他 sql-server container 使用相同的 volume model。
 
 ## 延伸閱讀
 

@@ -45,7 +45,7 @@ orbit status --json           # verify state
 orbit switch <env>            # change env and restart daemon
 orbit logs <service>          # plaintext; -f to stream
 orbit doctor                  # checks setup; prints fixes
-orbit query sql "SELECT TOP 5 * FROM Users"
+orbit db query "SELECT TOP 5 * FROM Users"
 orbit db publish <dbname>     # fast dev-loop, preserves data
 ```
 

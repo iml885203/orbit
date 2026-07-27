@@ -15,10 +15,8 @@ var settingsKeyMap = map[string]struct {
 	jsonKey string
 	kind    string // "string" | "bool"
 }{
-	"workspace-root":         {"workspace_root", "string"},
-	"sql-server-image":       {"sql_server_image", "string"},
-	"sql-server-pull-policy": {"sql_server_pull_policy", "string"},
-	"show-history":           {"show_history", "bool"},
+	"workspace-root": {"workspace_root", "string"},
+	"show-history":   {"show_history", "bool"},
 }
 
 func translateSettingsKey(cliKey string) (string, error) {

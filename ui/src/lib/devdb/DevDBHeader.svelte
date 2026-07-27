@@ -7,7 +7,7 @@
   const checkLabel = $derived(checkProgress && checkProgress.total > 0 ? `Checking ${checkProgress.done}/${checkProgress.total}…` : 'Checking…')
 </script>
 <header class="page-header">
-  <div><h1>Local databases</h1><p>Check schema changes, publish safely, or reset local data.</p>{#if running}<div class="progress" role="status">Publishing {scope} · {elapsedSeconds}s</div>{:else}<p class="scope">{scope}</p>{/if}</div>
+  <div><h1>Database Projects</h1><p>Check schema changes, publish safely, or reset local data.</p>{#if running}<div class="progress" role="status">Publishing {scope} · {elapsedSeconds}s</div>{:else}<p class="scope">{scope}</p>{/if}</div>
   <div class="actions">{#if hasLog}<button type="button" onclick={onViewLog}><ScrollText size={14} /> View log</button>{/if}<button type="button" disabled={checkingAll || total === 0 || !!disabledReason} aria-busy={checkingAll} use:tooltip={{ content: disabledReason || `Refreshes schema status for every database` }} onclick={onCheckAll}>{#if checkingAll}<Loader2 size={14} class="spin" aria-hidden="true" /> {checkLabel}{:else}<GitCompareArrows size={14} aria-hidden="true" /> Refresh all{/if}</button><button class="primary" type="button" disabled={!!disabledReason || total === 0} aria-busy={running} use:tooltip={{ content: disabledReason || `Publishes ${scope}; stops at the first failure` }} onclick={onPublishAll}>{running ? `Publishing ${total}…` : 'Publish all'}</button></div>
 </header>
 <style>

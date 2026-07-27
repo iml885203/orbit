@@ -49,9 +49,5 @@ func SetupDaemon(host extension.Host, mux *http.ServeMux) extension.DaemonHooks 
 	if dr, ok := host.(daemon.DoctorRegistrar); ok {
 		dr.AddDoctorChecks(db.dbWorkflowChecks)
 	}
-	if sr, ok := host.(daemon.SettingsHookRegistrar); ok {
-		sr.AddSettingsPUTHook(db.settingsPUTHook)
-	}
-
 	return hooks
 }

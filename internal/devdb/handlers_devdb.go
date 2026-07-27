@@ -41,11 +41,6 @@ func (f *dbFeature) handleDevDBMeta(w http.ResponseWriter, r *http.Request) {
 		sqlImage = publishTarget.Image
 	}
 	configured := f.dbWorkflowConfigured()
-	// If settings override the image, show that instead
-	if img := f.host.Settings().Get("sql_server_image"); img != "" {
-		sqlImage = img
-	}
-
 	configPath := f.host.ConfigPath()
 	workspaceRoot := f.workspaceRoot()
 	if workspaceRoot == "" {
@@ -56,22 +51,33 @@ func (f *dbFeature) handleDevDBMeta(w http.ResponseWriter, r *http.Request) {
 
 	sqlPort := 0
 	sqlTarget := ""
+	sqlService := ""
+	sqlUsername := ""
+	sqlPasswordEnv := ""
 	if c, targetName, ok := f.publishTarget(); ok {
 		if p, err := publishTargetHostPort(c); err == nil {
 			sqlPort = p
 		}
 		sqlTarget = dbTargetDockerName(targetName)
+		sqlService = targetName
+	}
+	if section := SQLServerFrom(f.host.Config()); section != nil {
+		sqlUsername = section.Username
+		sqlPasswordEnv = section.PasswordEnv
 	}
 
 	daemon.WriteJSON(w, http.StatusOK, DevDBMetaResponse{
-		EnvironmentPath: configPath,
-		EnvironmentName: filepath.Base(configPath),
-		SQLServerImage:  sqlImage,
-		SQLServerPort:   sqlPort,
-		SQLServerTarget: sqlTarget,
-		WorkspaceRoot:   workspaceRoot,
-		DBConfigured:    &configured,
-		ClaimConfigured: &claimConfigured,
+		EnvironmentPath:      configPath,
+		EnvironmentName:      filepath.Base(configPath),
+		SQLServerImage:       sqlImage,
+		SQLServerPort:        sqlPort,
+		SQLServerTarget:      sqlTarget,
+		SQLServerService:     sqlService,
+		SQLServerUsername:    sqlUsername,
+		SQLServerPasswordEnv: sqlPasswordEnv,
+		WorkspaceRoot:        workspaceRoot,
+		DBConfigured:         &configured,
+		ClaimConfigured:      &claimConfigured,
 	})
 }
 
@@ -89,22 +95,4 @@ func (f *dbFeature) workspaceRoot() string {
 		return filepath.Dir(cwd)
 	}
 	return ""
-}
-
-// dbRoot returns an explicit override for the directory that holds
-// SQL project subdirectories. Empty when unset — callers fall back to the standard
-// <workspaceRoot>[/dbprojects] scan locations. Resolution order: ORBIT_DB_ROOT
-// env var, then the `db_root` setting.
-func (f *dbFeature) dbRoot() string {
-	return resolveDBRootPath(f.host.Settings())
-}
-
-// resolveDBRootPath is the shared resolution for the db-projects
-// root override, so every caller (daemon meta, doctor, init) agrees:
-// ORBIT_DB_ROOT env, then the persisted db_root setting.
-func resolveDBRootPath(s *daemon.Settings) string {
-	if root := os.Getenv("ORBIT_DB_ROOT"); root != "" {
-		return root
-	}
-	return s.Get("db_root")
 }

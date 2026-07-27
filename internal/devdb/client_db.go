@@ -15,7 +15,7 @@ import (
 	"github.com/iml885203/orbit/internal/dbstate"
 )
 
-// fetchDevDBProjects returns the allowlisted SQL projects.
+// fetchDevDBProjects returns the explicitly configured SQL projects.
 func fetchDevDBProjects(c *daemon.Client) (*DevDBProjectsResponse, error) {
 	resp, err := c.Get("/api/devdb/projects")
 	if err != nil {
@@ -60,7 +60,7 @@ func fetchAllPublishTargets(c *daemon.Client) ([]publishTargetRef, error) {
 	}
 	targets := publishTargetsFrom(projects.Projects)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no databases found — add projects to the shared allowlist (envs/data/db-projects.yaml) or check `orbit db list`")
+		return nil, fmt.Errorf("no databases found — add .sqlproj paths to sqlserver.projects or check `orbit db list`")
 	}
 	return targets, nil
 }

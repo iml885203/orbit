@@ -33,6 +33,30 @@ type ExtensionSection struct {
 	// the hook for shared sibling files (e.g. envs/data/claim.yaml).
 	// A nil result means the feature is simply absent for this env.
 	Default func(cfgPath string) (any, error)
+	// Validate checks decoded feature intent against the complete environment.
+	// It runs from Config.Validate after core containers and services exist.
+	Validate func(value any, cfg *Config) error
+}
+
+func validateExtensionSections(cfg *Config) error {
+	extensionSections.mu.RLock()
+	defer extensionSections.mu.RUnlock()
+
+	names := make([]string, 0, len(cfg.ext))
+	for name := range cfg.ext {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		spec, ok := extensionSections.specs[name]
+		if !ok || spec.Validate == nil {
+			continue
+		}
+		if err := spec.Validate(cfg.ext[name], cfg); err != nil {
+			return fmt.Errorf("%s section: %w", name, err)
+		}
+	}
+	return nil
 }
 
 var extensionSections = struct {
@@ -137,7 +161,7 @@ func ExpandEnv(input string) string {
 
 // LoadSharedSiblingYAML decodes the shared envs/data/<filename> file next
 // to cfgPath into out — the convention extension-section Default hooks use
-// for team-shared config (claim.yaml, db-projects.yaml, ...). found is
+// for team-shared config (for example claim.yaml). found is
 // false when the file is absent or unreadable (the feature is simply not
 // configured for this env, never a Load failure); the returned error is
 // only a decode failure of a file that IS present, which callers may

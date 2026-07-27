@@ -12,21 +12,18 @@ import (
 	"github.com/iml885203/orbit/internal/tunnel"
 )
 
-// sqlServerConfig is testConfig plus a sql-server container — the shape every
-// ExampleTeam env has, which is what opts an env into the DB workflow.
+// sqlServerConfig is an explicitly configured SQL Server workflow.
 func sqlServerConfig() *config.Config {
 	cfg := testConfig()
 	cfg.Containers["sql-server"] = &config.Container{Name: "sql-server", Image: "mssql:2022"}
-	return cfg
+	return cfg.WithExtension(sqlServerSection, &SQLServerConfig{Target: "sql-server"})
 }
 
-// sqlProjectsConfig is testConfig plus a declared sql_projects target —
-// the generic opt-in path: no container named sql-server anywhere.
-func sqlProjectsConfig() *config.Config {
+// arbitraryTargetConfig proves the target name is not a feature gate.
+func arbitraryTargetConfig() *config.Config {
 	cfg := testConfig()
 	cfg.Containers["mydb"] = &config.Container{Name: "mydb", Image: "mssql:2022"}
-	cfg.SQLProjects = &config.SQLProjectsConfig{Target: "mydb"}
-	return cfg
+	return cfg.WithExtension(sqlServerSection, &SQLServerConfig{Target: "mydb"})
 }
 
 func TestDBWorkflowGate_RejectsWhenNoSQLServer(t *testing.T) {
@@ -60,13 +57,14 @@ func TestDBWorkflowGate_RejectsWhenNoSQLServer(t *testing.T) {
 
 func TestDBWorkflowGate_MetaReportsConfigured(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		cfg  *config.Config
-		want bool
+		name        string
+		cfg         *config.Config
+		want        bool
+		wantService string
 	}{
-		{"no sql-server", testConfig(), false},
-		{"with sql-server", sqlServerConfig(), true},
-		{"sql_projects target without sql-server", sqlProjectsConfig(), true},
+		{"no sqlserver section", testConfig(), false, ""},
+		{"conventional target", sqlServerConfig(), true, "sql-server"},
+		{"explicit arbitrary target", arbitraryTargetConfig(), true, "mydb"},
 	} {
 		s := newTestDBFeature(t, tc.cfg)
 		rr := httptest.NewRecorder()
@@ -84,6 +82,9 @@ func TestDBWorkflowGate_MetaReportsConfigured(t *testing.T) {
 		}
 		if *meta.DBConfigured != tc.want {
 			t.Errorf("%s: db_configured = %v, want %v", tc.name, *meta.DBConfigured, tc.want)
+		}
+		if meta.SQLServerService != tc.wantService {
+			t.Errorf("%s: sql_server_service = %q, want %q", tc.name, meta.SQLServerService, tc.wantService)
 		}
 	}
 }

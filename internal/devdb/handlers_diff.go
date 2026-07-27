@@ -70,7 +70,7 @@ func (f *dbFeature) handleDBDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host, port, saPassword, ok := f.resolveSQLServerConn(w)
+	host, port, username, password, ok := f.resolveSQLServerConn(w)
 	if !ok {
 		return
 	}
@@ -86,8 +86,8 @@ func (f *dbFeature) handleDBDiff(w http.ResponseWriter, r *http.Request) {
 		Host:     host,
 		Port:     port,
 		TargetID: f.publishTargetID(),
-		User:     "sa",
-		Password: saPassword,
+		User:     username,
+		Password: password,
 		Analyze:  req.Analyze,
 	}
 	if req.FastOnly {

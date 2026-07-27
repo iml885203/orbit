@@ -48,9 +48,7 @@ orbit switch example
 DbGate 是按連線快取 schema 的。在連線上右鍵 → Disconnect → Connect，或在 database 節點按重新整理。再用下面的指令確認物件真的在：
 
 ```bash
-docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "<你的-sa-密碼>" -C \
-  -Q "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
+orbit db query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
 ```
 
 ### `publish` 失敗：`CommonFiles.dacpac could not be resolved`
@@ -71,25 +69,24 @@ orbit db publish <dbname> --force     # 傳入 BlockOnPossibleDataLoss=false
 
 要嘛把變更拆成更小的步驟。要丟棄本機資料並套用最新 schema，執行 `orbit db reset <dbname>`。
 
-### `orbit restart sql-server` 之後我的 SP 不見了
+### 重新啟動設定指定的 SQL Server target 後，我的 SP 不見了
 在 volume-seeding 那個修法之後不應該再發生。如果還是遇到：
 
 1. 確認 DB 的檔案是放在 volume 裡：
    ```bash
-   docker exec orbit-sql-server /opt/mssql-tools18/bin/sqlcmd \
-     -S localhost -U sa -P "<你的-sa-密碼>" -C \
-     -Q "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
+   orbit db query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
    ```
    路徑應該要以 `/var/opt/mssql/data/` 開頭（持久化 volume）。如果某顆資料庫整個不見了，用 `orbit db publish <db>` 重新發佈（或用 `orbit db publish --all` 發佈全部）。
-2. 確認 volume 還在：`docker volume inspect orbit_sql_server` 應該顯示它存在、而且不是剛剛才被重建出來的。
+2. 確認環境設定宣告的 volume 或 bind mount 還存在，而且不是剛剛才被重建。
 
-### `docker volume rm orbit_sql_server` 失敗：「volume is in use」
-sql-server container 還掛在上面。先停掉它：
+### 移除 SQL Server volume 時失敗：「volume is in use」
+設定指定的 SQL Server target 還掛在上面。如果你確定要永久丟棄所有本機
+資料庫，先停掉環境，再移除環境設定宣告的 volume：
 
 ```bash
 orbit down
-docker volume rm orbit_sql_server
-orbit up sql-server
+docker volume rm <volume-name>
+orbit up <sqlserver.target>
 ```
 
 ## Daemon
@@ -137,13 +134,11 @@ sudo chown -R $(whoami) ~/.orbit
 ### `orbit exec` 抱怨 container 名字不存在
 Orbit 預設命名是 `orbit-<service>`。如果你設了 `ORBIT_NAMESPACE=foo`，名字會變成 `foo-<service>`。可以用 `docker ps --format '{{.Names}}'` 確認。
 
-### `orbit db publish` 噴錯：`SA_PASSWORD not set`
-Orbit 預設是從 `orbit-sql-server` container 的 env 讀密碼。如果 container 沒在跑、或是跑的是另一個非 orbit 的 SQL Server，就要自己設：
+### `orbit db publish` 回報 SQL Server credential unavailable
 
-```bash
-export SA_PASSWORD="<你的-sa-密碼>"
-orbit db publish AppDB
-```
+確認 `sqlserver.password_env` 指向 target container 中非空的環境變數，然後
+執行 `orbit restart <target>`。Orbit 不接受第二組密碼 override，避免悄悄
+連到與 active environment 宣告不同的 target。
 
 ## 診斷
 

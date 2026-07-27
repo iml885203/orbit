@@ -22,7 +22,7 @@ func execCmd() *cobra.Command {
 Examples:
   orbit exec redis redis-cli PING
   orbit exec mongodb mongosh
-  orbit exec sql-server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa`,
+  orbit exec database /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa`,
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		RunE:               runExec,
@@ -36,20 +36,9 @@ func queryCmd() *cobra.Command {
 		Long: `Query infrastructure databases using the container's built-in client.
 
 Examples:
-  orbit query sql "SELECT TOP 5 * FROM Users"
   orbit query mongo mydb '{"name":"test"}'
   orbit query redis GET session:123`,
 	}
-	cmd.AddCommand(&cobra.Command{
-		Use:   "sql [query]",
-		Short: "Query SQL Server",
-		Long: `Query SQL Server using sqlcmd.
-
-Examples:
-  orbit query sql "SELECT TOP 5 * FROM Users"
-  orbit query sql                              # interactive mode`,
-		RunE: runQuerySQL,
-	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "mongo [db] [query]",
 		Short: "Query MongoDB",
@@ -88,33 +77,6 @@ func runExec(cmd *cobra.Command, args []string) error {
 		cmdArgs = append(cmdArgs, args[1:]...)
 	} else {
 		cmdArgs = append(cmdArgs, "sh")
-	}
-
-	return execDocker(cmdArgs)
-}
-
-func runQuerySQL(_ *cobra.Command, args []string) error {
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	container := findContainer(cfg, "mssql")
-	if container == "" {
-		return fmt.Errorf("no SQL Server container found in config")
-	}
-
-	sa := cfg.Containers[container].SAPassword()
-
-	cmdArgs := []string{"exec", "-it", orbitContainerName(container),
-		"/opt/mssql-tools18/bin/sqlcmd",
-		"-S", "localhost", "-U", "sa", "-P", sa,
-		"-C", // trust server certificate
-		"-I", // enable QUOTED_IDENTIFIER
-	}
-
-	if len(args) > 0 {
-		cmdArgs = append(cmdArgs, "-Q", strings.Join(args, " "))
 	}
 
 	return execDocker(cmdArgs)
@@ -280,7 +242,7 @@ func runSeed(_ *cobra.Command, args []string) error {
 		anySeeds = true
 
 		_, _ = cli.Bold.Printf("%s\n", name)
-		results := container.RunSeed(name, c, cfg, seedForce)
+		results := container.RunSeed(name, c, seedForce)
 		for _, r := range results {
 			switch r.Status {
 			case "executed":
@@ -329,7 +291,7 @@ func findKafkaContainer(cfg *config.Config) (string, error) {
 	return container, nil
 }
 
-// findContainer finds a container by port label (e.g. "mssql", "mongo", "redis").
+// findContainer finds a container by a declared port label.
 func findContainer(cfg *config.Config, portLabel string) string {
 	for name, c := range cfg.Containers {
 		for label := range c.Ports {

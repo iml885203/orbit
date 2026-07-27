@@ -37,6 +37,6 @@ describe('DBTankScene', () => {
   it.each(['building', 'complete', 'failed'] as const)('applies the %s state class', (state) => {
     render(DBTankScene, { props: { state } })
 
-    expect(screen.getByRole('img', { name: /local db publish visualization/i })).toHaveClass(state)
+    expect(screen.getByRole('img', { name: /database project publish visualization/i })).toHaveClass(state)
   })
 })

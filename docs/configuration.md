@@ -13,12 +13,11 @@ Full YAML schema for an orbit env file. Files live in `~/.orbit/envs/` and are s
 - [`services`](#services)
 - [`groups`](#groups)
 - [`externals`](#externals)
-- [`sql_projects`](#sql_projects)
+- [`sqlserver`](#sqlserver)
 - [Extension-owned sections](#extension-owned-sections)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [Variable substitution](#variable-substitution)
 - [Per-instance overrides](#per-instance-overrides)
-- [SQL Server mode settings](#sql-server-mode-settings)
 
 ## Top-level structure
 
@@ -44,7 +43,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | `services` | map | no | Dev-process service definitions |
 | `groups` | map | no | Named service sets — startup batching and dashboard clustering |
 | `externals` | map | no | Non-orbit producers/consumers rendered as placeholder graph nodes |
-| `sql_projects` | object | no | Which container `orbit db publish` targets (its only field is `target`) |
+| `sqlserver` | object | no | Explicit opt-in for SQL Server Database Projects |
 | `<extension-key>` | any | no | Feature-owned configuration registered by an extension compiled into this binary; accepted keys and shapes depend on the distribution |
 
 ## `settings`
@@ -186,14 +185,25 @@ health_check:
 
 ```yaml
 seed:
-  database: PlatformDB          # MongoDB only: target database
+  type: mongo
+  database: PlatformDB
   files:
-    - envs/seeds/sql-server/001-something.sql
+    - envs/seeds/mongo/001-something.js
 ```
 
 Runs each file against the container after it reaches `Healthy`, in order.
 Applied seeds are recorded; re-running `orbit seed` skips them unless you pass
-`--force` (a CLI flag, not a config field).
+`--force` (a CLI flag, not a config field). SQL Server seeds are explicit
+about the login and container environment key:
+
+```yaml
+seed:
+  type: sqlserver
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
+  files:
+    - envs/seeds/sqlserver/001-something.sql
+```
 
 ### `init`
 
@@ -329,38 +339,34 @@ externals:
       consumes: []
 ```
 
-## `sql_projects`
+## `sqlserver`
 
-Points `orbit db publish` at the container its databases publish into. Its
-only field is `target` — absent, the DB workflow auto-detects the `sql-server`
-container.
-
-```yaml
-sql_projects:
-  target: sql-server
-```
-
-This does **not** name which projects to publish. That set is the team-shared
-allowlist in `envs/data/db-projects.yaml` (a sibling file shipped with the env
-repo, the same convention as `claim.yaml`), so one list covers every env:
+Explicitly enables SQL Server Database Projects for this environment. Without
+this section Orbit does not show SQL Server UI, checks, or setup guidance.
 
 ```yaml
-### `envs/data/db-projects.yaml`
-projects:
-  - billing.payment
-  - billing.wallet
+sqlserver:
+  target: database
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
+  projects:
+    - path: database/Accounts/Accounts.sqlproj
+    - path: database/Orders/Orders.sqlproj
 ```
 
-The allowlist names SQL-project directories, matched case-insensitively
-against your workspace folders. No allowlist means no databases — there is no
-scan-and-guess fallback. See [sql-workflow.md](sql-workflow.md).
+`target` names a container in this env. `username` defaults to `sa`.
+`password_env` names the target container environment key containing the
+password; Orbit reads its resolved value at runtime without storing or
+printing it. Every project path is a workspace-relative `.sqlproj` file.
+Orbit never scans sibling directories or guesses from container names and
+images. See [sql-workflow.md](sql-workflow.md).
 
 ## Extension-owned sections
 
 The core schema reserves top-level sections registered by feature packages
 compiled into the current binary. Their names and shapes are not part of the
 neutral core schema; consult the distribution's feature documentation. For
-example, `claim` (tunnel) and `db_projects` (SQL workflow) are registered by
+example, `claim` (tunnel) and `sqlserver` (SQL workflow) are registered by
 the gate-scanned feature packages. A binary rejects feature-owned sections for
 which it has no registered handler.
 
@@ -390,13 +396,13 @@ orbit daemon restart
 Orbit performs `${VAR}` and `${VAR:-default}` substitution across all string fields at load time. Source of substitution, in order of precedence:
 
 1. Environment variables at the time `orbit` runs
-2. User settings in `~/.orbit/settings.json` (e.g. `WORKSPACE_ROOT` and `SQL_SERVER_IMAGE`)
+2. User settings in `~/.orbit/settings.json` (e.g. `WORKSPACE_ROOT`)
 3. The `:-default` fallback in the config
 
 Undeclared variables evaluate to empty string — use `:-` to give them a meaningful default:
 
 ```yaml
-image: ${SQL_SERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
+path: ${API_ROOT:-~/dev/api}
 ```
 
 ## Per-instance overrides
@@ -411,17 +417,6 @@ Isolate multiple Orbit instances on one machine (e2e tests, sandboxes):
 | `ORBIT_LOG_LEVEL` | Daemon log verbosity (`debug`/`info`/`warn`/`error`) | `info` |
 
 Set these before `orbit up` — changing them after the daemon is already running requires `orbit daemon restart`.
-
-## SQL Server mode settings
-
-The sql-server container's image is resolved via two env vars (deploy-time config — there is no dashboard toggle):
-
-| Variable | Values | Effect |
-|---|---|---|
-| `SQL_SERVER_IMAGE` | image reference | The image the sql-server container runs; defaults to the env's declared image |
-| `SQL_SERVER_PULL_POLICY` | `always` / `if_not_present` / `never` | `always` re-checks the registry on every `orbit up` |
-
-Changing either takes effect on the next `orbit up` (or `orbit daemon restart`). The image uses the same volume model as any other sql-server container.
 
 ## See also
 

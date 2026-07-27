@@ -7,10 +7,8 @@ import (
 )
 
 type settingsUpdate struct {
-	WorkspaceRoot       *string `json:"workspace_root,omitempty"`
-	SQLServerImage      *string `json:"sql_server_image,omitempty"`
-	SQLServerPullPolicy *string `json:"sql_server_pull_policy,omitempty"`
-	ShowHistory         *bool   `json:"show_history,omitempty"`
+	WorkspaceRoot *string `json:"workspace_root,omitempty"`
+	ShowHistory   *bool   `json:"show_history,omitempty"`
 }
 
 // handleSettings handles GET (read) and PUT (update) for user settings.
@@ -33,8 +31,6 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			changes = append(changes, SettingsChange{Key: key, Old: srv.settings.Get(key), New: *updated})
 		}
 		record("workspace_root", update.WorkspaceRoot)
-		record("sql_server_image", update.SQLServerImage)
-		record("sql_server_pull_policy", update.SQLServerPullPolicy)
 		if update.WorkspaceRoot != nil {
 			if err := srv.settings.Set("workspace_root", *update.WorkspaceRoot); err != nil {
 				slog.Error("persist workspace_root", "component", "settings", "err", err)
@@ -44,20 +40,6 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			// Re-export so ${WORKSPACE_ROOT}/${WORKSPACE_ROOT} substitutions pick
 			// up the new value on the next config load.
 			srv.settings.ApplyToEnv()
-		}
-		if update.SQLServerImage != nil {
-			if err := srv.settings.Set("sql_server_image", *update.SQLServerImage); err != nil {
-				slog.Error("persist sql_server_image", "component", "settings", "err", err)
-				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
-				return
-			}
-		}
-		if update.SQLServerPullPolicy != nil {
-			if err := srv.settings.Set("sql_server_pull_policy", *update.SQLServerPullPolicy); err != nil {
-				slog.Error("persist sql_server_pull_policy", "component", "settings", "err", err)
-				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
-				return
-			}
 		}
 		if update.ShowHistory != nil {
 			if err := srv.settings.SetShowHistory(update.ShowHistory); err != nil {

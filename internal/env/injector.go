@@ -84,15 +84,6 @@ func buildConnectionStrings(name string, c *config.Container) map[string]string 
 		env[upper+"_HOST"] = "localhost"
 		env[upper+"_PORT"] = fmt.Sprintf("%d", port)
 
-	case strings.Contains(image, "sqlserver") || strings.Contains(image, "mssql"):
-		port := getPort(c.Ports, "mssql", 1433)
-		password := c.SAPassword()
-		connStr := fmt.Sprintf("Server=localhost,%d;User Id=sa;Password=%s;TrustServerCertificate=true", port, password)
-		env["SQL_SERVER_CONNECTION"] = connStr
-		env[connKey] = connStr
-		env[upper+"_HOST"] = "localhost"
-		env[upper+"_PORT"] = fmt.Sprintf("%d", port)
-
 	default:
 		for label, pd := range c.Ports {
 			env[upper+"_"+strings.ToUpper(label)+"_PORT"] = fmt.Sprintf("%d", pd.Host)

@@ -106,6 +106,7 @@ Pre-1.0 users migrate manually:
 2. Convert the shared project allowlist into explicit `.sqlproj` paths.
 3. Move the target username and password-key name into `sqlserver`.
 4. Remove `ORBIT_DB_ROOT` or the `db_root` setting after validation.
+5. Replace `orbit query sql ...` with `orbit db query ...`.
 
 Orbit does not carry a permanent compatibility layer for the private pre-1.0
 schema. Migration documentation and validation errors are preferred over

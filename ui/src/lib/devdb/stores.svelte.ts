@@ -28,7 +28,7 @@ class DevStore {
 export const devStore = new DevStore()
 
 // dbWorkflowHidden hides the DB surfaces when the daemon reports the
-// active env has no sql-server container. Fail-open: unknown (meta not
+// active env has no explicit sqlserver section. Fail-open: unknown (meta not
 // loaded yet, or an older daemon without the field) counts as configured,
 // so users never see the DB UI flash out. Only an explicit false hides.
 export function dbWorkflowHidden(): boolean {

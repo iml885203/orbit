@@ -18,14 +18,6 @@ func Validate(cfg *Config) error {
 		known[name] = true
 	}
 
-	if sp := cfg.SQLProjects; sp != nil {
-		if sp.Target == "" {
-			errs = append(errs, "sql_projects.target is required")
-		} else if _, ok := cfg.Containers[sp.Target]; !ok {
-			errs = append(errs, fmt.Sprintf("sql_projects.target %q is not a declared container", sp.Target))
-		}
-	}
-
 	// Check dependency references exist
 	for name, s := range cfg.Services {
 		for _, dep := range s.DependsOn {
@@ -46,6 +38,24 @@ func Validate(cfg *Config) error {
 		for _, sc := range c.Sidecars {
 			if !isValidPullPolicy(sc.PullPolicy) {
 				errs = append(errs, fmt.Sprintf("sidecar %q/%q has invalid pull_policy %q (expected always, if_not_present, or never)", name, sc.Name, sc.PullPolicy))
+			}
+		}
+		if c.Seed != nil {
+			switch c.Seed.Type {
+			case "mongo":
+			case "sqlserver":
+				if c.Seed.Username == "" {
+					errs = append(errs, fmt.Sprintf("container %q seed.username is required for type sqlserver", name))
+				}
+				if c.Seed.PasswordEnv == "" {
+					errs = append(errs, fmt.Sprintf("container %q seed.password_env is required for type sqlserver", name))
+				} else if strings.TrimSpace(c.Environment[c.Seed.PasswordEnv]) == "" {
+					errs = append(errs, fmt.Sprintf("container %q seed.password_env %q is not present in the container environment", name, c.Seed.PasswordEnv))
+				}
+			case "":
+				errs = append(errs, fmt.Sprintf("container %q seed.type is required (sqlserver or mongo)", name))
+			default:
+				errs = append(errs, fmt.Sprintf("container %q has unsupported seed.type %q (expected sqlserver or mongo)", name, c.Seed.Type))
 			}
 		}
 	}
@@ -76,21 +86,8 @@ func Validate(cfg *Config) error {
 		}
 	}
 
-	// SQL Server tooling (sqlcmd/sqlpackage exec, env injection, seeding)
-	// authenticates with the container's SA_PASSWORD; a missing password
-	// used to fall back to a baked-in team default and fail late with an
-	// auth error. Require it up front for every container those paths
-	// treat as SQL Server: the canonical sql-server name, plus anything
-	// whose image the env injector sniffs as MSSQL.
-	for name, c := range cfg.Containers {
-		if c == nil {
-			continue
-		}
-		looksLikeMSSQL := name == "sql-server" ||
-			strings.Contains(c.Image, "sqlserver") || strings.Contains(c.Image, "mssql")
-		if looksLikeMSSQL && c.SAPassword() == "" {
-			errs = append(errs, fmt.Sprintf("container %q is SQL Server and must set environment SA_PASSWORD (orbit has no built-in default)", name))
-		}
+	if err := validateExtensionSections(cfg); err != nil {
+		errs = append(errs, err.Error())
 	}
 
 	// Cycle detection

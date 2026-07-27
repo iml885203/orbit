@@ -2,31 +2,26 @@
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
-Orbit 對使用者只提供四個資料庫指令：`list`、`diff`、`publish`、`reset`。
+Orbit 對使用者提供五個資料庫指令：`list`、`diff`、`publish`、`reset`、
+`query`。
 Publish 全程在 host 上進行——用 `dotnet build` 建置 SQL project，再用
-`sqlpackage` 把 dacpac 推到執行中的 sql-server。快速 reset 的底層機制由
-Orbit 自己管理。
+`sqlpackage` 把 dacpac 推到設定指定的 SQL Server target。快速 reset 的
+底層機制由 Orbit 自己管理。
 
 ## Volume 與持久化模型
 
-sql-server container 跑起來時，會把一個 named Docker volume 掛在
-`/var/opt/mssql`，SQL Server 在那裡寫入它的 `.mdf` / `.ldf` 檔案。因為資料
-存在 volume 裡，你累積的 schema 與資料會在以下情境之間都被保留：
+環境設定應把持久化儲存空間掛在 `/var/opt/mssql`；SQL Server 會在那裡寫入
+`.mdf` / `.ldf` 檔案。有這個 mount 時，你累積的 schema 與資料會在以下
+情境之間保留：
 
-- `orbit restart sql-server`
+- `orbit restart <sqlserver.target>`
 - Docker daemon 重啟
 - 主機重新開機
 - `orbit down` 之後再 `orbit up`
 
-只有當 volume 本身被移除時，資料才會被丟掉：
-
-```bash
-orbit down
-docker volume rm orbit_sql_server
-```
-
-移除 volume 會永久刪除其中所有本機資料庫。只有一顆 database 需要乾淨資料
-時，請使用 `orbit db reset <dbname>`。
+Orbit 不會自動移除該儲存空間。刪除 volume 或 bind mount 內的資料會永久
+刪除所有本機資料庫；只有一顆 database 需要乾淨資料時，請使用
+`orbit db reset <dbname>`。
 
 全新的 volume 一開始是空的；`orbit db publish --all` 會建立並 publish
 所有設定好的資料庫。
@@ -44,7 +39,7 @@ docker volume rm orbit_sql_server
 ## `orbit db publish`:快速通用路徑
 
 `orbit db publish <db>` 在 **host 上**建置 SQL project(`dotnet build`),
-再用 host 的 `sqlpackage` 把 dacpac 直接發佈到 sql-server 的 published
+再用 host 的 `sqlpackage` 把 dacpac 直接發佈到設定 target 的 published
 port——不重建 image、不用 container 內工具,Apple Silicon 上是原生 arm64。
 冪等:project 沒變時幾秒內收斂為 no-op,資料一律保留(破壞性變更預設擋下,
 `--force` 才放行)。
@@ -57,29 +52,21 @@ DB schema 會收斂到 project：新增、修改或刪除 stored procedure、tab
 前置需求(`orbit doctor` 會檢查):host 上的 .NET SDK 與 sqlpackage——
 `dotnet tool install -g microsoft.sqlpackage`。
 
-「發佈到哪」與「發佈哪些專案」是兩件分開的事:
+一個明確的 section 同時決定「發佈到哪」與「發佈哪些專案」：
 
-- **哪個容器**接收發佈 —— env 的選配 `sql_projects` 區塊,它唯一的欄位是
-  `target`(容器名稱)。省略時,feature set 會自動偵測 `sql-server` 容器。
-
-  ```yaml
-  sql_projects:
-    target: sql-server
-  ```
-
-- **哪些專案**要發佈 —— team-shared allowlist,放在 `envs/data/db-projects.yaml`
-  (與 `claim.yaml` 同層,隨 env repo 一起出貨,一份清單涵蓋所有 env)。它列出
-  SQL 專案的目錄名,以大小寫不敏感方式對應你 workspace 底下的資料夾:
-
-  ```yaml
-  # envs/data/db-projects.yaml
+```yaml
+sqlserver:
+  target: database
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
   projects:
-    - billing.payment
-    - billing.wallet
-  ```
+    - path: database/Accounts/Accounts.sqlproj
+    - path: database/Orders/Orders.sqlproj
+```
 
-  在這裡宣告一個目錄,就是讓該專案加入 DB workflow 的方式 —— 沒有掃描猜測的
-  fallback。沒有 allowlist 就沒有任何資料庫。
+`target` 指向接收 publish 的 container；project 是 workspace-relative
+的 `.sqlproj` 檔案。沒有 image sniffing、慣例 container 名稱、目錄掃描，
+也沒有另一份 per-machine allowlist。
 
 ### 一次整個環境：`--all`
 
@@ -90,8 +77,8 @@ daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建�
 資料庫並部署 referenced shared objects。修好失敗的 project 後直接重跑；
 已成功的資料庫會收斂為 no-op。
 
-官方 image 讀的是 `MSSQL_SA_PASSWORD`(`SA_PASSWORD` 別名已棄用)——
-container 兩個都宣告,內建 envs 已如此。
+`password_env` 指定 target container 裡存放密碼的 key。Orbit 只在 DB
+操作執行時讀取解析後的值，不會在 status、logs 或 JSON output 暴露密碼。
 
 ### 乾淨重置：`orbit db reset`
 
@@ -101,12 +88,12 @@ container 兩個都宣告,內建 envs 已如此。
 
 ## Dashboard visibility
 
-Local DB 頁面會在進入或回到視窗時檢查 source 變更。每顆資料庫都會顯示
+SQL Server 頁面會在進入或回到視窗時檢查 source 變更。每顆資料庫都會顯示
 是否同步，並提供 Check、Publish 與 Reset。
 
 ### 從 dashboard 執行 publish
 
-Local DB 頁面為每個 db 提供 Publish 與 Reset，並提供 Publish all。
+SQL Server 頁面為每個 db 提供 Publish 與 Reset，並提供 Publish all。
 Publish 的串流輸出顯示在 log panel；Reset 丟棄資料前一定會要求確認。
 
 整個 daemon 一次只能跑一個 db operation —— 當另一個 op 進行中時按鈕

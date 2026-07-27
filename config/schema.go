@@ -29,12 +29,6 @@ type Config struct {
 	// means auto-on (Aspire-style zero-config); an explicit `enabled: false`
 	// opts out. See Config.TracingEnabled.
 	Tracing *TracingConfig `yaml:"tracing"`
-	// SQLProjects points `orbit db publish` at the container its databases
-	// publish into. Optional — absent means the feature set auto-detects
-	// its SQL Server container. Which PROJECTS to publish is a separate,
-	// team-shared allowlist (the db_projects extension section), not part
-	// of this per-env section.
-	SQLProjects *SQLProjectsConfig `yaml:"sql_projects"`
 	// Extensions collects top-level keys owned by registered extension
 	// sections (e.g. "claim"). yaml:",inline" routes unknown top-level
 	// keys here INSTEAD of tripping KnownFields (yaml.v3 behavior), so
@@ -63,16 +57,6 @@ const (
 	defaultOTLPPort  = 4318
 	defaultMaxTraces = 1000
 )
-
-// SQLProjectsConfig names the container the env's databases publish
-// into. The project SET is not here — that is the team-shared db_projects
-// allowlist — because which projects to publish is a team decision that
-// spans every env, while the target container is per-env.
-type SQLProjectsConfig struct {
-	// Target names the container (usually "sql-server") whose published
-	// port receives sqlpackage publishes.
-	Target string `yaml:"target"`
-}
 
 // TracingEnabled reports whether local tracing is on for this env.
 //
@@ -191,15 +175,6 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 	return &next
 }
 
-// SAPassword returns the container's SA_PASSWORD environment value. Empty
-// when the env doesn't set one — Validate requires it on the sql-server
-// container (there is deliberately no built-in default; the old fallback
-// baked a team-specific password into every env), so DB-workflow callers
-// can rely on it being non-empty.
-func (c *Container) SAPassword() string {
-	return c.Environment["SA_PASSWORD"]
-}
-
 // PortDef supports both simple (6379) and mapped (8989:8080) port definitions.
 // YAML: `redis: 6379` or `ui: "8989:8080"` (host:container)
 type PortDef struct {
@@ -273,8 +248,11 @@ type Sidecar struct {
 }
 
 type SeedConfig struct {
-	Database string   `yaml:"database"` // target database (for MongoDB)
-	Files    []string `yaml:"files"`    // seed file paths, executed in order
+	Type        string   `yaml:"type"`         // sqlserver or mongo
+	Database    string   `yaml:"database"`     // target database (MongoDB)
+	Username    string   `yaml:"username"`     // SQL Server login
+	PasswordEnv string   `yaml:"password_env"` // SQL Server container env key
+	Files       []string `yaml:"files"`        // seed file paths, executed in order
 }
 
 type InitConfig struct {

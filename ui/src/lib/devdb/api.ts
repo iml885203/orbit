@@ -25,7 +25,7 @@ async function fetchDevMeta({ quiet = false } = {}): Promise<DevDBMetaResponse |
 
 // refreshDevMeta owns the store-update contract for devMeta: a null response
 // (fetch failed) keeps the previous value, because dbWorkflowHidden() reads
-// this and a null overwrite would flash the Local DB tab out.
+// this and a null overwrite would flash the SQL Server tab out.
 export async function refreshDevMeta(opts: { quiet?: boolean } = {}): Promise<void> {
   const meta = await fetchDevMeta(opts)
   if (meta) devStore.devMeta = meta
@@ -98,8 +98,4 @@ export async function fetchDBState(): Promise<DBStateSnapshot | null> {
 // Feature-owned settings keys ride flat on the wire (the daemon merges
 // registered namespaces into the GET payload) — typed here as an
 // intersection alongside the core Settings shape.
-export type SettingsWire = Settings & {
-  sql_server_image?: string
-  sql_server_pull_policy?: string
-  db_root?: string
-}
+export type SettingsWire = Settings

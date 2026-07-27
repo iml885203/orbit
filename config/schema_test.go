@@ -227,48 +227,55 @@ func TestCheckVersion(t *testing.T) {
 	}
 }
 
-func TestValidate_SQLServerRequiresSAPassword(t *testing.T) {
-	cfg := &Config{
-		Containers: map[string]*Container{"sql-server": {Name: "sql-server"}},
-	}
-	if err := Validate(cfg); err == nil {
-		t.Fatal("expected error for sql-server without SA_PASSWORD")
-	} else if !strings.Contains(err.Error(), "SA_PASSWORD") {
-		t.Errorf("error %q must mention 'SA_PASSWORD'", err)
-	}
-
-	cfg.Containers["sql-server"].Environment = map[string]string{"SA_PASSWORD": "pw"}
-	if err := Validate(cfg); err != nil {
-		t.Errorf("expected valid config with SA_PASSWORD set, got %v", err)
-	}
-
-	// Image-sniffed MSSQL containers are held to the same requirement —
-	// env injection and query sql treat them as SQL Server too.
-	sniffed := &Config{Containers: map[string]*Container{
-		"legacy-db": {Name: "legacy-db", Image: "mcr.microsoft.com/mssql/server:2022-latest"},
-	}}
-	if err := Validate(sniffed); err == nil {
-		t.Error("expected error for mssql-image container without SA_PASSWORD")
-	}
-
-	// Non-SQL containers stay unconstrained.
-	other := &Config{Containers: map[string]*Container{"postgres": {Name: "postgres", Image: "postgres:16"}}}
-	if err := Validate(other); err != nil {
-		t.Errorf("expected non-sql-server container to pass, got %v", err)
-	}
-}
-
-func TestValidate_SQLProjectsTargetOnly(t *testing.T) {
-	// A sql_projects section may declare just the target and rely on
-	// discovery — projects is optional (it moved out of the env).
-	cfg := &Config{
-		Containers: map[string]*Container{
-			"sql-server": {Name: "sql-server", Environment: map[string]string{"SA_PASSWORD": "pw"}},
+func TestValidate_SeedRequiresExplicitExecutorAndCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		seed *SeedConfig
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "missing type",
+			seed: &SeedConfig{Files: []string{"seed.sql"}},
+			want: "seed.type is required",
 		},
-		SQLProjects: &SQLProjectsConfig{Target: "sql-server"},
+		{
+			name: "unknown type",
+			seed: &SeedConfig{Type: "database", Files: []string{"seed.sql"}},
+			want: "unsupported seed.type",
+		},
+		{
+			name: "sqlserver credential key missing",
+			seed: &SeedConfig{Type: "sqlserver", Username: "sa", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
+			want: "DB_PASSWORD",
+		},
+		{
+			name: "sqlserver username missing",
+			seed: &SeedConfig{Type: "sqlserver", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
+			env:  map[string]string{"DB_PASSWORD": "secret"},
+			want: "seed.username is required",
+		},
 	}
-	if err := Validate(cfg); err != nil {
-		t.Errorf("target-only sql_projects should be valid, got %v", err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &Config{Containers: map[string]*Container{
+				"database": {Seed: test.seed, Environment: test.env},
+			}}
+			err := Validate(cfg)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+		})
+	}
+
+	valid := &Config{Containers: map[string]*Container{
+		"database": {
+			Seed:        &SeedConfig{Type: "sqlserver", Username: "sa", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
+			Environment: map[string]string{"DB_PASSWORD": "secret"},
+		},
+	}}
+	if err := Validate(valid); err != nil {
+		t.Fatalf("valid explicit sqlserver seed: %v", err)
 	}
 }
 

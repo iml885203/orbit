@@ -1,55 +1,51 @@
 package devdb
 
-// Project resolution for the DB workflow: the team-shared allowlist
-// (db_projects) located under the workspace by case-insensitive folder
-// name, and the database→.sqlproj lookup over the result.
+// Explicit SQL Server project resolution and database→.sqlproj lookup.
 
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 )
 
 // errWorkspaceRootUnavailable is the shared user-facing hint for every
 // devdb path that needs a workspace root and doesn't have one.
 var errWorkspaceRootUnavailable = errors.New("workspace root unavailable; set WORKSPACE_ROOT or configure workspace_root in settings")
 
-// allProjects returns the SQL projects the team's shared allowlist names
-// (db_projects / envs/data/db-projects.yaml), located under the
-// workspace by case-insensitive folder name. No allowlist means no
-// projects: the workflow never publishes a folder the team didn't
-// declare, whatever else happens to sit beside it in a given checkout.
+// allProjects resolves only .sqlproj files declared in the sqlserver section.
+// Paths are workspace-relative so the environment has one shared source of
+// truth without scanning sibling checkouts or requiring per-machine DB roots.
 func (f *dbFeature) allProjects() ([]DevDBProject, error) {
 	workspaceRoot := f.workspaceRoot()
 	if workspaceRoot == "" {
 		return nil, errWorkspaceRootUnavailable
 	}
-	allow := dbProjectAllowlist(f.host.Config())
-	if len(allow) == 0 {
+	section := SQLServerFrom(f.host.Config())
+	if section == nil {
 		return nil, nil
 	}
-	return listAllowedProjects(workspaceRoot, f.dbRoot(), allow)
+	projects := make([]DevDBProject, 0, len(section.Projects))
+	for _, configured := range section.Projects {
+		path := filepath.Join(workspaceRoot, configured.Path)
+		database := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		projects = append(projects, DevDBProject{
+			Name:      database,
+			Path:      path,
+			Databases: []string{database},
+		})
+	}
+	return projects, nil
 }
 
 // sqlProjForDatabase maps a database name to its actual .sqlproj path
 // within the given projects — the one lookup the CLI (wire response)
-// and the daemon both use. It rides discovery's own layout
-// and naming rules (listSQLProjFiles, sqlProjDatabaseName): a listed
-// database must resolve to the file that listed it. A project whose
-// glob errors is skipped — the same silence discovery applies.
+// and the daemon both use.
 func sqlProjForDatabase(projects []DevDBProject, dbName string) (string, bool) {
 	for _, p := range projects {
 		for _, db := range p.Databases {
-			if db != dbName {
-				continue
-			}
-			files, err := listSQLProjFiles(p.Path)
-			if err != nil {
-				continue
-			}
-			for _, sqlProj := range files {
-				if sqlProjDatabaseName(sqlProj) == dbName {
-					return sqlProj, true
-				}
+			if db == dbName {
+				return p.Path, true
 			}
 		}
 	}
@@ -76,8 +72,8 @@ func sqlProjForDatabaseOrError(projects []DevDBProject, dbName string) (string, 
 }
 
 // publishTargetsForDBs maps a set of database names to their publish targets,
-// in the given order, first occurrence wins. A database whose .sqlproj can't
-// be resolved is skipped — it never publishes individually either. Shared by
+// in the given order, first occurrence wins. A database absent from the
+// explicit project list is skipped. Shared by
 // the `--all` work list and a single project's fan-out.
 func publishTargetsForDBs(projects []DevDBProject, dbs []string) []publishTargetRef {
 	seen := map[string]bool{}

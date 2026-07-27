@@ -1,10 +1,22 @@
 package devdb
 
 import (
+	"os"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
 )
+
+func TestDBTargetDockerNameUsesOrbitNamespace(t *testing.T) {
+	previous := os.Getenv("ORBIT_NAMESPACE")
+	t.Cleanup(func() { _ = os.Setenv("ORBIT_NAMESPACE", previous) })
+	if err := os.Setenv("ORBIT_NAMESPACE", "sandbox"); err != nil {
+		t.Fatal(err)
+	}
+	if got := dbTargetDockerName("database"); got != "orbit-sandbox-database" {
+		t.Fatalf("dbTargetDockerName = %q", got)
+	}
+}
 
 // publishTargetHostPort picks the host port that reaches a container's SQL
 // Server. The rule has three branches — an explicit 1433 target wins, a lone

@@ -2,32 +2,28 @@
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
-Orbit exposes four database commands: `list`, `diff`, `publish`, and `reset`.
+Orbit exposes five database commands: `list`, `diff`, `publish`, `reset`, and
+`query`.
 Publishing runs entirely on the host — build the SQL project with `dotnet
-build`, then push the dacpac to the running sql-server with `sqlpackage`.
+build`, then push the dacpac to the configured SQL Server target with
+`sqlpackage`.
 The implementation used to manage fast resets stays internal.
 
 ## Volume and persistence model
 
-When the sql-server container runs, it mounts a named Docker volume at
-`/var/opt/mssql`, where SQL Server writes its `.mdf` / `.ldf` files. Because
-the data lives in the volume, your accumulated schema and data are preserved
+The environment config should mount persistent storage at `/var/opt/mssql`,
+where SQL Server writes its `.mdf` / `.ldf` files. With that mount, your
+accumulated schema and data are preserved
 across:
 
-- `orbit restart sql-server`
+- `orbit restart <sqlserver.target>`
 - Docker daemon restarts
 - Host reboots
 - `orbit down` followed by `orbit up`
 
-Data is discarded only when the volume itself is removed:
-
-```bash
-orbit down
-docker volume rm orbit_sql_server
-```
-
-Removing the volume permanently deletes every local database in it. Use
-`orbit db reset <dbname>` when only one database needs clean data.
+Orbit never removes that storage automatically. Removing its volume or bind
+mount data permanently deletes every local database. Use `orbit db reset
+<dbname>` when only one database needs clean data.
 
 A fresh volume starts empty; `orbit db publish --all` creates and publishes
 every configured database.
@@ -45,8 +41,8 @@ every configured database.
 ## `orbit db publish`: the fast generic path
 
 `orbit db publish <db>` builds the SQL project **on the host** (`dotnet
-build`) and publishes the dacpac straight to the running sql-server's
-published port with the host `sqlpackage` — no image rebuild, no
+build`) and publishes the dacpac straight to the configured target's published
+port with the host `sqlpackage` — no image rebuild, no
 container-side tooling, native arm64 on Apple Silicon. It is idempotent:
 an unchanged project converges to a no-op in seconds, and data is always
 preserved (destructive changes are blocked unless `--force`).
@@ -59,31 +55,21 @@ and blocked by publish until the user explicitly passes `--force`.
 Requirements (checked by `orbit doctor`): the .NET SDK and sqlpackage on
 the host — `dotnet tool install -g microsoft.sqlpackage`.
 
-Two separate pieces decide what gets published and where:
+One explicit section decides both what gets published and where:
 
-- **Which container** publishes receive — the env's optional `sql_projects`
-  section, whose only field is `target` (the container name). Absent, the
-  feature set auto-detects the `sql-server` container.
-
-  ```yaml
-  sql_projects:
-    target: sql-server
-  ```
-
-- **Which projects** to publish — the team-shared allowlist in
-  `envs/data/db-projects.yaml` (a sibling of `claim.yaml`, shipped with the
-  env repo so one list covers every env). It names the SQL-project
-  directories, matched case-insensitively against your workspace folders:
-
-  ```yaml
-  # envs/data/db-projects.yaml
+```yaml
+sqlserver:
+  target: database
+  username: sa
+  password_env: MSSQL_SA_PASSWORD
   projects:
-    - billing.payment
-    - billing.wallet
-  ```
+    - path: database/Accounts/Accounts.sqlproj
+    - path: database/Orders/Orders.sqlproj
+```
 
-  Declaring a directory here is how a project joins the DB workflow — there
-  is no scan-and-guess fallback. No allowlist means no databases.
+`target` names the container that receives publishes. Project entries are
+workspace-relative `.sqlproj` files. There is no image sniffing, conventional
+container name, directory scan, or separate per-machine allowlist.
 
 ### The whole env at once: `--all`
 
@@ -96,8 +82,9 @@ Against an empty SQL Server, the same command creates missing databases and
 deploys referenced shared objects. Rerun it after fixing a failed project;
 successful databases converge to no-ops.
 
-The official image reads `MSSQL_SA_PASSWORD` (its `SA_PASSWORD` alias
-is deprecated) — declare both on the container, as the bundled envs do.
+`password_env` names the target container key containing the password. Orbit
+reads that resolved value only when a DB operation runs and never exposes it
+in status, logs, or JSON output.
 
 ### Clean resets: `orbit db reset`
 
@@ -108,12 +95,12 @@ needed.
 
 ## Dashboard visibility
 
-The Local DB page checks source changes when opened or focused. Each database
+The SQL Server page checks source changes when opened or focused. Each database
 shows whether it is in sync and provides Check, Publish, and Reset actions.
 
 ### Publish from the dashboard
 
-The Local DB page has per-db Publish and Reset buttons plus Publish all.
+The SQL Server page has per-db Publish and Reset buttons plus Publish all.
 Publish streams its output in a log panel; Reset always prompts before
 discarding local data.
 

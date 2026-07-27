@@ -29,14 +29,6 @@ export interface Config {
    * opts out. See Config.TracingEnabled.
    */
   tracing?: TracingConfig;
-  /**
-   * SQLProjects points `orbit db publish` at the container its databases
-   * publish into. Optional — absent means the feature set auto-detects
-   * its SQL Server container. Which PROJECTS to publish is a separate,
-   * team-shared allowlist (the db_projects extension section), not part
-   * of this per-env section.
-   */
-  sql_projects?: SQLProjectsConfig;
 }
 /**
  * TracingConfig configures the built-in local OTLP receiver. The receiver is
@@ -48,19 +40,6 @@ export interface TracingConfig {
   enabled: boolean;
   otlp_port: number /* int */; // OTLP/HTTP receiver port; default 4318
   max_traces: number /* int */; // ring-buffer capacity in traces; default 1000
-}
-/**
- * SQLProjectsConfig names the container the env's databases publish
- * into. The project SET is not here — that is the team-shared db_projects
- * allowlist — because which projects to publish is a team decision that
- * spans every env, while the target container is per-env.
- */
-export interface SQLProjectsConfig {
-  /**
-   * Target names the container (usually "sql-server") whose published
-   * port receives sqlpackage publishes.
-   */
-  target: string;
 }
 export interface RuntimeSettings {
   shutdown_timeout: number;
@@ -139,7 +118,10 @@ export interface Sidecar {
   depends_on: string[];
 }
 export interface SeedConfig {
-  database: string; // target database (for MongoDB)
+  type: string; // sqlserver or mongo
+  database: string; // target database (MongoDB)
+  username: string; // SQL Server login
+  password_env: string; // SQL Server container env key
   files: string[]; // seed file paths, executed in order
 }
 export interface InitConfig {

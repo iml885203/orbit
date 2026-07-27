@@ -35,7 +35,7 @@ type resolvedArg struct {
 func (r resolvedArg) FromProject() bool { return r.Project != "" }
 
 // resolveDBArg maps a positional argument to the database(s) it names, over
-// the allowlisted projects. See the file comment for the resolution order.
+// the configured projects. See the file comment for the resolution order.
 func resolveDBArg(projects []DevDBProject, arg string) (resolvedArg, error) {
 	// 1. Exact database name — the common case, and it takes precedence so a
 	//    database is never shadowed by a like-named project.

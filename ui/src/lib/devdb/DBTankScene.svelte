@@ -130,7 +130,7 @@
   class:complete-pulse={completePulse}
   class:failed-pulse={failedPulse}
   role="img"
-  aria-label={`Local DB publish visualization${projectName ? ` for ${projectName}` : ''}`}
+  aria-label={`Database project publish visualization${projectName ? ` for ${projectName}` : ''}`}
   style={`--charge-scale: ${tankChargeScale};`}
 >
   <div class="scene-content">

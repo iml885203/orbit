@@ -1,8 +1,6 @@
 package devdb
 
-// Publish-target resolution: which container `db publish` connects to
-// (the sql_projects.target declaration, else the sql-server convention)
-// and which published host port reaches it.
+// Publish-target resolution for the explicit sqlserver section.
 
 import (
 	"fmt"
@@ -22,23 +20,17 @@ func (f *dbFeature) publishTargetID() string {
 		return ""
 	}
 	image := c.Image
-	if override := f.host.Settings().Get("sql_server_image"); override != "" {
-		image = override
-	}
 	return publishTargetIdentity(f.host.ConfigPath(), dbTargetDockerName(targetName), image)
 }
 
-// publishTarget resolves the container publishes go to: the
-// sql_projects.target declaration when present, else the sql-server
-// convention the rest of the DB workflow uses.
 func (f *dbFeature) publishTarget() (*config.Container, string, bool) {
 	cfg := f.host.Config()
-	if sp := cfg.SQLProjects; sp != nil && sp.Target != "" {
-		c, ok := cfg.Containers[sp.Target]
-		return c, sp.Target, ok
+	section := SQLServerFrom(cfg)
+	if section == nil || section.Target == "" {
+		return nil, "", false
 	}
-	c, ok := f.sqlServerContainerConfig()
-	return c, SQLServerContainerName, ok
+	target, ok := cfg.Containers[section.Target]
+	return target, section.Target, ok
 }
 
 // publishTargetHostPort resolves the published port publishes

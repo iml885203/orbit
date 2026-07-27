@@ -15,11 +15,12 @@ import (
 // short-circuit on missing prereqs before any subprocess runs.
 
 func newDBOpsTestServer(t *testing.T) (*dbFeature, *http.ServeMux) {
-	srv := newTestDBFeature(t, &config.Config{
+	cfg := (&config.Config{
 		Containers: map[string]*config.Container{
 			"sql-server": {Name: "sql-server", Image: "irrelevant"},
 		},
-	})
+	}).WithExtension(sqlServerSection, &SQLServerConfig{Target: "sql-server"})
+	srv := newTestDBFeature(t, cfg)
 	srv.dbOps = newDBOpsManager()
 	mux := http.NewServeMux()
 	registerDBPublishHandler(mux, srv)

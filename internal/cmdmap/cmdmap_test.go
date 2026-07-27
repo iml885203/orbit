@@ -157,9 +157,8 @@ func TestSettingsRule_SingleKey(t *testing.T) {
 func TestSettingsRule_MultiKeyChained(t *testing.T) {
 	defer setRulesForTest(defaultRules())()
 	got := Resolve("PUT", "/api/settings",
-		[]byte(`{"sql_server_image":"example.db:latest","sql_server_pull_policy":"never"}`))
-	// Order is deterministic (sorted by key). sql_server_image < sql_server_pull_policy.
-	want := "orbit settings set sql-server-image example.db:latest && orbit settings set sql-server-pull-policy never"
+		[]byte(`{"show_history":true,"workspace_root":"/work/project"}`))
+	want := "orbit settings set show-history true && orbit settings set workspace-root /work/project"
 	if got.Command != want {
 		t.Errorf("Command = %q\nwant %q", got.Command, want)
 	}

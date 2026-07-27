@@ -92,9 +92,8 @@ func edgeEntry(from, to string, detached bool) Entry {
 // settingsJSONKeyToCLI maps daemon JSON keys to user-facing CLI keys for
 // Action History replay. Must match settingsKeyMap in cmd/orbit/settings.go.
 var settingsJSONKeyToCLI = map[string]string{
-	"sql_server_image":       "sql-server-image",
-	"sql_server_pull_policy": "sql-server-pull-policy",
-	"show_history":           "show-history",
+	"workspace_root": "workspace-root",
+	"show_history":   "show-history",
 }
 
 // settingsCommand renders one or more `orbit settings set ...` invocations

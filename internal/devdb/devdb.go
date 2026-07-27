@@ -22,23 +22,28 @@ type DevDBMetaResponse struct {
 	// `orbit db publish` connects to from the host.
 	SQLServerPort int `json:"sql_server_port,omitempty"`
 	// SQLServerTarget is the publish target's runtime docker name. The
-	// CLI resolves SA_PASSWORD by inspecting THIS container so port and
-	// credentials always come from the same declared target. Empty on
-	// daemons predating the field — consumers fall back to the legacy
-	// sql-server name.
+	// CLI resolves the configured password key by inspecting this container
+	// so port and credentials always come from the same declared target.
 	SQLServerTarget string `json:"sql_server_target,omitempty"`
-	WorkspaceRoot   string `json:"workspace_root"`
-	// DBConfigured mirrors the DB-workflow gate: false when the active
-	// env has neither a sql-server container nor a declared sql_projects
-	// target. CLI and dashboard hide the
-	// DB workflow behind it. A pointer so consumers can fail OPEN when the
+	// SQLServerService is the target's environment service name. The dashboard
+	// uses it for health and navigation instead of assuming a conventional
+	// container name.
+	SQLServerService string `json:"sql_server_service,omitempty"`
+	// SQLServerUsername and SQLServerPasswordEnv identify the configured
+	// login without exposing its secret value.
+	SQLServerUsername    string `json:"sql_server_username,omitempty"`
+	SQLServerPasswordEnv string `json:"sql_server_password_env,omitempty"`
+	WorkspaceRoot        string `json:"workspace_root"`
+	// DBConfigured mirrors the DB-workflow gate: false when the active env
+	// has no explicit sqlserver section. CLI and dashboard hide the DB
+	// workflow behind it. A pointer so consumers can fail OPEN when the
 	// field is absent — a CLI newer than its daemon must not lock
 	// users out of db commands just because the old daemon doesn't report it.
 	// Interpret via WorkflowConfigured, not by dereferencing directly.
 	DBConfigured *bool `json:"db_configured,omitempty"`
 	// ClaimConfigured is false when the active env has no claim section
 	// (Tunlease tunnel support). The dashboard hides the Tunnels tab behind
-	// it, the same way DBConfigured gates Local DB. Same pointer +
+	// it, the same way DBConfigured gates the SQL Server workflow. Same pointer +
 	// fail-open rule: nil (a daemon predating the field) counts as
 	// configured so the tab never wrongly vanishes for
 	// users on an older daemon. Interpret via ClaimSupported.

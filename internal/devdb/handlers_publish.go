@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/iml885203/orbit/daemon"
@@ -62,7 +63,7 @@ func (f *dbFeature) handleDBOpPublish(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(targets) == 0 {
-			daemon.WriteJSON(w, http.StatusBadRequest, daemon.APIResponse{Error: "no databases found — declare projects under sql_projects"})
+			daemon.WriteJSON(w, http.StatusBadRequest, daemon.APIResponse{Error: "no databases found — check sqlserver.projects in the active environment"})
 			return
 		}
 	} else {
@@ -73,7 +74,7 @@ func (f *dbFeature) handleDBOpPublish(w http.ResponseWriter, r *http.Request) {
 		}
 		targets = []publishTargetRef{{DB: req.DB, SQLProj: sqlProj}}
 	}
-	host, port, saPassword, ok := f.resolveSQLServerConn(w)
+	host, port, username, password, ok := f.resolveSQLServerConn(w)
 	if !ok {
 		return
 	}
@@ -86,19 +87,19 @@ func (f *dbFeature) handleDBOpPublish(w http.ResponseWriter, r *http.Request) {
 		Host:     host,
 		Port:     port,
 		TargetID: f.publishTargetID(),
-		User:     "sa",
-		Password: saPassword,
+		User:     username,
+		Password: password,
 		Force:    req.Force,
 	}, targets)
 	daemon.WriteJSON(w, http.StatusAccepted, daemon.APIResponse{OK: true})
 }
 
-// resolveSQLServerConn resolves the sql-server target's host, port, and SA
-// password for a host-side publish or reset. It writes the matching HTTP
+// resolveSQLServerConn resolves the configured target's host, port, and
+// credentials for a host-side publish or reset. It writes the matching HTTP
 // error and returns ok=false when the target is missing from the env,
 // not running, or has no usable SA password. Shared by the publish and
 // reset handlers so both gate connectivity identically.
-func (f *dbFeature) resolveSQLServerConn(w http.ResponseWriter) (host string, port int, saPassword string, ok bool) {
+func (f *dbFeature) resolveSQLServerConn(w http.ResponseWriter) (host string, port int, username, password string, ok bool) {
 	target, targetName, found := f.publishTarget()
 	if !found {
 		daemon.WriteJSON(w, http.StatusServiceUnavailable, daemon.APIResponse{Error: "publish target container not found in the active env"})
@@ -113,12 +114,17 @@ func (f *dbFeature) resolveSQLServerConn(w http.ResponseWriter) (host string, po
 		daemon.WriteJSON(w, http.StatusServiceUnavailable, daemon.APIResponse{Error: err.Error()})
 		return
 	}
-	saPassword = target.SAPassword()
-	if saPassword == "" {
-		daemon.WriteJSON(w, http.StatusServiceUnavailable, daemon.APIResponse{Error: "SA_PASSWORD unavailable from " + targetName + " config"})
+	section := SQLServerFrom(f.host.Config())
+	if section == nil {
+		daemon.WriteJSON(w, http.StatusServiceUnavailable, daemon.APIResponse{Error: ErrMsgDBNotConfigured})
 		return
 	}
-	return "localhost", port, saPassword, true
+	password = target.Environment[section.PasswordEnv]
+	if password == "" || strings.Contains(password, "${") {
+		daemon.WriteJSON(w, http.StatusServiceUnavailable, daemon.APIResponse{Error: section.PasswordEnv + " is unresolved for " + targetName})
+		return
+	}
+	return "localhost", port, section.Username, password, true
 }
 
 // runPublishOp publishes targets sequentially under the already-held op
@@ -194,5 +200,5 @@ func (f *dbFeature) resolveSQLProj(db string) (string, error) {
 	if proj, ok := sqlProjForDatabase(projects, db); ok {
 		return proj, nil
 	}
-	return "", fmt.Errorf("database %q not found in any allowlisted project", db)
+	return "", fmt.Errorf("database %q not found in sqlserver.projects", db)
 }

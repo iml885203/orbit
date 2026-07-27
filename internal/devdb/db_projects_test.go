@@ -8,8 +8,7 @@ import (
 	"github.com/iml885203/orbit/config"
 )
 
-// writeProjFixture creates <root>/<project>/<db>/<db>.sqlproj — the
-// layout the allowlist scan and the .sqlproj lookup both key off.
+// writeProjFixture creates <root>/<project>/<db>/<db>.sqlproj.
 func writeProjFixture(t *testing.T, root, project, db string) {
 	t.Helper()
 	dir := filepath.Join(root, project, db)
@@ -29,21 +28,19 @@ func projectNames(projects []DevDBProject) map[string]bool {
 	return names
 }
 
-// allProjects publishes exactly the team-shared allowlist (db_projects),
-// located under the workspace by CASE-INSENSITIVE folder name — so a
-// project cased differently on disk than in the shared list still
-// resolves, and a folder the list never named (another team's project,
-// or anything else checked out beside it) is never swept in.
-func TestAllProjects_Allowlist(t *testing.T) {
+func TestAllProjects_ExplicitPaths(t *testing.T) {
 	workspace := t.TempDir()
 	writeProjFixture(t, workspace, "DBProject.Payment", "PaymentDB") // cased differently than the list
 	writeProjFixture(t, workspace, "dbproject.account", "AccountingDB")
-	writeProjFixture(t, workspace, "artemis", "ArtemisDB") // not on the allowlist
+	writeProjFixture(t, workspace, "artemis", "ArtemisDB") // not explicitly configured
 	t.Setenv("WORKSPACE_ROOT", workspace)
 
-	t.Run("allowlist matches case-insensitively and excludes the rest", func(t *testing.T) {
-		cfg := (&config.Config{}).WithExtension("db_projects", &DBProjectsConfig{
-			Projects: []string{"dbproject.payment", "dbproject.account"},
+	t.Run("declared directories are included and unrelated directories are excluded", func(t *testing.T) {
+		cfg := (&config.Config{}).WithExtension(sqlServerSection, &SQLServerConfig{
+			Projects: []SQLServerProjectConfig{
+				{Path: "DBProject.Payment/PaymentDB/PaymentDB.sqlproj"},
+				{Path: "dbproject.account/AccountingDB/AccountingDB.sqlproj"},
+			},
 		})
 		f := newTestDBFeature(t, cfg)
 		projects, err := f.allProjects()
@@ -51,25 +48,25 @@ func TestAllProjects_Allowlist(t *testing.T) {
 			t.Fatalf("allProjects: %v", err)
 		}
 		names := projectNames(projects)
-		if !names["DBProject.Payment"] {
-			t.Errorf("lowercase allowlist entry must match the DBProject.Payment folder; got %v", names)
+		if !names["PaymentDB"] {
+			t.Errorf("declared PaymentDB project is missing; got %v", names)
 		}
-		if !names["dbproject.account"] {
-			t.Errorf("dbproject.account is allowlisted; got %v", names)
+		if !names["AccountingDB"] {
+			t.Errorf("declared AccountingDB project is missing; got %v", names)
 		}
 		if names["artemis"] {
-			t.Errorf("artemis is not allowlisted and must be excluded; got %v", names)
+			t.Errorf("undeclared artemis folder must be excluded; got %v", names)
 		}
 	})
 
-	t.Run("no allowlist means no projects", func(t *testing.T) {
+	t.Run("no explicit project list means no projects", func(t *testing.T) {
 		f := newTestDBFeature(t, &config.Config{})
 		projects, err := f.allProjects()
 		if err != nil {
 			t.Fatalf("allProjects: %v", err)
 		}
 		if len(projects) != 0 {
-			t.Errorf("without an allowlist the workflow publishes nothing; got %v", projectNames(projects))
+			t.Errorf("without sqlserver.projects the workflow publishes nothing; got %v", projectNames(projects))
 		}
 	})
 }
@@ -84,8 +81,8 @@ func TestPublishTargetsForDBs(t *testing.T) {
 	writeProjFixture(t, root, "wallet", "WalletDB")
 	writeProjFixture(t, root, "game", "GameDB")
 	projects := []DevDBProject{
-		{Name: "wallet", Path: filepath.Join(root, "wallet"), Databases: []string{"WalletDB"}},
-		{Name: "game", Path: filepath.Join(root, "game"), Databases: []string{"GameDB"}},
+		{Name: "WalletDB", Path: filepath.Join(root, "wallet", "WalletDB", "WalletDB.sqlproj"), Databases: []string{"WalletDB"}},
+		{Name: "GameDB", Path: filepath.Join(root, "game", "GameDB", "GameDB.sqlproj"), Databases: []string{"GameDB"}},
 	}
 
 	t.Run("dedups repeated db names, first occurrence wins", func(t *testing.T) {

@@ -8,18 +8,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/internal/sqlpublish"
 )
 
-// dbWorkflowChecks is the DB-workflow group of doctor checks: workspace
-// root, the optional db-root override, SQL image presence, and the
-// publish toolchain. For an adopting team without a sql-server container
-// all of these would be red noise, so the group collapses to a single
-// informational skip.
+// dbWorkflowChecks reports only checks required by an explicitly configured
+// SQL Server workflow.
 func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 	if !f.dbWorkflowConfigured() {
 		return nil
@@ -27,14 +26,41 @@ func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 
 	_, rootCheck, _ := f.host.ResolveWorkspaceRoot()
 	checks := []daemon.DoctorCheck{rootCheck}
-
-	// ORBIT_DB_ROOT — optional override. Only reported when configured.
-	if dbCheck, ok := f.resolveDBRoot(); ok {
-		checks = append(checks, dbCheck)
-	}
-
+	checks = append(checks, f.sqlProjectChecks()...)
 	checks = append(checks, f.sqlImageChecks()...)
 	checks = append(checks, publishToolchainChecks()...)
+	return checks
+}
+
+func (f *dbFeature) sqlProjectChecks() []daemon.DoctorCheck {
+	return sqlProjectChecks(f.host.Config(), f.workspaceRoot())
+}
+
+func sqlProjectChecks(cfg *config.Config, root string) []daemon.DoctorCheck {
+	section := SQLServerFrom(cfg)
+	if section == nil || root == "" {
+		return nil
+	}
+	checks := make([]daemon.DoctorCheck, 0, len(section.Projects))
+	for _, project := range section.Projects {
+		path := filepath.Join(root, project.Path)
+		check := daemon.DoctorCheck{Name: "SQL Project", Message: project.Path}
+		info, err := os.Stat(path)
+		switch {
+		case err != nil:
+			check.Status = daemon.CheckFail
+			check.Message += " (file not found)"
+			check.Hint = "Fix sqlserver.projects in the active environment"
+		case info.IsDir():
+			check.Status = daemon.CheckFail
+			check.Message += " (expected a .sqlproj file, found a directory)"
+			check.Hint = "Point sqlserver.projects[].path at the project file"
+		default:
+			check.Status = daemon.CheckPass
+			check.Message += " (found)"
+		}
+		checks = append(checks, check)
+	}
 	return checks
 }
 
@@ -52,41 +78,6 @@ func (f *dbFeature) sqlImageChecks() []daemon.DoctorCheck {
 		checks = append(checks, daemon.DoctorCheck{Name: "SQL Image", Status: daemon.CheckWarn, Message: fmt.Sprintf("%s (not cached — will pull on next start)", c.Image)})
 	}
 	return append(checks, f.checkRegistryAccess(c.Image))
-}
-
-// resolveDBRoot returns a DoctorCheck describing the ORBIT_DB_ROOT
-// setting (env var winning over settings, with the legacy env var as a
-// fallback — see settings_legacy.go). The second return is false when
-// the override is not configured — the caller should omit the check in
-// that case since it's optional (devdb falls back to
-// <workspace_root>[/dbprojects]).
-func (f *dbFeature) resolveDBRoot() (daemon.DoctorCheck, bool) {
-	root := resolveDBRootPath(f.host.Settings())
-	if root == "" {
-		return daemon.DoctorCheck{}, false
-	}
-	if _, err := os.Stat(root); err != nil {
-		return daemon.DoctorCheck{
-			Name:    "DB Root",
-			Status:  daemon.CheckFail,
-			Message: root + " (path not found)",
-			Hint:    "Update ORBIT_DB_ROOT (env or settings 'db_root') to point at an existing directory",
-		}, true
-	}
-	projects := findSQLProjectDirs(root)
-	if len(projects) == 0 {
-		return daemon.DoctorCheck{
-			Name:    "DB Root",
-			Status:  daemon.CheckWarn,
-			Message: fmt.Sprintf("%s (no SQL projects found)", root),
-			Hint:    "Expected a directory containing SQL project subdirectories (each with a <project>/*/*.sqlproj layout)",
-		}, true
-	}
-	return daemon.DoctorCheck{
-		Name:    "DB Root",
-		Status:  daemon.CheckPass,
-		Message: fmt.Sprintf("%s (%d SQL project(s))", root, len(projects)),
-	}, true
 }
 
 // checkRegistryAccess probes the registry for pull permission on the given

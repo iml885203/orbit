@@ -1,5 +1,5 @@
-// View helpers shared by the two publish surfaces (the Local DB page and
-// the sql-server drawer's operations list): a ticking elapsed-seconds
+// View helpers shared by the two publish surfaces (the SQL Server page and
+// the target drawer's operations list): a ticking elapsed-seconds
 // counter, the disabled-reason string, and the log-modal label. Homed
 // here so the page and drawer can't drift on the same publish op.
 
@@ -19,11 +19,15 @@ export function dbOpLabel(op: DBOpInFlight): string {
 }
 
 // publishDisabledReason is the shared gate both surfaces show on their
-// publish controls: sql-server must be healthy and no op already in
+// publish controls: the configured target must be healthy and no op already in
 // flight. Empty string means enabled.
 export function publishDisabledReason(): string {
-	if (store.daemon.services['sql-server']?.state !== 'healthy') {
-		return 'Start sql-server before changing databases'
+	const target = devStore.devMeta?.sql_server_service
+	if (!target) {
+		return 'SQL Server target is unavailable in the active environment'
+	}
+	if (store.daemon.services[target]?.state !== 'healthy') {
+		return `Start ${target} before changing databases`
 	}
 	if (dbOpRunning(devStore.dbOpInFlight)) {
 		return 'Another database operation is in progress'

@@ -65,7 +65,7 @@
 <section class="operations" class:drawer={variant === 'drawer'} aria-label={`${project.name} databases`}>
   {#if variant === 'page'}<header><div><h2>{project.name}</h2><p>{project.path}</p></div><strong>{project.databases.length} {project.databases.length === 1 ? 'database' : 'databases'}</strong></header>{/if}
   {#if project.databases.length === 0}
-    <div class="empty"><strong>No databases were found in this project.</strong><p>Check the project path or run <code>orbit env sync</code> to refresh discovery.</p></div>
+    <div class="empty"><strong>This SQL project does not declare any databases.</strong><p>Check the project file at <code>{project.path}</code>.</p></div>
   {:else}
     {#if allFailed}<div class="all-failed" role="alert"><strong>Publish all stopped at a failure.</strong><span>{operation?.err ?? 'A database failed to publish; the rest were skipped.'}</span><button type="button" onclick={() => logOpen = true}><ScrollText size={13} /> View log</button></div>{/if}
     <div class="rows">{#each project.databases as database (database)}<DatabaseRow {database} state={states[database]} resetState={resetStates[database]} {operation} disabledReason={submit.reason || disabledReason} submittingVerb={submit.pendingVerb} compact={variant === 'drawer'} elapsedSeconds={elapsed.seconds} onPublish={() => requestPublish(database)} onReset={() => { pendingReset = database }} onViewLog={() => logOpen = true} onDiff={onDiff ? () => onDiff(database) : undefined} onForcePublish={() => pendingForce = database} drift={driftByDB[database]} diffing={diffingDBs.has(database)} />{/each}</div>

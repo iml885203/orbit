@@ -17,7 +17,7 @@ func TestSnapshotDatabases_DerivesStates(t *testing.T) {
 	}}
 
 	states := map[string]daemon.ResourceSnapshot{}
-	for _, r := range snapshotDatabases(snap) {
+	for _, r := range snapshotDatabases(snap, "sql-server") {
 		states[r.Name] = r
 		if r.Type != "database" || r.Parent != "sql-server" {
 			t.Errorf("%s: wrong type/parent: %+v", r.Name, r)

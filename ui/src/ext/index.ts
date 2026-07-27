@@ -11,7 +11,7 @@ import LocalDatabasesPanel from '$lib/devdb/LocalDatabasesPanel.svelte'
 import { startDBStateStream } from '$lib/devdb/dbState.svelte'
 import { startDBOpStream } from '$lib/devdb/dbOps.svelte'
 import { startTunnelAccessStream } from '$lib/tunnel/tunnelAccess.svelte'
-import { dbWorkflowHidden, tunnelHidden, resetDevState } from '$lib/devdb/stores.svelte'
+import { dbWorkflowHidden, tunnelHidden, resetDevState, devStore } from '$lib/devdb/stores.svelte'
 import { refreshDevMeta } from '$lib/devdb/api'
 import type { SettingsWire } from '$lib/devdb/api'
 
@@ -23,7 +23,7 @@ export type ExtNavItem = {
 
 // Nav tabs and routes the core registry spreads after its own.
 export const navItems: ExtNavItem[] = [
-  { path: '/devdb', label: 'Local DB', hidden: dbWorkflowHidden },
+  { path: '/devdb', label: 'SQL Server', hidden: dbWorkflowHidden },
   { path: '/tunnel', label: 'Tunnels', hidden: tunnelHidden },
 ]
 
@@ -51,7 +51,7 @@ export function onAppMount(): () => void {
 export function onDaemonState(_settings: SettingsWire) {}
 
 // onEnvChanged keeps the DB-workflow gate in sync when the live graph
-// lands on a different env (a switch can add/remove sql-server).
+// lands on a different env (a switch can add/remove the sqlserver section).
 export function onEnvChanged() {
   void refreshDevMeta({ quiet: true })
 }
@@ -72,7 +72,12 @@ export const nodeDrawerPanels: Array<{
   key: string
   component: Component
 }> = [
-  { match: (name) => name === 'sql-server', title: 'Local databases', key: 'localDatabases', component: LocalDatabasesPanel },
+  {
+    match: (name) => name === devStore.devMeta?.sql_server_service,
+    title: 'Database Projects',
+    key: 'databaseProjects',
+    component: LocalDatabasesPanel,
+  },
 ]
 
 // settingsSections render inside the settings popover after the core rows.

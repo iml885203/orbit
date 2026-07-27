@@ -102,8 +102,9 @@ func TestLoad_ResolvesRelativeSeedFiles(t *testing.T) {
 version: "2"
 containers:
   db:
-    image: postgres:16
+    image: mongo:8
     seed:
+      type: mongo
       database: appdb
       files:
         - ./seeds/001-users.sql
@@ -206,10 +207,11 @@ services:
     command: pnpm dev
 containers:
   db:
-    image: postgres:16
+    image: mongo:8
     volumes:
       - ~/db-data:/var/lib/postgresql
     seed:
+      type: mongo
       database: appdb
       files:
         - ~/seeds/001-users.sql

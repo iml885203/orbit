@@ -30,18 +30,17 @@ var (
 func dbPublishCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "publish <database|project> | --all",
-		Short: "Publish a SQL project's schema to the running sql-server (host toolchain)",
+		Short: "Publish a SQL project's schema to the configured SQL Server",
 		Long: `Build the SQL project on the host and publish the dacpac straight to the
-running sql-server port — no image rebuild, no container-side tooling.
+configured SQL Server target — no image rebuild, no container-side tooling.
 Idempotent: an unchanged project converges to a no-op in seconds. Data is
 preserved; destructive changes are blocked unless --force.
 
 The argument may be a database name or a project name (both appear in
 ` + "`orbit db list`" + `); a project publishes each of its databases.
 
-Projects come from the team-shared allowlist (envs/data/db-projects.yaml),
-matched case-insensitively against your workspace folders. Requires the host
-dotnet SDK and sqlpackage
+Projects come from sqlserver.projects in the active environment. Requires the
+host dotnet SDK and sqlpackage
 (` + sqlpublish.InstallHint + `).`,
 		Args: func(_ *cobra.Command, args []string) error {
 			if publishAll {
@@ -58,7 +57,7 @@ dotnet SDK and sqlpackage
 		RunE: runDBPublish,
 	}
 	cmd.Flags().BoolVar(&publishForce, "force", false, "allow destructive changes (BlockOnPossibleDataLoss=false)")
-	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every database from the allowlisted projects")
+	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
 	return cmd
@@ -143,7 +142,7 @@ func runDBPublishAll(client *daemon.Client) error {
 // runPublishTargets is the shared body of the multi-target publish paths
 // (--all and a single project): resolve the base conn, run the bounded
 // publisher, report progress. scope names the project for the project path;
-// empty means the whole allowlist ("all").
+// empty means every configured project ("all").
 func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string) error {
 	base, err := publishConnOptsFromClient(client, "")
 	if err != nil {
