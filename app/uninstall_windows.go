@@ -19,14 +19,19 @@ $OrbitPaths = @(Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json)
 Wait-Process -Id $OrbitParentPID -ErrorAction SilentlyContinue
 $OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
+    $OrbitLastError = ""
     for ($OrbitAttempt = 0; $OrbitAttempt -lt 100 -and (Test-Path -LiteralPath $OrbitPath); $OrbitAttempt++) {
-        Remove-Item -LiteralPath $OrbitPath -Recurse -Force -ErrorAction SilentlyContinue
+        try {
+            Remove-Item -LiteralPath $OrbitPath -Recurse -Force -ErrorAction Stop
+        } catch {
+            $OrbitLastError = $_.Exception.Message
+        }
         if (Test-Path -LiteralPath $OrbitPath) {
             Start-Sleep -Milliseconds 100
         }
     }
     if (Test-Path -LiteralPath $OrbitPath) {
-        $OrbitFailures += $OrbitPath
+        $OrbitFailures += "$OrbitPath :: $OrbitLastError"
     }
 }
 if ($OrbitFailures.Count -gt 0) {
