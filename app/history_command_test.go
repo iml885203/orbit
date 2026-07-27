@@ -42,3 +42,9 @@ func TestShouldRecordCLIDaemonLifecycleCommands(t *testing.T) {
 		t.Fatal("daemon status should not be recorded")
 	}
 }
+
+func TestShouldNotRecordUninstall(t *testing.T) {
+	if shouldRecordCLI(uninstallCmd()) {
+		t.Fatal("uninstall must not recreate user data through command history")
+	}
+}

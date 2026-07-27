@@ -201,7 +201,7 @@ func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
-		if c.Name() == "history" {
+		if c.Name() == "history" || c.Name() == "uninstall" {
 			return false
 		}
 	}
