@@ -81,7 +81,7 @@ version; do not mix a plugin from one release with an older binary.
 
 ### Build from source
 
-Requires Go 1.25+ and Node.js 22+:
+Requires Go 1.25+, Node.js 22+, and pnpm 10+:
 
 ```bash
 git clone https://github.com/iml885203/orbit.git

@@ -74,7 +74,7 @@ binary。
 
 ### 從原始碼 build
 
-需要 Go 1.25+ 與 Node.js 22+：
+需要 Go 1.25+、Node.js 22+ 與 pnpm 10+：
 
 ```bash
 git clone https://github.com/iml885203/orbit.git

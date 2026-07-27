@@ -10,9 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +21,7 @@ import (
 	"github.com/iml885203/orbit/internal/env"
 	"github.com/iml885203/orbit/internal/health"
 	"github.com/iml885203/orbit/logging"
+	"github.com/iml885203/orbit/platform"
 	"github.com/iml885203/orbit/process"
 )
 
@@ -268,20 +269,45 @@ func ensureServicePortsAvailable(name string, svc *config.Service) error {
 		if available {
 			continue
 		}
-		holders := process.FindPortHolders([]int{port})
-		if len(holders) == 0 {
-			return fmt.Errorf("port %d is already in use (needed by service %s)", port, name)
-		}
-		pids := make([]string, 0, len(holders))
-		for _, holder := range holders {
-			pids = append(pids, strconv.Itoa(holder.PID))
-		}
-		return fmt.Errorf(
-			"port %d is already in use by pid %s (needed by service %s)",
-			port, strings.Join(pids, ", "), name,
-		)
+		pid, processName := platform.FindPortOwner(port)
+		return servicePortConflictError(name, port, pid, processName)
 	}
 	return nil
+}
+
+func servicePortConflictError(serviceName string, port int, pid, processName string) error {
+	if pid == "?" {
+		return fmt.Errorf(
+			"port %d is already in use (needed by service %s); inspect the listener with %q",
+			port, serviceName, portInspectCommand(port),
+		)
+	}
+	owner := "pid " + pid
+	if processName != "?" && processName != "" {
+		owner = filepath.Base(processName) + " (pid " + pid + ")"
+	}
+	return fmt.Errorf(
+		"port %d is already in use by %s (needed by service %s); inspect it with %q",
+		port, owner, serviceName, processInspectCommand(pid),
+	)
+}
+
+func portInspectCommand(port int) string {
+	switch runtime.GOOS {
+	case "darwin":
+		return fmt.Sprintf("lsof -nP -iTCP:%d -sTCP:LISTEN", port)
+	case "windows":
+		return fmt.Sprintf("Get-NetTCPConnection -LocalPort %d -State Listen", port)
+	default:
+		return fmt.Sprintf("ss -ltnp 'sport = :%d'", port)
+	}
+}
+
+func processInspectCommand(pid string) string {
+	if runtime.GOOS == "windows" {
+		return "Get-Process -Id " + pid
+	}
+	return "ps -p " + pid + " -o pid,comm,args="
 }
 
 func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder, orch *Orchestrator) {

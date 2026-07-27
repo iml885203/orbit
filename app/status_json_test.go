@@ -17,18 +17,48 @@ type statusJSON struct {
 func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) statusJSON {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, cfg, running, d); err != nil {
+	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
-	var got statusJSON
-	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+	var envelope struct {
+		SchemaVersion string     `json:"schema_version"`
+		OK            bool       `json:"ok"`
+		Command       string     `json:"command"`
+		Data          statusJSON `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\nraw: %s", err, buf.String())
 	}
-	return got
+	if envelope.SchemaVersion != "orbit.cli.v1" {
+		t.Errorf("schema_version: got %q", envelope.SchemaVersion)
+	}
+	if !envelope.OK {
+		t.Error("ok: got false")
+	}
+	if envelope.Command != "orbit status --json" {
+		t.Errorf("command: got %q", envelope.Command)
+	}
+	return envelope.Data
 }
 
 func TestStatusJSON_DaemonStopped(t *testing.T) {
-	got := renderStatusJSON(t, nil, nil, daemonStatus{Running: false})
+	var buf bytes.Buffer
+	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{Running: false}); err != nil {
+		t.Fatalf("writeStatusJSON: %v", err)
+	}
+	var envelope struct {
+		Data struct {
+			Daemon   daemonStatus  `json:"daemon"`
+			Services []jsonService `json:"services"`
+		} `json:"data"`
+		RecommendedActions []struct {
+			Command string `json:"command"`
+		} `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := envelope.Data
 	if got.Daemon.Running {
 		t.Errorf("Running: got true, want false")
 	}
@@ -37,6 +67,12 @@ func TestStatusJSON_DaemonStopped(t *testing.T) {
 	}
 	if got.Daemon.UpdateAvailable {
 		t.Errorf("UpdateAvailable: got true, want false")
+	}
+	if got.Services == nil {
+		t.Error("services: got null, want empty array")
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit up --json" {
+		t.Errorf("recommended_actions: got %+v", envelope.RecommendedActions)
 	}
 }
 
@@ -80,14 +116,22 @@ func TestStatusJSON_UpdateAvailable(t *testing.T) {
 // Guards against regression to pre-migration schema where daemon was a bool.
 func TestStatusJSON_DaemonIsObjectNotBool(t *testing.T) {
 	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, nil, nil, daemonStatus{Running: true}); err != nil {
+	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{Running: true}); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	d, ok := raw["daemon"]
+	data, ok := raw["data"]
+	if !ok {
+		t.Fatal("data field missing")
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("data not an object: %v", err)
+	}
+	d, ok := payload["daemon"]
 	if !ok {
 		t.Fatal("daemon field missing")
 	}

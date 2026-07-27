@@ -81,6 +81,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 |---|---|
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、service risks，以及建議後續指令。 |
+| `orbit status --json` | 在 `data` 中回傳 daemon 與已設定 service 的狀態。 |
 | `orbit logs <service> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <service> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳請求的 services、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。 |
@@ -121,7 +122,6 @@ Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout
 
 | Command | 行為 |
 |---|---|
-| `orbit status --json` | 回傳 legacy 的最上層 `daemon` 與 `services` 物件。 |
 | `orbit daemon status --json` | 回傳 legacy daemon status 物件。 |
 | `orbit history --json` | 保持既有的 history payload。 |
 | `orbit history gaps --json` | 保持既有的 history gaps payload。 |

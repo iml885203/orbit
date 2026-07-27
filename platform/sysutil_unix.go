@@ -33,7 +33,7 @@ func FindPortOwner(port int) (pid string, process string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.CommandContext(ctx, "lsof", "-ti", fmt.Sprintf(":%d", port))
+		cmd = exec.CommandContext(ctx, "lsof", "-ti", fmt.Sprintf("tcp:%d", port), "-sTCP:LISTEN")
 	case "linux":
 		cmd = exec.CommandContext(ctx, "fuser", fmt.Sprintf("%d/tcp", port))
 	default:
@@ -45,12 +45,13 @@ func FindPortOwner(port int) (pid string, process string) {
 		return "?", "?"
 	}
 
-	pid = strings.TrimSpace(string(out))
-	if pid == "" {
+	pids := strings.Fields(string(out))
+	if len(pids) == 0 {
 		return "?", "?"
 	}
+	pid = pids[0]
 
-	nameOut, err := exec.CommandContext(ctx, "ps", "-p", strings.Split(pid, "\n")[0], "-o", "comm=").Output()
+	nameOut, err := exec.CommandContext(ctx, "ps", "-p", pid, "-o", "comm=").Output()
 	if err != nil {
 		return pid, "?"
 	}

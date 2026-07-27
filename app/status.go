@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -51,14 +50,14 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	if cfgErr != nil && !daemonRunning {
 		if cli.JSONOutput {
-			return writeStatusJSON(os.Stdout, cfg, running, dstatus)
+			return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus)
 		}
-		fmt.Println("No daemon running.")
+		fmt.Println("No daemon running. Start it with 'orbit up'.")
 		return nil
 	}
 
 	if cli.JSONOutput {
-		return writeStatusJSON(os.Stdout, cfg, running, dstatus)
+		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus)
 	}
 
 	printDaemonHeader(dstatus)
@@ -170,7 +169,7 @@ func buildTips(cfg *config.Config, daemonRunning, stoppedInfra bool, stoppedServ
 
 	// Scenario 1: nothing running
 	if !daemonRunning {
-		tips = append(tips, "orbit up --infra          start infrastructure")
+		tips = append(tips, "orbit up                  start environment")
 		return tips
 	}
 
@@ -235,6 +234,11 @@ func configPorts(ports map[string]config.PortDef) string {
 	return strings.Join(parts, " ")
 }
 
+type statusJSONData struct {
+	Daemon   daemonStatus  `json:"daemon"`
+	Services []jsonService `json:"services"`
+}
+
 type jsonService struct {
 	Name        string         `json:"name"`
 	Kind        string         `json:"kind"`
@@ -255,8 +259,8 @@ type daemonStatus struct {
 	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
 }
 
-func writeStatusJSON(w io.Writer, cfg *config.Config, running map[string]daemon.ServiceStatus, dstatus daemonStatus) error {
-	var services []jsonService
+func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running map[string]daemon.ServiceStatus, dstatus daemonStatus) error {
+	services := make([]jsonService, 0)
 
 	if cfg != nil {
 		for name, c := range cfg.Containers {
@@ -296,16 +300,23 @@ func writeStatusJSON(w io.Writer, cfg *config.Config, running map[string]daemon.
 		return services[i].Name < services[j].Name
 	})
 
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
 	var actions []cli.JSONAction
+	if !dstatus.Running {
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit up --json",
+			Reason:  "Start the selected environment and its daemon.",
+		})
+	}
 	if dstatus.ConfigStale {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit daemon restart",
 			Reason:  "Apply the changed config: " + dstatus.ConfigStaleReason + ".",
 		})
 	}
-	return enc.Encode(map[string]any{"daemon": dstatus, "services": services, "recommended_actions": actions})
+	return cli.WriteJSONSuccess(w, command, statusJSONData{
+		Daemon:   dstatus,
+		Services: services,
+	}, actions)
 }
 
 func printDaemonHeader(s daemonStatus) {

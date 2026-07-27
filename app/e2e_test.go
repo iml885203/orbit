@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -201,9 +203,13 @@ func parseE2EEnvelope(t *testing.T, out string) e2eCLIEnvelope {
 func (e *e2eEnv) status(t *testing.T) e2eStatus {
 	t.Helper()
 	out := e.run(t, "status", "--json")
+	envelope := parseE2EEnvelope(t, out)
+	if !envelope.OK {
+		t.Fatalf("status envelope not ok: %+v\n%s", envelope.Error, out)
+	}
 	var s e2eStatus
-	if err := json.Unmarshal([]byte(out), &s); err != nil {
-		t.Fatalf("parse status json: %v\n%s", err, out)
+	if err := json.Unmarshal(envelope.Data, &s); err != nil {
+		t.Fatalf("parse status data: %v\n%s", err, out)
 	}
 	return s
 }
@@ -419,9 +425,13 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 	}
 
 	statusOut := env.run(t, "status", "--json")
+	statusEnvelope := parseE2EEnvelope(t, statusOut)
+	if !statusEnvelope.OK {
+		t.Fatalf("status envelope not ok: %+v\n%s", statusEnvelope.Error, statusOut)
+	}
 	var status e2eStatus
-	if err := json.Unmarshal([]byte(statusOut), &status); err != nil {
-		t.Fatalf("status json should keep legacy shape: %v\n%s", err, statusOut)
+	if err := json.Unmarshal(statusEnvelope.Data, &status); err != nil {
+		t.Fatalf("status data: %v\n%s", err, statusOut)
 	}
 	if !status.Daemon.Running {
 		t.Fatal("daemon should be running after up --infra --json")
@@ -445,6 +455,82 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 	}
 	if logsData.Service != "redis" {
 		t.Fatalf("logs service = %q", logsData.Service)
+	}
+}
+
+func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
+	binary := findOrbitBinary(t)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	servicePort := listener.Addr().(*net.TCPAddr).Port
+
+	dashboardListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
+	_ = dashboardListener.Close()
+
+	home, err := os.MkdirTemp("/tmp", "orb-port-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	configPath := filepath.Join(workspace, "port-conflict.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+services:
+  occupied-service:
+    type: python
+    path: %q
+    command: python3 -m http.server %d
+    ports:
+      http: %d
+    health_check:
+      type: http
+      path: /
+      port: %d
+`, workspace, servicePort, servicePort, servicePort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE=e2e-port-conflict",
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() { _ = command("daemon", "stop").Run() })
+
+	out, err := command("up", "--json").Output()
+	if err == nil {
+		t.Fatalf("up unexpectedly accepted occupied port %d", servicePort)
+	}
+	envelope := parseE2EEnvelope(t, string(out))
+	if envelope.OK || envelope.Error == nil {
+		t.Fatalf("expected error envelope: %s", out)
+	}
+	for _, evidence := range []string{
+		"service_start_failed",
+		strconv.Itoa(servicePort),
+		"occupied-service",
+		strconv.Itoa(os.Getpid()),
+		"inspect it with",
+	} {
+		if !strings.Contains(envelope.Error.Code+" "+envelope.Error.Message, evidence) {
+			t.Errorf("error envelope missing %q:\n%s", evidence, out)
+		}
+	}
+	if strings.Contains(strings.ToLower(envelope.Error.Message), "kill") {
+		t.Errorf("error should not suggest killing a process:\n%s", out)
 	}
 }
 

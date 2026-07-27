@@ -87,6 +87,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 |---|---|
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, service risks, and recommended follow-up commands. |
+| `orbit status --json` | Returns daemon and configured service state in `data`. |
 | `orbit logs <service> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <service> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns requested services, observed final states, degraded/timed-out services, and recommended follow-up commands. |
@@ -132,7 +133,6 @@ shape for compatibility:
 
 | Command | Behavior |
 |---|---|
-| `orbit status --json` | Returns the legacy top-level `daemon` and `services` object. |
 | `orbit daemon status --json` | Returns the legacy daemon status object. |
 | `orbit history --json` | Keeps its existing history payload. |
 | `orbit history gaps --json` | Keeps its existing history gaps payload. |
