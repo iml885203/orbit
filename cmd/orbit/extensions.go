@@ -25,9 +25,6 @@ func Extensions() []extension.Extension {
 			Checks:     devdb.CLIDoctorChecks,
 			PrintHuman: devdb.PrintDBWorkflowChecks,
 		},
-		CLIInit: &extension.CLIInit{
-			Steps: devdb.InitSteps,
-		},
 		Distribution: &extension.Distribution{
 			EnvRepoURL: "https://github.com/iml885203/orbit-demo.git",
 			InstallURL: "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",

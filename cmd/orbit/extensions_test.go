@@ -7,6 +7,9 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 	if len(extensions) != 1 || extensions[0].Distribution == nil {
 		t.Fatal("official distribution is not configured")
 	}
+	if extensions[0].CLIInit != nil {
+		t.Fatal("optional feature settings must not appear in the general init flow")
+	}
 
 	distribution := extensions[0].Distribution
 	if distribution.EnvRepoURL != "https://github.com/iml885203/orbit-demo.git" {
