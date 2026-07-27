@@ -63,7 +63,6 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	printDaemonHeader(dstatus)
 
 	// Track state for tips
-	var degradedNames []string
 	var stoppedInfra bool
 	var stoppedServices []string
 	var openableServices []string
@@ -76,8 +75,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			c := cfg.Containers[name]
 			if svc, ok := running[name]; ok {
 				printContainerLine(name, svc)
-				if svc.State == "degraded" {
-					degradedNames = append(degradedNames, name)
+				printStatusDetail(svc, running)
+				if svc.State == "stopped" {
+					stoppedInfra = true
 				}
 			} else {
 				ports := configPorts(c.Ports)
@@ -96,8 +96,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			s := cfg.Services[name]
 			if svc, ok := running[name]; ok {
 				printServiceLine(name, s, svc)
-				if svc.State == "degraded" {
-					degradedNames = append(degradedNames, name)
+				printStatusDetail(svc, running)
+				if svc.State == "stopped" {
+					stoppedServices = append(stoppedServices, name)
 				}
 				if svc.URL != "" && svc.State == "healthy" {
 					openableServices = append(openableServices, name)
@@ -116,7 +117,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	// Context-aware tips
-	tips := buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, degradedNames, openableServices)
+	tips := buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
 	if len(tips) > 0 {
 		fmt.Println()
 		for _, tip := range tips {
@@ -148,6 +149,39 @@ func printServiceLine(name string, _ *config.Service, svc daemon.ServiceStatus) 
 	}
 	timing := formatTiming(svc)
 	fmt.Printf("  %s %-20s  %-10s %s%s %s\n", icon, name, cli.ColorState(svc.State), info, extra, cli.Faint.Sprint(timing))
+}
+
+func printStatusDetail(svc daemon.ServiceStatus, running map[string]daemon.ServiceStatus) {
+	detail := statusDetail(svc, running)
+	if detail != "" {
+		fmt.Printf("    %s %s\n", cli.Faint.Sprint("↳"), detail)
+	}
+}
+
+func statusDetail(svc daemon.ServiceStatus, running map[string]daemon.ServiceStatus) string {
+	switch svc.State {
+	case "degraded":
+		return serviceFailureReason(svc)
+	case "pending":
+		if blocker := statusDependencyBlocker(svc, running); blocker != nil {
+			detail := "blocked by " + blocker.Name
+			if reason := serviceFailureReason(*blocker); reason != "" {
+				detail += " — " + reason
+			}
+			return detail
+		}
+	}
+	return ""
+}
+
+func serviceFailureReason(svc daemon.ServiceStatus) string {
+	if svc.StateReason != "" {
+		return svc.StateReason
+	}
+	if svc.HealthProgress != nil {
+		return svc.HealthProgress.LastErr
+	}
+	return ""
 }
 
 func formatTiming(svc daemon.ServiceStatus) string {
@@ -240,13 +274,16 @@ type statusJSONData struct {
 }
 
 type jsonService struct {
-	Name        string         `json:"name"`
-	Kind        string         `json:"kind"`
-	State       string         `json:"state"`
-	URL         string         `json:"url,omitempty"`
-	Ports       map[string]int `json:"ports,omitempty"`
-	StartupTime string         `json:"startup_time,omitempty"`
-	Uptime      string         `json:"uptime,omitempty"`
+	Name                string         `json:"name"`
+	Kind                string         `json:"kind"`
+	State               string         `json:"state"`
+	StateReason         string         `json:"state_reason,omitempty"`
+	PendingDependencies []string       `json:"pending_dependencies,omitempty"`
+	BlockedBy           string         `json:"blocked_by,omitempty"`
+	URL                 string         `json:"url,omitempty"`
+	Ports               map[string]int `json:"ports,omitempty"`
+	StartupTime         string         `json:"startup_time,omitempty"`
+	Uptime              string         `json:"uptime,omitempty"`
 }
 
 type daemonStatus struct {
@@ -271,9 +308,7 @@ func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running ma
 			}
 			svc.Ports = ports
 			if r, ok := running[name]; ok {
-				svc.State = r.State
-				svc.StartupTime = r.StartupTime
-				svc.Uptime = r.Uptime
+				applyRuntimeStatus(&svc, r, running)
 			}
 			services = append(services, svc)
 		}
@@ -285,9 +320,7 @@ func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running ma
 			}
 			svc.Ports = ports
 			if r, ok := running[name]; ok {
-				svc.State = r.State
-				svc.StartupTime = r.StartupTime
-				svc.Uptime = r.Uptime
+				applyRuntimeStatus(&svc, r, running)
 			}
 			services = append(services, svc)
 		}
@@ -313,10 +346,78 @@ func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running ma
 			Reason:  "Apply the changed config: " + dstatus.ConfigStaleReason + ".",
 		})
 	}
+	actions = cli.MergeActions(actions, statusRecoveryActions(running))
 	return cli.WriteJSONSuccess(w, command, statusJSONData{
 		Daemon:   dstatus,
 		Services: services,
 	}, actions)
+}
+
+func applyRuntimeStatus(target *jsonService, source daemon.ServiceStatus, running map[string]daemon.ServiceStatus) {
+	target.State = source.State
+	if source.State == "degraded" {
+		target.StateReason = serviceFailureReason(source)
+	}
+	target.PendingDependencies = append([]string{}, source.PendingDependencies...)
+	target.StartupTime = source.StartupTime
+	target.Uptime = source.Uptime
+	if blocker := statusDependencyBlocker(source, running); blocker != nil {
+		target.BlockedBy = blocker.Name
+	}
+}
+
+func statusDependencyBlocker(service daemon.ServiceStatus, running map[string]daemon.ServiceStatus) *daemon.ServiceStatus {
+	if service.State != "pending" || len(service.PendingDependencies) == 0 {
+		return nil
+	}
+	status := &daemon.StatusResponse{Services: make([]daemon.ServiceStatus, 0, len(running))}
+	for _, candidate := range running {
+		status.Services = append(status.Services, candidate)
+	}
+	return terminalDependencyBlocker(status, service.PendingDependencies)
+}
+
+func statusRecoveryTargets(running map[string]daemon.ServiceStatus) []string {
+	targets := make(map[string]bool)
+	for _, service := range running {
+		if service.State == "degraded" && (service.HealthProgress == nil || !service.HealthProgress.Recovering) {
+			targets[service.Name] = true
+		}
+		if blocker := statusDependencyBlocker(service, running); blocker != nil {
+			targets[blocker.Name] = true
+		}
+	}
+	names := make([]string, 0, len(targets))
+	for name := range targets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func statusRecoveryActions(running map[string]daemon.ServiceStatus) []cli.JSONAction {
+	var actions []cli.JSONAction
+	for _, name := range statusRecoveryTargets(running) {
+		service := running[name]
+		if service.State == "stopped" {
+			actions = append(actions, cli.JSONAction{
+				Command: "orbit up " + name + " --json",
+				Reason:  "Start " + name + ", which is blocking dependent services.",
+			})
+			continue
+		}
+		actions = append(actions,
+			cli.JSONAction{
+				Command: "orbit logs " + name + " --json",
+				Reason:  "Inspect recent logs for " + name + ".",
+			},
+			cli.JSONAction{
+				Command: "orbit restart " + name + " --json",
+				Reason:  "Retry " + name + " after fixing the reported cause.",
+			},
+		)
+	}
+	return actions
 }
 
 func printDaemonHeader(s daemonStatus) {

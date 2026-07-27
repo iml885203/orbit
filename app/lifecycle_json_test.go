@@ -239,6 +239,9 @@ func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
 	actions := lifecycleRecommendedActionsForStatus([]string{"api"}, status)
 	var foundLogs, foundRestart bool
 	for _, action := range actions {
+		if action.Command == "orbit logs api --json" {
+			t.Fatalf("actions = %+v, dependent has no logs before it starts", actions)
+		}
 		if action.Command == "orbit logs redis --json" {
 			foundLogs = true
 		}

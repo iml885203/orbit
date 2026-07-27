@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/iml885203/orbit/cli"
 )
 
 // These tests exercise the real orbit binary against a real Docker engine.
@@ -178,11 +180,12 @@ type e2eStatus struct {
 }
 
 type e2eCLIEnvelope struct {
-	SchemaVersion string          `json:"schema_version"`
-	OK            bool            `json:"ok"`
-	Command       string          `json:"command"`
-	Data          json.RawMessage `json:"data"`
-	Error         *struct {
+	SchemaVersion      string           `json:"schema_version"`
+	OK                 bool             `json:"ok"`
+	Command            string           `json:"command"`
+	Data               json.RawMessage  `json:"data"`
+	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
+	Error              *struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -554,6 +557,115 @@ services:
 	}
 	if strings.Contains(strings.ToLower(envelope.Error.Message), "kill") {
 		t.Errorf("error should not suggest killing a process:\n%s", out)
+	}
+}
+
+func TestE2E_StatusExplainsRootFailureAndBlockedDependent(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home, err := os.MkdirTemp("/tmp", "orb-recovery-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(envsDir, "recovery.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+services:
+  api-runtime:
+    type: shell
+    path: %q
+    command: orbit-e2e-missing-executable serve
+  web-app:
+    type: shell
+    path: %q
+    command: python3 -m http.server 18765
+    depends_on: [api-runtime]
+`, workspace, workspace)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dashboardListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
+	_ = dashboardListener.Close()
+	namespace := "e2e-recovery-" + randHex(4)
+
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() { _ = command("daemon", "stop").Run() })
+
+	if output, err := command("up").CombinedOutput(); err == nil {
+		t.Fatalf("up unexpectedly succeeded:\n%s", output)
+	}
+
+	human, err := command("status").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human status: %v\n%s", err, human)
+	}
+	for _, evidence := range []string{
+		`exec: "orbit-e2e-missing-executable": executable file not found`,
+		"blocked by api-runtime",
+		"orbit logs api-runtime",
+		"orbit restart api-runtime",
+	} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human status missing %q:\n%s", evidence, human)
+		}
+	}
+
+	jsonOutput, err := command("status", "--json").Output()
+	if err != nil {
+		t.Fatalf("json status: %v", err)
+	}
+	envelope := parseE2EEnvelope(t, string(jsonOutput))
+	if !envelope.OK {
+		t.Fatalf("status envelope not ok: %s", jsonOutput)
+	}
+	var status struct {
+		Services []jsonService `json:"services"`
+	}
+	if err := json.Unmarshal(envelope.Data, &status); err != nil {
+		t.Fatalf("status data: %v\n%s", err, jsonOutput)
+	}
+	services := make(map[string]jsonService, len(status.Services))
+	for _, service := range status.Services {
+		services[service.Name] = service
+	}
+	if services["api-runtime"].StateReason == "" {
+		t.Fatalf("api-runtime state_reason empty:\n%s", jsonOutput)
+	}
+	if services["web-app"].BlockedBy != "api-runtime" {
+		t.Fatalf("web-app blocked_by = %q:\n%s", services["web-app"].BlockedBy, jsonOutput)
+	}
+	commands := make(map[string]bool, len(envelope.RecommendedActions))
+	for _, action := range envelope.RecommendedActions {
+		commands[action.Command] = true
+	}
+	for _, wanted := range []string{
+		"orbit logs api-runtime --json",
+		"orbit restart api-runtime --json",
+	} {
+		if !commands[wanted] {
+			t.Fatalf("recommended_actions missing %q: %+v", wanted, envelope.RecommendedActions)
+		}
+	}
+	if commands["orbit logs web-app --json"] {
+		t.Fatalf("recommended_actions points to dependent without logs: %+v", envelope.RecommendedActions)
 	}
 }
 

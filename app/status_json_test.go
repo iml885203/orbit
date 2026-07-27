@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 )
@@ -14,21 +15,30 @@ type statusJSON struct {
 	Services []jsonService `json:"services"`
 }
 
-func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) statusJSON {
+type renderedStatusEnvelope struct {
+	SchemaVersion      string           `json:"schema_version"`
+	OK                 bool             `json:"ok"`
+	Command            string           `json:"command"`
+	Data               statusJSON       `json:"data"`
+	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
+}
+
+func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) renderedStatusEnvelope {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
-	var envelope struct {
-		SchemaVersion string     `json:"schema_version"`
-		OK            bool       `json:"ok"`
-		Command       string     `json:"command"`
-		Data          statusJSON `json:"data"`
-	}
+	var envelope renderedStatusEnvelope
 	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\nraw: %s", err, buf.String())
 	}
+	return envelope
+}
+
+func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) statusJSON {
+	t.Helper()
+	envelope := renderStatusEnvelope(t, cfg, running, d)
 	if envelope.SchemaVersion != "orbit.cli.v1" {
 		t.Errorf("schema_version: got %q", envelope.SchemaVersion)
 	}
@@ -39,6 +49,89 @@ func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemo
 		t.Errorf("command: got %q", envelope.Command)
 	}
 	return envelope.Data
+}
+
+func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
+	running := map[string]daemon.ServiceStatus{
+		"worker": {
+			Name:        "worker",
+			State:       "degraded",
+			StateReason: "exited: exit status 17",
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	service := envelope.Data.Services[0]
+	if service.StateReason != "exited: exit status 17" {
+		t.Fatalf("state_reason = %q", service.StateReason)
+	}
+	want := []string{"orbit logs worker --json", "orbit restart worker --json"}
+	if len(envelope.RecommendedActions) != len(want) {
+		t.Fatalf("recommended_actions = %+v, want %v", envelope.RecommendedActions, want)
+	}
+	for i, command := range want {
+		if envelope.RecommendedActions[i].Command != command {
+			t.Fatalf("recommended_actions[%d] = %q, want %q", i, envelope.RecommendedActions[i].Command, command)
+		}
+	}
+}
+
+func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api":   {},
+		"redis": {},
+	}}
+	running := map[string]daemon.ServiceStatus{
+		"api": {
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		"redis": {
+			Name:        "redis",
+			State:       "degraded",
+			StateReason: "container exited unexpectedly",
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	var api jsonService
+	for _, service := range envelope.Data.Services {
+		if service.Name == "api" {
+			api = service
+		}
+	}
+	if api.BlockedBy != "redis" {
+		t.Fatalf("blocked_by = %q, want redis", api.BlockedBy)
+	}
+	if len(api.PendingDependencies) != 1 || api.PendingDependencies[0] != "redis" {
+		t.Fatalf("pending_dependencies = %v", api.PendingDependencies)
+	}
+	for _, action := range envelope.RecommendedActions {
+		if action.Command == "orbit logs api --json" || action.Command == "orbit restart api --json" {
+			t.Fatalf("recommended_actions includes non-actionable dependent command: %+v", envelope.RecommendedActions)
+		}
+	}
+}
+
+func TestStatusDetail_ExplainsFailureAndDependencyBlock(t *testing.T) {
+	running := map[string]daemon.ServiceStatus{
+		"api": {
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		"redis": {
+			Name:        "redis",
+			State:       "degraded",
+			StateReason: "exited: exit status 17",
+		},
+	}
+	if got := statusDetail(running["redis"], running); got != "exited: exit status 17" {
+		t.Fatalf("degraded detail = %q", got)
+	}
+	if got := statusDetail(running["api"], running); got != "blocked by redis — exited: exit status 17" {
+		t.Fatalf("pending detail = %q", got)
+	}
 }
 
 func TestStatusJSON_DaemonStopped(t *testing.T) {

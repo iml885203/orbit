@@ -81,29 +81,36 @@ func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
 }
 
 func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {
-	actions := lifecycleRecommendedActions(serviceNames)
 	if status == nil {
-		return actions
+		return lifecycleRecommendedActions(serviceNames)
 	}
 	watched := watchSet(serviceNames)
+	evidenceNames := make([]string, 0, len(serviceNames))
+	blockedBy := make(map[string]string)
 	for i := range status.Services {
 		service := &status.Services[i]
-		if !watched[service.Name] || service.State != "pending" {
+		if !watched[service.Name] {
+			continue
+		}
+		if service.State != "pending" {
+			evidenceNames = append(evidenceNames, service.Name)
 			continue
 		}
 		dependency := terminalDependencyBlocker(status, service.PendingDependencies)
 		if dependency == nil {
+			evidenceNames = append(evidenceNames, service.Name)
 			continue
 		}
+		evidenceNames = append(evidenceNames, dependency.Name)
+		blockedBy[dependency.Name] = service.Name
+	}
+	actions := lifecycleRecommendedActions(evidenceNames)
+	for _, dependency := range sortedKeys(blockedBy) {
+		dependent := blockedBy[dependency]
 		actions = cli.MergeActions(actions, []cli.JSONAction{
 			{
-				Command:     "orbit logs " + dependency.Name + " --json",
-				Reason:      "Inspect recent logs for " + dependency.Name + ".",
-				Destructive: false,
-			},
-			{
-				Command:     "orbit restart " + dependency.Name + " --json",
-				Reason:      "Restore the dependency blocking " + service.Name + ".",
+				Command:     "orbit restart " + dependency + " --json",
+				Reason:      "Restore the dependency blocking " + dependent + ".",
 				Destructive: false,
 			},
 		})
