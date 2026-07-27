@@ -197,7 +197,7 @@ func switchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "switch <env>",
 		Short: "Switch env and restart daemon",
-		Long:  "Set active env (by short name or path) and restart the daemon to apply it. Containers and services are left to be managed by 'orbit up' / 'orbit down'.",
+		Long:  "Stop the current environment, set the active env (by short name or path), and restart the daemon to apply it.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runSwitch,
 	}
@@ -208,12 +208,6 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeCurrentEnv(abs); err != nil {
-		return fmt.Errorf("writing current env: %w", err)
-	}
-	if !cli.JSONOutput {
-		fmt.Printf("→ switching to %s\n", abs)
-	}
 
 	pidBefore, alive := daemon.IsDaemonRunning()
 	daemonAction := "start"
@@ -223,13 +217,27 @@ func runSwitch(_ *cobra.Command, args []string) error {
 
 	if alive {
 		if !cli.JSONOutput {
-			fmt.Println("→ daemon restart")
+			fmt.Println("→ stopping current environment")
+		}
+		client := daemon.NewClient(daemon.DefaultSocketPath())
+		if _, err := client.DownAndWait(); err != nil {
+			return fmt.Errorf("stop current environment: %w", err)
 		}
 		if _, err := stopDaemon(pidBefore); err != nil {
 			return err
 		}
-	} else if !cli.JSONOutput {
+	}
+
+	if err := writeCurrentEnv(abs); err != nil {
+		return fmt.Errorf("writing current env: %w", err)
+	}
+	if !cli.JSONOutput {
+		fmt.Printf("→ switching to %s\n", abs)
+	}
+	if !alive && !cli.JSONOutput {
 		fmt.Println("→ daemon start")
+	} else if alive && !cli.JSONOutput {
+		fmt.Println("→ daemon restart")
 	}
 	if err := ensureDaemonStarted(abs); err != nil {
 		return err

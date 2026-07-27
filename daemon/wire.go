@@ -21,7 +21,8 @@ type UpRequest struct {
 
 // DownRequest is the body for POST /api/down.
 type DownRequest struct {
-	All bool `json:"all"`
+	All  bool `json:"all"`
+	Wait bool `json:"wait"`
 }
 
 // StatusResponse is the response for GET /api/status.

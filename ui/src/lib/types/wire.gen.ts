@@ -58,6 +58,7 @@ export interface UpRequest {
  */
 export interface DownRequest {
   all: boolean;
+  wait: boolean;
 }
 /**
  * StatusResponse is the response for GET /api/status.

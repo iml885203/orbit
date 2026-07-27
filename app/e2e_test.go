@@ -308,6 +308,29 @@ func TestE2E_DownStopsContainersKeepsDaemon(t *testing.T) {
 	}
 }
 
+func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	_, _ = env.runNoFail(t, "up", "--infra")
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	emptyEnv := filepath.Join(env.home, "envs", "empty.yaml")
+	if err := os.WriteFile(emptyEnv, []byte("version: \"2\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
+		t.Fatalf("write empty env: %v", err)
+	}
+	env.run(t, "switch", emptyEnv)
+
+	redisName := "orbit-" + env.namespace + "-redis"
+	if containerRunning(t, redisName) {
+		t.Fatalf("%s still running after switch reported success", redisName)
+	}
+	if services := env.status(t).Services; len(services) != 0 {
+		t.Fatalf("new environment services = %+v, want none", services)
+	}
+}
+
 // Covers: `orbit env sync --url file://<local-repo>` clones a local git repo
 // and copies its envs/ tree into ORBIT_HOME/envs/.
 func TestE2E_EnvSync(t *testing.T) {

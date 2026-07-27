@@ -85,6 +85,47 @@ func TestHandleDown_ReturnsPresentTenseAcknowledgment(t *testing.T) {
 	srv.waitForBackground()
 }
 
+func TestHandleDownWait_ReturnsAfterStopCompletes(t *testing.T) {
+	cfg := &config.Config{
+		Services:   map[string]*config.Service{"svc": {Name: "svc", Type: "node"}},
+		Containers: map[string]*config.Container{},
+	}
+	srv := newTestServer(t, cfg)
+
+	released := make(chan struct{})
+	srv.app.Orchestrator.OnStopProcess = func(name string) error {
+		<-released
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/down", strings.NewReader(`{"wait":true}`))
+	w := httptest.NewRecorder()
+	handlerDone := make(chan struct{})
+	go func() {
+		srv.handleDown(w, req)
+		close(handlerDone)
+	}()
+
+	select {
+	case <-handlerDone:
+		t.Fatal("handleDown returned before the service stopped")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(released)
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDown did not return after the service stopped")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "stopped all services and containers") {
+		t.Fatalf("body = %q, want completion message", w.Body.String())
+	}
+}
+
 // TestHandleRestart_ReturnsPresentTenseAcknowledgment verifies the
 // restart handler is non-blocking by checking it returns the present-
 // tense "restarting ..." message. The old sync handler returned

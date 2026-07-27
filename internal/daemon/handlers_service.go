@@ -211,6 +211,14 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Wait {
+		s.app.StopAllServices()
+		s.PersistState()
+		s.stateFile.Remove()
+		writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: "stopped all services and containers"})
+		return
+	}
+
 	// Stop all services and containers in parallel through the canonical
 	// StopService lifecycle. Status pollers (orbit down's progress
 	// renderer) see real stopping → stopped transitions instead of a
