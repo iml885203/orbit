@@ -31,6 +31,7 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 Repo 還是 private 時，請先登入 [GitHub CLI](https://cli.github.com/)：
 
 ```bash
+gh auth login
 gh auth setup-git
 gh api -H "Accept: application/vnd.github.raw+json" \
   repos/iml885203/orbit/contents/scripts/install.sh | bash
@@ -59,15 +60,18 @@ macOS 與 Linux 為正式支援平台；Windows build 為 Beta。詳情請見
 ```bash
 orbit up                     # 啟動 services 與 dependencies
 orbit status --json          # 取得穩定的 machine-readable 狀態
-orbit logs api -f            # 追蹤單一 service
+orbit logs demo-api -f       # 追蹤預設 demo service
 orbit env sync --json        # 更新共享 environment files
-orbit switch development     # 選擇 environment
+orbit switch quickstart      # 選擇預設 demo environment
 orbit doctor --json          # 診斷本機設定
 orbit down                   # 停止環境
 ```
 
 一般啟動只需使用 `orbit up`。只有刻意想單獨啟動 containers、不啟動 host
 services 時，才使用 `orbit up --infra`。
+
+使用團隊自己的 environment 時，請把 `demo-api` 與 `quickstart` 換成
+`orbit status` 和 `orbit env list` 顯示的名稱。
 
 ### Database workflow
 

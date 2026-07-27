@@ -669,6 +669,56 @@ services:
 	}
 }
 
+func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home, err := os.MkdirTemp("/tmp", "orb-init-failure-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
+
+	command := exec.Command(binary, "init", "--yes", "--env-repo", missingRepo)
+	command.Dir = workspace
+	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("init should preserve partial setup for retry: %v\n%s", err, output)
+	}
+	for _, wanted := range []string{
+		"Setup is incomplete",
+		"Verify the repository URL and Git access",
+		"Next: orbit init",
+	} {
+		if !bytes.Contains(output, []byte(wanted)) {
+			t.Fatalf("init output missing %q:\n%s", wanted, output)
+		}
+	}
+	if bytes.Contains(output, []byte("Setup complete!")) {
+		t.Fatalf("init falsely claims success:\n%s", output)
+	}
+}
+
+func TestE2E_EnvSyncClassifiesRepositoryAccessFailure(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
+	command := exec.Command(binary, "env", "sync", "--url", missingRepo, "--json")
+	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
+	output, err := command.Output()
+	if err == nil {
+		t.Fatalf("env sync unexpectedly succeeded:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
+		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit env sync --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 // findOrbitBinary mirrors setupE2E's binary discovery without the docker skip
 // and without creating an e2eEnv. Useful for tests that don't need a full env.
 func findOrbitBinary(t *testing.T) string {

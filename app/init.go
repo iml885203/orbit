@@ -38,6 +38,15 @@ type initPrinter struct {
 	enabled bool
 }
 
+type initCompletion struct {
+	Heading      string
+	Detail       string
+	HumanCommand string
+	JSONCommand  string
+	Reason       string
+	Ready        bool
+}
+
 func (p initPrinter) printf(format string, args ...any) {
 	if p.enabled {
 		fmt.Printf(format, args...)
@@ -218,6 +227,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		output.printf("  Syncing %s → %s\n", repoURL, envsDir)
 		syncRes, err := envsync.SyncFromRepo(repoURL, envsDir, envsync.Options{})
 		if err != nil {
+			err = envRepoSyncError(err)
 			warning := "env sync failed: " + err.Error()
 			result.Warnings = append(result.Warnings, warning)
 			output.warnf("  ! sync failed: %v\n", err)
@@ -283,9 +293,16 @@ func runInit(_ *cobra.Command, _ []string) error {
 	result.Ready = result.ActiveEnv != "" && doctorFailure(health, false) == nil
 
 	output.println()
-	output.boldln("Setup complete!")
-	output.faintln("  Next: orbit up        start the environment")
-	output.faintln("        orbit open      open the dashboard")
+	completion := buildInitCompletion(result)
+	if completion.Ready {
+		output.boldln(completion.Heading)
+	} else {
+		output.warnln(completion.Heading)
+	}
+	if completion.Detail != "" {
+		output.faintln("  " + completion.Detail)
+	}
+	output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
 
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), result, initRecommendedActions(result))
@@ -294,21 +311,40 @@ func runInit(_ *cobra.Command, _ []string) error {
 }
 
 func initRecommendedActions(result initResult) []cli.JSONAction {
-	if result.ActiveEnv == "" {
-		return []cli.JSONAction{{
-			Command:     "orbit env sync --json",
-			Reason:      "Fetch environment configs before starting Orbit.",
-			Destructive: false,
-		}}
-	}
-	if !result.Ready {
-		return []cli.JSONAction{cli.DoctorAction()}
-	}
+	completion := buildInitCompletion(result)
 	return []cli.JSONAction{{
-		Command:     "orbit up --json",
-		Reason:      "Start the selected environment.",
+		Command:     completion.JSONCommand,
+		Reason:      completion.Reason,
 		Destructive: false,
 	}}
+}
+
+func buildInitCompletion(result initResult) initCompletion {
+	if result.ActiveEnv == "" {
+		return initCompletion{
+			Heading:      "Setup is incomplete",
+			Detail:       "No environment was selected. Fix the sync issue above, then retry setup.",
+			HumanCommand: "orbit init",
+			JSONCommand:  "orbit init --yes --json",
+			Reason:       "Retry setup and select an environment.",
+		}
+	}
+	if !result.Ready {
+		return initCompletion{
+			Heading:      "Setup saved, but prerequisites are missing",
+			Detail:       "Resolve the failed checks above before starting the environment.",
+			HumanCommand: "orbit doctor",
+			JSONCommand:  "orbit doctor --json",
+			Reason:       "Verify the required tools after fixing the failed checks.",
+		}
+	}
+	return initCompletion{
+		Heading:      "Setup complete!",
+		HumanCommand: "orbit up",
+		JSONCommand:  "orbit up --json",
+		Reason:       "Start the selected environment.",
+		Ready:        true,
+	}
 }
 
 // detectWorkspaceRoot tries to find the workspace root automatically.

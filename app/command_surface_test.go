@@ -79,6 +79,21 @@ func TestExecHelpIsNotTreatedAsAContainer(t *testing.T) {
 	}
 }
 
+func TestLogsAcceptsTailAlias(t *testing.T) {
+	previous := logLines
+	t.Cleanup(func() { logLines = previous })
+	cmd := logsCmd()
+	if cmd.Flags().Lookup("lines") == nil || cmd.Flags().Lookup("tail") == nil {
+		t.Fatal("logs must support both --lines and the familiar --tail alias")
+	}
+	if err := cmd.Flags().Set("tail", "20"); err != nil {
+		t.Fatal(err)
+	}
+	if logLines != 20 {
+		t.Fatalf("logLines = %d, want 20", logLines)
+	}
+}
+
 func TestUpdateUsesShortPublicName(t *testing.T) {
 	if got := selfUpdateCmd().Name(); got != "update" {
 		t.Fatalf("update command name = %q", got)

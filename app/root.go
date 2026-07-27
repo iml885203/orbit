@@ -471,6 +471,7 @@ func logsCmd() *cobra.Command {
 		RunE:  runLogs,
 	}
 	cmd.Flags().IntVar(&logLines, "lines", 100, "number of log lines to show")
+	cmd.Flags().IntVar(&logLines, "tail", 100, "number of log lines to show (alias for --lines)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream logs in real-time")
 	return cmd
 }

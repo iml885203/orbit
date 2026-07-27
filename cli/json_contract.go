@@ -181,6 +181,14 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit status --json",
 		}
+	case errors.Is(err, ErrEnvRepoAccess):
+		return JSONError{
+			Code:        "env_repo_access",
+			Message:     msg,
+			Hint:        "Verify Git access. For a private GitHub repository, run 'gh auth login' and 'gh auth setup-git', then retry.",
+			Retryable:   true,
+			NextCommand: "orbit env sync --json",
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",
@@ -195,6 +203,13 @@ func classify(err error) JSONError {
 func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "json_unsupported_destructive_command" {
 		return nil
+	}
+	if err.Code == "env_repo_access" {
+		return []JSONAction{{
+			Command:     "orbit env sync --json",
+			Reason:      "Retry after restoring Git access to the environment repository.",
+			Destructive: false,
+		}}
 	}
 	if err.Code == "env_mismatch" {
 		return []JSONAction{{

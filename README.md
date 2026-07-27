@@ -34,6 +34,7 @@ While the repository is private, use an authenticated
 [GitHub CLI](https://cli.github.com/) session:
 
 ```bash
+gh auth login
 gh auth setup-git
 gh api -H "Accept: application/vnd.github.raw+json" \
   repos/iml885203/orbit/contents/scripts/install.sh | bash
@@ -78,15 +79,18 @@ macOS and Linux are supported. Windows builds are Beta; see
 ```bash
 orbit up                     # start services and their dependencies
 orbit status --json          # inspect stable machine-readable state
-orbit logs api -f            # stream one service
+orbit logs demo-api -f       # stream the default demo service
 orbit env sync --json        # refresh shared environment files
-orbit switch development     # select an environment
+orbit switch quickstart      # select the default demo environment
 orbit doctor --json          # diagnose the local setup
 orbit down                   # stop the environment
 ```
 
 `orbit up` is the normal start command. Use `orbit up --infra` only when you
 intentionally want containers without host services.
+
+For a team environment, replace `demo-api` and `quickstart` with names shown by
+`orbit status` and `orbit env list`.
 
 ### Database workflow
 

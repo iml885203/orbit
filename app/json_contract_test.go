@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -33,6 +34,24 @@ func TestWriteCLIJSONErrorMergesActionErrorRecommendations(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing %q in %+v", want, got.RecommendedActions)
+}
+
+func TestEnvRepoAccessJSONPointsToAuthenticationAndRetry(t *testing.T) {
+	var buf bytes.Buffer
+	err := cli.NewEnvRepoAccessError("cannot access environment repo https://github.com/example/private.git")
+	if err := cli.WriteJSONError(&buf, "orbit env sync --json", err); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "env_repo_access" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !strings.Contains(got.Error.Hint, "gh auth login") {
+		t.Fatalf("hint = %q", got.Error.Hint)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit env sync --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
 }
 
 func TestWriteLogJSONErrorEvent(t *testing.T) {

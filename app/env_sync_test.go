@@ -1,11 +1,15 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/envsync"
 )
 
 // setTestDistribution swaps the package distribution for one test.
@@ -96,5 +100,26 @@ func TestEnvsDestDir_UsesOrbitHome(t *testing.T) {
 	// Call must not create the dir itself — caller (sync/init) decides.
 	if _, err := os.Stat(got); !os.IsNotExist(err) {
 		t.Errorf("envsDestDir should not create the dir yet; stat err=%v", err)
+	}
+}
+
+func TestEnvRepoSyncErrorIdentifiesPrivateRepoRemedy(t *testing.T) {
+	source := &envsync.CloneError{
+		URL: "https://github.com/example/private-env.git",
+		Err: errors.New("exit status 128"),
+	}
+	err := envRepoSyncError(source)
+	if !errors.Is(err, cli.ErrEnvRepoAccess) {
+		t.Fatalf("error = %v, want ErrEnvRepoAccess", err)
+	}
+	for _, evidence := range []string{
+		source.URL,
+		"gh auth login",
+		"gh auth setup-git",
+		"orbit env sync",
+	} {
+		if !strings.Contains(err.Error(), evidence) {
+			t.Errorf("error missing %q: %v", evidence, err)
+		}
 	}
 }

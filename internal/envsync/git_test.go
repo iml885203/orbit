@@ -1,6 +1,7 @@
 package envsync
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,5 +72,28 @@ func TestClone_NonExistentFails(t *testing.T) {
 	err := Clone("file:///nonexistent/repo", dest)
 	if err == nil {
 		t.Error("expected error for non-existent repo, got nil")
+	}
+	var cloneErr *CloneError
+	if !errors.As(err, &cloneErr) {
+		t.Fatalf("error = %T, want *CloneError", err)
+	}
+	if cloneErr.URL != "file:///nonexistent/repo" {
+		t.Errorf("clone URL = %q", cloneErr.URL)
+	}
+}
+
+func TestCloneErrorRedactsURLCredentials(t *testing.T) {
+	err := &CloneError{
+		URL: "https://secret-token@github.com/example/private.git",
+		Err: errors.New("exit status 128"),
+	}
+	if strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("error leaks URL credentials: %v", err)
+	}
+	if got := err.DisplayURL(); got != "https://github.com/example/private.git" {
+		t.Fatalf("display URL = %q", got)
+	}
+	if !err.IsGitHub() {
+		t.Fatal("GitHub URL was not recognized")
 	}
 }

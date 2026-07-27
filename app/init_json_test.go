@@ -89,7 +89,7 @@ func TestInitRecommendedActionsLeadToNextUsefulCommand(t *testing.T) {
 		result initResult
 		want   string
 	}{
-		{name: "missing env", result: initResult{}, want: "orbit env sync --json"},
+		{name: "missing env", result: initResult{}, want: "orbit init --yes --json"},
 		{name: "checks failed", result: initResult{ActiveEnv: "dev.yaml"}, want: "orbit doctor --json"},
 		{name: "ready", result: initResult{ActiveEnv: "dev.yaml", Ready: true}, want: "orbit up --json"},
 	}
@@ -98,6 +98,50 @@ func TestInitRecommendedActionsLeadToNextUsefulCommand(t *testing.T) {
 			actions := initRecommendedActions(test.result)
 			if len(actions) != 1 || actions[0].Command != test.want {
 				t.Fatalf("actions = %+v, want %q", actions, test.want)
+			}
+		})
+	}
+}
+
+func TestInitCompletionNeverClaimsIncompleteSetupSucceeded(t *testing.T) {
+	tests := []struct {
+		name        string
+		result      initResult
+		wantHeading string
+		wantCommand string
+		wantReady   bool
+	}{
+		{
+			name:        "environment sync failed",
+			result:      initResult{},
+			wantHeading: "Setup is incomplete",
+			wantCommand: "orbit init",
+		},
+		{
+			name:        "required tool missing",
+			result:      initResult{ActiveEnv: "dev.yaml"},
+			wantHeading: "Setup saved, but prerequisites are missing",
+			wantCommand: "orbit doctor",
+		},
+		{
+			name:        "ready",
+			result:      initResult{ActiveEnv: "dev.yaml", Ready: true},
+			wantHeading: "Setup complete!",
+			wantCommand: "orbit up",
+			wantReady:   true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := buildInitCompletion(test.result)
+			if got.Heading != test.wantHeading {
+				t.Errorf("heading = %q, want %q", got.Heading, test.wantHeading)
+			}
+			if got.HumanCommand != test.wantCommand {
+				t.Errorf("human command = %q, want %q", got.HumanCommand, test.wantCommand)
+			}
+			if got.Ready != test.wantReady {
+				t.Errorf("ready = %v, want %v", got.Ready, test.wantReady)
 			}
 		})
 	}

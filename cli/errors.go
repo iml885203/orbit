@@ -11,6 +11,7 @@ var (
 	ErrChecksFailed       = errors.New("checks failed")
 	ErrDependencyBlocked  = errors.New("dependency blocked")
 	ErrServiceStartFailed = errors.New("service start failed")
+	ErrEnvRepoAccess      = errors.New("environment repository access failed")
 )
 
 type classifiedError struct {
@@ -48,4 +49,8 @@ func NewDependencyBlockedError(msg string) error {
 
 func NewServiceStartFailedError(msg string) error {
 	return classifiedError{kind: ErrServiceStartFailed, msg: msg}
+}
+
+func NewEnvRepoAccessError(msg string) error {
+	return classifiedError{kind: ErrEnvRepoAccess, msg: msg}
 }

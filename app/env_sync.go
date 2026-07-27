@@ -1,9 +1,11 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
@@ -93,7 +95,7 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 	}
 	res, err := envsync.SyncFromRepo(url, dest, envsync.Options{DryRun: envSyncDryRun})
 	if err != nil {
-		return fmt.Errorf("sync: %w", err)
+		return envRepoSyncError(err)
 	}
 	if !cli.JSONOutput {
 		printSyncResult(res)
@@ -120,6 +122,23 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 		}), envSyncRecommendedActions(len(res.Written) > 0, alive, envSyncDryRun, envSyncNoRestart))
 	}
 	return offerDaemonRestart(len(res.Written) > 0)
+}
+
+func envRepoSyncError(err error) error {
+	var cloneErr *envsync.CloneError
+	if !errors.As(err, &cloneErr) {
+		return fmt.Errorf("sync: %w", err)
+	}
+	message := fmt.Sprintf("cannot access environment repo %s: %v", cloneErr.DisplayURL(), cloneErr.Err)
+	if detail := strings.TrimSpace(strings.ReplaceAll(cloneErr.Output, cloneErr.URL, cloneErr.DisplayURL())); detail != "" {
+		message += "\nGit: " + detail
+	}
+	if cloneErr.IsGitHub() {
+		message += "\nFor a private GitHub repo, run 'gh auth login' and 'gh auth setup-git', then retry 'orbit env sync'."
+	} else {
+		message += "\nVerify the repository URL and Git access, then retry 'orbit env sync'."
+	}
+	return cli.NewEnvRepoAccessError(message)
 }
 
 type envSyncJSONOptions struct {
