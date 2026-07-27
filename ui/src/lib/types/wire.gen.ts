@@ -72,6 +72,12 @@ export interface StatusResponse {
   epoch: number /* int64 */;
   services: ServiceStatus[];
   /**
+   * ConfigPath identifies the environment loaded by the running daemon.
+   * CLI clients compare it with their selected config before combining
+   * local config with daemon state.
+   */
+  config_path: string;
+  /**
    * ConfigStale means the loaded config has fallen behind reality (env
    * file edited, selection changed, or an API env switch left the
    * orchestrator on the previous env) — `orbit daemon restart` applies.

@@ -33,6 +33,45 @@ var (
 	ErrDaemonNotReady = errors.New("daemon not ready")
 )
 
+// ConfigMismatchError prevents a CLI command from silently combining one
+// selected environment with a daemon running another.
+type ConfigMismatchError struct {
+	Requested string
+	Running   string
+}
+
+func (e *ConfigMismatchError) Error() string {
+	return fmt.Sprintf(
+		"selected config %q differs from the running daemon config %q — run 'orbit daemon restart -c %q' to use the selected config, or rerun with '-c %q' to address the running environment",
+		e.Requested, e.Running, e.Requested, e.Running,
+	)
+}
+
+// CheckConfigMatch tolerates an empty daemon path for version skew with a
+// daemon that predates config identity in the status response.
+func CheckConfigMatch(requested, running string) error {
+	if strings.TrimSpace(requested) == "" || strings.TrimSpace(running) == "" {
+		return nil
+	}
+	requested = normalizedConfigPath(requested)
+	running = normalizedConfigPath(running)
+	if requested == running {
+		return nil
+	}
+	return &ConfigMismatchError{Requested: requested, Running: running}
+}
+
+func normalizedConfigPath(path string) string {
+	path = strings.TrimSpace(path)
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return filepath.Clean(path)
+}
+
 // DefaultPIDPath returns ~/.orbit/orbit.pid.
 func DefaultPIDPath() string {
 	return filepath.Join(OrbitDir(), "orbit.pid")
@@ -104,6 +143,11 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 		// Verify we can actually connect
 		client := NewClient(DefaultSocketPath())
 		if err := client.Health(); err == nil {
+			if status, statusErr := client.Status(); statusErr == nil {
+				if mismatch := CheckConfigMatch(configPath, status.ConfigPath); mismatch != nil {
+					return nil, mismatch
+				}
+			}
 			return client, nil
 		}
 		// Process alive but socket dead — kill and restart

@@ -31,6 +31,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	resp := StatusResponse{
 		Epoch:             s.epoch(),
 		Services:          statuses,
+		ConfigPath:        s.ConfigPath(),
 		ConfigStale:       stale,
 		ConfigStaleReason: staleReason,
 	}

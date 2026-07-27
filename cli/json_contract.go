@@ -121,6 +121,16 @@ func classify(err error) JSONError {
 			NextCommand: nextCommand,
 		}
 	}
+	var configMismatch *daemon.ConfigMismatchError
+	if errors.As(err, &configMismatch) {
+		return JSONError{
+			Code:        "env_mismatch",
+			Message:     msg,
+			Hint:        "Restart the daemon with the selected config, or explicitly select the running daemon config.",
+			Retryable:   true,
+			NextCommand: "orbit daemon restart -c " + strconv.Quote(configMismatch.Requested),
+		}
+	}
 	switch {
 	case errors.Is(err, ErrUnknownService):
 		return JSONError{
@@ -185,6 +195,13 @@ func classify(err error) JSONError {
 func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "json_unsupported_destructive_command" {
 		return nil
+	}
+	if err.Code == "env_mismatch" {
+		return []JSONAction{{
+			Command:     err.NextCommand,
+			Reason:      "Restart the daemon with the selected environment.",
+			Destructive: false,
+		}}
 	}
 	actions := []JSONAction{
 		{Command: "orbit status --json", Reason: "Inspect the latest daemon and service state.", Destructive: false},

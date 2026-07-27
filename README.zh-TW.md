@@ -51,10 +51,12 @@ orbit init
 升級、rollback、移除、手動下載與從 source build
 請見[安裝與開發](docs/development.zh-TW.md)。
 
+macOS 與 Linux 為正式支援平台；Windows build 為 Beta。詳情請見
+[平台支援與安裝](docs/development.zh-TW.md#平台支援)。
+
 ## 常用操作
 
 ```bash
-orbit up --infra             # 只啟動 containers
 orbit up                     # 啟動 services 與 dependencies
 orbit status --json          # 取得穩定的 machine-readable 狀態
 orbit logs api -f            # 追蹤單一 service
@@ -64,9 +66,14 @@ orbit doctor --json          # 診斷本機設定
 orbit down                   # 停止環境
 ```
 
+一般啟動只需使用 `orbit up`。只有刻意想單獨啟動 containers、不啟動 host
+services 時，才使用 `orbit up --infra`。
+
 ### Database workflow
 
 ```bash
+orbit db list
+orbit db query "SELECT @@VERSION"
 orbit db diff AppDB
 orbit db publish AppDB
 orbit db reset AppDB         # 破壞性操作：丟棄本機資料

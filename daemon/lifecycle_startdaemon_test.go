@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
@@ -28,5 +29,28 @@ func TestStartDaemon_FailsWhenDashboardPortHeld(t *testing.T) {
 	}
 	if conflict.Port != port {
 		t.Errorf("conflict.Port = %d, want %d", conflict.Port, port)
+	}
+}
+
+func TestCheckConfigMatch(t *testing.T) {
+	dir := t.TempDir()
+	selected := filepath.Join(dir, "selected.yaml")
+	if err := CheckConfigMatch(selected, selected); err != nil {
+		t.Fatalf("same config rejected: %v", err)
+	}
+
+	err := CheckConfigMatch(selected, filepath.Join(dir, "running.yaml"))
+	var mismatch *ConfigMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("error = %T %v, want ConfigMismatchError", err, err)
+	}
+	if mismatch.Requested != selected {
+		t.Errorf("requested = %q, want %q", mismatch.Requested, selected)
+	}
+}
+
+func TestCheckConfigMatchAllowsOlderDaemonWithoutPath(t *testing.T) {
+	if err := CheckConfigMatch("/tmp/selected.yaml", ""); err != nil {
+		t.Fatalf("empty running path should fail open for version skew: %v", err)
 	}
 }

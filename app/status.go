@@ -32,6 +32,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	running := make(map[string]daemon.ServiceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
+			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+				return mismatch
+			}
 			for i := range status.Services {
 				running[status.Services[i].Name] = status.Services[i]
 			}

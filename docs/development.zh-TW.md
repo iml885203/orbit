@@ -2,9 +2,28 @@
 
 [English](./development.md) · [繁體中文](./development.zh-TW.md)
 
-兩種讀者：**使用 Orbit**（安裝方式、upgrade / rollback / uninstall —— 到 _手動下載_ 為止的章節）與**在 Orbit 本身上動手**（從原始碼 build、開發流程、dashboard hot reload —— 從 _從原始碼 build_ 開始）。日常基本流程請參考 [README](../README.zh-TW.md#五分鐘上手)。
+兩種讀者：**使用 Orbit**（安裝方式、upgrade / rollback / uninstall）與
+**在 Orbit 本身上動手**（從原始碼 build、開發流程、dashboard hot reload）。
+日常基本流程請參考 [README](../README.zh-TW.md#常用操作)。
 
 ## 使用 Orbit
+
+### 平台支援
+
+| 平台 | 支援程度 | 安裝方式 |
+|---|---|---|
+| macOS arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
+| Linux arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
+| Windows amd64 / arm64 | Beta | 手動下載 `.exe`，或從 Git Bash/MSYS2 執行 `install.sh` |
+
+使用 container 的環境在 macOS 與 Windows 需要 Docker Desktop，在 Linux
+需要 Docker Engine。每個環境也可能宣告額外的 host runtime；`orbit doctor`
+會列出並提供安裝提示。同步 environment repository 需要 Git。
+
+Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
+完全同等。尚未提供原生 PowerShell installer；Windows 使用者應手動下載
+`.exe`，或從 Git Bash/MSYS2 執行 Bash installer，container workload 則使用
+Docker Desktop。
 
 ### Upgrade
 

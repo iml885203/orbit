@@ -32,6 +32,10 @@ type StatusResponse struct {
 	// nanoseconds) keeps the value safely within JS Number precision.
 	Epoch    int64           `json:"epoch"`
 	Services []ServiceStatus `json:"services"`
+	// ConfigPath identifies the environment loaded by the running daemon.
+	// CLI clients compare it with their selected config before combining
+	// local config with daemon state.
+	ConfigPath string `json:"config_path"`
 	// ConfigStale means the loaded config has fallen behind reality (env
 	// file edited, selection changed, or an API env switch left the
 	// orchestrator on the previous env) — `orbit daemon restart` applies.

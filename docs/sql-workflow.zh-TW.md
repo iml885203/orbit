@@ -86,6 +86,9 @@ daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建�
 不需要先執行任何設定指令。Orbit 有可用的快速還原狀態時會直接使用，否則
 從 SQL project 重建；這個差異不需要使用者處理。
 
+`orbit db query` 刻意只提供 CLI 操作。Dashboard 專注於 project drift、
+publish 與 reset，而不內嵌通用 SQL console。
+
 ## Dashboard visibility
 
 SQL Server 頁面會在進入或回到視窗時檢查 source 變更。每顆資料庫都會顯示
@@ -102,5 +105,5 @@ Publish 的串流輸出顯示在 log panel；Reset 丟棄資料前一定會要�
 
 ## 延伸閱讀
 
-- [configuration.zh-TW.md](configuration.zh-TW.md) —— `sql_server_image`、`sql_server_pull_policy` 與相關設定
-- [docs/troubleshooting.md](troubleshooting.zh-TW.md) —— 更完整的錯誤列表
+- [configuration.zh-TW.md](configuration.zh-TW.md#sqlserver) —— 完整的 target container 與 `sqlserver` 設定
+- [troubleshooting.zh-TW.md](troubleshooting.zh-TW.md) —— 更完整的錯誤列表

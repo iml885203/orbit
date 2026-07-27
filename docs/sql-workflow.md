@@ -93,6 +93,10 @@ applies the latest schema. No setup command is required. Orbit automatically
 chooses a fast restore when available and rebuilds from the SQL project when
 needed.
 
+`orbit db query` is intentionally CLI-only. The dashboard focuses on project
+drift, publish, and reset operations rather than embedding a general SQL
+console.
+
 ## Dashboard visibility
 
 The SQL Server page checks source changes when opened or focused. Each database
@@ -111,5 +115,5 @@ force-publish action.
 
 ## See also
 
-- [configuration.md](configuration.md) — `sql_server_image`, `sql_server_pull_policy`, and related settings
+- [configuration.md](configuration.md#sqlserver) — complete target container and `sqlserver` configuration
 - [docs/troubleshooting.md](troubleshooting.md) — broader error catalog

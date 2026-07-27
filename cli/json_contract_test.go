@@ -69,6 +69,30 @@ func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit db list --json", &daemon.ConfigMismatchError{
+		Requested: "/tmp/selected.yaml",
+		Running:   "/tmp/running.yaml",
+	})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "env_mismatch" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable {
+		t.Fatal("retryable = false, want true")
+	}
+	if got.Error.NextCommand != `orbit daemon restart -c "/tmp/selected.yaml"` {
+		t.Fatalf("next_command = %q", got.Error.NextCommand)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != got.Error.NextCommand {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesUnknownService(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit restart missing --json", NewUnknownServiceError("missing"))

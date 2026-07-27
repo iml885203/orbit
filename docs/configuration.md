@@ -344,7 +344,25 @@ externals:
 Explicitly enables SQL Server Database Projects for this environment. Without
 this section Orbit does not show SQL Server UI, checks, or setup guidance.
 
+This complete example includes the target container, its persistent storage,
+and the workflow section:
+
 ```yaml
+containers:
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      mssql: "14333:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_PASSWORD}"
+    volumes:
+      - orbit-sqlserver:/var/opt/mssql
+    health_check:
+      type: tcp
+      port: 14333
+      retries: 30
+
 sqlserver:
   target: database
   username: sa
@@ -353,6 +371,12 @@ sqlserver:
     - path: database/Accounts/Accounts.sqlproj
     - path: database/Orders/Orders.sqlproj
 ```
+
+Set `SQLSERVER_PASSWORD` in the host environment before starting Orbit. The
+Microsoft image requires `MSSQL_SA_PASSWORD` to initialize itself; Orbit reads
+the same resolved key because `password_env` names it. If an image requires a
+different bootstrap key, declare both keys on the target container and point
+`password_env` at the one Orbit should read.
 
 `target` names a container in this env. `username` defaults to `sa`.
 `password_env` names the target container environment key containing the

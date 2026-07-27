@@ -82,6 +82,16 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		if configFile == "" {
 			configFile = resolveConfigFile()
 		}
+		if commandRequiresMatchingDaemonConfig(cmd) {
+			client := daemon.NewClient(daemon.DefaultSocketPath())
+			if client.Health() == nil {
+				if status, err := client.Status(); err == nil {
+					if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+						return mismatch
+					}
+				}
+			}
+		}
 		if shouldRecordCLI(cmd) {
 			cliHistID = history.NewID()
 			cliHistAt = time.Now()
@@ -177,6 +187,15 @@ func (e errCLIJSONAlreadyRendered) Error() string {
 
 func (e errCLIJSONAlreadyRendered) Unwrap() error {
 	return e.err
+}
+
+func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
+	for current := cmd; current != nil; current = current.Parent() {
+		if current.Name() == "db" {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {

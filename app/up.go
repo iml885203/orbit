@@ -48,8 +48,9 @@ func isTerminal() bool {
 	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 }
 
-func runUp(_ *cobra.Command, args []string) error {
-	if err := preflightOrAbort(); err != nil {
+func runUp(cmd *cobra.Command, args []string) error {
+	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+	if err := preflightOrAbort(explicitConfig); err != nil {
 		return err
 	}
 
@@ -588,7 +589,10 @@ func isPostStopState(state string) bool {
 
 // preflightOrAbort runs readiness checks and returns a user-friendly error if
 // any block start-up.
-func preflightOrAbort() error {
+func preflightOrAbort(explicitConfig bool) error {
+	if explicitConfig {
+		return nil
+	}
 	checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
 	var failures []preflight.Check
 	for _, c := range checks {

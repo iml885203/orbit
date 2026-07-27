@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"slices"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestEnvironmentHelpOnlyShowsListAndSync(t *testing.T) {
@@ -78,5 +80,21 @@ func TestExecHelpIsNotTreatedAsAContainer(t *testing.T) {
 func TestUpdateUsesShortPublicName(t *testing.T) {
 	if got := selfUpdateCmd().Name(); got != "update" {
 		t.Fatalf("update command name = %q", got)
+	}
+}
+
+func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
+	root := &cobra.Command{Use: "orbit"}
+	db := &cobra.Command{Use: "db"}
+	list := &cobra.Command{Use: "list"}
+	status := &cobra.Command{Use: "status"}
+	root.AddCommand(db, status)
+	db.AddCommand(list)
+
+	if !commandRequiresMatchingDaemonConfig(list) {
+		t.Fatal("nested db command did not require matching daemon config")
+	}
+	if commandRequiresMatchingDaemonConfig(status) {
+		t.Fatal("unrelated command required the db-specific guard")
 	}
 }

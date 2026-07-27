@@ -47,6 +47,21 @@ func TestDoctorRecommendedActionsRunnableHint(t *testing.T) {
 	}
 }
 
+func TestDoctorRecommendedActionsUseJSONForOrbitHints(t *testing.T) {
+	resp := &daemon.DoctorResponse{
+		Checks: []daemon.DoctorCheck{
+			{Name: "Daemon", Status: daemon.CheckFail, Message: "api degraded", Hint: "run: orbit logs api"},
+		},
+	}
+	got := doctorRecommendedActions(resp)
+	for _, action := range got {
+		if action.Command == "orbit logs api --json" {
+			return
+		}
+	}
+	t.Fatalf("missing machine-readable logs action: %+v", got)
+}
+
 func TestDoctorFailureIgnoresHiddenServiceCheck(t *testing.T) {
 	resp := &daemon.DoctorResponse{
 		Checks: []daemon.DoctorCheck{

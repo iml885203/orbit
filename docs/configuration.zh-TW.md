@@ -337,7 +337,24 @@ externals:
 明確為這個環境啟用 SQL Server Database Projects。沒有這個 section 時，
 Orbit 不會顯示 SQL Server UI、檢查或設定提示。
 
+以下完整範例同時包含 target container、持久化儲存與 workflow section：
+
 ```yaml
+containers:
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      mssql: "14333:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_PASSWORD}"
+    volumes:
+      - orbit-sqlserver:/var/opt/mssql
+    health_check:
+      type: tcp
+      port: 14333
+      retries: 30
+
 sqlserver:
   target: database
   username: sa
@@ -346,6 +363,12 @@ sqlserver:
     - path: database/Accounts/Accounts.sqlproj
     - path: database/Orders/Orders.sqlproj
 ```
+
+啟動 Orbit 前先在 host environment 設定 `SQLSERVER_PASSWORD`。Microsoft
+image 初始化時需要 `MSSQL_SA_PASSWORD`；`password_env` 指向同一個 key，
+所以 Orbit 會讀取它解析後的值。如果 image 使用不同的 bootstrap key，
+請在 target container 同時宣告兩個 keys，並讓 `password_env` 指向 Orbit
+應讀取的那一個。
 
 `target` 指向同一個 env 裡的 container；`username` 預設為 `sa`。
 `password_env` 是 target container 裡存放密碼的環境變數名稱，Orbit

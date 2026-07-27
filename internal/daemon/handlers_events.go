@@ -211,6 +211,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 	}
 	stale, staleReason := s.configStale()
 	resp := StatusResponse{Epoch: s.epoch(), Services: make([]ServiceStatus, 0),
+		ConfigPath:  s.ConfigPath(),
 		ConfigStale: stale, ConfigStaleReason: staleReason}
 	for name, c := range cfg.Containers {
 		if ss, ok := tracked[name]; ok {

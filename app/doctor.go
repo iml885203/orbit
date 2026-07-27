@@ -33,6 +33,13 @@ type doctorOptions struct {
 
 func runDoctorWithOptions(options doctorOptions) error {
 	client := daemon.NewClient(daemon.DefaultSocketPath())
+	if client.Health() == nil {
+		if status, err := client.Status(); err == nil {
+			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+				return mismatch
+			}
+		}
+	}
 	resp := doctorResponse(client)
 	failure := doctorFailure(resp, options.showDaemon)
 	if cli.JSONOutput {
@@ -86,8 +93,12 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 
 func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
 	if client.Health() == nil {
-		if resp, err := client.Doctor(); err == nil {
-			return resp
+		if status, err := client.Status(); err == nil {
+			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
+				if resp, err := client.Doctor(); err == nil {
+					return resp
+				}
+			}
 		}
 	}
 	return localDoctorResponse()
@@ -177,6 +188,9 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 			}
 			if cmd, ok := strings.CutPrefix(check.Hint, "run: "); ok {
 				cmd = strings.TrimSpace(cmd)
+				if strings.HasPrefix(cmd, "orbit ") && !strings.Contains(cmd, " --json") {
+					cmd += " --json"
+				}
 				if cmd != "" && !added[cmd] {
 					actions = append(actions, cli.JSONAction{
 						Command:     cmd,

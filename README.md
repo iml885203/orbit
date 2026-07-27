@@ -56,10 +56,12 @@ standard-library Python service running on the host with Redis in a container.
 Orbit does not install Python or other project runtimes; `orbit doctor` reports
 what the selected environment expects.
 
+macOS and Linux are supported. Windows builds are Beta; see
+[platform support and installation](docs/development.md#platform-support).
+
 ## Common workflows
 
 ```bash
-orbit up --infra             # start containers only
 orbit up                     # start services and their dependencies
 orbit status --json          # inspect stable machine-readable state
 orbit logs api -f            # stream one service
@@ -69,9 +71,14 @@ orbit doctor --json          # diagnose the local setup
 orbit down                   # stop the environment
 ```
 
+`orbit up` is the normal start command. Use `orbit up --infra` only when you
+intentionally want containers without host services.
+
 ### Database workflow
 
 ```bash
+orbit db list
+orbit db query "SELECT @@VERSION"
 orbit db diff AppDB
 orbit db publish AppDB
 orbit db reset AppDB         # destructive: discards local data

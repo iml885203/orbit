@@ -2,9 +2,30 @@
 
 [English](./development.md) · [繁體中文](./development.zh-TW.md)
 
-Two audiences: **using Orbit** (install alternatives, upgrade / rollback / uninstall — the sections up to _Manual download_) and **hacking on Orbit itself** (build from source, dev workflow, dashboard hot reload — from _Build from source_ on). For the basic day-to-day workflow, see the [README](../README.md#your-first-5-minutes).
+Two audiences: **using Orbit** (install alternatives, upgrade / rollback /
+uninstall) and **hacking on Orbit itself** (build from source, dev workflow,
+dashboard hot reload). For the basic day-to-day workflow, see the
+[README](../README.md#common-workflows).
 
 ## Using Orbit
+
+### Platform support
+
+| Platform | Support | Installation |
+|---|---|---|
+| macOS arm64 / amd64 | Supported | `install.sh` or manual release download |
+| Linux arm64 / amd64 | Supported | `install.sh` or manual release download |
+| Windows amd64 / arm64 | Beta | Manual `.exe` download, or `install.sh` from Git Bash/MSYS2 |
+
+Container-based environments require Docker Desktop on macOS and Windows, or
+Docker Engine on Linux. Every environment may declare additional host runtimes;
+`orbit doctor` names them and provides installation guidance. Git is required
+to sync environment repositories.
+
+Windows builds receive release smoke coverage, but do not yet promise full
+macOS/Linux parity. There is no native PowerShell installer yet. Windows users
+should download the `.exe` manually or run the Bash installer from Git
+Bash/MSYS2, then use Docker Desktop for container workloads.
 
 ### Upgrading
 

@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,6 +138,9 @@ func (a *App) wireContainerCallbacks(mgr *container.Manager) {
 func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) {
 	a.Orchestrator.OnStartProcess = func(ctx context.Context, name string, generation int, cfg *config.Config, svc *config.Service) error {
 		slog.Info("starting service", "component", "orbit", "name", name)
+		if err := ensureServicePortsAvailable(name, svc); err != nil {
+			return err
+		}
 		var toggleStates map[string]bool
 		if a.GetToggleStates != nil {
 			toggleStates = a.GetToggleStates()
@@ -231,6 +238,50 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 		}
 		return err
 	}
+}
+
+func ensureServicePortsAvailable(name string, svc *config.Service) error {
+	type endpoint struct {
+		network string
+		address string
+	}
+	ports := make([]int, 0, len(svc.Ports))
+	for _, port := range svc.Ports {
+		ports = append(ports, port.Host)
+	}
+	sort.Ints(ports)
+	for _, port := range ports {
+		addresses := []endpoint{{network: "tcp4", address: "127.0.0.1:" + strconv.Itoa(port)}}
+		if probe, err := net.Listen("tcp6", "[::1]:0"); err == nil {
+			_ = probe.Close()
+			addresses = append(addresses, endpoint{network: "tcp6", address: "[::1]:" + strconv.Itoa(port)})
+		}
+		available := true
+		for _, address := range addresses {
+			listener, err := net.Listen(address.network, address.address)
+			if err != nil {
+				available = false
+				break
+			}
+			_ = listener.Close()
+		}
+		if available {
+			continue
+		}
+		holders := process.FindPortHolders([]int{port})
+		if len(holders) == 0 {
+			return fmt.Errorf("port %d is already in use (needed by service %s)", port, name)
+		}
+		pids := make([]string, 0, len(holders))
+		for _, holder := range holders {
+			pids = append(pids, strconv.Itoa(holder.PID))
+		}
+		return fmt.Errorf(
+			"port %d is already in use by pid %s (needed by service %s)",
+			port, strings.Join(pids, ", "), name,
+		)
+	}
+	return nil
 }
 
 func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder, orch *Orchestrator) {
