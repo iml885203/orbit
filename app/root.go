@@ -65,7 +65,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd := &cobra.Command{
 		Use:     "orbit",
 		Short:   "Local development orchestration tool",
-		Long:    "Orbit manages containers and services for local development with zero zombie processes and reliable state sync.",
+		Long:    "Run host services and containers as one local development environment.",
 		Version: buildVersion(),
 	}
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
@@ -206,7 +206,7 @@ func coreCommandVisibility(cfg *config.Config) map[string]bool {
 			break
 		}
 	}
-	visibility["trace"] = cfg.TracingEnabled()
+	visibility["trace"] = cfg.Tracing != nil && cfg.Tracing.Enabled
 	return visibility
 }
 

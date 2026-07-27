@@ -137,12 +137,16 @@ func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
 		},
 	}})
 
-	for _, name := range []string{"exec", "query", "seed", "trace", "tunnel"} {
+	for _, name := range []string{"exec", "query", "seed", "tunnel"} {
 		assertCommandHidden(t, root, name, false)
 	}
-	for _, name := range []string{"db", "topics"} {
+	for _, name := range []string{"db", "topics", "trace"} {
 		assertCommandHidden(t, root, name, true)
 	}
+
+	cfg.Tracing = &config.TracingConfig{Enabled: true}
+	applyContextualCommandVisibility(root, cfg, nil)
+	assertCommandHidden(t, root, "trace", false)
 }
 
 func commandVisibilityTestRoot() *cobra.Command {
