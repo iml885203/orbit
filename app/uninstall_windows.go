@@ -15,7 +15,7 @@ const windowsUninstallHelper = `param(
     [Parameter(Mandatory=$true)][int]$OrbitParentPID,
     [Parameter(Mandatory=$true)][string]$OrbitManifest
 )
-$OrbitPaths = @(Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json)
+$OrbitPaths = Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json
 Wait-Process -Id $OrbitParentPID -ErrorAction SilentlyContinue
 $OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
