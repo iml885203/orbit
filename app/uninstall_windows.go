@@ -17,17 +17,17 @@ $OrbitPaths = Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json
 $OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
     $OrbitLastError = ""
-    for ($OrbitAttempt = 0; $OrbitAttempt -lt 100 -and (Test-Path -LiteralPath $OrbitPath); $OrbitAttempt++) {
+    $OrbitRemoved = -not (Test-Path -LiteralPath $OrbitPath)
+    for ($OrbitAttempt = 0; $OrbitAttempt -lt 100 -and -not $OrbitRemoved; $OrbitAttempt++) {
         try {
             Remove-Item -LiteralPath $OrbitPath -Recurse -Force -ErrorAction Stop
+            $OrbitRemoved = $true
         } catch {
             $OrbitLastError = $_.Exception.Message
-        }
-        if (Test-Path -LiteralPath $OrbitPath) {
             Start-Sleep -Milliseconds 100
         }
     }
-    if (Test-Path -LiteralPath $OrbitPath) {
+    if (-not $OrbitRemoved) {
         $OrbitFailures += "$OrbitPath :: $OrbitLastError"
     }
 }
