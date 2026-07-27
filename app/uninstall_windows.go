@@ -81,7 +81,7 @@ func removeUninstallArtifacts(paths []string) (bool, error) {
 	cmd := exec.Command("powershell.exe", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
-		CreationFlags: 0x00000008 | 0x00000200,
+		CreationFlags: 0x08000000,
 	}
 	if err := cmd.Start(); err != nil {
 		_ = os.Remove(helperPath)
