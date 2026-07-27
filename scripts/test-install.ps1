@@ -73,8 +73,8 @@ function Assert-Version {
     )
 
     $actual = & $Path --version
-    if ($LASTEXITCODE -ne 0 -or $actual -ne "orbit v$Version") {
-        throw "$Path reports '$actual', expected orbit v$Version"
+    if ($LASTEXITCODE -ne 0 -or $actual -ne "v$Version") {
+        throw "$Path reports '$actual', expected v$Version"
     }
 }
 

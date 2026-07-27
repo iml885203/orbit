@@ -78,7 +78,7 @@ function Get-OrbitBinaryVersion {
     $versionText = ([string]::Join("`n", @($output))).Trim()
     $match = [regex]::Match(
         $versionText,
-        '^orbit v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$'
+        '^(?:orbit )?v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$'
     )
     if ($LASTEXITCODE -ne 0 -or -not $match.Success) {
         throw "$Path does not report a valid Orbit semantic version"

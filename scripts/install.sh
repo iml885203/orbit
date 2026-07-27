@@ -77,8 +77,8 @@ sha256_file() {
 binary_version() {
   local output
   output="$("$1" --version 2>/dev/null)" || return 1
-  if [[ "$output" =~ ^orbit[[:space:]]+v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$ ]]; then
-    echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+  if [[ "$output" =~ ^(orbit[[:space:]]+)?v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$ ]]; then
+    echo "${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}${BASH_REMATCH[5]}"
     return
   fi
   return 1
