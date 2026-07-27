@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,8 +13,9 @@ import (
 
 const windowsUninstallHelper = `param(
     [Parameter(Mandatory=$true)][int]$OrbitParentPID,
-    [Parameter(ValueFromRemainingArguments=$true)][string[]]$OrbitPaths
+    [Parameter(Mandatory=$true)][string]$OrbitManifest
 )
+$OrbitPaths = @(Get-Content -LiteralPath $OrbitManifest -Raw | ConvertFrom-Json)
 Wait-Process -Id $OrbitParentPID -ErrorAction SilentlyContinue
 $OrbitFailures = @()
 foreach ($OrbitPath in $OrbitPaths) {
@@ -31,27 +33,50 @@ if ($OrbitFailures.Count -gt 0) {
     Set-Content -LiteralPath "$PSCommandPath.failed" -Value $OrbitFailures
     exit 1
 }
+Remove-Item -LiteralPath $OrbitManifest -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
 `
 
 func removeUninstallArtifacts(paths []string) (bool, error) {
+	manifest, err := os.CreateTemp("", "orbit-uninstall-*.json")
+	if err != nil {
+		return false, fmt.Errorf("create Windows uninstall manifest: %w", err)
+	}
+	manifestPath := manifest.Name()
+	if err := json.NewEncoder(manifest).Encode(paths); err != nil {
+		_ = manifest.Close()
+		_ = os.Remove(manifestPath)
+		return false, fmt.Errorf("write Windows uninstall manifest: %w", err)
+	}
+	if err := manifest.Close(); err != nil {
+		_ = os.Remove(manifestPath)
+		return false, fmt.Errorf("close Windows uninstall manifest: %w", err)
+	}
+
 	helper, err := os.CreateTemp("", "orbit-uninstall-*.ps1")
 	if err != nil {
+		_ = os.Remove(manifestPath)
 		return false, fmt.Errorf("create Windows uninstall helper: %w", err)
 	}
 	helperPath := helper.Name()
 	if _, err := helper.WriteString(windowsUninstallHelper); err != nil {
 		_ = helper.Close()
 		_ = os.Remove(helperPath)
+		_ = os.Remove(manifestPath)
 		return false, fmt.Errorf("write Windows uninstall helper: %w", err)
 	}
 	if err := helper.Close(); err != nil {
 		_ = os.Remove(helperPath)
+		_ = os.Remove(manifestPath)
 		return false, fmt.Errorf("close Windows uninstall helper: %w", err)
 	}
 
-	args := []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helperPath, "-OrbitParentPID", strconv.Itoa(os.Getpid()), "-OrbitPaths"}
-	args = append(args, paths...)
+	args := []string{
+		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+		"-File", helperPath,
+		"-OrbitParentPID", strconv.Itoa(os.Getpid()),
+		"-OrbitManifest", manifestPath,
+	}
 	cmd := exec.Command("powershell.exe", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
@@ -59,6 +84,7 @@ func removeUninstallArtifacts(paths []string) (bool, error) {
 	}
 	if err := cmd.Start(); err != nil {
 		_ = os.Remove(helperPath)
+		_ = os.Remove(manifestPath)
 		return false, fmt.Errorf("start Windows uninstall helper: %w", err)
 	}
 	if err := cmd.Process.Release(); err != nil {
