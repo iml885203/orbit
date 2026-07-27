@@ -58,6 +58,10 @@ jobs:
         if: ${{ !matrix.windows }}
         shell: bash
         run: make test-install
+      - name: Exercise native PowerShell installer lifecycle
+        if: ${{ matrix.windows }}
+        shell: pwsh
+        run: ./scripts/test-install.ps1
       - name: Build and smoke Unix binary
         if: ${{ !matrix.windows }}
         shell: bash

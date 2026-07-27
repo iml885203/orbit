@@ -15,7 +15,7 @@ dashboard hot reload). For the basic day-to-day workflow, see the
 |---|---|---|
 | macOS arm64 / amd64 | Supported | `install.sh` or manual release download |
 | Linux arm64 / amd64 | Supported | `install.sh` or manual release download |
-| Windows amd64 / arm64 | Beta | Manual `.exe` download, or `install.sh` from Git Bash/MSYS2 |
+| Windows amd64 / arm64 | Beta | Native `install.ps1` or manual `.exe` download |
 
 Container-based environments require Docker Desktop on macOS and Windows, or
 Docker Engine on Linux. Every environment may declare additional host runtimes;
@@ -23,9 +23,10 @@ Docker Engine on Linux. Every environment may declare additional host runtimes;
 to sync environment repositories.
 
 Windows builds receive release smoke coverage, but do not yet promise full
-macOS/Linux parity. There is no native PowerShell installer yet. Windows users
-should download the `.exe` manually or run the Bash installer from Git
-Bash/MSYS2, then use Docker Desktop for container workloads.
+macOS/Linux runtime parity. The native PowerShell installer verifies the
+release checksum and version, preserves the previous binary, refuses accidental
+downgrades, and adds Orbit to the user PATH. Windows container workloads use
+Docker Desktop.
 
 ### Upgrading
 
@@ -35,6 +36,10 @@ binary's distribution config provides an install URL:
 ```bash
 orbit update
 ```
+
+On Windows Beta, rerun `install.ps1` to update; replacing a running `.exe`
+in-place is not reliable on Windows, so `orbit update` is not yet supported
+there.
 
 After upgrading, the running daemon is still the old build. `orbit status` flags this with `⚠ newer orbit … — orbit daemon restart`. Run `orbit daemon restart` to pick up the new binary.
 

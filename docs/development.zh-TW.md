@@ -14,16 +14,16 @@
 |---|---|---|
 | macOS arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
 | Linux arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
-| Windows amd64 / arm64 | Beta | 手動下載 `.exe`，或從 Git Bash/MSYS2 執行 `install.sh` |
+| Windows amd64 / arm64 | Beta | 原生 `install.ps1` 或手動下載 `.exe` |
 
 使用 container 的環境在 macOS 與 Windows 需要 Docker Desktop，在 Linux
 需要 Docker Engine。每個環境也可能宣告額外的 host runtime；`orbit doctor`
 會列出並提供安裝提示。同步 environment repository 需要 Git。
 
 Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
-完全同等。尚未提供原生 PowerShell installer；Windows 使用者應手動下載
-`.exe`，或從 Git Bash/MSYS2 執行 Bash installer，container workload 則使用
-Docker Desktop。
+完全同等。原生 PowerShell installer 會驗證 release checksum 與版本、保留
+上一版 binary、阻止意外降級，並把 Orbit 加入 user PATH。Container workload
+使用 Docker Desktop。
 
 ### Upgrade
 
@@ -32,6 +32,9 @@ Docker Desktop。
 ```bash
 orbit update
 ```
+
+Windows Beta 請重新執行 `install.ps1` 來更新；Windows 無法可靠地原地替換
+正在執行的 `.exe`，因此尚不支援 `orbit update`。
 
 升級後，正在跑的 daemon 仍是舊的 build。`orbit status` 會用 `⚠ newer orbit … — orbit daemon restart` 提醒你。執行 `orbit daemon restart` 讓新的 binary 生效。
 
