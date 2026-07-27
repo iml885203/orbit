@@ -98,3 +98,28 @@ func TestLocalDoctorResponse_ExtensionChecks(t *testing.T) {
 	}}
 	_ = localDoctorResponse()
 }
+
+func TestLocalDoctorResponse_HostOnlyEnvironmentDoesNotRequireDocker(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, "env.yaml")
+	if err := os.WriteFile(envPath, []byte(`
+version: "2"
+services:
+  docs:
+    type: shell
+    path: .
+    command: echo ready
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prev := configFile
+	configFile = envPath
+	t.Cleanup(func() { configFile = prev })
+
+	resp := localDoctorResponse()
+	for _, check := range resp.Checks {
+		if check.Name == "Docker" {
+			t.Fatalf("host-only environment reported an irrelevant Docker check: %+v", check)
+		}
+	}
+}

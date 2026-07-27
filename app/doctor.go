@@ -24,6 +24,14 @@ func doctorCmd() *cobra.Command {
 }
 
 func runDoctor(_ *cobra.Command, _ []string) error {
+	return runDoctorWithOptions(doctorOptions{showDaemon: true})
+}
+
+type doctorOptions struct {
+	showDaemon bool
+}
+
+func runDoctorWithOptions(options doctorOptions) error {
 	// If daemon is running, delegate to API for consistent results
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if cli.JSONOutput {
@@ -35,6 +43,9 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		if err == nil {
 			_, _ = cli.Bold.Println("Checks:")
 			for _, c := range resp.Checks {
+				if !options.showDaemon && c.Name == "Daemon" {
+					continue
+				}
 				icon := cli.Faint.Sprint("—")
 				switch c.Status {
 				case "pass":
@@ -59,16 +70,6 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 
 	_, _ = cli.Bold.Println("Checks:")
 
-	dc := daemonsrv.DockerCheck()
-	dockerIcon := pass
-	if dc.Status == daemon.CheckFail {
-		dockerIcon = fail
-	}
-	fmt.Printf("  %s %s: %s\n", dockerIcon, dc.Name, dc.Message)
-	if dc.Hint != "" && dc.Status == daemon.CheckFail {
-		_, _ = cli.Faint.Printf("      → %s\n", dc.Hint)
-	}
-
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		fmt.Printf("  %s Config file error: %v\n", fail, err)
@@ -81,6 +82,18 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 			cfg = nil
 		} else {
 			fmt.Printf("  %s Config is valid\n", pass)
+		}
+	}
+
+	if cfg != nil && len(cfg.Containers) > 0 {
+		dc := daemonsrv.DockerCheck()
+		dockerIcon := pass
+		if dc.Status == daemon.CheckFail {
+			dockerIcon = fail
+		}
+		fmt.Printf("  %s %s: %s\n", dockerIcon, dc.Name, dc.Message)
+		if dc.Hint != "" && dc.Status == daemon.CheckFail {
+			_, _ = cli.Faint.Printf("      → %s\n", dc.Hint)
 		}
 	}
 
@@ -131,7 +144,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	if daemonRunning {
+	if options.showDaemon && daemonRunning {
 		status, err := daemonClient.Status()
 		if err != nil {
 			fmt.Printf("  %s Orbit daemon is running but status unavailable (%v)\n", fail, err)
@@ -145,7 +158,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 			}
 			fmt.Printf("  %s Orbit daemon is running (%d/%d services healthy)\n", pass, healthy, len(status.Services))
 		}
-	} else {
+	} else if options.showDaemon {
 		fmt.Printf("  %s Orbit daemon is not running\n", cli.Faint.Sprint("—"))
 	}
 
@@ -173,7 +186,7 @@ func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
 }
 
 func localDoctorResponse() *daemon.DoctorResponse {
-	checks := []daemon.DoctorCheck{daemonsrv.DockerCheck()}
+	var checks []daemon.DoctorCheck
 	var cfg *config.Config
 	if loaded, err := config.Load(configFile); err != nil {
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckFail, Message: err.Error()})
@@ -182,6 +195,9 @@ func localDoctorResponse() *daemon.DoctorResponse {
 	} else {
 		cfg = loaded
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckPass, Message: configFile})
+		if len(cfg.Containers) > 0 {
+			checks = append(checks, daemonsrv.DockerCheck())
+		}
 		checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
 	}
 	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running"})

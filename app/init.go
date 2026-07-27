@@ -197,7 +197,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// Step 4: Health check
 	fmt.Println()
 	_, _ = cli.Bold.Println("Step 4: Health check")
-	_ = runDoctor(nil, nil)
+	_ = runDoctorWithOptions(doctorOptions{})
 
 	// Step 5: Next steps
 	fmt.Println()

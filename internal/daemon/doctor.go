@@ -384,10 +384,11 @@ func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
 func (s *Server) runDoctorChecks() []DoctorCheck {
 	var checks []DoctorCheck
 
-	checks = append(checks, DockerCheck())
-
 	configPath := s.ConfigPath()
 	checks = append(checks, DoctorCheck{Name: "Config", Status: CheckInfo, Message: configPath})
+	if len(s.Config().Containers) > 0 {
+		checks = append(checks, DockerCheck())
+	}
 
 	services := s.app.Orchestrator.GetAllServices()
 	healthy := 0
