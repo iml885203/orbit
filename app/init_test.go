@@ -69,11 +69,11 @@ func TestDetectWorkspaceRoot_PrefersCurrentDirectoryWithEnvs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.Chdir(cwd); err != nil {
 			t.Errorf("restore working directory: %v", err)
 		}
-	})
+	}()
 
 	current := t.TempDir()
 	if err := os.Mkdir(filepath.Join(current, "envs"), 0755); err != nil {
@@ -104,11 +104,11 @@ func TestDetectWorkspaceRoot_FallsBackToCurrentDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.Chdir(cwd); err != nil {
 			t.Errorf("restore working directory: %v", err)
 		}
-	})
+	}()
 
 	current := t.TempDir()
 	if err := os.Chdir(current); err != nil {
@@ -130,11 +130,11 @@ func TestDetectWorkspaceRoot_PrefersSavedRootOverUnmarkedCurrentDirectory(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.Chdir(cwd); err != nil {
 			t.Errorf("restore working directory: %v", err)
 		}
-	})
+	}()
 
 	if err := os.Chdir(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -222,8 +222,9 @@ func TestWorkspaceExample(t *testing.T) {
 			WorkspaceCandidates: func(h string) []string { return []string{filepath.Join(h, "dev", "example")} },
 		},
 	}})
-	if got := workspaceExample(); got != "~/dev/example" {
-		t.Errorf("workspaceExample = %q, want ~/dev/example", got)
+	want := "~" + string(filepath.Separator) + filepath.Join("dev", "example")
+	if got := workspaceExample(); got != want {
+		t.Errorf("workspaceExample = %q, want %q", got, want)
 	}
 
 	setTestExtensions(t, []extension.Extension{{

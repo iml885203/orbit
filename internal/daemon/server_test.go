@@ -26,6 +26,7 @@ func newTestServer(t *testing.T, cfg *config.Config) *Server {
 	// "current" pointer) never touch the real ~/.orbit / %LOCALAPPDATA%\orbit.
 	// Setting HOME is not enough on Windows, where OrbitDir prefers LOCALAPPDATA.
 	t.Setenv("ORBIT_HOME", t.TempDir())
+	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
 	holder := config.NewHolder(cfg)
 	app, err := engine.NewApp(holder, nil, nil, "orbit-test")
 	if err != nil {

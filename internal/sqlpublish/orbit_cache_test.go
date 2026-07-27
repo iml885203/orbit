@@ -42,6 +42,7 @@ func TestOrbitCacheDir_Precedence(t *testing.T) {
 		t.Setenv("ORBIT_HOME", "")
 		t.Setenv("LOCALAPPDATA", "")
 		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
 		got, err := orbitCacheDir("dacpac")
 		if err != nil {
 			t.Fatal(err)
