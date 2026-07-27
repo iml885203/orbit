@@ -19,7 +19,7 @@ function Write-TestRelease {
 
     Push-Location $repoRoot
     try {
-        & go build -ldflags "-s -w -X main.version=v$Version" -o (Join-Path $fixtures $asset) ./cmd/orbit
+        & go build -ldflags "-s -w -X main.version=v$Version -X main.buildTime=2026-07-27T04:44:56Z" -o (Join-Path $fixtures $asset) ./cmd/orbit
         if ($LASTEXITCODE -ne 0) { throw "failed to build fixture $Version" }
     }
     finally {
@@ -81,8 +81,8 @@ function Assert-Version {
     }
     try {
         $actual = & $executable --version
-        if ($LASTEXITCODE -ne 0 -or $actual -ne "v$Version") {
-            throw "$Path reports '$actual', expected v$Version"
+        if ($LASTEXITCODE -ne 0 -or $actual -notmatch "^v$([regex]::Escape($Version)) \([^)]+\)$") {
+            throw "$Path reports '$actual', expected v$Version with build time"
         }
     }
     finally {

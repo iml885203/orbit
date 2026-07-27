@@ -46,21 +46,45 @@ func runSelfUpdate(ctx context.Context) error {
 	fmt.Fprintf(os.Stderr, "Fetching %s\n", installURL)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	sh := exec.CommandContext(ctx, "bash", "-c", fmt.Sprintf("curl -fsSL %q | bash", installURL))
+
+	script, err := os.CreateTemp("", "orbit-install-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temporary install script: %w", err)
+	}
+	scriptPath := script.Name()
+	if err := script.Close(); err != nil {
+		_ = os.Remove(scriptPath)
+		return fmt.Errorf("close temporary install script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	curl := exec.CommandContext(ctx, "curl", "-fsSL", installURL, "-o", scriptPath)
+	curl.Stdout = os.Stdout
+	curl.Stderr = os.Stderr
+	if err := curl.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("update timed out after 5m: %w", ctx.Err())
+		}
+		return fmt.Errorf("download install script: %w", err)
+	}
+
+	sh := exec.CommandContext(ctx, "bash", scriptPath)
 	sh.Stdout = os.Stdout
 	sh.Stderr = os.Stderr
 	if err := sh.Run(); err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return fmt.Errorf("update timed out after 5m: %w", ctx.Err())
 		}
-		return err
+		return fmt.Errorf("run install script: %w", err)
 	}
 
 	if exe, err := currentBinaryPath(); err == nil {
 		prev := exe + ".prev"
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "To roll back:   orbit update --rollback")
-		fmt.Fprintf(os.Stderr, "Or manually:    mv %s %s && orbit daemon restart\n", prev, exe)
+		if _, err := os.Stat(prev); err == nil {
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "To roll back:   orbit update --rollback")
+			fmt.Fprintf(os.Stderr, "Or manually:    mv %s %s && orbit daemon restart\n", prev, exe)
+		}
 	}
 	return nil
 }
