@@ -24,6 +24,26 @@ type renderedStatusEnvelope struct {
 	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
 }
 
+func TestEnvironmentHeaderShowsUserContextNotDaemonState(t *testing.T) {
+	var output bytes.Buffer
+	printEnvironmentHeader(&output, "quickstart", daemonStatus{
+		Running: true,
+		Version: "v0.9.0",
+	})
+
+	got := output.String()
+	for _, want := range []string{"ENVIRONMENT", "quickstart"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("header missing %q:\n%s", want, got)
+		}
+	}
+	for _, internal := range []string{"DAEMON", "v0.9.0", "not running"} {
+		if strings.Contains(got, internal) {
+			t.Fatalf("header exposed %q:\n%s", internal, got)
+		}
+	}
+}
+
 func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) renderedStatusEnvelope {
 	t.Helper()
 	var buf bytes.Buffer

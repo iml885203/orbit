@@ -53,7 +53,8 @@ func runDoctorWithOptions(options doctorOptions) error {
 	}
 	_, _ = cli.Bold.Println("Checks:")
 	for _, c := range resp.Checks {
-		if !options.showDaemon && c.Name == "Daemon" {
+		label, visible := humanDoctorCheck(c, options.showDaemon)
+		if !visible {
 			continue
 		}
 		icon := cli.Faint.Sprint("—")
@@ -65,12 +66,22 @@ func runDoctorWithOptions(options doctorOptions) error {
 		case daemon.CheckWarn:
 			icon = cli.Yellow.Sprint("!")
 		}
-		fmt.Printf("  %s %s: %s\n", icon, c.Name, c.Message)
+		fmt.Printf("  %s %s: %s\n", icon, label, c.Message)
 		if c.Hint != "" && (c.Status == daemon.CheckFail || c.Status == daemon.CheckWarn) {
 			_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
 		}
 	}
 	return failure
+}
+
+func humanDoctorCheck(check daemon.DoctorCheck, showDaemon bool) (string, bool) {
+	if check.Name != "Daemon" {
+		return check.Name, true
+	}
+	if !showDaemon || (check.Status == daemon.CheckInfo && check.Message == "not running") {
+		return "", false
+	}
+	return "Environment", true
 }
 
 func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {

@@ -11,13 +11,14 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/spf13/cobra"
 )
 
 func statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show service status",
+		Short: "Show environment status",
 		RunE:  runStatus,
 	}
 }
@@ -60,7 +61,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		printEnvironmentSelectionRecovery(selection)
 		if daemonRunning {
 			fmt.Println()
-			printDaemonHeader(dstatus)
+			printEnvironmentHeader(os.Stdout, selection.SelectedName, dstatus)
 			_, _, _ = printRunningSnapshot(running)
 		}
 		return nil
@@ -103,7 +104,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
 	}
 
-	printDaemonHeader(dstatus)
+	name := selection.SelectedName
+	if name == "" {
+		name = daemonsrv.EnvShortName(configFile)
+	}
+	printEnvironmentHeader(os.Stdout, name, dstatus)
 
 	// Track state for tips
 	var stoppedInfra bool
@@ -475,7 +480,7 @@ func writeStatusJSON(
 	} else if !dstatus.Running {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit up --json",
-			Reason:  "Start the selected environment and its daemon.",
+			Reason:  "Start the selected environment.",
 		})
 	}
 	if !setup.SelectionRequired && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
@@ -626,26 +631,21 @@ func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
 	return tips
 }
 
-func printDaemonHeader(s daemonStatus) {
-	_, _ = cli.Bold.Println("DAEMON")
-	if !s.Running {
-		fmt.Printf("  %s %s\n\n", cli.Faint.Sprint("○"), cli.Faint.Sprint("not running"))
-		return
+func printEnvironmentHeader(w io.Writer, name string, s daemonStatus) {
+	_, _ = cli.Bold.Fprintln(w, "ENVIRONMENT")
+	if name == "" {
+		name = "selected configuration"
 	}
-	ver := s.Version
-	if ver == "" {
-		ver = cli.Faint.Sprint("version unknown")
-	}
-	fmt.Printf("  %s %s\n", cli.ColorState("healthy"), ver)
+	_, _ = fmt.Fprintf(w, "  %s\n", name)
 	if s.UpdateAvailable && s.OnDisk != "" {
-		fmt.Printf("  %s Orbit update ready — %s to apply\n",
+		_, _ = fmt.Fprintf(w, "  %s Orbit update ready — %s to apply\n",
 			cli.Faint.Sprint("⚠"), orbitRestartCommand(false))
 	}
 	if s.ConfigStale {
-		fmt.Printf("  %s environment changes pending — orbit daemon restart to apply\n",
+		_, _ = fmt.Fprintf(w, "  %s environment changes pending — orbit daemon restart to apply\n",
 			cli.Faint.Sprint("⚠"))
 	}
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
 }
 
 func formatPorts(ports map[string]int) string {

@@ -10,6 +10,28 @@ import (
 	"github.com/iml885203/orbit/extension"
 )
 
+func TestHumanDoctorHidesInactiveDaemonImplementation(t *testing.T) {
+	label, visible := humanDoctorCheck(daemon.DoctorCheck{
+		Name:    "Daemon",
+		Status:  daemon.CheckInfo,
+		Message: "not running",
+	}, true)
+	if visible || label != "" {
+		t.Fatalf("inactive daemon check label=%q visible=%v", label, visible)
+	}
+}
+
+func TestHumanDoctorCallsRuntimeHealthEnvironment(t *testing.T) {
+	label, visible := humanDoctorCheck(daemon.DoctorCheck{
+		Name:    "Daemon",
+		Status:  daemon.CheckPass,
+		Message: "All healthy (2/2)",
+	}, true)
+	if !visible || label != "Environment" {
+		t.Fatalf("runtime health label=%q visible=%v", label, visible)
+	}
+}
+
 func TestDoctorRecommendedActionsAllPass(t *testing.T) {
 	resp := &daemon.DoctorResponse{
 		Checks: []daemon.DoctorCheck{
