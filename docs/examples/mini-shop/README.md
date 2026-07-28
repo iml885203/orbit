@@ -4,7 +4,7 @@
 
 - host process + container 混合運行
 - 多個服務間有 `depends_on`
-- 服務健康檢查能直接反映依賴狀態（catalog health / redis health）
+- 服務健康檢查能直接反映依賴狀態（catalog / inventory / redis）
 - 同一個環境同時能做 `status`、`logs`、`open`
 
 包含資源：
@@ -13,7 +13,8 @@
   - `redis`（快取容器，做為相依服務）
 - Host services：
   - `catalog-api`（產品 catalog，使用 SQLite 作為本地 DB）
-  - `order-api`（下單服務，依賴 catalog API 與 redis）
+  - `inventory-api`（庫存服務，使用 SQLite 記錄可售數量）
+  - `order-api`（下單服務，依賴 catalog API / inventory API / redis）
   - `web`（前端）
 
 ## 快速啟動
@@ -24,7 +25,7 @@
 orbit -c docs/examples/mini-shop/dev.yaml up
 ```
 
-> 預設會啟動 4 個 resource：`catalog-api`、`order-api`、`web`、`redis`。
+> 預設會啟動 5 個 resource：`catalog-api`、`inventory-api`、`order-api`、`web`、`redis`。
 
 ```bash
 orbit -c docs/examples/mini-shop/dev.yaml status
@@ -38,6 +39,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json
 orbit -c docs/examples/mini-shop/dev.yaml logs web -f
 orbit -c docs/examples/mini-shop/dev.yaml logs catalog-api -f
 orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f
+orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f
 ```
 
 預期的健康檢查輸出（`--json` 節錄）：
@@ -48,6 +50,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f
   "status": "ok",
   "dependencies": {
     "catalog_api": { "ready": true, "url": "http://127.0.0.1:3001" },
+    "inventory_api": { "ready": true, "url": "http://127.0.0.1:3003" },
     "redis": { "ready": true }
   }
 }
@@ -57,9 +60,16 @@ orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f
 
 - 先把 `redis` 拉起來。
 - `catalog-api` 啟動後會回報 SQLite 可用性（資料會寫到專案內 `mini_shop_*.db`）。
-- `order-api` 等 `catalog-api` 與 `redis` 都 ready 後才啟動。
-- `web` 在兩個後端 ready 後啟動；打開頁面後可以直接下單，
-  前端會顯示關聯服務的健康與資料。
+- `order-api` 會等待 `catalog-api`、`inventory-api` 與 `redis` 都 ready 後才會進入 ready。
+- `web` 在 `order-api` ready 後啟動；打開頁面後可以直接下單，並看到商品、
+  庫存、訂單資料。
+
+訂單流程是：
+
+- `web` -> `order-api`
+- `order-api` -> `inventory-api`（先保留庫存）
+- `order-api` -> `catalog-api`（再補齊商品名稱與價格）
+- `order-api` -> `redis`（快取/背景處理可用性）
 
 ## 設計重點（為何這個 demo 對新手友善）
 
@@ -68,10 +78,41 @@ orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f
 - 所有服務使用 `python3 main.py`，不需要額外套件，第一次能直接跑起來。
 - `web` 會展示可點式流程（清單、下單、訂單列表），不是只有靜態教學頁。
 
+### 一次成功率高的驗收流程（新手建議）
+
+1. 啟動與等就緒
+   ```bash
+   orbit -c docs/examples/mini-shop/dev.yaml up
+   orbit -c docs/examples/mini-shop/dev.yaml status --json
+   ```
+   先確認 `order-api`、`catalog-api`、`inventory-api` 都是 `status: ok`。
+
+2. 開啟前端
+   ```bash
+   orbit -c docs/examples/mini-shop/dev.yaml open
+   ```
+   頁面會顯示「服務狀態」與「庫存面板」。
+
+3. 先放一筆成功案例
+   在前端輸入 `product-id: 1`、`quantity: 1` 點「建立訂單」。
+   成功後你應看到：
+   - 訂單清單新增 `#...`
+   - 庫存面板中產品 1 的剩餘數字減少
+
+4. 失敗案例（驗證你知道錯了什麼）
+   下超過庫存數量，會得到 `insufficient_stock`。
+
+5. 一分鐘健康檢查
+   - `orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f`
+   - `orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f`
+   - `orbit -c docs/examples/mini-shop/dev.yaml logs catalog-api -f`
+
 ## 依賴關係（簡化）
 
 - `web` -> `order-api`
-- `order-api` -> `catalog-api`, `redis`
+- `order-api` -> `catalog-api`, `inventory-api`, `redis`
+- `inventory-api` -> `redis`
 - `catalog-api` -> `sqlite`
+- `inventory-api` -> `sqlite`
 
 這就是常見「有資料層 + 快取層 + 多後端 + 前端」的 local 開發雛形。

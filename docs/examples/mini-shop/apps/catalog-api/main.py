@@ -69,7 +69,7 @@ def db_ready() -> bool:
 
 def write_json(payload, status=HTTPStatus.OK):
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    return status, [("Content-Type", "application/json; charset=utf-8")], body
+    return [("Content-Type", "application/json; charset=utf-8")], body
 
 
 def json_response(handler, status, headers, body):

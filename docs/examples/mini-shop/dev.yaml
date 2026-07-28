@@ -33,14 +33,33 @@ services:
     command: python3 main.py
     ports:
       http: 3002
-    depends_on: [catalog-api, redis]
+    depends_on: [catalog-api, inventory-api, redis]
     health_check:
       type: http
       path: /health
       port: 3002
     env:
       CATALOG_API_URL: http://127.0.0.1:3001
+      INVENTORY_API_URL: http://127.0.0.1:3003
       DATABASE_PATH: mini_shop_orders.db
+      DATA_DIR: .
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "26379"
+
+  inventory-api:
+    type: python
+    kind: backend
+    path: ./apps/inventory-api
+    command: python3 main.py
+    ports:
+      http: 3003
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /health
+      port: 3003
+    env:
+      DATABASE_PATH: mini_shop_inventory.db
       DATA_DIR: .
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: "26379"
@@ -61,8 +80,9 @@ services:
       PORT: "3000"
       CATALOG_API_URL: http://127.0.0.1:3001
       ORDER_API_URL: http://127.0.0.1:3002
+      INVENTORY_API_URL: http://127.0.0.1:3003
 
 groups:
   mini-shop:
     enabled: true
-    services: [catalog-api, order-api, web]
+    services: [catalog-api, inventory-api, order-api, web]

@@ -17,8 +17,18 @@
   </head>
   <body>
     <h1>Orbit mini-shop</h1>
-    <p>前後端 + 兩個 backend + Redis container，演示 Orbit 多服務關聯啟動。</p>
+    <p>前後端 + 3 個 backend + Redis container，演示 Orbit 多服務關聯啟動。</p>
     <div id="status">載入中...</div>
+    <div class="help card" id="help">
+      <h3>第一次啟動檢查（最少心智負擔）</h3>
+      <ol>
+        <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
+        <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開分頁</li>
+        <li>用「下單」下 1 個產品、1 件數量，若成功會同時更新訂單與庫存</li>
+      </ol>
+      <p>若下單失敗，先看錯誤訊息：通常是 <code>insufficient_stock</code>（庫存不足）或
+      某服務未啟動（先確認 <code>orbit status --json</code>）。</p>
+    </div>
     <div class="grid">
       <div class="card">
         <h3>商品</h3>
@@ -37,6 +47,10 @@
         <button id="place-order">建立訂單</button>
       </div>
       <div class="card">
+        <h3>庫存</h3>
+        <div id="stock"></div>
+      </div>
+      <div class="card">
         <h3>訂單</h3>
         <div id="orders"></div>
       </div>
@@ -45,20 +59,58 @@
     <script>
       const catalogApi = '{{CATALOG_API_URL}}';
       const orderApi = '{{ORDER_API_URL}}';
+      const inventoryApi = '{{INVENTORY_API_URL}}';
 
       const status = document.getElementById('status');
       const products = document.getElementById('products');
       const orders = document.getElementById('orders');
+      const stock = document.getElementById('stock');
+      const help = document.getElementById('help');
 
       async function checkAll() {
         try {
-          const [catalogHealth, orderHealth] = await Promise.all([
+          const [catalogHealth, orderHealth, inventoryHealth] = await Promise.all([
             fetch(`${catalogApi}/health`),
             fetch(`${orderApi}/health`),
+            fetch(`${inventoryApi}/health`),
           ]);
           const catalogPayload = await catalogHealth.json();
           const orderPayload = await orderHealth.json();
-          status.textContent = `服務狀態：${catalogPayload.service}=${catalogPayload.status}，${orderPayload.service}=${orderPayload.status}`;
+          const inventoryPayload = await inventoryHealth.json();
+          const checks = [
+            `catalog (${catalogPayload.service}) = ${catalogPayload.status}`,
+            `order (${orderPayload.service}) = ${orderPayload.status}`,
+            `inventory (${inventoryPayload.service}) = ${inventoryPayload.status}`,
+          ];
+          status.textContent = `服務狀態：${checks.join(' / ')}`;
+
+          const orderDeps = orderPayload.dependencies || {};
+          const inventoryDeps = inventoryPayload.dependencies || {};
+          help.dataset.orderOk = (orderPayload.status === 'ok') ? 'true' : 'false';
+          if (orderPayload.status !== 'ok') {
+            const issues = [];
+            if (!orderDeps.catalog_api?.ready) {
+              issues.push('catalog-api 未 ready，請先確認 /products 是否可用');
+            }
+            if (!orderDeps.inventory_api?.ready) {
+              issues.push('inventory-api 未 ready，請確認 /stock 是否可用');
+            }
+            if (!orderDeps.redis?.ready) {
+              issues.push('redis 不可用，請重啟 redis container');
+            }
+            if (issues.length) {
+              help.innerHTML = `<h3>第一輪健康檢查</h3><ul><li>${issues.join('</li><li>')}</li></ul>`;
+            }
+          } else if (help.dataset.orderOk === 'true') {
+            help.innerHTML = `<h3>第一次啟動檢查（最少心智負擔）</h3>
+              <ol>
+                <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
+                <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開分頁</li>
+                <li>用「下單」下 1 個產品、1 件數量，若成功會同時更新訂單與庫存</li>
+              </ol>
+              <p>若下單失敗，先看錯誤訊息：通常是 <code>insufficient_stock</code>（庫存不足）或
+              某服務未啟動（先確認 <code>orbit status --json</code>）。</p>`;
+          }
         } catch (e) {
           status.textContent = '初始化失敗，請先確認 orbit up 已完整啟動所有服務。';
         }
@@ -73,6 +125,18 @@
           row.className = 'row';
           row.textContent = `${item.id}. ${item.name} — $${item.price.toFixed(2)}`;
           products.appendChild(row);
+        });
+      }
+
+      async function loadStock() {
+        const resp = await fetch(`${inventoryApi}/stock`);
+        const payload = await resp.json();
+        stock.innerHTML = '';
+        payload.items.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.textContent = `產品 ${item.product_id}：剩餘 ${item.stock}`;
+          stock.appendChild(row);
         });
       }
 
@@ -101,12 +165,12 @@
           alert(payload.message || '建立失敗');
           return;
         }
-        await loadOrders();
+        await Promise.all([loadOrders(), loadStock()]);
       });
 
       async function main() {
         try {
-          await Promise.all([checkAll(), loadProducts(), loadOrders()]);
+          await Promise.all([checkAll(), loadProducts(), loadOrders(), loadStock()]);
           setInterval(checkAll, 4000);
         } catch (e) {
           status.textContent = '載入錯誤，請先確認所有 services 已啟動。';

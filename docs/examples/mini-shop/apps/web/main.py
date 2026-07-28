@@ -5,6 +5,7 @@ import http.server
 class Handler(http.server.SimpleHTTPRequestHandler):
     catalog_api = os.environ.get("CATALOG_API_URL", "http://127.0.0.1:3001")
     order_api = os.environ.get("ORDER_API_URL", "http://127.0.0.1:3002")
+    inventory_api = os.environ.get("INVENTORY_API_URL", "http://127.0.0.1:3003")
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
@@ -18,7 +19,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             template = file.read()
         rendered = template.replace("{{CATALOG_API_URL}}", self.catalog_api).replace(
             "{{ORDER_API_URL}}", self.order_api
-        )
+        ).replace("{{INVENTORY_API_URL}}", self.inventory_api)
         body = rendered.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")

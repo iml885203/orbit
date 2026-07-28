@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DB_PATH = os.path.join(os.path.dirname(__file__), os.environ.get("DATABASE_PATH", "orders.db"))
 CATALOG_API_URL = os.environ.get("CATALOG_API_URL", "http://127.0.0.1:3001")
+INVENTORY_API_URL = os.environ.get("INVENTORY_API_URL", "http://127.0.0.1:3003")
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 
@@ -78,6 +79,38 @@ def create_order(product_id: int, quantity: int) -> dict:
     )
 
 
+def reserve_inventory(product_id: int, quantity: int) -> None:
+    payload = json.dumps({"product_id": product_id, "quantity": quantity}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{INVENTORY_API_URL}/reserve",
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=1) as response:
+        if response.status != 200:
+            raise ValueError("inventory_unavailable")
+        _ = json.load(response)
+
+
+def release_inventory(product_id: int, quantity: int) -> bool:
+    payload = json.dumps({"product_id": product_id, "quantity": quantity}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{INVENTORY_API_URL}/release",
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=1) as response:
+            if response.status != 200:
+                return False
+            _ = json.load(response)
+            return True
+    except urllib.error.URLError:
+        return False
+
+
 def fetch_product(product_id: int) -> dict:
     try:
         with urllib.request.urlopen(f"{CATALOG_API_URL}/products/{product_id}", timeout=1) as resp:
@@ -108,9 +141,20 @@ def catalog_ready() -> bool:
     return payload.get("service") == "catalog-api" and payload.get("status") == "ok"
 
 
+def inventory_ready() -> bool:
+    try:
+        with urllib.request.urlopen(f"{INVENTORY_API_URL}/health", timeout=1) as response:
+            if response.status != 200:
+                return False
+            payload = json.load(response)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return payload.get("service") == "inventory-api" and payload.get("status") == "ok"
+
+
 def write_json(payload, status=HTTPStatus.OK):
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    return status, [("Content-Type", "application/json; charset=utf-8")], body
+    return [("Content-Type", "application/json; charset=utf-8")], body
 
 
 def json_response(handler, status, headers, body):
@@ -140,11 +184,17 @@ class Handler(BaseHTTPRequestHandler):
                     "ready": catalog_ready(),
                     "url": CATALOG_API_URL,
                 },
+                "inventory_api": {
+                    "ready": inventory_ready(),
+                    "url": INVENTORY_API_URL,
+                },
                 "redis": {
                     "ready": cache_ready(),
                 },
             }
-            status = "ok" if all((cache_ready(), catalog_ready())) else "degraded"
+            status = (
+                "ok" if all((cache_ready(), catalog_ready(), inventory_ready())) else "degraded"
+            )
             code = HTTPStatus.OK if status == "ok" else HTTPStatus.SERVICE_UNAVAILABLE
             payload = {
                 "service": "order-api",
@@ -190,12 +240,51 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, HTTPStatus.BAD_REQUEST, headers, body)
             return
 
-        try:
-            order = create_order(product_id, quantity)
-        except ValueError:
+        product = fetch_product(product_id)
+        if not product:
             payload = {"code": "product_not_found", "message": f"product {product_id} not found"}
             headers, body = write_json(payload, HTTPStatus.NOT_FOUND)
             json_response(self, HTTPStatus.NOT_FOUND, headers, body)
+            return
+
+        try:
+            reserve_inventory(product_id, quantity)
+            try:
+                order = create_order(product_id, quantity)
+            except sqlite3.Error:
+                if not release_inventory(product_id, quantity):
+                    payload = {
+                        "code": "order_failed_release_failed",
+                        "message": (
+                            "order persistence failed and inventory rollback failed. "
+                            "please retry after a short wait"
+                        ),
+                    }
+                    headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
+                    json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
+                    return
+                payload = {"code": "order_failed", "message": "order persistence failed, stock was rolled back"}
+                headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
+                json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
+                return
+            except ValueError:
+                _ = release_inventory(product_id, quantity)
+                payload = {"code": "product_not_found", "message": f"product {product_id} not found"}
+                headers, body = write_json(payload, HTTPStatus.NOT_FOUND)
+                json_response(self, HTTPStatus.NOT_FOUND, headers, body)
+                return
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                payload = {"code": "inventory_not_found", "message": f"product {product_id} not found"}
+                status = HTTPStatus.NOT_FOUND
+            elif err.code == 409:
+                payload = {"code": "insufficient_stock", "message": "inventory not enough"}
+                status = HTTPStatus.CONFLICT
+            else:
+                payload = {"code": "inventory_error", "message": "reserve failed"}
+                status = HTTPStatus.SERVICE_UNAVAILABLE
+            headers, body = write_json(payload, status)
+            json_response(self, status, headers, body)
             return
         headers, body = write_json(order, HTTPStatus.CREATED)
         json_response(self, HTTPStatus.CREATED, headers, body)
