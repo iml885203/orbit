@@ -283,6 +283,21 @@ func (c *Client) postJSON(path string, body any) (*APIResponse, error) {
 	return c.postJSONWithHeaders(path, body, map[string]string{CLIOriginHeader: "cli"})
 }
 
+// apiError preserves the daemon's stable code so callers can classify the
+// failure without coupling to user-facing message text.
+type apiError struct {
+	Code    string
+	Message string
+}
+
+func (e *apiError) Error() string {
+	return e.Message
+}
+
+func (e *apiError) ErrorCode() string {
+	return e.Code
+}
+
 func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]string) (*APIResponse, error) {
 	var reader io.Reader
 	if body != nil {
@@ -314,6 +329,9 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 	if result.Error != "" {
+		if result.Code != "" {
+			return &result, &apiError{Code: result.Code, Message: result.Error}
+		}
 		return &result, fmt.Errorf("%s", result.Error)
 	}
 	return &result, nil

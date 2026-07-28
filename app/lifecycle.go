@@ -146,6 +146,9 @@ func waitForLifecycleJSONOrPast(client *daemon.Client, names []string, wantState
 }
 
 func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
+	if len(names) == 0 {
+		return client.Status()
+	}
 	deadline := time.After(effectiveTimeout(timeout))
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()

@@ -426,7 +426,10 @@ func upCmd() *cobra.Command {
 Examples:
   orbit up                    # start everything (containers + services)
   orbit up --infra            # start only containers
-  orbit up api web            # start specific services`,
+  orbit up api web            # start specific services
+  orbit up --group frontend   # start one configured group
+
+Service names, --infra, and --group are separate selection modes and cannot be combined.`,
 		RunE: runUp,
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")

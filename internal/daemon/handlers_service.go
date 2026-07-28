@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -117,31 +118,70 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.InfraOnly {
-		var containerNames []string
-		for name := range s.holder.Load().Containers {
-			containerNames = append(containerNames, name)
+		containerNames := sortedKeys(s.holder.Load().Containers)
+		message := fmt.Sprintf("starting %d containers", len(containerNames))
+		if len(containerNames) == 0 {
+			message = "No containers are configured for this environment."
 		}
 		s.app.StartServices(containerNames)
-		writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("starting %d containers", len(containerNames))})
+		writeJSON(w, http.StatusOK, APIResponse{
+			OK:               true,
+			Message:          message,
+			AffectedServices: containerNames,
+		})
 		return
 	}
 
 	names, err := s.resolveServicesFromRequest(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error()})
+		code := ""
+		if errors.Is(err, errUnknownGroup) {
+			code = "unknown_group"
+		}
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error(), Code: code})
 		return
 	}
 
+	sort.Strings(names)
+	message := fmt.Sprintf("starting %d services", len(names))
+	if len(names) == 0 {
+		message = "No services or containers are enabled for this environment."
+		if len(req.Groups) > 0 {
+			message = fmt.Sprintf("No services match the selected groups: %s.", strings.Join(req.Groups, ", "))
+		}
+	}
 	s.app.StartServices(names)
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("starting %d services", len(names))})
+	writeJSON(w, http.StatusOK, APIResponse{
+		OK:               true,
+		Message:          message,
+		AffectedServices: names,
+	})
 }
+
+var errUnknownGroup = errors.New("unknown group")
 
 func (s *Server) resolveServicesFromRequest(req UpRequest) ([]string, error) {
 	if len(req.Services) > 0 {
 		return s.resolveExplicitServices(req.Services)
 	}
+	cfg := s.holder.Load()
+	unknown := make([]string, 0, len(req.Groups))
+	for _, name := range req.Groups {
+		if _, exists := cfg.Groups[name]; !exists {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		message := strings.Join(unknown, ", ")
+		available := sortedKeys(cfg.Groups)
+		if len(available) == 0 {
+			return nil, fmt.Errorf("%w: %s; this environment defines no groups", errUnknownGroup, message)
+		}
+		return nil, fmt.Errorf("%w: %s; available groups: %s", errUnknownGroup, message, strings.Join(available, ", "))
+	}
 	detached := s.settings.GetDetachedEdges(s.currentEnvName())
-	enabled := engine.FilterEnabledServicesWithDetached(s.holder.Load(), req.Groups, detached)
+	enabled := engine.FilterEnabledServicesWithDetached(cfg, req.Groups, detached)
 	names := make([]string, 0, len(enabled))
 	for name := range enabled {
 		names = append(names, name)

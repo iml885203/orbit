@@ -91,7 +91,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit status --json` | Returns setup readiness, daemon state, and configured service state in `data`. |
 | `orbit logs <service> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <service> -f --json` | Streams NDJSON events, one JSON object per line. |
-| `orbit up --json` | Returns requested services, observed final states, degraded/timed-out services, and recommended follow-up commands. |
+| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out services, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
 | `orbit down <service> --json` | Returns final lifecycle result for the requested service. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
@@ -114,6 +114,11 @@ Lifecycle actions are outcome-specific. A successful `up` returns one primary
 next action, `orbit open --json`. A failed start recommends status, logs for the
 root failed resource, and a targeted restart after the reported cause is fixed;
 it does not send agents through unrelated setup diagnostics.
+
+`data.requested_services` on `up` is the daemon-resolved start set, despite the
+legacy field name. It includes selected dependencies and excludes resources
+filtered out by groups. This is the exact set whose terminal state the command
+waits for.
 
 Before first setup, status remains a successful state query with
 `data.setup_required: true`, a human-readable `setup_message`, and exactly one

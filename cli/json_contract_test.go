@@ -119,6 +119,58 @@ func TestWriteJSONErrorClassifiesInvalidEnvironmentWithExactRetry(t *testing.T) 
 	}
 }
 
+func TestWriteJSONErrorClassifiesInvalidArgumentWithoutRecoveryDetour(t *testing.T) {
+	var buf bytes.Buffer
+	err := NewInvalidArgumentError("service names and --infra cannot be used together")
+	if writeErr := WriteJSONError(&buf, "orbit up api --infra --json", err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+	var envelope JSONEnvelope
+	if decodeErr := json.Unmarshal(buf.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "invalid_argument" {
+		t.Fatalf("error = %+v", envelope.Error)
+	}
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("recommended actions = %+v, want none", envelope.RecommendedActions)
+	}
+}
+
+func TestWriteJSONErrorClassifiesUnknownGroupAPIError(t *testing.T) {
+	var buf bytes.Buffer
+	err := codedTestError{
+		code:    "unknown_group",
+		message: "unknown group: typo; available groups: backend, frontend",
+	}
+	if writeErr := WriteJSONError(&buf, "orbit up --group typo --json", err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+	var envelope JSONEnvelope
+	if decodeErr := json.Unmarshal(buf.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "invalid_argument" {
+		t.Fatalf("error = %+v", envelope.Error)
+	}
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("recommended actions = %+v, want none", envelope.RecommendedActions)
+	}
+}
+
+type codedTestError struct {
+	code    string
+	message string
+}
+
+func (e codedTestError) Error() string {
+	return e.message
+}
+
+func (e codedTestError) ErrorCode() string {
+	return e.code
+}
+
 func TestWriteJSONErrorClassifiesUnknownService(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit restart missing --json", NewUnknownServiceError("missing"))

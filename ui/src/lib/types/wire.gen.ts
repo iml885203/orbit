@@ -157,6 +157,11 @@ export interface APIResponse {
   message?: string;
   error?: string;
   /**
+   * AffectedServices identifies the resources accepted by a lifecycle
+   * request, including dependencies selected by the daemon.
+   */
+  affected_services?: string[];
+  /**
    * Code is a stable, machine-readable discriminator a client can
    * switch on when the plain Error string isn't enough — e.g. the
    * reset endpoint's "reset_requires_recreate". Empty for most errors.

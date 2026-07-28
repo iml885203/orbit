@@ -120,7 +120,7 @@ sequenceDiagram
     D->>DAG: build(services, containers)
     DAG-->>D: topological order
     D->>Orch: run(order) — dispatch, non-blocking
-    D-->>CLI: 200 OK ("starting N services") — returns immediately
+    D-->>CLI: 200 OK (affected resources + dispatch result) — returns immediately
     Note over Orch,HC: convergence continues async; CLI/dashboard observe via SSE / orbit status
     Orch->>Svc: start (no deps)
     Svc-->>Orch: started
@@ -133,6 +133,11 @@ sequenceDiagram
 ```
 
 `POST /api/up` returns as soon as startup is *dispatched* (`handlers_service.go` calls `StartServices` then responds), not after everything is healthy — the CLI/dashboard watch convergence over the SSE status stream. Services are launched as soon as their declared dependencies reach `Healthy`. The DAG itself doesn't block — independent services start in parallel.
+
+The response identifies the exact daemon-resolved resource set, including
+transitive dependencies and group filtering. The CLI waits only for that set.
+When the set is empty, `up` is an explicit successful no-op and returns
+immediately instead of entering a health timeout.
 
 ## Container supervision vs process supervision
 

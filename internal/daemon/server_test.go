@@ -151,6 +151,13 @@ func TestHandleUp_InfraOnly(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
 	}
+	var response APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, want := strings.Join(response.AffectedServices, ","), "db,redis"; got != want {
+		t.Fatalf("affected services = %q, want %q", got, want)
+	}
 
 	// Containers should be pending/ready; services should still be stopped.
 	infos := s.app.Orchestrator.GetAllServices()
@@ -168,6 +175,81 @@ func TestHandleUp_InfraOnly(t *testing.T) {
 		if states[svc] != stopped {
 			t.Errorf("service %q state = %q; expected stopped (InfraOnly should not touch services)", svc, states[svc])
 		}
+	}
+}
+
+func TestHandleUp_EmptyEnvironmentReportsSuccessfulNoOp(t *testing.T) {
+	s := newTestServer(t, &config.Config{})
+
+	body, _ := json.Marshal(UpRequest{})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/up", bytes.NewReader(body))
+	s.handleUp(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var response APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.OK {
+		t.Fatalf("response = %+v, want successful no-op", response)
+	}
+	if response.Message != "No services or containers are enabled for this environment." {
+		t.Fatalf("message = %q", response.Message)
+	}
+	if len(response.AffectedServices) != 0 {
+		t.Fatalf("affected services = %v, want none", response.AffectedServices)
+	}
+}
+
+func TestHandleUp_SelectedGroupReportsActualDependencies(t *testing.T) {
+	cfg := testConfig()
+	cfg.Groups = map[string]config.Group{
+		"frontend": {Services: []string{"web"}},
+	}
+	s := newTestServer(t, cfg)
+
+	body, _ := json.Marshal(UpRequest{Groups: []string{"frontend"}})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/up", bytes.NewReader(body))
+	s.handleUp(rr, req)
+
+	var response APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, want := strings.Join(response.AffectedServices, ","), "api,db,redis,web"; got != want {
+		t.Fatalf("affected services = %q, want %q", got, want)
+	}
+}
+
+func TestHandleUp_RejectsUnknownGroupWithAvailableNames(t *testing.T) {
+	cfg := testConfig()
+	cfg.Groups = map[string]config.Group{
+		"backend":  {Services: []string{"api"}},
+		"frontend": {Services: []string{"web"}},
+	}
+	s := newTestServer(t, cfg)
+
+	body, _ := json.Marshal(UpRequest{Groups: []string{"typo"}})
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/up", bytes.NewReader(body))
+	s.handleUp(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rr.Code, rr.Body.String())
+	}
+	var response APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Code != "unknown_group" {
+		t.Fatalf("code = %q, want unknown_group", response.Code)
+	}
+	if response.Error != "unknown group: typo; available groups: backend, frontend" {
+		t.Fatalf("error = %q", response.Error)
 	}
 }
 

@@ -323,6 +323,11 @@ groups:
 dependencies). A group with `enabled: false` is skipped unless explicitly
 requested on the command line.
 
+Group names are validated before startup. An unknown name fails with the
+available groups instead of becoming a successful no-op. Service names,
+`--group`, and `--infra` are separate `up` selection modes and cannot be
+combined.
+
 ## `externals`
 
 Placeholder nodes for systems orbit doesn't manage (an upstream feed, a

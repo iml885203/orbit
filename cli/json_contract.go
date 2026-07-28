@@ -131,6 +131,15 @@ func classify(err error) JSONError {
 			NextCommand: "orbit daemon restart -c " + strconv.Quote(configMismatch.Requested),
 		}
 	}
+	var codedErr interface{ ErrorCode() string }
+	if errors.As(err, &codedErr) && codedErr.ErrorCode() == "unknown_group" {
+		return JSONError{
+			Code:      "invalid_argument",
+			Message:   msg,
+			Hint:      "Choose one of the available groups reported by Orbit, then retry.",
+			Retryable: false,
+		}
+	}
 	switch {
 	case errors.Is(err, ErrUnknownService):
 		return JSONError{
@@ -204,6 +213,13 @@ func classify(err error) JSONError {
 			Hint:      "Fix the reported environment file, then retry the same command.",
 			Retryable: true,
 		}
+	case errors.Is(err, ErrInvalidArgument):
+		return JSONError{
+			Code:      "invalid_argument",
+			Message:   msg,
+			Hint:      "Correct the conflicting or unknown command selection, then retry.",
+			Retryable: false,
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",
@@ -234,6 +250,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		}}
 	}
 	if err.Code == "invalid_environment" {
+		return nil
+	}
+	if err.Code == "invalid_argument" {
 		return nil
 	}
 	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {

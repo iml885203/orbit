@@ -85,7 +85,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit status --json` | 在 `data` 中回傳 setup readiness、daemon 與已設定 service 的狀態。 |
 | `orbit logs <service> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <service> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
-| `orbit up --json` | 回傳請求的 services、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。 |
+| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
 | `orbit down <service> --json` | 回傳指定 service 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
@@ -106,6 +106,10 @@ Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout
 Lifecycle actions 會依結果提供。成功的 `up` 只回傳一個主要下一步：
 `orbit open --json`。啟動失敗時則建議查看 status、根因 resource 的 logs，
 並在修正原因後只 restart 該 resource；不會把 agent 導向無關的 setup 診斷。
+
+`up` 的 `data.requested_services` 雖沿用舊欄位名稱，內容是 daemon 解析後的
+實際啟動集合：包含被選中的相依，並排除由 groups 篩掉的 resources。指令只會
+等待這個集合進入 terminal state。
 
 第一次 setup 前，status 仍是成功的狀態查詢，但會回傳
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的

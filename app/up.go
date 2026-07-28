@@ -49,6 +49,9 @@ func isTerminal() bool {
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
+	if err := validateUpSelection(args); err != nil {
+		return err
+	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	if err := preflightOrAbort(explicitConfig); err != nil {
 		return err
@@ -75,13 +78,30 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println(resp.Message)
 
+	if len(resp.AffectedServices) == 0 {
+		_, _ = cli.Faint.Println("  orbit open                open web UI")
+		return nil
+	}
 	if infraOnly {
-		return waitForInfraHealthy(client)
+		return waitForUpHealthy(client, resp.AffectedServices, "All infrastructure healthy.")
 	}
 	if len(args) > 0 {
 		return waitForServicesHealthy(client, args)
 	}
-	return waitForAllHealthy(client)
+	return waitForUpHealthy(client, resp.AffectedServices, "All services healthy.")
+}
+
+func validateUpSelection(args []string) error {
+	switch {
+	case infraOnly && len(args) > 0:
+		return cli.NewInvalidArgumentError("service names and --infra cannot be used together")
+	case infraOnly && len(groups) > 0:
+		return cli.NewInvalidArgumentError("--group and --infra cannot be used together")
+	case len(args) > 0 && len(groups) > 0:
+		return cli.NewInvalidArgumentError("service names and --group cannot be used together")
+	default:
+		return nil
+	}
 }
 
 func runUpJSON(args []string) error {
@@ -94,11 +114,7 @@ func runUpJSON(args []string) error {
 	if err != nil {
 		return fmt.Errorf("up failed: %w", err)
 	}
-	status, err := client.Status()
-	if err != nil {
-		return err
-	}
-	names := lifecycleNamesForUp(status, args, infraOnly)
+	names := resp.AffectedServices
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
 		return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
@@ -110,24 +126,6 @@ func runUpJSON(args []string) error {
 		InfraOnly:         infraOnly,
 		FinalStatus:       finalStatus,
 	}), lifecycleUpSuccessActions())
-}
-
-func lifecycleNamesForUp(status *daemon.StatusResponse, args []string, infraOnly bool) []string {
-	if len(args) > 0 {
-		return args
-	}
-	names := []string{}
-	if status == nil {
-		return names
-	}
-	for i := range status.Services {
-		svc := &status.Services[i]
-		if infraOnly && svc.Kind != daemon.ServiceKindContainer {
-			continue
-		}
-		names = append(names, svc.Name)
-	}
-	return names
 }
 
 // pollLoop runs an onTick callback every 2s with the latest status snapshot
@@ -316,46 +314,21 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 	}
 }
 
-func waitForInfraHealthy(client *daemon.Client) error {
+func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string) error {
+	watch := watchSet(serviceNames)
 	announced := map[string]bool{}
 	return runProgressWait(client, waitOptions{
-		filter:     func(s *daemon.ServiceStatus) bool { return s.Kind == "container" },
-		commit:     commitOnHealthyOrDegraded,
-		doneOn:     doneOnHealthy,
-		timeoutErr: cli.NewTimeoutError("timeout waiting for infrastructure to become healthy"),
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
-			announceRecovering(snapshots, announced)
-			total := 0
-			for name, s := range snapshots {
-				total++
-				if err := blockedDependencyError(client, status, name, s); err != nil {
-					return false, err
-				}
-				if s.state == "degraded" && !s.recovering {
-					return false, serviceStartError(name, s, recentLogEvidence(client, name))
-				}
-			}
-			if total > 0 && len(done) == total {
-				fmt.Println("All infrastructure healthy.")
-				_, _ = cli.Faint.Println("  orbit open                open web UI")
-				return true, nil
-			}
-			return false, nil
-		},
-	})
-}
-
-func waitForAllHealthy(client *daemon.Client) error {
-	announced := map[string]bool{}
-	return runProgressWait(client, waitOptions{
+		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
 		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
 		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
-			total := 0
-			for name, s := range snapshots {
-				total++
+			for name := range watch {
+				s, ok := snapshots[name]
+				if !ok {
+					continue
+				}
 				if err := blockedDependencyError(client, status, name, s); err != nil {
 					return false, err
 				}
@@ -363,8 +336,8 @@ func waitForAllHealthy(client *daemon.Client) error {
 					return false, serviceStartError(name, s, recentLogEvidence(client, name))
 				}
 			}
-			if total > 0 && len(done) == total {
-				fmt.Println("All services healthy.")
+			if len(done) == len(watch) {
+				fmt.Println(completionMessage)
 				_, _ = cli.Faint.Println("  orbit open                open web UI")
 				return true, nil
 			}

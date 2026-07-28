@@ -4,6 +4,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -497,6 +498,108 @@ func TestE2E_UpBlockedWhenNoEnvs(t *testing.T) {
 	combined := string(out)
 	if !strings.Contains(combined, "not ready") && !strings.Contains(combined, "orbit init") {
 		t.Errorf("expected output to mention `not ready` or `orbit init`, got:\n%s", combined)
+	}
+}
+
+func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home, err := os.MkdirTemp("/tmp", "orb-empty-")
+	if err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatalf("mkdir envs: %v", err)
+	}
+	envYaml := filepath.Join(envsDir, "empty.yaml")
+	if err := os.WriteFile(envYaml, []byte("version: \"2\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
+		t.Fatalf("write empty env: %v", err)
+	}
+
+	namespace := "e2e-empty-" + randHex(4)
+	port := 19900 + int(randByte())
+	command := func(ctx context.Context, args ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, binary, args...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", port),
+		)
+		return cmd
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = command(ctx, "daemon", "stop").Run()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if output, err := command(ctx, "env", "use", envYaml).CombinedOutput(); err != nil {
+		t.Fatalf("select empty env: %v\n%s", err, output)
+	}
+
+	started := time.Now()
+	human, err := command(ctx, "up").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human up failed: %v\n%s", err, human)
+	}
+	if elapsed := time.Since(started); elapsed >= 3*time.Second {
+		t.Fatalf("human up took %s, want an immediate no-op", elapsed)
+	}
+	if !bytes.Contains(human, []byte("No services or containers are enabled for this environment.")) {
+		t.Fatalf("human output did not explain the no-op:\n%s", human)
+	}
+	if bytes.Contains(human, []byte("starting 0")) {
+		t.Fatalf("human output exposed an implementation count:\n%s", human)
+	}
+
+	jsonOutput, err := command(ctx, "up", "--json").CombinedOutput()
+	if err != nil {
+		t.Fatalf("json up failed: %v\n%s", err, jsonOutput)
+	}
+	envelope := parseE2EEnvelope(t, string(jsonOutput))
+	if !envelope.OK {
+		t.Fatalf("json up envelope not ok: %+v\n%s", envelope.Error, jsonOutput)
+	}
+	var data lifecycleJSONData
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("parse lifecycle data: %v\n%s", err, jsonOutput)
+	}
+	if data.Message != "No services or containers are enabled for this environment." {
+		t.Fatalf("json message = %q", data.Message)
+	}
+	if len(data.RequestedServices) != 0 || len(data.Services) != 0 {
+		t.Fatalf("json lifecycle data = %+v, want no affected resources", data)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit open --json" {
+		t.Fatalf("recommended actions = %+v", envelope.RecommendedActions)
+	}
+
+	conflictOutput, err := command(ctx, "up", "api", "--infra", "--json").CombinedOutput()
+	if err == nil {
+		t.Fatalf("conflicting selectors succeeded:\n%s", conflictOutput)
+	}
+	conflict := parseE2EEnvelope(t, string(conflictOutput))
+	if conflict.Error == nil || conflict.Error.Code != "invalid_argument" {
+		t.Fatalf("conflicting selector error = %+v", conflict.Error)
+	}
+	if len(conflict.RecommendedActions) != 0 {
+		t.Fatalf("conflicting selector actions = %+v, want none", conflict.RecommendedActions)
+	}
+
+	unknownOutput, err := command(ctx, "up", "--group", "typo", "--json").CombinedOutput()
+	if err == nil {
+		t.Fatalf("unknown group succeeded:\n%s", unknownOutput)
+	}
+	unknown := parseE2EEnvelope(t, string(unknownOutput))
+	if unknown.Error == nil || unknown.Error.Code != "invalid_argument" {
+		t.Fatalf("unknown group error = %+v", unknown.Error)
+	}
+	if !strings.Contains(unknown.Error.Message, "this environment defines no groups") {
+		t.Fatalf("unknown group message = %q", unknown.Error.Message)
 	}
 }
 

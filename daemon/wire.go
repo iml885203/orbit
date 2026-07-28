@@ -104,6 +104,9 @@ type APIResponse struct {
 	OK      bool   `json:"ok,omitempty"`
 	Message string `json:"message,omitempty"`
 	Error   string `json:"error,omitempty"`
+	// AffectedServices identifies the resources accepted by a lifecycle
+	// request, including dependencies selected by the daemon.
+	AffectedServices []string `json:"affected_services,omitempty"`
 	// Code is a stable, machine-readable discriminator a client can
 	// switch on when the plain Error string isn't enough — e.g. the
 	// reset endpoint's "reset_requires_recreate". Empty for most errors.
