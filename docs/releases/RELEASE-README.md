@@ -14,6 +14,8 @@
   - 為故障演練加上時間量化回饋，讓 release 之間能對比 UX 變快變順。
 - `RELEASE-0.0.22.md`
   - 新增「本次 demo 指標」panel，集中展示 1.0 核心交付條件（服務就緒、成功 checkout、關聯驗證）的即時進度。
+- `RELEASE-0.0.23.md`
+  - 修正本次 demo 指標的 session 重置行為，避免重置後仍殘留舊 session 的完成時間。
 
 建議流程：
 

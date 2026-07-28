@@ -1468,6 +1468,19 @@ web
         return `<div class="session-metric-line ${status}">• ${value}（${ok ? '✓' : fallback || '尚待完成'}）</div>`;
       }
 
+      function resetSessionMetrics() {
+        sessionMetricsState.bootAt = performance.now();
+        sessionMetricsState.serviceReadyAt = 0;
+        sessionMetricsState.firstSuccessAt = 0;
+        sessionMetricsState.lastSuccessAt = 0;
+        sessionMetricsState.relationEstablishedAt = 0;
+        setSessionMetrics({
+          allServiceReady: false,
+          hasSuccessfulOrder: false,
+          hasOrderShipmentRelation: false,
+        });
+      }
+
       function setSessionMetrics(snapshot = {}) {
         if (!sessionMetricsEl) {
           return;
@@ -3247,6 +3260,7 @@ web
           await refresh();
           setNotice('流程已重置，從「選擇客戶」開始。', 'ok');
           appendSummary('重置流程完成：已清空購物車並回到預設設定。');
+          resetSessionMetrics();
           setRunResult('warn', '🔁 流程已重置', ['已重置為預設檢視與預設付款方式']);
           renderErrorPlaybook(fallbackPattern.code);
         } catch (_e) {
@@ -3269,6 +3283,7 @@ web
       }
 
       setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${TOTAL_RESOURCE_COUNT} 個資源就緒（含 web）`]);
+      resetSessionMetrics();
       renderErrorPlaybook(fallbackPattern.code);
       setUiMode(uiMode);
       refresh();
