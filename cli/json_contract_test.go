@@ -112,6 +112,21 @@ func TestWriteJSONErrorClassifiesUnknownOlderDaemonConfig(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesPendingEnvironmentChanges(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit up api --json", &daemon.ConfigStaleError{Reason: "env file edited"})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "environment_changed" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable || got.Error.NextCommand != "orbit daemon restart --json" {
+		t.Fatalf("error recovery = %+v", got.Error)
+	}
+}
+
 func TestWriteJSONErrorClassifiesInvalidEnvironmentWithExactRetry(t *testing.T) {
 	var buf bytes.Buffer
 	retry := `orbit switch "/tmp/broken env.yaml" --json`

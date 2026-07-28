@@ -122,6 +122,30 @@ func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	}
 }
 
+func TestMutationsRequireReconciledEnvironment(t *testing.T) {
+	root := &cobra.Command{Use: "orbit"}
+	up := &cobra.Command{Use: "up"}
+	restart := &cobra.Command{Use: "restart"}
+	status := &cobra.Command{Use: "status"}
+	down := &cobra.Command{Use: "down"}
+	env := &cobra.Command{Use: "env"}
+	toggle := &cobra.Command{Use: "toggle"}
+	list := &cobra.Command{Use: "list"}
+	root.AddCommand(up, restart, status, down, env)
+	env.AddCommand(toggle, list)
+
+	for _, cmd := range []*cobra.Command{up, restart, toggle} {
+		if !commandRequiresReconciledEnvironment(cmd) {
+			t.Errorf("%s did not require reconciled environment", cmd.CommandPath())
+		}
+	}
+	for _, cmd := range []*cobra.Command{status, down, list} {
+		if commandRequiresReconciledEnvironment(cmd) {
+			t.Errorf("%s should remain available during reconciliation", cmd.CommandPath())
+		}
+	}
+}
+
 func TestContextualHelpHidesCommandsWithoutASelectedEnvironment(t *testing.T) {
 	root := commandVisibilityTestRoot()
 	applyContextualCommandVisibility(root, nil, []extension.Extension{{

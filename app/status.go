@@ -94,9 +94,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	var stoppedServices []string
 	var openableServices []string
 
-	// Containers
-	_, _ = cli.Bold.Println("CONTAINERS")
-	if cfg != nil {
+	if dstatus.ConfigStale {
+		stoppedInfra, stoppedServices, openableServices = printRunningSnapshot(running)
+	} else {
+		// Containers
+		_, _ = cli.Bold.Println("CONTAINERS")
 		names := sortedKeys(cfg.Containers)
 		for _, name := range names {
 			c := cfg.Containers[name]
@@ -112,13 +114,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 				stoppedInfra = true
 			}
 		}
-	}
 
-	// Services
-	fmt.Println()
-	_, _ = cli.Bold.Println("SERVICES")
-	if cfg != nil {
-		names := sortedKeys(cfg.Services)
+		// Services
+		fmt.Println()
+		_, _ = cli.Bold.Println("SERVICES")
+		names = sortedKeys(cfg.Services)
 		for _, name := range names {
 			s := cfg.Services[name]
 			if svc, ok := running[name]; ok {
@@ -144,7 +144,14 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	// Context-aware tips
-	tips := buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
+	var tips []string
+	if dstatus.ConfigStale {
+		tips = []string{"orbit daemon restart      apply environment changes"}
+	} else if dstatus.UpdateAvailable {
+		tips = []string{"orbit daemon restart      use the installed Orbit version"}
+	} else {
+		tips = buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
+	}
 	if len(tips) > 0 {
 		fmt.Println()
 		for _, tip := range tips {
@@ -153,6 +160,48 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func printRunningSnapshot(running map[string]daemon.ResourceStatus) (bool, []string, []string) {
+	var stoppedInfra bool
+	var stoppedServices []string
+	var openableServices []string
+
+	_, _ = cli.Bold.Println("CONTAINERS")
+	for _, name := range sortedResourceNames(running, daemon.ResourceKindContainer) {
+		svc := running[name]
+		printContainerLine(name, svc)
+		printStatusDetail(svc, running)
+		if svc.State == "stopped" {
+			stoppedInfra = true
+		}
+	}
+
+	fmt.Println()
+	_, _ = cli.Bold.Println("SERVICES")
+	for _, name := range sortedResourceNames(running, daemon.ResourceKindService) {
+		svc := running[name]
+		printServiceLine(name, nil, svc)
+		printStatusDetail(svc, running)
+		if svc.State == "stopped" {
+			stoppedServices = append(stoppedServices, name)
+		}
+		if svc.URL != "" && svc.State == "healthy" {
+			openableServices = append(openableServices, name)
+		}
+	}
+	return stoppedInfra, stoppedServices, openableServices
+}
+
+func sortedResourceNames(running map[string]daemon.ResourceStatus, kind daemon.ResourceKind) []string {
+	names := make([]string, 0, len(running))
+	for name, resource := range running {
+		if resource.Kind == kind {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func configFileExists(path string) bool {
@@ -348,7 +397,19 @@ func writeStatusJSON(
 ) error {
 	resources := make([]jsonService, 0)
 
-	if cfg != nil {
+	if dstatus.ConfigStale {
+		for name, resource := range running {
+			svc := jsonService{
+				Name:  name,
+				Kind:  string(resource.Kind),
+				State: resource.State,
+				URL:   resource.URL,
+				Ports: resource.Ports,
+			}
+			applyRuntimeStatus(&svc, resource, running)
+			resources = append(resources, svc)
+		}
+	} else if cfg != nil {
 		for name, c := range cfg.Containers {
 			svc := jsonService{Name: name, Kind: "container", State: "stopped"}
 			ports := make(map[string]int, len(c.Ports))
@@ -383,7 +444,17 @@ func writeStatusJSON(
 	})
 
 	var actions []cli.JSONAction
-	if setup.Required {
+	if dstatus.ConfigStale {
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit daemon restart --json",
+			Reason:  "Apply the selected environment changes before running resource commands.",
+		})
+	} else if dstatus.UpdateAvailable {
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit daemon restart --json",
+			Reason:  "Run the installed Orbit version before starting resources.",
+		})
+	} else if setup.Required {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit init --yes --json",
 			Reason:  "Set up a workspace and select an environment before starting Orbit.",
@@ -394,13 +465,9 @@ func writeStatusJSON(
 			Reason:  "Start the selected environment and its daemon.",
 		})
 	}
-	if dstatus.ConfigStale {
-		actions = append(actions, cli.JSONAction{
-			Command: "orbit daemon restart",
-			Reason:  "Apply the changed config: " + dstatus.ConfigStaleReason + ".",
-		})
+	if !dstatus.ConfigStale && !dstatus.UpdateAvailable {
+		actions = cli.MergeActions(actions, statusRecoveryActions(running))
 	}
-	actions = cli.MergeActions(actions, statusRecoveryActions(running))
 	return cli.WriteJSONSuccess(w, command, statusJSONData{
 		SetupRequired: setup.Required,
 		SetupMessage:  setup.Message,
@@ -496,8 +563,8 @@ func printDaemonHeader(s daemonStatus) {
 			cli.Faint.Sprint("⚠"), location)
 	}
 	if s.ConfigStale {
-		fmt.Printf("  %s %s — orbit daemon restart to apply\n",
-			cli.Faint.Sprint("⚠"), s.ConfigStaleReason)
+		fmt.Printf("  %s environment changes pending — orbit daemon restart to apply\n",
+			cli.Faint.Sprint("⚠"))
 	}
 	fmt.Println()
 }

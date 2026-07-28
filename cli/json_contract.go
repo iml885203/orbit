@@ -135,6 +135,16 @@ func classify(err error) JSONError {
 			NextCommand: "orbit daemon restart -c " + strconv.Quote(configMismatch.Requested),
 		}
 	}
+	var configStale *daemon.ConfigStaleError
+	if errors.As(err, &configStale) {
+		return JSONError{
+			Code:        "environment_changed",
+			Message:     msg,
+			Hint:        "Restart Orbit once to apply the selected environment changes before running this command.",
+			Retryable:   true,
+			NextCommand: "orbit daemon restart --json",
+		}
+	}
 	var codedErr interface{ ErrorCode() string }
 	if errors.As(err, &codedErr) {
 		switch codedErr.ErrorCode() {

@@ -264,6 +264,39 @@ func TestStatusJSON_UpdateAvailable(t *testing.T) {
 	if !got.Daemon.UpdateAvailable {
 		t.Error("UpdateAvailable: got false, want true")
 	}
+	envelope := renderStatusEnvelope(t, nil, nil, d)
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit daemon restart --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
+func TestStatusJSON_ConfigStaleShowsRunningSnapshotAndOnlyRestart(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"desired-new-name": {},
+	}}
+	running := map[string]daemon.ResourceStatus{
+		"running-old-name": {
+			Name:  "running-old-name",
+			Kind:  daemon.ResourceKindService,
+			State: "stopped",
+			URL:   "http://localhost:4321",
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{
+		Running:           true,
+		ConfigStale:       true,
+		ConfigStaleReason: "env file edited",
+	})
+
+	if len(envelope.Data.Resources) != 1 ||
+		envelope.Data.Resources[0].Name != "running-old-name" {
+		t.Fatalf("resources = %+v, want running daemon snapshot", envelope.Data.Resources)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit daemon restart --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
 }
 
 // Guards against regression to pre-migration schema where daemon was a bool.

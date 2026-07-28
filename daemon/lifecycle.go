@@ -40,6 +40,16 @@ type ConfigMismatchError struct {
 	Running   string
 }
 
+// ConfigStaleError prevents commands from acting on a resource graph that no
+// longer matches the selected environment file.
+type ConfigStaleError struct {
+	Reason string
+}
+
+func (e *ConfigStaleError) Error() string {
+	return "environment changes are pending — run 'orbit daemon restart' before continuing"
+}
+
 func (e *ConfigMismatchError) Error() string {
 	if strings.TrimSpace(e.Running) == "" {
 		return fmt.Sprintf(
@@ -69,6 +79,13 @@ func CheckConfigMatch(requested, running string) error {
 		return nil
 	}
 	return &ConfigMismatchError{Requested: requested, Running: running}
+}
+
+func CheckEnvironmentReconciled(status *StatusResponse) error {
+	if status == nil || !status.ConfigStale {
+		return nil
+	}
+	return &ConfigStaleError{Reason: status.ConfigStaleReason}
 }
 
 func normalizedConfigPath(path string) string {

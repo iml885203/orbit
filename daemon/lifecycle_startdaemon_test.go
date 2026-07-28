@@ -65,3 +65,20 @@ func TestCheckConfigMatchRejectsOlderDaemonWithoutPath(t *testing.T) {
 		t.Fatalf("error is not actionable: %q", got)
 	}
 }
+
+func TestCheckEnvironmentReconciledRejectsPendingChanges(t *testing.T) {
+	err := CheckEnvironmentReconciled(&StatusResponse{
+		ConfigStale:       true,
+		ConfigStaleReason: "env file edited",
+	})
+	var stale *ConfigStaleError
+	if !errors.As(err, &stale) {
+		t.Fatalf("error = %T %v, want ConfigStaleError", err, err)
+	}
+	if stale.Reason != "env file edited" {
+		t.Fatalf("reason = %q", stale.Reason)
+	}
+	if err := CheckEnvironmentReconciled(&StatusResponse{}); err != nil {
+		t.Fatalf("fresh environment rejected: %v", err)
+	}
+}

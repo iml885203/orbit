@@ -82,12 +82,21 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		if configFile == "" {
 			configFile = resolveConfigFile()
 		}
-		if commandRequiresMatchingDaemonConfig(cmd) {
+		requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
+		requiresReconcile := commandRequiresReconciledEnvironment(cmd)
+		if requiresMatch || requiresReconcile {
 			client := daemon.NewClient(daemon.DefaultSocketPath())
 			if client.Health() == nil {
 				if status, err := client.Status(); err == nil {
-					if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-						return mismatch
+					if requiresMatch {
+						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+							return mismatch
+						}
+					}
+					if requiresReconcile {
+						if stale := daemon.CheckEnvironmentReconciled(status); stale != nil {
+							return stale
+						}
 					}
 				}
 			}
@@ -260,6 +269,23 @@ func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
 		}
 	}
 	return false
+}
+
+func commandRequiresReconciledEnvironment(cmd *cobra.Command) bool {
+	top := cmd
+	for top.Parent() != nil && top.Parent().Parent() != nil {
+		top = top.Parent()
+	}
+	switch top.Name() {
+	case "up", "restart", "exec", "query", "topics", "seed", "edge", "service", "db", "tunnel":
+		return true
+	case "env":
+		return cmd.Name() == "toggle"
+	case "daemon":
+		return cmd.Name() == "start"
+	default:
+		return false
+	}
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
