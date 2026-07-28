@@ -34,6 +34,9 @@ See [Why Orbit](docs/why-orbit.md) for design trade-offs and comparisons.
 
 ## Install
 
+The installer below installs the latest published preview release, not an
+unreleased build from `main`.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init
@@ -46,8 +49,8 @@ irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 |
 orbit init
 ```
 
-Upgrade, rollback, uninstall, manual downloads, and source builds are documented
-in [Installation and development](docs/development.md).
+Upgrade, rollback, uninstall, manual downloads, and testing unreleased `main`
+are documented in [Installation and development](docs/development.md).
 
 The default setup uses the
 [Orbit demo environment](https://github.com/iml885203/orbit-demo): a

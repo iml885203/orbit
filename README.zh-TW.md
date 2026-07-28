@@ -31,6 +31,9 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 
 ## 安裝
 
+以下 installer 會安裝最新發布的 preview release，不是尚未發布的 `main`
+build。
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init
@@ -47,7 +50,7 @@ orbit init
 在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。Orbit
 不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
 
-升級、rollback、移除、手動下載與從 source build
+升級、rollback、移除、手動下載與測試尚未發布的 `main`
 請見[安裝與開發](docs/development.zh-TW.md)。
 
 macOS 與 Linux 為正式支援平台；Windows build 為 Beta。詳情請見

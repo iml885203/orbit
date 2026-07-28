@@ -16,15 +16,22 @@ ui:
 build: ui
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)$(GOEXE) ./cmd/orbit
 
-# Install the dev build over the stable install.sh location. Opt-in: use
-# this only when you want your local build to become your daily-driver
-# orbit (it overwrites the installer's binary, but all state lives under
-# ~/.orbit and is shared either way).
+# Install the dev build over the release installer's location. This target is
+# intentionally opt-in and preserves the replaced binary for rollback.
 install: build
-	@mkdir -p $(HOME)/.local/bin
-	cp $(BUILD_DIR)/$(BINARY)$(GOEXE) $(HOME)/.local/bin/$(BINARY)$(GOEXE)
-	@codesign -s - -f $(HOME)/.local/bin/$(BINARY)$(GOEXE) 2>/dev/null || true
-	@echo "Installed $(HOME)/.local/bin/$(BINARY)$(GOEXE)"
+	@set -eu; \
+	install_dir="$(HOME)/.local/bin"; \
+	target="$$install_dir/$(BINARY)$(GOEXE)"; \
+	staged="$$target.new"; \
+	mkdir -p "$$install_dir"; \
+	cp "$(BUILD_DIR)/$(BINARY)$(GOEXE)" "$$staged"; \
+	chmod +x "$$staged"; \
+	codesign -s - -f "$$staged" 2>/dev/null || true; \
+	if [ -f "$$target" ]; then cp -p "$$target" "$$target.prev"; fi; \
+	mv -f "$$staged" "$$target"; \
+	echo "Installed development build: $$target"; \
+	"$$target" version; \
+	echo "If Orbit is already running, restart it with: orbit daemon restart"
 
 clean:
 	rm -rf $(BUILD_DIR)

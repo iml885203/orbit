@@ -9,6 +9,10 @@ dashboard hot reload). For the basic day-to-day workflow, see the
 
 ## Using Orbit
 
+The documented installers always install a published GitHub Release. Their
+scripts live on `main`, but they do not install an unreleased `main` build. To
+test current source, follow [Testing unreleased main](#testing-unreleased-main).
+
 ### Platform support
 
 | Platform | Support | Installation |
@@ -116,7 +120,7 @@ version; do not mix a plugin from one release with an older binary.
 
 ## Contributing to Orbit
 
-### Build from source
+### Testing unreleased main
 
 Requires Go 1.25+, Node.js 22+, and pnpm 10+:
 
@@ -124,11 +128,20 @@ Requires Go 1.25+, Node.js 22+, and pnpm 10+:
 git clone https://github.com/iml885203/orbit.git
 cd orbit
 pnpm --dir ui install
-make build        # compiles UI + binary into ./bin/orbit
-./bin/orbit init
+make install
+orbit version
+orbit init
 ```
 
-`make install` copies the dev build over `~/.local/bin/orbit` to use it as your daily orbit.
+`make install` builds current source and deliberately makes it the one `orbit`
+on your normal PATH. It preserves the replaced binary at
+`~/.local/bin/orbit.prev` and prints a daemon restart reminder, so a published
+release and a source build do not silently compete. Run `orbit version` after
+switching to confirm which build you are testing.
+
+For a one-off build that must not replace the installed release, use
+`make build` and invoke `./bin/orbit` explicitly. Stop any daemon started by
+that binary before returning to the installed `orbit`.
 
 ### Development workflow
 
@@ -147,5 +160,5 @@ Release numbering and compatibility promises are documented in
 
 ```bash
 cd ui && pnpm dev          # Vite dev server on :5173
-./bin/orbit daemon start   # API backend + dashboard on :19800
+orbit daemon start         # API backend + dashboard on :19800
 ```

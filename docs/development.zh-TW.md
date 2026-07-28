@@ -8,6 +8,10 @@
 
 ## 使用 Orbit
 
+文件中的 installer 一律安裝已發布的 GitHub Release。Script 雖然放在
+`main`，但不會安裝尚未發布的 `main` build。要測試目前 source，請依照
+[測試尚未發布的 main](#測試尚未發布的-main)。
+
 ### 平台支援
 
 | 平台 | 支援程度 | 安裝方式 |
@@ -107,7 +111,7 @@ binary。
 
 ## 貢獻 Orbit
 
-### 從原始碼 build
+### 測試尚未發布的 main
 
 需要 Go 1.25+、Node.js 22+ 與 pnpm 10+：
 
@@ -115,11 +119,18 @@ binary。
 git clone https://github.com/iml885203/orbit.git
 cd orbit
 pnpm --dir ui install
-make build        # compiles UI + binary into ./bin/orbit
-./bin/orbit init
+make install
+orbit version
+orbit init
 ```
 
-`make install` 會把 dev build 覆蓋到 `~/.local/bin/orbit`，讓它成為你日常用的 orbit。
+`make install` 會 build 目前 source，並刻意讓它成為一般 PATH 上唯一使用的
+`orbit`。被替換的 binary 會保留在 `~/.local/bin/orbit.prev`，安裝完成也會
+提醒重啟 daemon，避免已發布的 release 與 source build 在不知情下互相競爭。
+切換後執行 `orbit version`，確認目前測試的是哪個 build。
+
+若只想做一次性 build、不替換已安裝的 release，請執行 `make build`，並明確
+使用 `./bin/orbit`。回到已安裝的 `orbit` 前，先停止由該 binary 啟動的 daemon。
 
 ### 開發流程
 
@@ -137,5 +148,5 @@ Release 編號與相容性承諾請見[版本與相容性](versioning.zh-TW.md)�
 
 ```bash
 cd ui && pnpm dev          # Vite dev server on :5173
-./bin/orbit daemon start   # API backend + dashboard on :19800
+orbit daemon start         # API backend + dashboard on :19800
 ```
