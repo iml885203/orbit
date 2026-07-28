@@ -10,13 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/dockerctx"
 	"github.com/iml885203/orbit/logging"
-	cerrdefs "github.com/containerd/errdefs"
+	orbitport "github.com/iml885203/orbit/port"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
@@ -98,6 +100,10 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	if err := m.ensureImageAvailable(ctx, name, cfg); err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
 		return err
+	}
+	if conflict := containerPortConflict(name, cfg); conflict != nil {
+		m.narrate(name, "ERROR: "+conflict.Error())
+		return conflict
 	}
 
 	// Build port bindings
@@ -186,6 +192,10 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 
 	// Start container
 	if _, err := m.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
+		if conflict := containerPortConflict(name, cfg); conflict != nil {
+			m.narrate(name, "ERROR: "+conflict.Error())
+			return conflict
+		}
 		m.narrate(name, "ERROR: "+err.Error())
 		return fmt.Errorf("starting container %s: %w", name, err)
 	}
@@ -195,6 +205,22 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	go m.streamLogs(ctx, name, resp.ID)
 
 	return nil
+}
+
+func containerPortConflict(name string, cfg *config.Container) *orbitport.ConflictError {
+	if cfg == nil {
+		return nil
+	}
+	ports := make([]int, 0, len(cfg.Ports))
+	for _, definition := range cfg.Ports {
+		ports = append(ports, definition.Host)
+	}
+	sort.Ints(ports)
+	conflicts := orbitport.CheckPorts(map[string][]int{name: ports})
+	if len(conflicts) == 0 {
+		return nil
+	}
+	return orbitport.NewConflictError(conflicts[0])
 }
 
 func formatPortBindings(ports map[string]config.PortDef) string {

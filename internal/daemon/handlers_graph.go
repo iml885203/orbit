@@ -63,18 +63,27 @@ type GraphNode struct {
 	Color string `json:"color,omitempty"` // externals only; hex color tint
 	State string `json:"state"`
 	// StateReason says why the node is degraded; empty otherwise.
-	StateReason string              `json:"stateReason,omitempty"`
-	Mode        string              `json:"mode,omitempty"` // services only
-	URL         string              `json:"url,omitempty"`
-	Ports       map[string]int      `json:"ports,omitempty"`
-	Health      *HealthProgressInfo `json:"health,omitempty"`
-	Sidecars    []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
-	InfraDeps   []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
+	StateReason  string              `json:"stateReason,omitempty"`
+	PortConflict *GraphPortConflict  `json:"portConflict,omitempty"`
+	Mode         string              `json:"mode,omitempty"` // services only
+	URL          string              `json:"url,omitempty"`
+	Ports        map[string]int      `json:"ports,omitempty"`
+	Health       *HealthProgressInfo `json:"health,omitempty"`
+	Sidecars     []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
+	InfraDeps    []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
 	// Kafka carries the produces/consumes declarations the node owns.
 	// Services with no declared topics get nil (omitted from JSON);
 	// externals are required by validation to declare at least one
 	// topic, so the pointer is always non-nil for them.
 	Kafka *config.KafkaIO `json:"kafka,omitempty"`
+}
+
+type GraphPortConflict struct {
+	Port           int    `json:"port"`
+	Resource       string `json:"resource"`
+	PID            string `json:"pid,omitempty"`
+	Process        string `json:"process,omitempty"`
+	InspectCommand string `json:"inspect_command"`
 }
 
 // InfraDepRef is a compact reference to one infra container that a service
@@ -207,6 +216,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
 			n.StateReason = st.StateReason
+			n.PortConflict = graphPortConflict(st.PortConflict)
 			n.Ports = st.Ports
 			n.URL = st.URL
 			n.Health = st.HealthProgress
@@ -229,6 +239,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
 			n.StateReason = st.StateReason
+			n.PortConflict = graphPortConflictFor(name, statuses, nil)
 			n.Mode = st.Mode
 			n.Ports = st.Ports
 			n.URL = st.URL
@@ -256,6 +267,47 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		})
 	}
 	return nodes
+}
+
+func graphPortConflictFor(
+	name string,
+	statuses map[string]ResourceStatus,
+	seen map[string]bool,
+) *GraphPortConflict {
+	if seen == nil {
+		seen = make(map[string]bool)
+	}
+	if seen[name] {
+		return nil
+	}
+	seen[name] = true
+
+	status, ok := statuses[name]
+	if !ok {
+		return nil
+	}
+	if status.PortConflict != nil {
+		return graphPortConflict(status.PortConflict)
+	}
+	for _, dependency := range status.PendingDependencies {
+		if conflict := graphPortConflictFor(dependency, statuses, seen); conflict != nil {
+			return conflict
+		}
+	}
+	return nil
+}
+
+func graphPortConflict(conflict *ResourcePortConflict) *GraphPortConflict {
+	if conflict == nil {
+		return nil
+	}
+	return &GraphPortConflict{
+		Port:           conflict.Port,
+		Resource:       conflict.Resource,
+		PID:            conflict.PID,
+		Process:        conflict.Process,
+		InspectCommand: conflict.InspectCommand,
+	}
 }
 
 // serviceInfraDeps flattens a service's depends_on entries that resolve to

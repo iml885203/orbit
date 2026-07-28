@@ -112,6 +112,9 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 		if service == nil {
 			continue
 		}
+		if service.PortConflict != nil {
+			return resourcePortConflictActions(service.PortConflict)
+		}
 		switch service.State {
 		case "degraded":
 			if service.HealthProgress == nil || !service.HealthProgress.Recovering {
@@ -121,6 +124,9 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 			terminalNames = append(terminalNames, service.Name)
 		case "pending":
 			if blocker := terminalDependencyBlocker(status, service.PendingDependencies); blocker != nil {
+				if blocker.PortConflict != nil {
+					return resourcePortConflictActions(blocker.PortConflict)
+				}
 				terminalNames = append(terminalNames, blocker.Name)
 			}
 		}
@@ -142,6 +148,17 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 		evidenceNames = append(evidenceNames, evidence.Name)
 	}
 	return lifecycleRecommendedActions(evidenceNames)
+}
+
+func resourcePortConflictActions(conflict *daemon.ResourcePortConflict) []cli.JSONAction {
+	if conflict == nil || conflict.InspectCommand == "" {
+		return nil
+	}
+	return []cli.JSONAction{{
+		Command:     conflict.InspectCommand,
+		Reason:      fmt.Sprintf("Inspect the process using port %d required by %s.", conflict.Port, conflict.Resource),
+		Destructive: false,
+	}}
 }
 
 func lifecycleEvidenceResource(service *daemon.ResourceStatus, byName map[string]*daemon.ResourceStatus, visited map[string]bool) *daemon.ResourceStatus {
@@ -282,6 +299,9 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 			if svc.HealthProgress != nil && svc.HealthProgress.Recovering {
 				continue
 			}
+			if svc.PortConflict != nil {
+				return resourcePortConflictError(svc.PortConflict)
+			}
 			reason := svc.StateReason
 			if reason == "" && svc.HealthProgress != nil {
 				reason = svc.HealthProgress.LastErr
@@ -298,6 +318,9 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 			dependency := terminalDependencyBlocker(status, svc.PendingDependencies)
 			if dependency == nil {
 				continue
+			}
+			if dependency.PortConflict != nil {
+				return resourcePortConflictError(dependency.PortConflict)
 			}
 			reason := dependency.StateReason
 			if reason == "" && dependency.HealthProgress != nil {
@@ -318,6 +341,19 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 		}
 	}
 	return nil
+}
+
+func resourcePortConflictError(conflict *daemon.ResourcePortConflict) error {
+	if conflict == nil {
+		return nil
+	}
+	return &cli.ResourcePortConflictError{
+		Port:           conflict.Port,
+		Resource:       conflict.Resource,
+		PID:            conflict.PID,
+		Process:        conflict.Process,
+		InspectCommand: conflict.InspectCommand,
+	}
 }
 
 func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencies []string) *daemon.ResourceStatus {

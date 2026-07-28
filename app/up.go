@@ -459,6 +459,9 @@ func blockedDependencyError(client *daemon.Client, status *daemon.StatusResponse
 	if dependency == nil {
 		return nil
 	}
+	if dependency.PortConflict != nil {
+		return resourcePortConflictError(dependency.PortConflict)
+	}
 	reason := dependency.StateReason
 	if reason == "" && dependency.HealthProgress != nil {
 		reason = dependency.HealthProgress.LastErr
@@ -508,6 +511,9 @@ func doneOnHealthy(e progressEvent) bool {
 }
 
 func serviceStartError(name string, snapshot progressSnapshot, evidence string) error {
+	if snapshot.portConflict != nil {
+		return resourcePortConflictError(snapshot.portConflict)
+	}
 	message := name + " failed to become healthy"
 	if snapshot.reason != "" {
 		message += ": " + snapshot.reason

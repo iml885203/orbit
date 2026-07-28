@@ -49,6 +49,9 @@
   }
   const cta = $derived.by<Cta | null>(() => {
     if (!node) return null
+    if (node.portConflict) {
+      return { label: 'Port blocked', icon: null, tone: 'muted', disabled: true }
+    }
     const name = node.name
     switch (node.state) {
       case 'stopped':
@@ -116,7 +119,7 @@
   }
 
   const canRestart = $derived(
-    !!node && ['healthy', 'degraded', 'building', 'starting'].includes(node.state)
+    !!node && !node.portConflict && ['healthy', 'degraded', 'building', 'starting'].includes(node.state)
   )
   function doRestart() {
     if (!node) return
@@ -136,6 +139,15 @@
     try {
       await navigator.clipboard.writeText(String(port))
       toast(`Copied :${port}`)
+    } catch {
+      toast('Copy failed')
+    }
+  }
+  async function copyPortInspection() {
+    if (!node?.portConflict?.inspect_command) return
+    try {
+      await navigator.clipboard.writeText(node.portConflict.inspect_command)
+      toast('Copied port inspection command')
     } catch {
       toast('Copy failed')
     }
@@ -237,7 +249,7 @@
         <h2 id="drawer-title">{node.name}</h2>
         <Badge state={node.state} />
       </div>
-      {#if node.stateReason}
+      {#if node.stateReason && !node.portConflict}
         <p class="state-reason" role="status">{node.stateReason}</p>
       {/if}
       <div class="header-actions">
@@ -257,6 +269,18 @@
       </div>
     </header>
     <div class="body">
+      {#if node.portConflict}
+        <section class="port-conflict" role="alert" aria-label="Port conflict">
+          <div>
+            <strong>Port {node.portConflict.port} is already in use</strong>
+            <p>Stop its owner or change {node.portConflict.resource}'s host port, then start the environment again.</p>
+          </div>
+          <button class="secondary-btn" type="button" onclick={copyPortInspection}>
+            <Copy size={14} strokeWidth={2.25} />
+            <span>Copy inspection command</span>
+          </button>
+        </section>
+      {/if}
       <div class="secondary-actions">
         {#if canRestart}
           <button class="secondary-btn" type="button" disabled={busy || readOnly} onclick={doRestart}>
@@ -512,6 +536,28 @@
     flex-wrap: wrap;
     gap: var(--space-2);
     margin-bottom: var(--space-4);
+  }
+  .port-conflict {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--red) 8%, transparent);
+  }
+  .port-conflict strong {
+    color: var(--red);
+    font-size: var(--text-md);
+  }
+  .port-conflict p {
+    margin: var(--space-1) 0 0;
+    color: var(--dim);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+  .port-conflict .secondary-btn {
+    width: fit-content;
   }
   .secondary-btn {
     display: inline-flex;

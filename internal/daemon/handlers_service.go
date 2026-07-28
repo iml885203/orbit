@@ -89,6 +89,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			State:               svc.State.String(),
 			PendingDependencies: pendingDependencies,
 			StateReason:         svc.StateReason,
+			PortConflict:        resourcePortConflict(svc),
 			RestartCount:        svc.RestartCount,
 			Ports:               ports,
 			URL:                 url,
@@ -101,6 +102,19 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		})
 	}
 	return out
+}
+
+func resourcePortConflict(svc *engine.ServiceInfo) *ResourcePortConflict {
+	if svc == nil || svc.PortConflict == nil {
+		return nil
+	}
+	return &ResourcePortConflict{
+		Port:           svc.PortConflict.Port,
+		Resource:       svc.PortConflict.Service,
+		PID:            svc.PortConflict.PID,
+		Process:        svc.PortConflict.Process,
+		InspectCommand: svc.PortConflict.InspectCommand,
+	}
 }
 
 func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {

@@ -19,7 +19,7 @@ func TestHandleGraph_HappyPath(t *testing.T) {
 		},
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend", DependsOn: []string{"redis"}},
+			"api":      {Name: "api", Kind: "backend", DependsOn: []string{"redis"}},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -78,7 +78,7 @@ func TestBuildGroupInfos(t *testing.T) {
 		},
 		Services: map[string]*config.Service{
 			"api":         {Name: "api"},
-			"frontend":         {Name: "frontend"},
+			"frontend":    {Name: "frontend"},
 			"odds-api":    {Name: "odds-api"},
 			"feed-worker": {Name: "feed-worker"},
 		},
@@ -124,11 +124,52 @@ func TestHandleGraph_ContainerIconsComeFromEnvConfig(t *testing.T) {
 	}
 }
 
+func TestBuildGraphNodes_PropagatesDependencyPortConflict(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{
+			"redis": {Name: "redis", Kind: "infra"},
+		},
+		Services: map[string]*config.Service{
+			"api": {Name: "api", Kind: "backend", DependsOn: []string{"redis"}},
+		},
+	}
+	statuses := map[string]ResourceStatus{
+		"redis": {
+			Name:  "redis",
+			State: "degraded",
+			PortConflict: &ResourcePortConflict{
+				Port:           6379,
+				Resource:       "redis",
+				InspectCommand: "lsof -nP -iTCP:6379 -sTCP:LISTEN",
+			},
+		},
+		"api": {
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+	}
+
+	nodes := buildGraphNodes(cfg, statuses)
+	byName := map[string]GraphNode{}
+	for _, node := range nodes {
+		byName[node.Name] = node
+	}
+
+	conflict := byName["api"].PortConflict
+	if conflict == nil {
+		t.Fatal("api port conflict = nil, want redis dependency conflict")
+	}
+	if conflict.Resource != "redis" || conflict.Port != 6379 {
+		t.Fatalf("api port conflict = %#v, want redis:6379", conflict)
+	}
+}
+
 func TestHandleGraph_DetachedEdgeShown(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -163,7 +204,7 @@ func TestHandleEdgeDetach_HappyPath(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -190,7 +231,7 @@ func TestHandleEdgeDetach_IgnoresClientEnv(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -270,7 +311,7 @@ func TestHandleEdgeDetach_URLPathForm(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -296,7 +337,7 @@ func TestHandleEdgeDetach_LegacyBodyFormRemoved(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	srv := newTestServer(t, cfg)
@@ -378,7 +419,7 @@ func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend"},
 		},
 	}
 	s := newTestServer(t, cfg)

@@ -146,6 +146,7 @@ function graphDataKey(graph: GraphResponse): string {
       color: n.color ?? '',
       state: n.state,
       stateReason: n.stateReason ?? '',
+      portConflict: n.portConflict ?? null,
       mode: n.mode ?? '',
       url: n.url ?? '',
       ports: n.ports ?? {},

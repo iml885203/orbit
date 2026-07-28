@@ -151,8 +151,12 @@ func (o *Orchestrator) OnContainerGone(name string) {
 	}
 	prev := info.State
 	switch prev {
-	case StateStopping, StateDegraded:
+	case StateStopping:
 		info.Transition(StateStopped)
+	case StateDegraded:
+		if info.AwaitingContainerRemoval {
+			info.Transition(StateStopped)
+		}
 	case StateHealthy:
 		info.Transition(StateDegraded)
 		info.StateReason = "container removed outside orbit"
@@ -196,6 +200,7 @@ func (o *Orchestrator) StopService(ctx context.Context, name string) error {
 	if err != nil {
 		info.Transition(StateDegraded)
 		info.StateReason = fmt.Sprintf("stop failed: %v", err)
+		info.AwaitingContainerRemoval = info.Kind == "container"
 	} else {
 		info.Transition(StateStopped)
 	}

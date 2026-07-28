@@ -19,6 +19,7 @@ type (
 	ResourceKind           = pub.ResourceKind
 	SidecarInfo            = pub.SidecarInfo
 	ResourceStatus         = pub.ResourceStatus
+	ResourcePortConflict   = pub.ResourcePortConflict
 	HealthProgressInfo     = pub.HealthProgressInfo
 	LogsResponse           = pub.LogsResponse
 	DoctorCheckStatus      = pub.DoctorCheckStatus

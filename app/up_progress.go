@@ -12,6 +12,7 @@ import (
 type progressSnapshot struct {
 	state               string
 	reason              string
+	portConflict        *daemon.ResourcePortConflict
 	recovering          bool
 	pendingDependencies []string
 	since               time.Time // when we first observed this state
@@ -75,6 +76,7 @@ func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ResourceS
 		snap := progressSnapshot{
 			state:               svc.State,
 			reason:              svc.StateReason,
+			portConflict:        svc.PortConflict,
 			pendingDependencies: append([]string{}, svc.PendingDependencies...),
 			since:               now,
 			firstSeen:           now,

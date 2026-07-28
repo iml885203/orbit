@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/iml885203/orbit/port"
 )
 
 // ServiceState represents the lifecycle state of a service or container.
@@ -117,9 +119,14 @@ type ServiceInfo struct {
 	// failure, build failure). Populated only while State is Degraded —
 	// Transition clears it on every other target so a stale reason never
 	// survives a restart. Mutation requires the owning Orchestrator's mu.
-	StateReason string
-	StartedAt   time.Time // when the service entered Starting state
-	HealthyAt   time.Time // when the service first became Healthy
+	StateReason  string
+	PortConflict *port.ConflictError
+	// AwaitingContainerRemoval distinguishes a failed stop whose Docker
+	// removal may still finish from a startup failure where no container
+	// ever existed. The poller may reconcile only the former to stopped.
+	AwaitingContainerRemoval bool
+	StartedAt                time.Time // when the service entered Starting state
+	HealthyAt                time.Time // when the service first became Healthy
 
 	// ctx is the per-service lifecycle context. It is created when the
 	// service transitions into Starting and cancelled by StopService/
@@ -180,6 +187,8 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		// invalidates them. Callers set StateReason right after a
 		// Transition(StateDegraded).
 		i.StateReason = ""
+		i.PortConflict = nil
+		i.AwaitingContainerRemoval = false
 	}
 	switch to {
 	case StateStarting:

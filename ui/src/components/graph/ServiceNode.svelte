@@ -171,7 +171,7 @@
   <div class="row row2">
     {#if showActions}
       <div class="actions">
-        {#if stopped}
+        {#if stopped && !node.portConflict}
           <button
             class="action-btn"
             type="button"
@@ -181,7 +181,7 @@
             onclick={makeHandler(doStart)}
           ><Play size={15} strokeWidth={2} /></button>
         {/if}
-        {#if running}
+        {#if running && !node.portConflict}
           <button
             class="action-btn"
             type="button"

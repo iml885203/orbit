@@ -166,7 +166,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	} else if dstatus.UpdateAvailable {
 		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
 	} else {
-		tips = buildTips(daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
+		tips = buildTips(daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTips(running), openableServices)
 	}
 	if len(tips) > 0 {
 		fmt.Println()
@@ -298,7 +298,7 @@ func formatTiming(svc daemon.ResourceStatus) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-func buildTips(daemonRunning, stoppedInfra bool, stoppedServices, degradedNames, openableServices []string) []string {
+func buildTips(daemonRunning, stoppedInfra bool, stoppedServices, recoveryTips, openableServices []string) []string {
 	var tips []string
 
 	// Scenario 1: nothing running
@@ -308,14 +308,8 @@ func buildTips(daemonRunning, stoppedInfra bool, stoppedServices, degradedNames,
 	}
 
 	// Scenario 5: degraded — most urgent
-	if len(degradedNames) > 0 {
-		for _, name := range degradedNames {
-			tips = append(tips,
-				fmt.Sprintf("orbit logs %-14s  check logs", name),
-				fmt.Sprintf("orbit restart %-11s  restart service", name),
-			)
-		}
-		return tips
+	if len(recoveryTips) > 0 {
+		return recoveryTips
 	}
 
 	// A stopped environment has one normal recovery path. Partial-start flags
@@ -377,16 +371,17 @@ type statusSetupState struct {
 }
 
 type jsonService struct {
-	Name                string         `json:"name"`
-	Kind                string         `json:"kind"`
-	State               string         `json:"state"`
-	StateReason         string         `json:"state_reason,omitempty"`
-	PendingDependencies []string       `json:"pending_dependencies,omitempty"`
-	BlockedBy           string         `json:"blocked_by,omitempty"`
-	URL                 string         `json:"url,omitempty"`
-	Ports               map[string]int `json:"ports,omitempty"`
-	StartupTime         string         `json:"startup_time,omitempty"`
-	Uptime              string         `json:"uptime,omitempty"`
+	Name                string                       `json:"name"`
+	Kind                string                       `json:"kind"`
+	State               string                       `json:"state"`
+	StateReason         string                       `json:"state_reason,omitempty"`
+	PortConflict        *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
+	PendingDependencies []string                     `json:"pending_dependencies,omitempty"`
+	BlockedBy           string                       `json:"blocked_by,omitempty"`
+	URL                 string                       `json:"url,omitempty"`
+	Ports               map[string]int               `json:"ports,omitempty"`
+	StartupTime         string                       `json:"startup_time,omitempty"`
+	Uptime              string                       `json:"uptime,omitempty"`
 }
 
 type daemonStatus struct {
@@ -543,6 +538,7 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 	target.State = source.State
 	if source.State == "degraded" {
 		target.StateReason = serviceFailureReason(source)
+		target.PortConflict = source.PortConflict
 	}
 	target.PendingDependencies = append([]string{}, source.PendingDependencies...)
 	target.StartupTime = source.StartupTime
@@ -585,6 +581,10 @@ func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONA
 	var actions []cli.JSONAction
 	for _, name := range statusRecoveryTargets(running) {
 		service := running[name]
+		if service.PortConflict != nil {
+			actions = append(actions, resourcePortConflictActions(service.PortConflict)...)
+			continue
+		}
 		if service.State == "stopped" {
 			actions = append(actions, cli.JSONAction{
 				Command: "orbit up " + name + " --json",
@@ -604,6 +604,24 @@ func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONA
 		)
 	}
 	return actions
+}
+
+func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
+	var tips []string
+	for _, name := range statusRecoveryTargets(running) {
+		service := running[name]
+		if service.PortConflict != nil {
+			if service.PortConflict.InspectCommand != "" {
+				tips = append(tips, fmt.Sprintf("%s  inspect port %d owner", service.PortConflict.InspectCommand, service.PortConflict.Port))
+			}
+			continue
+		}
+		tips = append(tips,
+			fmt.Sprintf("orbit logs %-14s  check logs", name),
+			fmt.Sprintf("orbit restart %-11s  restart service", name),
+		)
+	}
+	return tips
 }
 
 func printDaemonHeader(s daemonStatus) {

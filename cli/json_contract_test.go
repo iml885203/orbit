@@ -331,6 +331,29 @@ func TestWriteJSONErrorClassifiesServiceStartFailed(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesResourcePortConflict(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit up --json", &ResourcePortConflictError{
+		Port:           26379,
+		Resource:       "redis",
+		PID:            "42",
+		Process:        "/usr/bin/redis-server",
+		InspectCommand: "ps -p 42 -o pid,comm,args=",
+	})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "resource_port_conflict" ||
+		got.Error.NextCommand != "ps -p 42 -o pid,comm,args=" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "ps -p 42 -o pid,comm,args=" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesDashboardPortConflict(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit up --json", &daemon.PortConflictError{

@@ -121,6 +121,16 @@ func classify(err error) JSONError {
 			NextCommand: nextCommand,
 		}
 	}
+	var resourcePortConflict *ResourcePortConflictError
+	if errors.As(err, &resourcePortConflict) {
+		return JSONError{
+			Code:        "resource_port_conflict",
+			Message:     msg,
+			Hint:        "Stop the reported port owner or change this resource's host port in the environment, then run 'orbit up' again.",
+			Retryable:   true,
+			NextCommand: resourcePortConflict.InspectCommand,
+		}
+	}
 	var configMismatch *daemon.ConfigMismatchError
 	if errors.As(err, &configMismatch) {
 		hint := "Restart the daemon with the selected config, or explicitly select the running daemon config."
@@ -323,6 +333,16 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		return []JSONAction{{
 			Command:     err.NextCommand,
 			Reason:      "Restart Orbit to run the installed version.",
+			Destructive: false,
+		}}
+	}
+	if err.Code == "resource_port_conflict" {
+		if err.NextCommand == "" {
+			return nil
+		}
+		return []JSONAction{{
+			Command:     err.NextCommand,
+			Reason:      "Inspect the process currently using the required port.",
 			Destructive: false,
 		}}
 	}

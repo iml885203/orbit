@@ -92,6 +92,7 @@ export interface GraphNode {
    * StateReason says why the node is degraded; empty otherwise.
    */
   stateReason?: string;
+  portConflict?: GraphPortConflict;
   mode?: string; // services only
   url?: string;
   ports?: { [key: string]: number /* int */};
@@ -105,6 +106,13 @@ export interface GraphNode {
    * topic, so the pointer is always non-nil for them.
    */
   kafka?: KafkaIO;
+}
+export interface GraphPortConflict {
+  port: number /* int */;
+  resource: string;
+  pid?: string;
+  process?: string;
+  inspect_command: string;
 }
 /**
  * InfraDepRef is a compact reference to one infra container that a service

@@ -245,6 +245,7 @@ func TestOnContainerGone_StopFailureReconcilesToStopped(t *testing.T) {
 	o.mu.Lock()
 	o.services["redis"].Transition(StateDegraded)
 	o.services["redis"].StateReason = "stop failed: context deadline exceeded"
+	o.services["redis"].AwaitingContainerRemoval = true
 	o.mu.Unlock()
 
 	o.OnContainerGone("redis")
@@ -255,6 +256,23 @@ func TestOnContainerGone_StopFailureReconcilesToStopped(t *testing.T) {
 	}
 	if info.StateReason != "" {
 		t.Errorf("redis StateReason = %q, want cleared", info.StateReason)
+	}
+}
+
+func TestOnContainerGoneKeepsStartupFailureDegraded(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+
+	o.mu.Lock()
+	o.services["redis"].Transition(StateDegraded)
+	o.services["redis"].StateReason = "cannot start redis: port 26379 is already in use"
+	o.mu.Unlock()
+
+	o.OnContainerGone("redis")
+
+	info, _ := o.GetServiceInfo("redis")
+	if info.State != StateDegraded {
+		t.Errorf("redis state = %s, want degraded startup evidence preserved", info.State)
 	}
 }
 

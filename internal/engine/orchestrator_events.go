@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+
+	"github.com/iml885203/orbit/port"
 )
 
 func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
@@ -52,6 +55,11 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 			case StateStarting, StateHealthy:
 				info.Transition(StateDegraded)
 				info.StateReason = evt.Message
+				var conflict *port.ConflictError
+				if errors.As(evt.Err, &conflict) {
+					info.PortConflict = conflict
+					info.StateReason = conflict.Error()
+				}
 			case StateDegraded:
 				// Recovery probing can produce a sharper diagnosis than
 				// the original exhaustion message (e.g. zombie detection)

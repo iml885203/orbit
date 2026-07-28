@@ -1,6 +1,10 @@
 package cli
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+)
 
 // Sentinel kinds for CLI error classification. Wrap them via the New*Error
 // constructors so WriteJSONError maps failures to stable machine codes.
@@ -17,6 +21,25 @@ var (
 	ErrInvalidEnvironment = errors.New("invalid environment")
 	ErrInvalidArgument    = errors.New("invalid argument")
 )
+
+type ResourcePortConflictError struct {
+	Port           int
+	Resource       string
+	PID            string
+	Process        string
+	InspectCommand string
+}
+
+func (e *ResourcePortConflictError) Error() string {
+	owner := ""
+	if e.PID != "" && e.PID != "?" {
+		owner = " by pid " + e.PID
+		if e.Process != "" && e.Process != "?" {
+			owner = " by " + filepath.Base(e.Process) + " (pid " + e.PID + ")"
+		}
+	}
+	return fmt.Sprintf("cannot start %s: port %d is already in use%s", e.Resource, e.Port, owner)
+}
 
 type classifiedError struct {
 	kind error

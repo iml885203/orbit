@@ -215,6 +215,49 @@ func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
 	}
 }
 
+func TestLifecycleTerminalErrorPreservesPortConflict(t *testing.T) {
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
+		Name:        "redis",
+		State:       "degraded",
+		StateReason: "cannot start redis: port 26379 is already in use",
+		PortConflict: &daemon.ResourcePortConflict{
+			Port:           26379,
+			Resource:       "redis",
+			PID:            "42",
+			InspectCommand: "ps -p 42 -o pid,comm,args=",
+		},
+	}}}
+	err := lifecycleTerminalError(nil, status, []string{"redis"}, true)
+	var conflict *cli.ResourcePortConflictError
+	if !errors.As(err, &conflict) || conflict.Port != 26379 || conflict.Resource != "redis" {
+		t.Fatalf("error = %T %v", err, err)
+	}
+}
+
+func TestLifecycleBlockedDependencyPreservesPortConflict(t *testing.T) {
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+		{
+			Name:  "redis",
+			State: "degraded",
+			PortConflict: &daemon.ResourcePortConflict{
+				Port:           26379,
+				Resource:       "redis",
+				InspectCommand: "lsof -nP -iTCP:26379 -sTCP:LISTEN",
+			},
+		},
+	}}
+	err := lifecycleTerminalError(nil, status, []string{"api"}, true)
+	var conflict *cli.ResourcePortConflictError
+	if !errors.As(err, &conflict) || conflict.Resource != "redis" {
+		t.Fatalf("error = %T %v", err, err)
+	}
+}
+
 func TestLifecycleTerminalErrorFailsOnTerminalDependency(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{

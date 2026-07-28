@@ -254,6 +254,15 @@ func printExecutionError(w io.Writer, err error) {
 		_ = cli.WriteJSONError(out, commandString(), err)
 		return
 	}
+	var portConflict *cli.ResourcePortConflictError
+	if errors.As(err, &portConflict) {
+		_, _ = fmt.Fprintf(w, "Error: %v\n", portConflict)
+		if portConflict.InspectCommand != "" {
+			_, _ = fmt.Fprintf(w, "  → Inspect owner: %s\n", portConflict.InspectCommand)
+		}
+		_, _ = fmt.Fprintf(w, "  → Stop that process or change %s's host port, then run: orbit up\n", portConflict.Resource)
+		return
+	}
 	_, _ = fmt.Fprintf(w, "Error: %v\n", err)
 }
 

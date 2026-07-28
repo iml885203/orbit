@@ -16,14 +16,10 @@ container 已經啟動，但 health check 一直沒成功。
 ### `port already in use`
 有別的 process 佔住了 Orbit 想用的 port。
 
-```bash
-# macOS / Linux
-lsof -i :<port>
-# Windows
-netstat -ano | findstr :<port>
-```
-
-如果是殘留的 `orbit` 子 process，`orbit down` 通常可以清掉（process-group kill）。其他情況就手動 kill 掉那個 PID。
+Orbit 會指出受影響的 resource 與 port，並提供一條唯讀指令查看目前 owner。
+請透過管理該 process 的工具將它停止，或在 shared environment 中修改該
+resource 的 host port，再重新執行 `orbit up`。讀取 container logs 或盲目
+restart resource 都無法釋放由其他 process 佔用的 host port。
 
 ### 私有 registry `pull unauthorized` / `pull access denied`
 你的 Docker client 沒辦法 pull image。中性版 `orbit doctor` 會確認 Docker 是否可用,但不會探測 private registry。請向你的 registry provider 驗證身份,例如：

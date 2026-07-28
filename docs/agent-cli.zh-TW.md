@@ -73,6 +73,12 @@ orbit logs redis --json
 
 Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而不是從錯誤訊息文字去猜測恢復路徑。
 
+遇到 `resource_port_conflict` 時，`error.next_command` 是該平台用來查看
+目前 port owner 的唯讀指令。Resource status 也會提供 `port_conflict`
+evidence（`port`、`resource`、可取得時的 owner，以及 `inspect_command`）。
+在停止 owner 或於 shared environment 選用其他 host port 前，不應盲目
+retry 或讀取 logs。
+
 ## Converted Commands
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：

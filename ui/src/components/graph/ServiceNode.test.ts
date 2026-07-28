@@ -62,6 +62,25 @@ describe('ServiceNode', () => {
     expect(getByRole('button', { name: /stop/i })).toBeTruthy()
   })
 
+  it('hides misleading lifecycle actions when a port blocks startup', () => {
+    const node = {
+      ...baseNode,
+      name: 'api',
+      state: 'pending',
+      portConflict: {
+        port: 6379,
+        resource: 'redis',
+        inspect_command: 'lsof -nP -iTCP:6379 -sTCP:LISTEN',
+      },
+    }
+    const { queryByRole, getByRole } = render(ServiceNode, { props: { data: node, id: 'api' } })
+
+    expect(queryByRole('button', { name: /^start api$/i })).toBeNull()
+    expect(queryByRole('button', { name: /^restart api$/i })).toBeNull()
+    expect(queryByRole('button', { name: /^stop api$/i })).toBeNull()
+    expect(getByRole('button', { name: /open logs for api/i })).toBeTruthy()
+  })
+
   it('shows start button when stopped', () => {
     const stoppedNode = { ...baseNode, state: 'stopped' }
     const { getByRole, queryByRole } = render(ServiceNode, { props: { data: stoppedNode, id: 'api' } })

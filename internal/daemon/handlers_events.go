@@ -200,6 +200,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 			Kind:         ResourceKind(svc.Kind),
 			State:        svc.State.String(),
 			StateReason:  svc.StateReason,
+			PortConflict: resourcePortConflict(svc),
 			RestartCount: svc.RestartCount,
 			Ports:        ports,
 			URL:          url,

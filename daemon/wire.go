@@ -69,16 +69,27 @@ type ResourceStatus struct {
 	PendingDependencies []string `json:"pending_dependencies,omitempty"`
 	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
-	StateReason    string              `json:"state_reason,omitempty"`
-	RestartCount   int                 `json:"restart_count"`
-	Ports          map[string]int      `json:"ports,omitempty"`
-	URL            string              `json:"url,omitempty"`
-	Image          string              `json:"image,omitempty"` // resolved container image; containers only
-	StartupTime    string              `json:"startup_time,omitempty"`
-	Uptime         string              `json:"uptime,omitempty"`
-	Sidecars       []SidecarInfo       `json:"sidecars,omitempty"`
-	Mode           string              `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
-	HealthProgress *HealthProgressInfo `json:"health_progress,omitempty"`
+	StateReason    string                `json:"state_reason,omitempty"`
+	PortConflict   *ResourcePortConflict `json:"port_conflict,omitempty"`
+	RestartCount   int                   `json:"restart_count"`
+	Ports          map[string]int        `json:"ports,omitempty"`
+	URL            string                `json:"url,omitempty"`
+	Image          string                `json:"image,omitempty"` // resolved container image; containers only
+	StartupTime    string                `json:"startup_time,omitempty"`
+	Uptime         string                `json:"uptime,omitempty"`
+	Sidecars       []SidecarInfo         `json:"sidecars,omitempty"`
+	Mode           string                `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
+	HealthProgress *HealthProgressInfo   `json:"health_progress,omitempty"`
+}
+
+// ResourcePortConflict is actionable evidence for a resource that could not
+// bind its configured host port.
+type ResourcePortConflict struct {
+	Port           int    `json:"port"`
+	Resource       string `json:"resource"`
+	PID            string `json:"pid,omitempty"`
+	Process        string `json:"process,omitempty"`
+	InspectCommand string `json:"inspect_command"`
 }
 
 // HealthProgressInfo reports retry state for a resource that has a

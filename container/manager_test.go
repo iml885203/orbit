@@ -3,13 +3,35 @@ package container
 import (
 	"bytes"
 	"encoding/binary"
+	"net"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/logging"
 	"github.com/moby/moby/api/pkg/stdcopy"
 )
+
+func TestContainerPortConflictHidesContainerRuntimeError(t *testing.T) {
+	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	hostPort := listener.Addr().(*net.TCPAddr).Port
+
+	conflict := containerPortConflict("redis", &config.Container{
+		Ports: map[string]config.PortDef{"redis": {Host: hostPort, Target: 6379}},
+	})
+	if conflict == nil || conflict.Port != hostPort || conflict.Service != "redis" {
+		t.Fatalf("conflict = %+v", conflict)
+	}
+	if strings.Contains(strings.ToLower(conflict.Error()), "docker") ||
+		strings.Contains(strings.ToLower(conflict.Error()), "endpoint") {
+		t.Fatalf("conflict leaked runtime internals: %v", conflict)
+	}
+}
 
 // frame builds a Docker multiplexed log frame (stream=1 stdout, 2 stderr).
 func frame(stream byte, payload string) []byte {

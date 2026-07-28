@@ -40,4 +40,43 @@ describe('NodeDrawer', () => {
     await fireEvent.keyDown(window, { key: 'Escape' })
     expect(closed).toBe(true)
   })
+
+  it('shows port recovery instead of a blind restart', () => {
+    const node = {
+      name: 'redis',
+      kind: 'infra' as const,
+      state: 'degraded',
+      stateReason: 'cannot start redis: port 26379 is already in use',
+      portConflict: {
+        port: 26379,
+        resource: 'redis',
+        inspect_command: 'lsof -nP -iTCP:26379 -sTCP:LISTEN',
+      },
+    }
+    const { getByRole, getByText, queryByText } = render(NodeDrawer, {
+      props: { node, onClose: () => {} },
+    })
+
+    expect(getByRole('alert', { name: 'Port conflict' })).toBeTruthy()
+    expect(getByText('Port 26379 is already in use')).toBeTruthy()
+    expect(getByText('Copy inspection command')).toBeTruthy()
+    expect(getByText('Port blocked')).toBeTruthy()
+    expect(queryByText('Restart')).toBeNull()
+  })
+
+  it('names the dependency whose port must change', () => {
+    const node = {
+      name: 'api',
+      kind: 'backend' as const,
+      state: 'pending',
+      portConflict: {
+        port: 6379,
+        resource: 'redis',
+        inspect_command: 'lsof -nP -iTCP:6379 -sTCP:LISTEN',
+      },
+    }
+    const { getByText } = render(NodeDrawer, { props: { node, onClose: () => {} } })
+
+    expect(getByText(/change redis's host port/)).toBeTruthy()
+  })
 })

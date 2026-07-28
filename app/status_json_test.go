@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -98,6 +99,43 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	for i, command := range want {
 		if envelope.RecommendedActions[i].Command != command {
 			t.Fatalf("recommended_actions[%d] = %q, want %q", i, envelope.RecommendedActions[i].Command, command)
+		}
+	}
+}
+
+func TestStatusPortConflictRecommendsInspectionInsteadOfRestart(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{"redis": {}},
+		Services:   map[string]*config.Service{"api": {DependsOn: []string{"redis"}}},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"redis": {
+			Name:        "redis",
+			Kind:        daemon.ResourceKindContainer,
+			State:       "degraded",
+			StateReason: "cannot start redis: port 26379 is already in use",
+			PortConflict: &daemon.ResourcePortConflict{
+				Port:           26379,
+				Resource:       "redis",
+				PID:            "42",
+				InspectCommand: "ps -p 42 -o pid,comm,args=",
+			},
+		},
+		"api": {
+			Name:                "api",
+			Kind:                daemon.ResourceKindService,
+			State:               "pending",
+			PendingDependencies: []string{"redis"},
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "ps -p 42 -o pid,comm,args=" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+	for _, action := range envelope.RecommendedActions {
+		if strings.Contains(action.Command, "logs") || strings.Contains(action.Command, "restart") {
+			t.Fatalf("port conflict recommends blind retry: %+v", envelope.RecommendedActions)
 		}
 	}
 }

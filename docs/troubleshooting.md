@@ -16,14 +16,11 @@ The container started but the health check never succeeded.
 ### `port already in use`
 Another process is holding the port Orbit wants.
 
-```bash
-# macOS / Linux
-lsof -i :<port>
-# Windows
-netstat -ano | findstr :<port>
-```
-
-If it's a stale `orbit` child, `orbit down` usually clears it (process-group kill). Otherwise kill the offending PID manually.
+Orbit names the affected resource and port and prints one read-only command to
+inspect the current owner. Stop that process through the tool that owns it, or
+change the resource's host port in the shared environment, then run
+`orbit up` again. Fetching container logs or blindly restarting the resource
+cannot release a host port owned by another process.
 
 ### Private registry `pull unauthorized` / `pull access denied`
 Your Docker client can't pull the image. The neutral `orbit doctor` verifies Docker availability but does not probe private registries. Authenticate with your registry provider, for example:

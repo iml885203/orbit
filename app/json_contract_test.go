@@ -143,6 +143,29 @@ func TestPrintExecutionErrorHuman(t *testing.T) {
 	}
 }
 
+func TestPrintExecutionErrorHumanExplainsPortRecovery(t *testing.T) {
+	origJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = origJSON })
+	cli.JSONOutput = false
+
+	var buf bytes.Buffer
+	printExecutionError(&buf, &cli.ResourcePortConflictError{
+		Port:           26379,
+		Resource:       "redis",
+		InspectCommand: "lsof -nP -iTCP:26379 -sTCP:LISTEN",
+	})
+
+	output := buf.String()
+	for _, evidence := range []string{"redis", "26379", "Inspect owner", "lsof", "then run: orbit up"} {
+		if !strings.Contains(output, evidence) {
+			t.Fatalf("human error missing %q: %s", evidence, output)
+		}
+	}
+	if strings.Contains(output, "orbit logs") || strings.Contains(output, "orbit restart") {
+		t.Fatalf("human port recovery recommends blind retry: %s", output)
+	}
+}
+
 func TestPrintExecutionErrorSkipsAlreadyRenderedJSONError(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })

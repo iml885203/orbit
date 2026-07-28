@@ -79,6 +79,12 @@ Structured errors use this shape:
 Agents should prefer `error.next_command` and `recommended_actions` over
 guessing a recovery path from the message text.
 
+For `resource_port_conflict`, `error.next_command` is the platform-specific
+read-only command that inspects the current port owner. The resource's status
+also includes `port_conflict` evidence (`port`, `resource`, optional owner, and
+`inspect_command`). Do not retry or fetch logs until the owner is stopped or
+the shared environment selects a different host port.
+
 ## Converted Commands
 
 These commands currently use the `orbit.cli.v1` envelope when `--json` is set:

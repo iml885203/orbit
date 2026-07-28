@@ -738,7 +738,7 @@ func TestE2E_InspectBeforeInitMatchesStatusSetupGuidance(t *testing.T) {
 	if data.Readiness.State != inspectReadinessSetupRequired || !data.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", data.Readiness)
 	}
-	if data.Env.Name != "" || data.Env.ConfigPath != "" {
+	if data.Env.SelectedName != "" || data.Env.SelectedPath != "" {
 		t.Fatalf("env = %+v", data.Env)
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit init --yes --json" {
@@ -949,15 +949,21 @@ services:
 		t.Fatalf("expected error envelope: %s", out)
 	}
 	for _, evidence := range []string{
-		"service_start_failed",
+		"resource_port_conflict",
 		strconv.Itoa(servicePort),
 		"occupied-service",
-		strconv.Itoa(os.Getpid()),
-		"inspect it with",
 	} {
 		if !strings.Contains(envelope.Error.Code+" "+envelope.Error.Message, evidence) {
 			t.Errorf("error envelope missing %q:\n%s", evidence, out)
 		}
+	}
+	if envelope.Error.NextCommand == "" ||
+		len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != envelope.Error.NextCommand {
+		t.Errorf("port recovery is not one exact inspection command:\n%s", out)
+	}
+	if strings.Contains(string(out), "orbit logs") || strings.Contains(string(out), "orbit restart") {
+		t.Errorf("port conflict should not recommend logs or a blind restart:\n%s", out)
 	}
 	if strings.Contains(strings.ToLower(envelope.Error.Message), "kill") {
 		t.Errorf("error should not suggest killing a process:\n%s", out)

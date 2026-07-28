@@ -117,6 +117,7 @@ export interface ResourceStatus {
    * failure, build failure); empty in every other state.
    */
   state_reason?: string;
+  port_conflict?: ResourcePortConflict;
   restart_count: number /* int */;
   ports?: { [key: string]: number /* int */};
   url?: string;
@@ -126,6 +127,17 @@ export interface ResourceStatus {
   sidecars?: SidecarInfo[];
   mode?: string; // "dev" or "container" (only for dual-defined services)
   health_progress?: HealthProgressInfo;
+}
+/**
+ * ResourcePortConflict is actionable evidence for a resource that could not
+ * bind its configured host port.
+ */
+export interface ResourcePortConflict {
+  port: number /* int */;
+  resource: string;
+  pid?: string;
+  process?: string;
+  inspect_command: string;
 }
 /**
  * HealthProgressInfo reports retry state for a resource that has a

@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -22,6 +21,7 @@ import (
 	"github.com/iml885203/orbit/internal/health"
 	"github.com/iml885203/orbit/logging"
 	"github.com/iml885203/orbit/platform"
+	"github.com/iml885203/orbit/port"
 	"github.com/iml885203/orbit/process"
 )
 
@@ -251,11 +251,11 @@ func ensureServicePortsAvailable(name string, svc *config.Service) error {
 		ports = append(ports, port.Host)
 	}
 	sort.Ints(ports)
-	for _, port := range ports {
-		addresses := []endpoint{{network: "tcp4", address: "127.0.0.1:" + strconv.Itoa(port)}}
+	for _, hostPort := range ports {
+		addresses := []endpoint{{network: "tcp4", address: "127.0.0.1:" + strconv.Itoa(hostPort)}}
 		if probe, err := net.Listen("tcp6", "[::1]:0"); err == nil {
 			_ = probe.Close()
-			addresses = append(addresses, endpoint{network: "tcp6", address: "[::1]:" + strconv.Itoa(port)})
+			addresses = append(addresses, endpoint{network: "tcp6", address: "[::1]:" + strconv.Itoa(hostPort)})
 		}
 		available := true
 		for _, address := range addresses {
@@ -269,45 +269,15 @@ func ensureServicePortsAvailable(name string, svc *config.Service) error {
 		if available {
 			continue
 		}
-		pid, processName := platform.FindPortOwner(port)
-		return servicePortConflictError(name, port, pid, processName)
+		pid, processName := platform.FindPortOwner(hostPort)
+		return port.NewConflictError(port.Conflict{
+			Port:    hostPort,
+			Service: name,
+			PID:     pid,
+			Process: processName,
+		})
 	}
 	return nil
-}
-
-func servicePortConflictError(serviceName string, port int, pid, processName string) error {
-	if pid == "?" {
-		return fmt.Errorf(
-			"port %d is already in use (needed by service %s); inspect the listener with %q",
-			port, serviceName, portInspectCommand(port),
-		)
-	}
-	owner := "pid " + pid
-	if processName != "?" && processName != "" {
-		owner = filepath.Base(processName) + " (pid " + pid + ")"
-	}
-	return fmt.Errorf(
-		"port %d is already in use by %s (needed by service %s); inspect it with %q",
-		port, owner, serviceName, processInspectCommand(pid),
-	)
-}
-
-func portInspectCommand(port int) string {
-	switch runtime.GOOS {
-	case "darwin":
-		return fmt.Sprintf("lsof -nP -iTCP:%d -sTCP:LISTEN", port)
-	case "windows":
-		return fmt.Sprintf("Get-NetTCPConnection -LocalPort %d -State Listen", port)
-	default:
-		return fmt.Sprintf("ss -ltnp 'sport = :%d'", port)
-	}
-}
-
-func processInspectCommand(pid string) string {
-	if runtime.GOOS == "windows" {
-		return "Get-Process -Id " + pid
-	}
-	return "ps -p " + pid + " -o pid,comm,args="
 }
 
 func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder, orch *Orchestrator) {
