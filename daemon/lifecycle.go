@@ -41,17 +41,27 @@ type ConfigMismatchError struct {
 }
 
 func (e *ConfigMismatchError) Error() string {
+	if strings.TrimSpace(e.Running) == "" {
+		return fmt.Sprintf(
+			"the running daemon does not report its active config (it may be an older Orbit build) — run 'orbit daemon restart -c %q' before continuing",
+			e.Requested,
+		)
+	}
 	return fmt.Sprintf(
 		"selected config %q differs from the running daemon config %q — run 'orbit daemon restart -c %q' to use the selected config, or rerun with '-c %q' to address the running environment",
 		e.Requested, e.Running, e.Requested, e.Running,
 	)
 }
 
-// CheckConfigMatch tolerates an empty daemon path for version skew with a
-// daemon that predates config identity in the status response.
+// CheckConfigMatch fails closed when an older daemon cannot identify its
+// config. Continuing would let a newly selected environment drive resources
+// or destructive extension commands in the daemon's unknown environment.
 func CheckConfigMatch(requested, running string) error {
-	if strings.TrimSpace(requested) == "" || strings.TrimSpace(running) == "" {
+	if strings.TrimSpace(requested) == "" {
 		return nil
+	}
+	if strings.TrimSpace(running) == "" {
+		return &ConfigMismatchError{Requested: normalizedConfigPath(requested)}
 	}
 	requested = normalizedConfigPath(requested)
 	running = normalizedConfigPath(running)

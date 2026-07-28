@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -49,8 +50,18 @@ func TestCheckConfigMatch(t *testing.T) {
 	}
 }
 
-func TestCheckConfigMatchAllowsOlderDaemonWithoutPath(t *testing.T) {
-	if err := CheckConfigMatch("/tmp/selected.yaml", ""); err != nil {
-		t.Fatalf("empty running path should fail open for version skew: %v", err)
+func TestCheckConfigMatchRejectsOlderDaemonWithoutPath(t *testing.T) {
+	selected := "/tmp/selected.yaml"
+	err := CheckConfigMatch(selected, "")
+	var mismatch *ConfigMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("error = %T %v, want ConfigMismatchError", err, err)
+	}
+	if mismatch.Requested != selected || mismatch.Running != "" {
+		t.Fatalf("mismatch = %+v, want requested config and unknown running config", mismatch)
+	}
+	if got := err.Error(); !strings.Contains(got, "older Orbit build") ||
+		!strings.Contains(got, "orbit daemon restart -c") {
+		t.Fatalf("error is not actionable: %q", got)
 	}
 }
