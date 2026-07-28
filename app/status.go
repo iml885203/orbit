@@ -42,7 +42,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			dstatus.ConfigStale = status.ConfigStale
 			dstatus.ConfigStaleReason = status.ConfigStaleReason
 		}
-		if v, err := client.Version(); err == nil {
+		if v, err := currentDaemonVersion(client); err == nil {
 			dstatus.Version = v.Running
 			dstatus.OnDisk = v.OnDisk
 			dstatus.OnDiskPath = v.OnDiskPath
@@ -164,7 +164,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	if dstatus.ConfigStale {
 		tips = []string{"orbit daemon restart      apply environment changes"}
 	} else if dstatus.UpdateAvailable {
-		tips = []string{"orbit daemon restart      use the installed Orbit version"}
+		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
 	} else {
 		tips = buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
 	}
@@ -477,8 +477,8 @@ func writeStatusJSON(
 		})
 	} else if dstatus.UpdateAvailable {
 		actions = append(actions, cli.JSONAction{
-			Command: "orbit daemon restart --json",
-			Reason:  "Run the installed Orbit version before starting resources.",
+			Command: orbitRestartCommand(true),
+			Reason:  "Apply the Orbit update before operating resources.",
 		})
 	} else if setup.Required {
 		actions = append(actions, cli.JSONAction{
@@ -610,12 +610,8 @@ func printDaemonHeader(s daemonStatus) {
 	}
 	fmt.Printf("  %s %s\n", cli.ColorState("healthy"), ver)
 	if s.UpdateAvailable && s.OnDisk != "" {
-		location := s.OnDisk
-		if s.OnDiskPath != "" {
-			location = fmt.Sprintf("%s at %s", s.OnDisk, s.OnDiskPath)
-		}
-		fmt.Printf("  %s newer orbit %s — orbit daemon restart\n",
-			cli.Faint.Sprint("⚠"), location)
+		fmt.Printf("  %s Orbit update ready — %s to apply\n",
+			cli.Faint.Sprint("⚠"), orbitRestartCommand(false))
 	}
 	if s.ConfigStale {
 		fmt.Printf("  %s environment changes pending — orbit daemon restart to apply\n",

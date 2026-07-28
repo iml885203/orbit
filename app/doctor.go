@@ -91,6 +91,12 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 	if len(failed) == 1 && failed[0] == "Environment selection" {
 		return newEnvironmentSelectionRequiredError(readEnvironmentSelection())
 	}
+	if len(failed) == 1 && failed[0] == "Orbit update" {
+		return &daemon.UpdateRequiredError{
+			RestartCommand:     orbitRestartCommand(false),
+			RestartJSONCommand: orbitRestartCommand(true),
+		}
+	}
 	return cli.NewChecksFailedError(fmt.Sprintf("doctor found %d failed check(s): %s", len(failed), strings.Join(failed, ", ")))
 }
 
@@ -102,6 +108,9 @@ func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
 		if status, err := client.Status(); err == nil {
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
 				if resp, err := client.Doctor(); err == nil {
+					if version, versionErr := currentDaemonVersion(client); versionErr == nil {
+						return addUpdateDoctorCheck(resp, version)
+					}
 					return resp
 				}
 			}
@@ -208,6 +217,12 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 			if check.Name == "Environment selection" {
 				return environmentSelectionActions(readEnvironmentSelection())
 			}
+			if check.Name == "Orbit update" {
+				return []cli.JSONAction{{
+					Command: orbitRestartCommand(true),
+					Reason:  "Restart Orbit to run the installed version.",
+				}}
+			}
 		}
 	}
 	actions := []cli.JSONAction{cli.StatusAction()}
@@ -238,4 +253,18 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 		}
 	}
 	return actions
+}
+
+func addUpdateDoctorCheck(resp *daemon.DoctorResponse, version *daemon.VersionResponse) *daemon.DoctorResponse {
+	if resp == nil || version == nil || !version.UpdateAvailable {
+		return resp
+	}
+	out := *resp
+	out.Checks = append([]daemon.DoctorCheck{{
+		Name:    "Orbit update",
+		Status:  daemon.CheckFail,
+		Message: "an installed Orbit update requires a daemon restart",
+		Hint:    "run: " + orbitRestartCommand(false),
+	}}, resp.Checks...)
+	return &out
 }

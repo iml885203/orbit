@@ -41,21 +41,14 @@ func resolveSymlinks(path string) string {
 // Overridable in tests to inject a fixed list.
 var candidatePathsFn = candidatePaths
 
-// candidatePaths collects possible on-disk orbit binaries in priority order,
-// returning only existing, deduplicated (by resolved symlink target) paths.
+// candidatePaths returns the daemon's own executable. An update warning must
+// point to a binary that restarting this daemon will actually run; scanning
+// unrelated installations can create an unrecoverable restart loop.
 func candidatePaths() []string {
-	raw := make([]string, 0, 4)
 	if exe, err := os.Executable(); err == nil {
-		raw = append(raw, exe)
+		return filterExistingAndDedup([]string{exe})
 	}
-	if p, err := exec.LookPath("orbit"); err == nil {
-		raw = append(raw, p)
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		raw = append(raw, filepath.Join(home, ".local", "bin", "orbit"))
-	}
-	raw = append(raw, "/usr/local/bin/orbit")
-	return filterExistingAndDedup(raw)
+	return nil
 }
 
 // filterExistingAndDedup drops non-existent paths and collapses duplicates
@@ -182,6 +175,12 @@ func isNewerBuild(candidate, running string) bool {
 	candidateTime, candidateTimeOK := parseVersionTime(candidate)
 	runningTime, runningTimeOK := parseVersionTime(running)
 	return candidateTimeOK && runningTimeOK && candidateTime.After(runningTime)
+}
+
+// IsNewerBuild reports whether candidate can be ordered after running. CLI
+// callers use this to compare the binary the user invoked with the daemon.
+func IsNewerBuild(candidate, running string) bool {
+	return isNewerBuild(candidate, running)
 }
 
 // detectUpdate scans candidate orbit binaries for one Orbit can order after

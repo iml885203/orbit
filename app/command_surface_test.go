@@ -122,7 +122,7 @@ func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	}
 }
 
-func TestMutationsRequireReconciledEnvironment(t *testing.T) {
+func TestMutationsRequireReconciledDaemon(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
 	up := &cobra.Command{Use: "up"}
 	restart := &cobra.Command{Use: "restart"}
@@ -135,12 +135,12 @@ func TestMutationsRequireReconciledEnvironment(t *testing.T) {
 	env.AddCommand(toggle, list)
 
 	for _, cmd := range []*cobra.Command{up, restart, toggle} {
-		if !commandRequiresReconciledEnvironment(cmd) {
-			t.Errorf("%s did not require reconciled environment", cmd.CommandPath())
+		if !commandRequiresReconciledDaemon(cmd) {
+			t.Errorf("%s did not require a reconciled daemon", cmd.CommandPath())
 		}
 	}
 	for _, cmd := range []*cobra.Command{status, down, list} {
-		if commandRequiresReconciledEnvironment(cmd) {
+		if commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s should remain available during reconciliation", cmd.CommandPath())
 		}
 	}

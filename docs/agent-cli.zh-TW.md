@@ -229,7 +229,7 @@ Inspect payload 包含：
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `environment` | 與 status、env list 共用 `state`、`selected_name`、`selected_path`、`environments` selection object，另包含可用時的 preview/daemon 資訊。 |
 | `resources` | 依 state 分組的 resource 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`orbit_update_pending`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：
@@ -239,6 +239,7 @@ Inspect payload 包含：
 | `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
 | `selection_required` | true | 先前 selection 已失效；actions 會提供精確的 `orbit switch <env> --json` 選項，沒有候選時則提供 `orbit env sync --json`。 |
 | `config_invalid` | true | 選到的 config 無法載入。 |
+| `update_required` | true | 新版 Orbit binary 已安裝，但 daemon 仍執行舊版本；唯一 action 是 `orbit daemon restart --json`。 |
 | `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
 | `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |
 | `degraded` | false | 至少一個 resource 回報 `degraded`。 |
@@ -256,6 +257,10 @@ non-destructive 的 `recommended_actions`，但任何 `destructive: true` 的 ac
 readiness 是 `needs_daemon` 時，agents 應先執行建議的
 `orbit switch <env> --json` action，再依據 service state 行動，因為 running
 environment 與選取的 CLI config 不同。
+
+Readiness 是 `update_required` 時，agents 必須先 restart Orbit 才能送出
+resource mutation。這些 mutation 會回傳 `orbit_update_pending`，並且只建議
+`orbit daemon restart --json`。
 
 ## Recommended Agent Workflow
 

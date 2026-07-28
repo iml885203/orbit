@@ -250,7 +250,7 @@ The inspect payload contains:
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `environment` | The same `state`, `selected_name`, `selected_path`, and `environments` selection object used by status and env list, plus preview/daemon details when available. |
 | `resources` | Bounded resource summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `orbit_update_pending`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:
@@ -260,6 +260,7 @@ Stable `readiness.state` values:
 | `setup_required` | true | No usable environment has been selected; the only next action is `orbit init --yes --json`. |
 | `selection_required` | true | The previous selection is unavailable. Actions contain exact `orbit switch <env> --json` choices, or `orbit env sync --json` when none are available. |
 | `config_invalid` | true | The selected config cannot be loaded. |
+| `update_required` | true | A newer Orbit binary is installed but the daemon still runs the previous version; the only action is `orbit daemon restart --json`. |
 | `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
 | `needs_daemon` | true | A running daemon is serving a different env than the selected config. |
 | `degraded` | false | At least one resource reports `degraded`. |
@@ -277,6 +278,10 @@ human approval for any action marked `destructive: true`.
 When readiness is `needs_daemon`, agents should run the recommended
 `orbit switch <env> --json` action before acting on service state because the
 running environment differs from the selected CLI config.
+
+When readiness is `update_required`, agents must restart Orbit before sending
+resource mutations. Orbit returns `orbit_update_pending` from those mutations
+and recommends only `orbit daemon restart --json`.
 
 ## Recommended Agent Workflow
 

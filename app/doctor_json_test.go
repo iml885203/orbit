@@ -62,6 +62,27 @@ func TestDoctorRecommendedActionsUseJSONForOrbitHints(t *testing.T) {
 	t.Fatalf("missing machine-readable logs action: %+v", got)
 }
 
+func TestUpdateDoctorCheckOnlyRecommendsRestart(t *testing.T) {
+	resp := addUpdateDoctorCheck(
+		&daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
+			Name:   "Docker",
+			Status: daemon.CheckPass,
+		}}},
+		&daemon.VersionResponse{
+			Running:         "v0.0.1",
+			OnDisk:          "v0.0.2",
+			UpdateAvailable: true,
+		},
+	)
+	if len(resp.Checks) != 2 || resp.Checks[0].Name != "Orbit update" {
+		t.Fatalf("checks = %+v", resp.Checks)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit daemon restart --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
 func TestLocalDoctorResponseUnavailableSelectionOffersExactSwitch(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("ORBIT_HOME", home)

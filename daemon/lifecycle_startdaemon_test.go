@@ -82,3 +82,21 @@ func TestCheckEnvironmentReconciledRejectsPendingChanges(t *testing.T) {
 		t.Fatalf("fresh environment rejected: %v", err)
 	}
 }
+
+func TestCheckDaemonCurrentRejectsInstalledUpdate(t *testing.T) {
+	err := CheckDaemonCurrent(&VersionResponse{
+		Running:         "v0.0.1",
+		OnDisk:          "v0.0.2",
+		UpdateAvailable: true,
+	})
+	var update *UpdateRequiredError
+	if !errors.As(err, &update) {
+		t.Fatalf("error = %T %v, want UpdateRequiredError", err, err)
+	}
+	if update.Running != "v0.0.1" || update.Installed != "v0.0.2" {
+		t.Fatalf("update = %+v", update)
+	}
+	if err := CheckDaemonCurrent(&VersionResponse{}); err != nil {
+		t.Fatalf("current daemon rejected: %v", err)
+	}
+}

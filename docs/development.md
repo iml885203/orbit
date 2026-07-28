@@ -52,7 +52,14 @@ On Windows Beta, rerun `install.ps1` to update; replacing a running `.exe`
 in-place is not reliable on Windows, so `orbit update` is not yet supported
 there.
 
-After upgrading, the running daemon is still the old build. `orbit status` flags this with `⚠ newer orbit … — orbit daemon restart`. Run `orbit daemon restart` to pick up the new binary.
+After upgrading, the running daemon may still be the previous build.
+`orbit status` reports `Orbit update ready` and resource mutations pause until
+you run `orbit daemon restart`. The restart always uses the Orbit binary you
+invoked, so another installation cannot cause a restart loop.
+
+When another Orbit installation takes precedence on `PATH`, Orbit prints the
+current binary's absolute restart command instead of the ambiguous bare
+`orbit daemon restart`. `orbit doctor` also reports the shadowing installation.
 
 Each upgrade keeps the previous binary at `<path>.prev` (e.g. `~/.local/bin/orbit.prev`).
 The installer verifies the checksum and the downloaded binary's reported

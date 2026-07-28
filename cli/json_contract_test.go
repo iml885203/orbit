@@ -127,6 +127,47 @@ func TestWriteJSONErrorClassifiesPendingEnvironmentChanges(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesPendingOrbitUpdate(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit up --json", &daemon.UpdateRequiredError{
+		Running:   "v0.0.1",
+		Installed: "v0.0.2",
+	})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "orbit_update_pending" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable || got.Error.NextCommand != "orbit daemon restart --json" {
+		t.Fatalf("error recovery = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit daemon restart --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
+func TestWriteJSONErrorPreservesUpdateRestartCommand(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(&buf, "orbit up --json", &daemon.UpdateRequiredError{
+		RestartCommand:     `"/active/orbit" daemon restart`,
+		RestartJSONCommand: `"/active/orbit" daemon restart --json`,
+	})
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.NextCommand != `"/active/orbit" daemon restart --json` {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != `"/active/orbit" daemon restart --json` {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesInvalidEnvironmentWithExactRetry(t *testing.T) {
 	var buf bytes.Buffer
 	retry := `orbit switch "/tmp/broken env.yaml" --json`

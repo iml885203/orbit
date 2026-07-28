@@ -88,7 +88,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 			return newEnvironmentSelectionRequiredError(selection)
 		}
 		requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
-		requiresReconcile := commandRequiresReconciledEnvironment(cmd)
+		requiresReconcile := commandRequiresReconciledDaemon(cmd)
 		if requiresMatch || requiresReconcile {
 			client := daemon.NewClient(daemon.DefaultSocketPath())
 			if client.Health() == nil {
@@ -101,6 +101,11 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 					if requiresReconcile {
 						if stale := daemon.CheckEnvironmentReconciled(status); stale != nil {
 							return stale
+						}
+						if version, versionErr := currentDaemonVersion(client); versionErr == nil {
+							if update := checkCurrentDaemonVersion(version); update != nil {
+								return update
+							}
 						}
 					}
 				}
@@ -276,7 +281,7 @@ func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
 	return false
 }
 
-func commandRequiresReconciledEnvironment(cmd *cobra.Command) bool {
+func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {
 	top := cmd
 	for top.Parent() != nil && top.Parent().Parent() != nil {
 		top = top.Parent()

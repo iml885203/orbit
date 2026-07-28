@@ -21,6 +21,7 @@ const (
 	inspectReadinessSelectionRequired = "selection_required"
 	inspectReadinessConfigInvalid     = "config_invalid"
 	inspectReadinessNeedsDaemon       = "needs_daemon"
+	inspectReadinessUpdateRequired    = "update_required"
 	inspectReadinessStopped           = "stopped"
 	inspectReadinessDegraded          = "degraded"
 	inspectReadinessConverging        = "converging"
@@ -143,7 +144,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		} else {
 			opts.StatusErr = err
 		}
-		if version, err := client.Version(); err == nil {
+		if version, err := currentDaemonVersion(client); err == nil {
 			opts.Version = version.Running
 			opts.OnDisk = version.OnDisk
 			opts.OnDiskPath = version.OnDiskPath
@@ -322,6 +323,13 @@ func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
 			Message:  fmt.Sprintf("selected env %q differs from daemon env %q", opts.ConfigEnvName, opts.DaemonEnv),
 		}, true
 	}
+	if opts.UpdateAvailable {
+		return inspectRisk{
+			Code:     "orbit_update_pending",
+			Severity: "critical",
+			Message:  "an installed Orbit update requires a daemon restart",
+		}, true
+	}
 	if !opts.DaemonRunning {
 		return inspectRisk{
 			Code:     "environment_stopped",
@@ -382,6 +390,9 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 	if inspectEnvMismatch(opts) {
 		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is running with a different env"}
 	}
+	if opts.UpdateAvailable {
+		return inspectReadiness{State: inspectReadinessUpdateRequired, Blocked: true, Summary: "restart Orbit to run the installed version"}
+	}
 	if !opts.DaemonRunning {
 		return inspectReadiness{State: inspectReadinessStopped, Blocked: true, Summary: "the selected environment is not running"}
 	}
@@ -422,6 +433,12 @@ func inspectRecommendedActions(
 		})
 	case inspectReadinessSelectionRequired:
 		actions = append(actions, environmentSelectionActions(selection)...)
+	case inspectReadinessUpdateRequired:
+		actions = append(actions, cli.JSONAction{
+			Command:     orbitRestartCommand(true),
+			Reason:      "Restart Orbit to run the installed version.",
+			Destructive: false,
+		})
 	case inspectReadinessConfigInvalid:
 		command := "orbit inspect --json"
 		if retryCommand != "" {

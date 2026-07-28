@@ -404,39 +404,49 @@ func formatDockerFailMessage(ctxInfo dockerctx.ContextInfo, fallbackMsg string) 
 	return fallbackMsg, "Start Docker Desktop"
 }
 
-// checkOrbitOnPath verifies the directory holding the running orbit binary
-// is present in $PATH. Both sides are resolved via EvalSymlinks so a
-// symlinked install dir (e.g. /usr/local/bin → /opt/homebrew/bin) doesn't
-// cause a false negative.
+// checkOrbitOnPath verifies that a bare `orbit` command resolves to the
+// running binary. Merely finding its directory later in PATH is insufficient:
+// another installation may take precedence.
 func checkOrbitOnPath() DoctorCheck {
 	exe, err := os.Executable()
 	if err != nil {
 		return DoctorCheck{Name: "PATH", Status: CheckInfo, Message: "cannot resolve orbit binary: " + err.Error()}
 	}
-	exeResolved, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		exeResolved = exe
-	}
-	exeDir := filepath.Dir(exeResolved)
+	winner, lookupErr := exec.LookPath("orbit")
+	return checkOrbitPath(exe, winner, lookupErr)
+}
 
-	for _, entry := range filepath.SplitList(os.Getenv("PATH")) {
-		if entry == "" {
-			continue
+func checkOrbitPath(executable, winner string, lookupErr error) DoctorCheck {
+	executable = resolvedPath(executable)
+	exeDir := filepath.Dir(executable)
+	if lookupErr != nil {
+		return DoctorCheck{
+			Name:    "PATH",
+			Status:  CheckWarn,
+			Message: "orbit installed at " + exeDir + " but not on $PATH",
+			Hint:    "Add " + exeDir + " to your shell's PATH",
 		}
-		resolved, err := filepath.EvalSymlinks(entry)
-		if err != nil {
-			resolved = entry
-		}
-		if resolved == exeDir {
-			return DoctorCheck{Name: "PATH", Status: CheckPass, Message: "orbit dir " + exeDir + " is on PATH"}
-		}
+	}
+	winner = resolvedPath(winner)
+	if winner == executable {
+		return DoctorCheck{Name: "PATH", Status: CheckPass, Message: "orbit resolves to " + executable}
 	}
 	return DoctorCheck{
 		Name:    "PATH",
 		Status:  CheckWarn,
-		Message: "orbit installed at " + exeDir + " but not on $PATH",
-		Hint:    "Add " + exeDir + " to your shell's PATH",
+		Message: "another Orbit installation takes precedence on PATH: " + winner,
+		Hint:    "Move " + exeDir + " before " + filepath.Dir(winner) + " in your shell's PATH",
 	}
+}
+
+func resolvedPath(path string) string {
+	if absolute, err := filepath.Abs(path); err == nil {
+		path = absolute
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return filepath.Clean(path)
 }
 
 func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {

@@ -135,6 +135,40 @@ func TestBuildInspectDataDaemonDown(t *testing.T) {
 	}
 }
 
+func TestBuildInspectDataInstalledUpdateRequiresRestart(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:      "/tmp/development.yaml",
+		ConfigEnvName:   "development",
+		DaemonRunning:   true,
+		UpdateAvailable: true,
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
+			Name:  "api",
+			State: "stopped",
+		}}},
+		Selection: environmentSelection{
+			State:        environmentSelectionSelected,
+			SelectedName: "development",
+			SelectedPath: "/tmp/development.yaml",
+			Environments: []environmentChoice{{
+				Name:     "development",
+				Path:     "/tmp/development.yaml",
+				Selected: true,
+			}},
+		},
+	})
+
+	if got.Readiness.State != inspectReadinessUpdateRequired || !got.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", got.Readiness)
+	}
+	if len(got.Risks) != 1 || got.Risks[0].Code != "orbit_update_pending" {
+		t.Fatalf("risks = %+v", got.Risks)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit daemon restart --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestConfiguredInspectServicesExposeStoppedResourcesWithoutDaemon(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{"redis": {}},

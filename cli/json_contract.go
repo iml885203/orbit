@@ -145,6 +145,20 @@ func classify(err error) JSONError {
 			NextCommand: "orbit daemon restart --json",
 		}
 	}
+	var updateRequired *daemon.UpdateRequiredError
+	if errors.As(err, &updateRequired) {
+		nextCommand := updateRequired.RestartJSONCommand
+		if nextCommand == "" {
+			nextCommand = "orbit daemon restart --json"
+		}
+		return JSONError{
+			Code:        "orbit_update_pending",
+			Message:     msg,
+			Hint:        "Restart Orbit once to run the installed version before operating resources.",
+			Retryable:   true,
+			NextCommand: nextCommand,
+		}
+	}
 	var codedErr interface{ ErrorCode() string }
 	if errors.As(err, &codedErr) {
 		switch codedErr.ErrorCode() {
@@ -304,6 +318,13 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	}
 	if err.Code == "environment_selection_required" {
 		return nil
+	}
+	if err.Code == "orbit_update_pending" {
+		return []JSONAction{{
+			Command:     err.NextCommand,
+			Reason:      "Restart Orbit to run the installed version.",
+			Destructive: false,
+		}}
 	}
 	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {
 		return []JSONAction{StatusAction()}

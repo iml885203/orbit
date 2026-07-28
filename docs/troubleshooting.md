@@ -117,8 +117,9 @@ export ORBIT_DASHBOARD_PORT=19801
 orbit daemon restart
 ```
 
-### After upgrading the binary, `orbit status` complains about version mismatch
-The daemon is still running the old binary. Restart it:
+### After upgrading, Orbit says an update is ready
+The daemon still runs the previous version. Resource mutations pause so they
+cannot cross versions. Apply the update with:
 
 ```bash
 orbit daemon restart

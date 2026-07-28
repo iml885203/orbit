@@ -131,7 +131,7 @@ func runDaemonStatus(_ *cobra.Command, _ []string) error {
 
 	if alive {
 		client := daemon.NewClient(daemon.DefaultSocketPath())
-		if v, err := client.Version(); err == nil {
+		if v, err := currentDaemonVersion(client); err == nil {
 			out.Version = v.Running
 			out.OnDisk = v.OnDisk
 			out.OnDiskPath = v.OnDiskPath
@@ -156,11 +156,7 @@ func runDaemonStatus(_ *cobra.Command, _ []string) error {
 		fmt.Printf("Version   %s\n", out.Version)
 	}
 	if out.UpdateAvailable && out.OnDisk != "" {
-		location := out.OnDisk
-		if out.OnDiskPath != "" {
-			location = fmt.Sprintf("%s at %s", out.OnDisk, out.OnDiskPath)
-		}
-		fmt.Printf("          ⚠ newer orbit %s — orbit daemon restart\n", location)
+		fmt.Printf("          ⚠ Orbit update ready — %s to apply\n", orbitRestartCommand(false))
 	}
 	if out.ConfigPath != "" {
 		fmt.Printf("Config    %s\n", out.ConfigPath)

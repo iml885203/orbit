@@ -46,7 +46,14 @@ orbit update
 Windows Beta 請重新執行 `install.ps1` 來更新；Windows 無法可靠地原地替換
 正在執行的 `.exe`，因此尚不支援 `orbit update`。
 
-升級後，正在跑的 daemon 仍是舊的 build。`orbit status` 會用 `⚠ newer orbit … — orbit daemon restart` 提醒你。執行 `orbit daemon restart` 讓新的 binary 生效。
+升級後，正在跑的 daemon 可能仍是先前的 build。`orbit status` 會顯示
+`Orbit update ready`，resource mutation 也會先暫停，直到你執行
+`orbit daemon restart`。Restart 一律使用你目前呼叫的 Orbit binary，因此
+另一份安裝不會造成無限 restart。
+
+若 `PATH` 中另一套 Orbit 具有較高優先序，Orbit 會顯示目前 binary 的完整
+restart 指令，而不是有歧義的 `orbit daemon restart`；`orbit doctor` 也會
+指出是哪一套安裝造成遮蔽。
 
 每次 upgrade 會把前一版 binary 保留在 `<path>.prev`（例如 `~/.local/bin/orbit.prev`）。
 Installer 會先驗證 checksum 與下載 binary 回報的版本，確認成功後才碰目前

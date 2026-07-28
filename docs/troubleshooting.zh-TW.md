@@ -115,8 +115,8 @@ export ORBIT_DASHBOARD_PORT=19801
 orbit daemon restart
 ```
 
-### 升級 binary 之後，`orbit status` 抱怨版本對不上
-daemon 還在跑舊的 binary。把它重啟：
+### 升級後 Orbit 顯示 update ready
+daemon 仍執行先前版本；resource mutation 會先暫停，避免跨版本操作。套用更新：
 
 ```bash
 orbit daemon restart

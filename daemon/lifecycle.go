@@ -46,6 +46,23 @@ type ConfigStaleError struct {
 	Reason string
 }
 
+// UpdateRequiredError prevents resource commands from crossing CLI/daemon
+// versions after a newer Orbit binary has been installed.
+type UpdateRequiredError struct {
+	Running            string
+	Installed          string
+	RestartCommand     string
+	RestartJSONCommand string
+}
+
+func (e *UpdateRequiredError) Error() string {
+	command := e.RestartCommand
+	if command == "" {
+		command = "orbit daemon restart"
+	}
+	return fmt.Sprintf("an Orbit update is ready — run %s before continuing", command)
+}
+
 func (e *ConfigStaleError) Error() string {
 	return "environment changes are pending — run 'orbit daemon restart' before continuing"
 }
@@ -86,6 +103,16 @@ func CheckEnvironmentReconciled(status *StatusResponse) error {
 		return nil
 	}
 	return &ConfigStaleError{Reason: status.ConfigStaleReason}
+}
+
+func CheckDaemonCurrent(version *VersionResponse) error {
+	if version == nil || !version.UpdateAvailable {
+		return nil
+	}
+	return &UpdateRequiredError{
+		Running:   version.Running,
+		Installed: version.OnDisk,
+	}
 }
 
 func normalizedConfigPath(path string) string {
