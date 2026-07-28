@@ -132,6 +132,14 @@ Before first setup, status remains a successful state query with
 `orbit init --yes --json` action. A present but invalid environment file is
 instead an `invalid_environment` error, because startup cannot safely use it.
 
+When GitHub reports that an environment repository was not found, Orbit returns
+`env_repo_unavailable` without recommended actions. GitHub deliberately uses
+the same response for a misspelled or missing repository and a private
+repository hidden from the current credentials, so an agent must not
+automatically log in or retry unchanged. Verify the owner and repository name
+first; authenticate Git only after confirming that the URL is correct and
+private. Unambiguous authentication failures remain `env_repo_access`.
+
 Stable `data.operation` values for converted control commands:
 
 | Command | `data.operation` |

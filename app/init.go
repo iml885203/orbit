@@ -214,8 +214,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 			syncFailure = err
 			warning := "env sync failed: " + err.Error()
 			result.Warnings = append(result.Warnings, warning)
-			output.warnf("  ! sync failed: %v\n", err)
-			output.faintln("    you can retry later with `orbit env sync`")
+			output.warnln("  ! Could not sync the local environment files")
+			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
 			result.SyncedFiles = syncRes.Written
 			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
@@ -234,18 +234,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 			syncFailure = err
 			warning := "env sync failed: " + err.Error()
 			result.Warnings = append(result.Warnings, warning)
-			output.warnf("  ! sync failed: %v\n", err)
-			output.faintln("    you can retry later with `orbit env sync`")
+			output.warnln("  ! Could not sync the environment repository")
+			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
 			result.SyncedFiles = syncRes.Written
 			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
 		}
 	}
 
+	envFiles := listEnvFiles(envsDir)
+	if len(envFiles) == 0 && syncFailure != nil {
+		return finishInit(output, result, syncFailure)
+	}
 	output.println()
 	output.boldln("Step 3: Environment")
-
-	envFiles := listEnvFiles(envsDir)
 	if len(envFiles) == 0 {
 		result.Warnings = append(result.Warnings, "no environment configs found in "+envsDir)
 		output.warnf("  ! No environment configs found in %s\n", envsDir)
@@ -289,15 +291,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	output.println()
 	output.boldln("Step 4: Health check")
-	if output.enabled {
-		_ = runDoctorWithOptions(doctorOptions{})
+	if result.ActiveEnv != "" {
+		if output.enabled {
+			_ = runDoctorWithOptions(doctorOptions{})
+		}
+		health := doctorResponse(daemon.NewClient(daemon.DefaultSocketPath()))
+		result.Checks = health.Checks
+		result.Ready = doctorFailure(health, false) == nil
 	}
-	health := doctorResponse(daemon.NewClient(daemon.DefaultSocketPath()))
-	result.Checks = health.Checks
-	result.Ready = result.ActiveEnv != "" && doctorFailure(health, false) == nil
+	return finishInit(output, result, syncFailure)
+}
 
+func finishInit(output initPrinter, result initResult, syncFailure error) error {
 	output.println()
-	completion := buildInitCompletion(result)
+	completion := buildInitCompletion(result, syncFailure)
 	if completion.Ready {
 		output.boldln(completion.Heading)
 	} else {
@@ -306,12 +313,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if completion.Detail != "" {
 		output.faintln("  " + completion.Detail)
 	}
-	output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
+	if completion.HumanCommand != "" {
+		output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
+	}
 
 	if cli.JSONOutput {
 		if !result.Ready {
 			failure := initFailure(result, syncFailure)
-			if err := cli.WriteJSONFailure(os.Stdout, commandString(), result, failure, initRecommendedActions(result)); err != nil {
+			if err := cli.WriteJSONFailure(os.Stdout, commandString(), result, failure, initFailureRecommendedActions(result, failure)); err != nil {
 				return err
 			}
 			return errCLIJSONAlreadyRendered{err: failure}
@@ -326,7 +335,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 func initFailure(result initResult, syncFailure error) error {
 	if syncFailure != nil {
-		if errors.Is(syncFailure, cli.ErrEnvRepoAccess) {
+		if errors.Is(syncFailure, cli.ErrEnvRepoAccess) || errors.Is(syncFailure, cli.ErrEnvRepoUnavailable) {
 			return syncFailure
 		}
 		return cli.NewInitIncompleteError("environment sync failed: " + syncFailure.Error())
@@ -338,7 +347,7 @@ func initFailure(result initResult, syncFailure error) error {
 }
 
 func initRecommendedActions(result initResult) []cli.JSONAction {
-	completion := buildInitCompletion(result)
+	completion := buildInitCompletion(result, nil)
 	return []cli.JSONAction{{
 		Command:     completion.JSONCommand,
 		Reason:      completion.Reason,
@@ -346,7 +355,20 @@ func initRecommendedActions(result initResult) []cli.JSONAction {
 	}}
 }
 
-func buildInitCompletion(result initResult) initCompletion {
+func initFailureRecommendedActions(result initResult, failure error) []cli.JSONAction {
+	if errors.Is(failure, cli.ErrEnvRepoUnavailable) {
+		return nil
+	}
+	return initRecommendedActions(result)
+}
+
+func buildInitCompletion(result initResult, syncFailure error) initCompletion {
+	if errors.Is(syncFailure, cli.ErrEnvRepoUnavailable) {
+		return initCompletion{
+			Heading: "Setup is incomplete",
+			Detail:  "Verify the environment repository URL first; if it is correct and private, authenticate Git.",
+		}
+	}
 	if result.ActiveEnv == "" {
 		return initCompletion{
 			Heading:      "Setup is incomplete",

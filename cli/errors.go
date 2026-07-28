@@ -12,6 +12,7 @@ var (
 	ErrDependencyBlocked  = errors.New("dependency blocked")
 	ErrServiceStartFailed = errors.New("service start failed")
 	ErrEnvRepoAccess      = errors.New("environment repository access failed")
+	ErrEnvRepoUnavailable = errors.New("environment repository unavailable")
 	ErrInitIncomplete     = errors.New("initialization incomplete")
 	ErrInvalidEnvironment = errors.New("invalid environment")
 	ErrInvalidArgument    = errors.New("invalid argument")
@@ -56,6 +57,10 @@ func NewServiceStartFailedError(msg string) error {
 
 func NewEnvRepoAccessError(msg string) error {
 	return classifiedError{kind: ErrEnvRepoAccess, msg: msg}
+}
+
+func NewEnvRepoUnavailableError(msg string) error {
+	return classifiedError{kind: ErrEnvRepoUnavailable, msg: msg}
 }
 
 func NewInitIncompleteError(msg string) error {

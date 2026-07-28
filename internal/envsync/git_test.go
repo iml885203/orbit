@@ -97,3 +97,24 @@ func TestCloneErrorRedactsURLCredentials(t *testing.T) {
 		t.Fatal("GitHub URL was not recognized")
 	}
 }
+
+func TestCloneErrorRecognizesRepositoryNotFoundOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{name: "GitHub", output: "remote: Repository not found.\nfatal: repository unavailable", want: true},
+		{name: "generic host", output: "fatal: repository does not exist", want: true},
+		{name: "authentication", output: "fatal: Authentication failed", want: false},
+		{name: "network", output: "fatal: unable to access: Could not resolve host", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := &CloneError{Output: test.output}
+			if got := err.ReportsRepositoryNotFound(); got != test.want {
+				t.Fatalf("ReportsRepositoryNotFound() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}

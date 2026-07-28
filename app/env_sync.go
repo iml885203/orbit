@@ -133,6 +133,11 @@ func envRepoSyncError(err error) error {
 	if detail := strings.TrimSpace(strings.ReplaceAll(cloneErr.Output, cloneErr.URL, cloneErr.DisplayURL())); detail != "" {
 		message += "\nGit: " + detail
 	}
+	if cloneErr.IsGitHub() && cloneErr.ReportsRepositoryNotFound() {
+		message += "\nCheck the GitHub owner and repository name first. GitHub uses the same response when a private repository is hidden from your current credentials."
+		message += "\nIf the URL is correct and the repo is private, authenticate Git; otherwise retry with 'orbit init --env-repo <correct-url>' or 'orbit env sync --url <correct-url>'."
+		return cli.NewEnvRepoUnavailableError(message)
+	}
 	if cloneErr.IsGitHub() {
 		message += "\nFor a private GitHub repo, run 'gh auth login' and 'gh auth setup-git', then retry 'orbit env sync'."
 		return cli.WithJSONActions(cli.NewEnvRepoAccessError(message), []cli.JSONAction{

@@ -111,6 +111,39 @@ func TestIncompleteInitJSONIsFailureWithRecoveryActions(t *testing.T) {
 	}
 }
 
+func TestMissingGitHubRepoDoesNotRecommendAuthenticationOrBlindRetry(t *testing.T) {
+	result := initResult{Ready: false, Warnings: []string{"env sync failed"}}
+	syncFailure := envRepoSyncError(&envsync.CloneError{
+		URL:    "https://github.com/example/typo-env.git",
+		Err:    errors.New("exit status 128"),
+		Output: "remote: Repository not found.",
+	})
+	failure := initFailure(result, syncFailure)
+
+	var buf bytes.Buffer
+	if err := cli.WriteJSONFailure(
+		&buf,
+		"orbit init --yes --json",
+		result,
+		failure,
+		initFailureRecommendedActions(result, failure),
+	); err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, buf.Bytes())
+	if envelope.Error == nil || envelope.Error.Code != "env_repo_unavailable" {
+		t.Fatalf("error envelope = %+v", envelope)
+	}
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("ambiguous failure recommends an assumptive action: %+v", envelope.RecommendedActions)
+	}
+	for _, action := range envelope.RecommendedActions {
+		if action.Command == "gh auth login" || action.Command == "gh auth setup-git" {
+			t.Fatalf("missing repository was treated as known-private: %+v", envelope.RecommendedActions)
+		}
+	}
+}
+
 func TestInitRecommendedActionsLeadToNextUsefulCommand(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -135,10 +168,18 @@ func TestInitCompletionNeverClaimsIncompleteSetupSucceeded(t *testing.T) {
 	tests := []struct {
 		name        string
 		result      initResult
+		syncFailure error
 		wantHeading string
 		wantCommand string
 		wantReady   bool
 	}{
+		{
+			name:        "repository may be missing or private",
+			result:      initResult{},
+			syncFailure: cli.NewEnvRepoUnavailableError("repository not found"),
+			wantHeading: "Setup is incomplete",
+			wantCommand: "",
+		},
 		{
 			name:        "environment sync failed",
 			result:      initResult{},
@@ -161,7 +202,7 @@ func TestInitCompletionNeverClaimsIncompleteSetupSucceeded(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := buildInitCompletion(test.result)
+			got := buildInitCompletion(test.result, test.syncFailure)
 			if got.Heading != test.wantHeading {
 				t.Errorf("heading = %q, want %q", got.Heading, test.wantHeading)
 			}

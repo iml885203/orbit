@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -121,5 +122,37 @@ func TestEnvRepoSyncErrorIdentifiesPrivateRepoRemedy(t *testing.T) {
 		if !strings.Contains(err.Error(), evidence) {
 			t.Errorf("error missing %q: %v", evidence, err)
 		}
+	}
+}
+
+func TestEnvRepoSyncErrorDoesNotAssumeMissingGitHubRepoIsPrivate(t *testing.T) {
+	source := &envsync.CloneError{
+		URL:    "https://github.com/example/typo-env.git",
+		Err:    errors.New("exit status 128"),
+		Output: "remote: Repository not found.\nfatal: repository not found",
+	}
+	err := envRepoSyncError(source)
+	if !errors.Is(err, cli.ErrEnvRepoUnavailable) {
+		t.Fatalf("error = %v, want ErrEnvRepoUnavailable", err)
+	}
+	for _, evidence := range []string{
+		"Check the GitHub owner and repository name first",
+		"same response when a private repository is hidden",
+	} {
+		if !strings.Contains(err.Error(), evidence) {
+			t.Errorf("error missing %q: %v", evidence, err)
+		}
+	}
+
+	var output bytes.Buffer
+	if writeErr := cli.WriteJSONError(&output, "orbit env sync --json", err); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	envelope := decodeEnvelope(t, output.Bytes())
+	if envelope.Error == nil || envelope.Error.Code != "env_repo_unavailable" {
+		t.Fatalf("error envelope = %+v", envelope)
+	}
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("ambiguous failure recommends an assumptive action: %+v", envelope.RecommendedActions)
 	}
 }

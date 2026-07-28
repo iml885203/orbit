@@ -209,6 +209,13 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit env sync --json",
 		}
+	case errors.Is(err, ErrEnvRepoUnavailable):
+		return JSONError{
+			Code:      "env_repo_unavailable",
+			Message:   msg,
+			Hint:      "Verify the repository owner and name. If the URL is correct and the repository is private, authenticate Git before retrying.",
+			Retryable: true,
+		}
 	case errors.Is(err, ErrInitIncomplete):
 		return JSONError{
 			Code:        "init_incomplete",
@@ -252,6 +259,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 			Reason:      "Retry after restoring Git access to the environment repository.",
 			Destructive: false,
 		}}
+	}
+	if err.Code == "env_repo_unavailable" {
+		return nil
 	}
 	if err.Code == "init_incomplete" {
 		return []JSONAction{{

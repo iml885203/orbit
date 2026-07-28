@@ -85,7 +85,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit status --json` | 在 `data.resources` 中回傳 setup readiness、daemon 與已設定 resource 的狀態。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
-| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
+| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
 | `orbit down <resource> --json` | 回傳指定 resource 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
@@ -123,6 +123,13 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的
 `orbit init --yes --json` action。若 environment 檔案存在但內容無效，則回傳
 `invalid_environment` error，因為 Orbit 無法安全使用它啟動。
+
+當 GitHub 回覆 environment repo 不存在時，Orbit 會回傳
+`env_repo_unavailable`，且不提供 recommended actions。GitHub 對拼錯／不存在
+的 repo，以及目前 credentials 看不到的 private repo，刻意使用相同回覆；
+因此 agent 不應自動登入或用原指令盲目重試。應先核對 owner 與 repo 名稱，
+確認 URL 正確且 repo 為 private 後才進行 Git 認證。能明確判定的認證失敗仍
+使用 `env_repo_access`。
 
 已轉換控制指令的穩定 `data.operation` 值：
 

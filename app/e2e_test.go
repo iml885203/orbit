@@ -1144,6 +1144,11 @@ func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
 	if bytes.Contains(output, []byte("Setup complete!")) {
 		t.Fatalf("init falsely claims success:\n%s", output)
 	}
+	for _, unwanted := range []string{"Step 3: Environment", "Step 4: Health check", "reading config"} {
+		if bytes.Contains(output, []byte(unwanted)) {
+			t.Fatalf("init continued into irrelevant setup after sync failure (%q):\n%s", unwanted, output)
+		}
+	}
 }
 
 func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
@@ -1164,13 +1169,17 @@ func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
 		t.Fatalf("envelope = %+v:\n%s", envelope, output)
 	}
 	var data struct {
-		Ready bool `json:"ready"`
+		Checks []json.RawMessage `json:"checks"`
+		Ready  bool              `json:"ready"`
 	}
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		t.Fatalf("decode diagnostic data: %v\n%s", err, envelope.Data)
 	}
 	if data.Ready {
 		t.Fatalf("diagnostic data = %s", envelope.Data)
+	}
+	if len(data.Checks) != 0 {
+		t.Fatalf("sync failure ran unrelated health checks: %s", envelope.Data)
 	}
 	commands := make(map[string]bool, len(envelope.RecommendedActions))
 	for _, action := range envelope.RecommendedActions {
