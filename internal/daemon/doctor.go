@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -155,6 +156,7 @@ func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []Doct
 		}
 		path := service.Path
 		unresolved := strings.Contains(path, "${")
+		pathVariable := unresolvedPathVariable(path)
 		info, err := os.Stat(path)
 		valid := err == nil
 		if service.Type != "dotnet" {
@@ -168,20 +170,38 @@ func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []Doct
 			Status: CheckFail,
 		}
 		if unresolved {
-			check.Message = "workspace variable is unresolved in " + path
+			if pathVariable != "" {
+				check.Message = "path variable " + pathVariable + " is unresolved in " + path
+			} else {
+				check.Message = "path variable is unresolved in " + path
+			}
 		} else if err != nil {
 			check.Message = "working directory not found: " + path
 		} else {
 			check.Message = "working directory is not a directory: " + path
 		}
-		if unresolved || pathUsesWorkspaceRoot(path, workspaceRoot) {
+		if pathVariable == "WORKSPACE_ROOT" || pathUsesWorkspaceRoot(path, workspaceRoot) {
 			check.Hint = `run: orbit settings set workspace-root "$PWD"`
+		} else if pathVariable != "" {
+			check.Hint = `run: orbit settings set-env ` + pathVariable + ` "$PWD"`
+		} else if unresolved {
+			check.Hint = "Set the path variable or update services." + name + ".path"
 		} else {
 			check.Hint = "Update services." + name + ".path to an existing project directory"
 		}
 		checks = append(checks, check)
 	}
 	return checks
+}
+
+var pathVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)`)
+
+func unresolvedPathVariable(path string) string {
+	match := pathVariablePattern.FindStringSubmatch(path)
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
 }
 
 func pathUsesWorkspaceRoot(path, root string) bool {

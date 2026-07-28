@@ -115,6 +115,19 @@ func settingsCommand(body []byte) string {
 
 	var parts []string
 	for _, jsonKey := range keys {
+		if jsonKey == "user_env" {
+			if values, ok := m[jsonKey].(map[string]any); ok {
+				envNames := make([]string, 0, len(values))
+				for name := range values {
+					envNames = append(envNames, name)
+				}
+				sort.Strings(envNames)
+				for _, name := range envNames {
+					parts = append(parts, "orbit settings set-env "+name+" "+formatSettingsValue(values[name]))
+				}
+			}
+			continue
+		}
 		cliKey, ok := settingsJSONKeyToCLI[jsonKey]
 		if !ok {
 			continue

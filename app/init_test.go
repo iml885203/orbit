@@ -99,7 +99,7 @@ func TestDetectWorkspaceRoot_PrefersCurrentDirectoryWithEnvs(t *testing.T) {
 	}
 }
 
-func TestDetectWorkspaceRoot_FallsBackToCurrentDirectory(t *testing.T) {
+func TestDetectWorkspaceRootDoesNotInventWorkspaceFromCurrentDirectory(t *testing.T) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -110,18 +110,13 @@ func TestDetectWorkspaceRoot_FallsBackToCurrentDirectory(t *testing.T) {
 		}
 	}()
 
-	current := t.TempDir()
-	if err := os.Chdir(current); err != nil {
-		t.Fatal(err)
-	}
-	current, err = os.Getwd()
-	if err != nil {
+	if err := os.Chdir(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
-	if got := detectWorkspaceRoot(settings); got != current {
-		t.Errorf("detectWorkspaceRoot = %q, want current directory %q", got, current)
+	if got := detectWorkspaceRoot(settings); got != "" {
+		t.Errorf("detectWorkspaceRoot = %q, want no unproven workspace", got)
 	}
 }
 
@@ -158,9 +153,8 @@ func setTestExtensions(t *testing.T, exts []extension.Extension) {
 	t.Cleanup(func() { extensions = prev })
 }
 
-// Two extensions with CLIInit: candidates and markers union in
-// registration order; the hint is first-non-empty-wins; Steps run for
-// every extension in order.
+// Two extensions with CLIInit: candidates and markers union in registration
+// order, and Steps run for every extension in order.
 func TestCLIInitAggregation(t *testing.T) {
 	var stepOrder []string
 	setTestExtensions(t, []extension.Extension{
@@ -169,7 +163,6 @@ func TestCLIInitAggregation(t *testing.T) {
 			CLIInit: &extension.CLIInit{
 				WorkspaceCandidates: func(home string) []string { return []string{home + "/a"} },
 				WorkspaceMarkers:    func(root string) []string { return []string{"a/"} },
-				MarkerHint:          "a/ expected",
 				Steps: func(*daemon.Settings, bool, func(string) string, bool) error {
 					stepOrder = append(stepOrder, "a")
 					return nil
@@ -181,7 +174,6 @@ func TestCLIInitAggregation(t *testing.T) {
 			CLIInit: &extension.CLIInit{
 				WorkspaceCandidates: func(home string) []string { return []string{home + "/b"} },
 				WorkspaceMarkers:    func(root string) []string { return []string{"b/"} },
-				MarkerHint:          "b/ expected",
 				Steps: func(*daemon.Settings, bool, func(string) string, bool) error {
 					stepOrder = append(stepOrder, "b")
 					return nil
@@ -196,9 +188,6 @@ func TestCLIInitAggregation(t *testing.T) {
 	if got := workspaceMarkers("/x"); len(got) != 2 || got[0] != "a/" || got[1] != "b/" {
 		t.Errorf("markers = %v, want union in registration order", got)
 	}
-	if got := workspaceMarkerHint(); got != "a/ expected" {
-		t.Errorf("hint = %q, want first extension's", got)
-	}
 	for _, ext := range extensions {
 		if err := ext.CLIInit.Steps(nil, true, nil, false); err != nil {
 			t.Fatal(err)
@@ -209,37 +198,66 @@ func TestCLIInitAggregation(t *testing.T) {
 	}
 }
 
-// workspaceExample contracts the home prefix to ~ and leaves
-// non-home-based candidates untouched.
-func TestWorkspaceExample(t *testing.T) {
-	home, err := os.UserHomeDir()
+func TestConfigureRequiredWorkspaceUsesLocalEnvironmentRoot(t *testing.T) {
+	previousYes := initYes
+	initYes = true
+	t.Cleanup(func() { initYes = previousYes })
+	unsetEnvForTest(t, "WORKSPACE_ROOT")
+
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(t.TempDir(), "dev.yaml")
+	if err := os.WriteFile(envPath, []byte("version: \"2\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
+
+	configured, got, err := configureRequiredWorkspace(initPrinter{}, settings, envPath, root)
 	if err != nil {
-		t.Skip("no home dir")
+		t.Fatal(err)
 	}
-	setTestExtensions(t, []extension.Extension{{
-		Name: "x",
-		CLIInit: &extension.CLIInit{
-			WorkspaceCandidates: func(h string) []string { return []string{filepath.Join(h, "dev", "example")} },
-		},
-	}})
-	want := "~" + string(filepath.Separator) + filepath.Join("dev", "example")
-	if got := workspaceExample(); got != want {
-		t.Errorf("workspaceExample = %q, want %q", got, want)
+	if !configured || got != root {
+		t.Fatalf("configured = %v, root = %q, want %q", configured, got, root)
 	}
+	if saved := settings.Get("workspace_root"); saved != root {
+		t.Fatalf("saved workspace = %q, want %q", saved, root)
+	}
+}
 
-	setTestExtensions(t, []extension.Extension{{
-		Name: "x",
-		CLIInit: &extension.CLIInit{
-			WorkspaceCandidates: func(string) []string { return []string{"/opt/work"} },
-		},
-	}})
-	if got := workspaceExample(); got != "/opt/work" {
-		t.Errorf("workspaceExample = %q, want /opt/work untouched", got)
-	}
+func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testing.T) {
+	previousYes := initYes
+	initYes = true
+	t.Cleanup(func() { initYes = previousYes })
+	unsetEnvForTest(t, "WORKSPACE_ROOT")
 
-	setTestExtensions(t, nil)
-	if got := workspaceExample(); got != "~/dev/workspace" {
-		t.Errorf("workspaceExample = %q, want generic placeholder", got)
+	envPath := filepath.Join(t.TempDir(), "dev.yaml")
+	if err := os.WriteFile(envPath, []byte("version: \"2\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	_ = home
+	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
+
+	configured, root, err := configureRequiredWorkspace(initPrinter{}, settings, envPath, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured || root != "" || settings.Get("workspace_root") != "" {
+		t.Fatalf("configured = %v, root = %q, saved = %q", configured, root, settings.Get("workspace_root"))
+	}
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	value, existed := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if existed {
+			_ = os.Setenv(key, value)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
 }

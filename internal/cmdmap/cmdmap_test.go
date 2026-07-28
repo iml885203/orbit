@@ -164,6 +164,15 @@ func TestSettingsRule_MultiKeyChained(t *testing.T) {
 	}
 }
 
+func TestSettingsRule_UserEnvironment(t *testing.T) {
+	defer setRulesForTest(defaultRules())()
+	entry := Resolve("PUT", "/api/settings", []byte(`{"user_env":{"WEB_ROOT":"/work/web","API_ROOT":"/work/api"}}`))
+	want := "orbit settings set-env API_ROOT /work/api && orbit settings set-env WEB_ROOT /work/web"
+	if entry.Command != want {
+		t.Fatalf("command = %q, want %q", entry.Command, want)
+	}
+}
+
 func TestServiceEnvRule_Removed(t *testing.T) {
 	defer setRulesForTest(defaultRules())()
 	got := Resolve("PUT", "/api/service-env/api", []byte(`{}`))

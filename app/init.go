@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/envsync"
@@ -23,7 +24,7 @@ var (
 )
 
 type initResult struct {
-	WorkspaceRoot string               `json:"workspace_root"`
+	WorkspaceRoot string               `json:"workspace_root,omitempty"`
 	EnvsDir       string               `json:"envs_dir"`
 	EnvRepoURL    string               `json:"env_repo_url,omitempty"`
 	EnvSource     string               `json:"env_source"`
@@ -88,7 +89,9 @@ func initCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up Orbit for first use",
-		Long: `Interactive wizard that detects your workspace, selects an environment, and verifies your setup.
+		Long: `Sets up an environment source, selects an environment, and verifies your setup.
+The official demo uses its defaults without questions. A custom environment asks
+for a project workspace only when its selected config actually requires one.
 
 For non-interactive setup (CI, scripts):
   orbit init --yes                                         # accept all defaults
@@ -118,69 +121,19 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
-
-	output.boldln("Step 1: Workspace root")
-
-	root := detectWorkspaceRoot(settings)
-	if root != "" {
-		if !initYes {
-			output.printf("  Found: %s\n", root)
-			input := prompt(fmt.Sprintf("  Workspace root [%s]: ", root))
-			if input != "" {
-				root = expandHome(input)
-			}
-		}
-	} else {
-		if initYes {
-			return fmt.Errorf("could not auto-detect the workspace root — run without --yes")
-		}
-		output.faintln("  Could not auto-detect the workspace root (the directory holding your repo checkouts).")
-		root = expandHome(prompt(fmt.Sprintf("  Enter path (e.g. %s): ", workspaceExample())))
-	}
-
-	if root == "" {
-		return fmt.Errorf("workspace root is required")
-	}
-	if _, err := os.Stat(root); err != nil {
-		return fmt.Errorf("path not found: %s", root)
-	}
-
-	// Validate — check for known repos (markers come from the extensions;
-	// an unbranded build accepts any existing directory silently).
-	markers := workspaceMarkers(root)
-	if len(markers) > 0 {
-		output.printf("  %s workspace root %s (contains %s)\n", cli.Green.Sprint("✓"), root, strings.Join(markers, ", "))
-	} else if hint := workspaceMarkerHint(); hint != "" {
-		output.printf("  %s workspace root %s (no known repos found — %s)\n", cli.Yellow.Sprint("!"), root, hint)
-	} else {
-		output.printf("  %s workspace root %s\n", cli.Green.Sprint("✓"), root)
-	}
-	result.WorkspaceRoot = root
-
-	if err := settings.Set("workspace_root", root); err != nil {
-		return fmt.Errorf("saving settings: %w", err)
-	}
 	settings.ApplyToEnv()
 
-	// Feature-specific settings steps (each extension's own keys and
-	// prompts) come from the registered extensions — the wizard owns the
-	// flow, the extension owns its steps.
-	for _, ext := range extensions {
-		if ext.CLIInit != nil && ext.CLIInit.Steps != nil {
-			if err := ext.CLIInit.Steps(settings, initYes, prompt, cli.JSONOutput); err != nil {
-				return err
-			}
-		}
-	}
-
-	output.println()
-	output.boldln("Step 2: Env repo")
+	output.boldln("Step 1: Environment source")
 
 	currentURL := settings.Get(settingKeyEnvRepoURL)
 	repoURL := currentURL
 	if repoURL == "" {
 		repoURL = distribution.EnvRepoURL
 	}
+	cwd, _ := os.Getwd()
+	localEnvsDir := filepath.Join(cwd, "envs")
+	localInfo, localErr := os.Stat(localEnvsDir)
+	useLocalEnvs := localErr == nil && localInfo.IsDir() && initEnvRepo == ""
 	// Persist only what the user explicitly typed (or passed via flag).
 	// Accepting the suggested default with Enter must not pin it into
 	// settings.json — an unpinned default keeps following new releases.
@@ -189,7 +142,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	case initEnvRepo != "":
 		repoURL = initEnvRepo
 		explicit = true
-	case !initYes:
+	case !useLocalEnvs && repoURL == "" && !initYes:
 		if input := prompt(fmt.Sprintf("  Git URL [%s]: ", repoURL)); input != "" {
 			repoURL = input
 			explicit = true
@@ -206,8 +159,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 	var syncWarning string
 	result.EnvsDir = envsDir
 	result.EnvRepoURL = repoURL
-	localEnvsDir := filepath.Join(root, "envs")
-	if info, err := os.Stat(localEnvsDir); err == nil && info.IsDir() && initEnvRepo == "" {
+	localWorkspaceRoot := ""
+	if useLocalEnvs {
+		localWorkspaceRoot = cwd
 		result.EnvSource = "local"
 		output.printf("  Syncing local %s → %s\n", localEnvsDir, envsDir)
 		syncRes, err := envsync.Sync(localEnvsDir, envsDir, envsync.Options{})
@@ -249,7 +203,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 		result.Warnings = append(result.Warnings, syncWarning)
 	}
 	output.println()
-	output.boldln("Step 3: Environment")
+	output.boldln("Step 2: Environment")
+	workspaceStepShown := false
 	if len(envFiles) == 0 {
 		result.Warnings = append(result.Warnings, "no environment configs found in "+envsDir)
 		output.warnf("  ! No environment configs found in %s\n", envsDir)
@@ -289,10 +244,24 @@ func runInit(_ *cobra.Command, _ []string) error {
 		configFile = absPath
 		result.ActiveEnv = daemonsrv.EnvShortName(chosen)
 		result.ConfigPath = absPath
+
+		var err error
+		workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath, localWorkspaceRoot)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := runExtensionInitSteps(settings); err != nil {
+		return err
 	}
 
 	output.println()
-	output.boldln("Step 4: Health check")
+	if workspaceStepShown {
+		output.boldln("Step 4: Health check")
+	} else {
+		output.boldln("Step 3: Health check")
+	}
 	if result.ActiveEnv != "" {
 		if output.enabled {
 			_ = runDoctorWithOptions(doctorOptions{})
@@ -302,6 +271,76 @@ func runInit(_ *cobra.Command, _ []string) error {
 		result.Ready = doctorFailure(health, false) == nil
 	}
 	return finishInit(output, result, syncFailure)
+}
+
+func configureRequiredWorkspace(
+	output initPrinter,
+	settings *daemon.Settings,
+	envPath string,
+	localWorkspaceRoot string,
+) (bool, string, error) {
+	cfg, err := config.Load(envPath)
+	if err != nil {
+		return false, "", nil
+	}
+	var requiredBy []string
+	for _, check := range daemonsrv.ServiceWorkingDirectoryChecks(cfg, nil) {
+		if check.Hint == `run: orbit settings set workspace-root "$PWD"` {
+			name := strings.TrimSuffix(strings.TrimPrefix(check.Name, "Working directory ("), ")")
+			requiredBy = append(requiredBy, name)
+		}
+	}
+	if len(requiredBy) == 0 {
+		return false, "", nil
+	}
+
+	candidate := localWorkspaceRoot
+	if candidate == "" {
+		candidate = detectWorkspaceRoot(settings)
+	}
+	if initYes && candidate == "" {
+		return false, "", nil
+	}
+
+	output.println()
+	output.boldln("Step 3: Project workspace")
+	output.printf("  Environment %s needs local project files for %s.\n",
+		daemonsrv.EnvShortName(envPath), strings.Join(requiredBy, ", "))
+	root := candidate
+	if !initYes && localWorkspaceRoot == "" {
+		label := "  Directory containing those projects"
+		if candidate != "" {
+			label += " [" + candidate + "]"
+		}
+		input := prompt(label + ": ")
+		if input != "" {
+			root = expandHome(input)
+		}
+	}
+	if root == "" {
+		return true, "", nil
+	}
+	root, err = normalizeWorkspaceRoot(root)
+	if err != nil {
+		return false, "", err
+	}
+	if err := settings.Set("workspace_root", root); err != nil {
+		return false, "", fmt.Errorf("saving workspace root: %w", err)
+	}
+	settings.ApplyToEnv()
+	output.printf("  %s Project workspace: %s\n", cli.Green.Sprint("✓"), root)
+	return true, root, nil
+}
+
+func runExtensionInitSteps(settings *daemon.Settings) error {
+	for _, ext := range extensions {
+		if ext.CLIInit != nil && ext.CLIInit.Steps != nil {
+			if err := ext.CLIInit.Steps(settings, initYes, prompt, cli.JSONOutput); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func finishInit(output initPrinter, result initResult, syncFailure error) error {
@@ -322,7 +361,9 @@ func finishInit(output initPrinter, result initResult, syncFailure error) error 
 	if cli.JSONOutput {
 		if !result.Ready {
 			failure := initFailure(result, syncFailure)
-			if err := cli.WriteJSONFailure(os.Stdout, commandString(), result, failure, initFailureRecommendedActions(result, failure)); err != nil {
+			actions := initFailureRecommendedActions(result, failure)
+			failure = cli.WithJSONReplacementActions(failure, actions)
+			if err := cli.WriteJSONFailure(os.Stdout, commandString(), result, failure, actions); err != nil {
 				return err
 			}
 			return errCLIJSONAlreadyRendered{err: failure}
@@ -345,10 +386,19 @@ func initFailure(result initResult, syncFailure error) error {
 	if result.ActiveEnv == "" {
 		return cli.NewInitIncompleteError("initialization did not select an environment")
 	}
+	if failure := doctorFailure(&daemon.DoctorResponse{Checks: result.Checks}, false); failure != nil {
+		return failure
+	}
 	return cli.NewChecksFailedError("initialization saved settings, but required checks failed")
 }
 
 func initRecommendedActions(result initResult) []cli.JSONAction {
+	if action, ok := initCheckRecoveryAction(result); ok {
+		return []cli.JSONAction{action}
+	}
+	if initHasWorkingDirectoryFailure(result) {
+		return []cli.JSONAction{}
+	}
 	completion := buildInitCompletion(result, nil)
 	return []cli.JSONAction{{
 		Command:     completion.JSONCommand,
@@ -381,6 +431,21 @@ func buildInitCompletion(result initResult, syncFailure error) initCompletion {
 		}
 	}
 	if !result.Ready {
+		if action, ok := initCheckRecoveryAction(result); ok {
+			return initCompletion{
+				Heading:      "Setup saved, but one prerequisite is missing",
+				Detail:       "Apply the correction below, then Orbit can start the selected environment.",
+				HumanCommand: strings.TrimSuffix(action.Command, " --json"),
+				JSONCommand:  action.Command,
+				Reason:       action.Reason,
+			}
+		}
+		if initHasWorkingDirectoryFailure(result) {
+			return initCompletion{
+				Heading: "Setup saved, but one project path is unresolved",
+				Detail:  "Set the path variable or update the service path shown above.",
+			}
+		}
 		return initCompletion{
 			Heading:      "Setup saved, but prerequisites are missing",
 			Detail:       "Resolve the failed checks above before starting the environment.",
@@ -396,6 +461,26 @@ func buildInitCompletion(result initResult, syncFailure error) initCompletion {
 		Reason:       "Start the selected environment.",
 		Ready:        true,
 	}
+}
+
+func initCheckRecoveryAction(result initResult) (cli.JSONAction, bool) {
+	if result.Ready || result.ActiveEnv == "" {
+		return cli.JSONAction{}, false
+	}
+	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: result.Checks})
+	if len(actions) != 1 || actions[0].Command == "orbit status --json" {
+		return cli.JSONAction{}, false
+	}
+	return actions[0], true
+}
+
+func initHasWorkingDirectoryFailure(result initResult) bool {
+	for _, check := range result.Checks {
+		if check.Status == daemon.CheckFail && strings.HasPrefix(check.Name, "Working directory (") {
+			return true
+		}
+	}
+	return false
 }
 
 // detectWorkspaceRoot tries to find the workspace root automatically.
@@ -426,10 +511,7 @@ func detectWorkspaceRoot(settings *daemon.Settings) string {
 		}
 	}
 
-	// A clean checkout has no Orbit markers yet. Falling back to where the
-	// user invoked init keeps first use aligned with every other project CLI:
-	// the current directory is the workspace unless they say otherwise.
-	return cwd
+	return ""
 }
 
 // workspaceCandidates aggregates the extensions' auto-detect candidate
@@ -444,23 +526,6 @@ func workspaceCandidates(home string) []string {
 	return out
 }
 
-// workspaceExample renders the prompt's example path: the first
-// extension candidate (home contracted back to ~), or a generic
-// placeholder for an unbranded build.
-func workspaceExample() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "~/dev/workspace"
-	}
-	if cands := workspaceCandidates(home); len(cands) > 0 {
-		if home != "" && strings.HasPrefix(cands[0], home) {
-			return "~" + cands[0][len(home):]
-		}
-		return cands[0]
-	}
-	return "~/dev/workspace"
-}
-
 // workspaceMarkers aggregates the extensions' known-repo hits under root.
 func workspaceMarkers(root string) []string {
 	var found []string
@@ -470,17 +535,6 @@ func workspaceMarkers(root string) []string {
 		}
 	}
 	return found
-}
-
-// workspaceMarkerHint returns the first extension's description of what
-// the markers are, for the none-found warning.
-func workspaceMarkerHint() string {
-	for _, ext := range extensions {
-		if ext.CLIInit != nil && ext.CLIInit.MarkerHint != "" {
-			return ext.CLIInit.MarkerHint
-		}
-	}
-	return ""
 }
 
 // listEnvFiles is a thin wrapper over the daemon server package's ListEnvYamls, preserved for

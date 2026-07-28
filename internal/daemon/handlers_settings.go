@@ -7,8 +7,9 @@ import (
 )
 
 type settingsUpdate struct {
-	WorkspaceRoot *string `json:"workspace_root,omitempty"`
-	ShowHistory   *bool   `json:"show_history,omitempty"`
+	WorkspaceRoot *string           `json:"workspace_root,omitempty"`
+	ShowHistory   *bool             `json:"show_history,omitempty"`
+	UserEnv       map[string]string `json:"user_env,omitempty"`
 }
 
 // handleSettings handles GET (read) and PUT (update) for user settings.
@@ -47,6 +48,17 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 				return
 			}
+		}
+		for key, value := range update.UserEnv {
+			changes = append(changes, SettingsChange{Key: "user_env." + key, Old: srv.settings.GetUserEnv(key), New: value})
+			if err := srv.settings.SetUserEnv(key, value); err != nil {
+				slog.Error("persist user environment variable", "component", "settings", "key", key, "err", err)
+				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+				return
+			}
+		}
+		if len(update.UserEnv) > 0 {
+			srv.settings.ApplyToEnv()
 		}
 
 		// Feature-owned reactions (the SQL mode switch) run through the

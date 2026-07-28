@@ -400,7 +400,17 @@ env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專
 }
 ```
 
-`workspace_root` 是 first-class 設定（`orbit init` 會寫入，也可用 `orbit settings set workspace-root <path>` 修改），可在 daemon 尚未啟動時設定，並會以 `WORKSPACE_ROOT` 輸出給 env config。其他變數放在 `user_env` 底下。
+`workspace_root` 是 first-class 設定。只有所選 environment 實際引用 workspace
+projects 時，`orbit init` 才會詢問；只有 containers 或自給自足的 environment
+不會把任意 current directory 存成 workspace。也可在 daemon 尚未啟動時用
+`orbit settings set workspace-root <path>` 設定。它會以 `WORKSPACE_ROOT`
+輸出給 env config。其他引用的變數不需要手動編輯 JSON：
+
+```bash
+orbit settings set-env API_ROOT /path/to/api
+```
+
+這些值會存放在 `user_env` 底下。
 
 選擇環境後，`orbit doctor` 會驗證解析完成的 service paths。`orbit up` 也會在啟動 containers 或 host processes 前執行相同檢查，因此錯誤的 workspace 不會留下只啟動一半的環境。
 

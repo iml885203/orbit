@@ -63,19 +63,13 @@ type CLIInit struct {
 	// workspace root, tried in order when neither settings nor env
 	// provide one.
 	WorkspaceCandidates func(home string) []string
-	// WorkspaceMarkers reports the known repo directories found under
-	// root — the wizard's validation feedback ("contains repoA/, …").
-	// Markers (like WorkspaceCandidates and Steps) aggregate across all
-	// registered extensions in registration order.
+	// WorkspaceMarkers reports known repo directories under root. At least
+	// one marker proves an auto-detected candidate is a real workspace.
 	WorkspaceMarkers func(root string) []string
-	// MarkerHint names what WorkspaceMarkers looks for; shown when a
-	// chosen root contains none of them. Unlike the aggregating hooks,
-	// the first non-empty hint wins.
-	MarkerHint string
-	// Steps runs the feature's settings prompts right after the
-	// workspace-root step. yes mirrors --yes (accept defaults, no
-	// prompting); prompt reads one trimmed line from the user. quiet asks
-	// the extension to keep stdout machine-readable for --json.
+	// Steps runs feature-specific settings prompts after core environment
+	// and contextual workspace setup. yes mirrors --yes (accept defaults,
+	// no prompting); prompt reads one trimmed line from the user. quiet
+	// asks the extension to keep stdout machine-readable for --json.
 	Steps func(settings *daemon.Settings, yes bool, prompt func(label string) string, quiet bool) error
 }
 

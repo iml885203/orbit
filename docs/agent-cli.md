@@ -152,6 +152,15 @@ If the previously selected environment was renamed or removed, status instead
 returns `data.selection_required: true`, a `selection_message`, and exact
 `orbit switch <env> --json` choices; this does not mean setup must be repeated.
 
+`orbit init --yes --json` never invents `data.workspace_root` from the current
+directory. The field is omitted for self-contained environments. If a custom
+environment requires `${WORKSPACE_ROOT}` and no proven local workspace exists,
+init returns `service_working_directory_missing` with the sole action
+`orbit settings set workspace-root "$PWD" --json`.
+Other unresolved path variables preserve their name and lead to
+`orbit settings set-env <NAME> "$PWD" --json`; they never produce a
+workspace-root action.
+
 When GitHub reports that an environment repository was not found, Orbit returns
 `env_repo_unavailable` without recommended actions. GitHub deliberately uses
 the same response for a misspelled or missing repository and a private
@@ -173,6 +182,7 @@ Stable `data.operation` values for converted control commands:
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
 | `orbit settings set <key> <value> --json` | `settings_set` |
+| `orbit settings set-env <name> <value> --json` | `settings_set_env` |
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 

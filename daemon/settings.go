@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -67,6 +68,15 @@ type settingsOnDisk struct {
 	// RawDetachedEdges holds the raw JSON value for detached_edges so we can
 	// try both the nested and legacy flat shapes.
 	RawDetachedEdges json.RawMessage `json:"detached_edges,omitempty"`
+}
+
+var userEnvNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func ValidateUserEnvName(name string) error {
+	if !userEnvNamePattern.MatchString(name) {
+		return fmt.Errorf("environment variable name must match [A-Za-z_][A-Za-z0-9_]*")
+	}
+	return nil
 }
 
 func DefaultSettingsPath() string {
@@ -269,6 +279,25 @@ func (s *Settings) SetShowHistory(value *bool) error {
 	defer s.mu.Unlock()
 	s.ShowHistory = value
 	return s.saveLocked()
+}
+
+func (s *Settings) SetUserEnv(key, value string) error {
+	if err := ValidateUserEnvName(key); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.UserEnv == nil {
+		s.UserEnv = make(map[string]string)
+	}
+	s.UserEnv[key] = value
+	return s.saveLocked()
+}
+
+func (s *Settings) GetUserEnv(key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.UserEnv[key]
 }
 
 // ApplyToEnv sets environment variables from settings so config's ${VAR:-default} picks them up.

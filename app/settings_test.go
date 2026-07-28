@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,8 +23,29 @@ func TestSettingsCmd_Subcommands(t *testing.T) {
 	for _, s := range cmd.Commands() {
 		names[strings.Fields(s.Use)[0]] = true
 	}
-	if !names["set"] || !names["list"] {
+	if !names["set"] || !names["set-env"] || !names["list"] {
 		t.Errorf("missing subcommands: %v", names)
+	}
+}
+
+func TestSettingsEnvironmentVariableCanBeSetBeforeDaemonStarts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	t.Setenv("ORBIT_NAMESPACE", "settings-env-local-test")
+
+	previousJSON := cli.JSONOutput
+	cli.JSONOutput = false
+	t.Cleanup(func() { cli.JSONOutput = previousJSON })
+
+	if err := runSettingsSetEnv(nil, []string{"API_ROOT", "/work/api"}); err != nil {
+		t.Fatal(err)
+	}
+	got := daemon.LoadSettings(daemon.DefaultSettingsPath())
+	if got.GetUserEnv("API_ROOT") != "/work/api" {
+		t.Fatalf("API_ROOT = %q", got.GetUserEnv("API_ROOT"))
+	}
+	if err := runSettingsSetEnv(nil, []string{"invalid-name", "/work/api"}); !errors.Is(err, cli.ErrInvalidArgument) {
+		t.Fatalf("invalid name error = %v", err)
 	}
 }
 

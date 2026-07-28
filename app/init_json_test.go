@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/internal/envsync"
 )
 
@@ -74,6 +76,54 @@ func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
 	}
 	if data["active_env"] != "quickstart" {
 		t.Fatalf("active_env = %q, want logical name without file extension", data["active_env"])
+	}
+}
+
+func TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace(t *testing.T) {
+	if os.Getenv("ORBIT_INIT_ZERO_PROMPT_HELPER") == "1" {
+		cli.JSONOutput = false
+		initYes = false
+		initEnvRepo = ""
+		initEnvName = ""
+		configFile = ""
+		distribution.DefaultEnv = "quickstart.yaml"
+		if err := runInit(nil, nil); err != nil {
+			_, _ = os.Stderr.WriteString(err.Error())
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	root := t.TempDir()
+	envsDir := filepath.Join(root, "envs")
+	if err := os.Mkdir(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), []byte("version: \"2\"\nservices: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orbitHome := filepath.Join(t.TempDir(), "orbit-home")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace$")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"ORBIT_INIT_ZERO_PROMPT_HELPER=1",
+		"ORBIT_HOME="+orbitHome,
+	)
+	cmd.Stdin = strings.NewReader("")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("helper failed: %v\nstderr:\n%s\nstdout:\n%s", err, stderr.String(), stdout.String())
+	}
+	for _, irrelevant := range []string{"Workspace root", "Git URL", "Project workspace"} {
+		if strings.Contains(stdout.String(), irrelevant) {
+			t.Fatalf("init exposed irrelevant %q:\n%s", irrelevant, stdout.String())
+		}
+	}
+	settings := daemon.LoadSettings(filepath.Join(orbitHome, "settings.json"))
+	if root := settings.Get("workspace_root"); root != "" {
+		t.Fatalf("init persisted unrelated workspace %q", root)
 	}
 }
 
@@ -168,6 +218,51 @@ func TestInitRecommendedActionsLeadToNextUsefulCommand(t *testing.T) {
 				t.Fatalf("actions = %+v, want %q", actions, test.want)
 			}
 		})
+	}
+}
+
+func TestInitWorkspaceFailureLeadsDirectlyToWorkspaceSetting(t *testing.T) {
+	result := initResult{
+		ActiveEnv: "dev",
+		Checks: []daemon.DoctorCheck{{
+			Name:    "Working directory (api)",
+			Status:  daemon.CheckFail,
+			Message: "workspace variable is unresolved",
+			Hint:    `run: orbit settings set workspace-root "$PWD"`,
+		}},
+	}
+
+	actions := initRecommendedActions(result)
+	if len(actions) != 1 || actions[0].Command != `orbit settings set workspace-root "$PWD" --json` {
+		t.Fatalf("actions = %+v", actions)
+	}
+	if failure := initFailure(result, nil); !errors.Is(failure, cli.ErrServiceWorkingDir) {
+		t.Fatalf("failure = %v, want service working directory classification", failure)
+	}
+	completion := buildInitCompletion(result, nil)
+	if completion.HumanCommand != `orbit settings set workspace-root "$PWD"` {
+		t.Fatalf("human command = %q", completion.HumanCommand)
+	}
+}
+
+func TestInitCustomVariableFailureLeadsToPersistentSetting(t *testing.T) {
+	result := initResult{
+		ActiveEnv: "dev",
+		Checks: []daemon.DoctorCheck{{
+			Name:    "Working directory (api)",
+			Status:  daemon.CheckFail,
+			Message: "path variable API_ROOT is unresolved",
+			Hint:    `run: orbit settings set-env API_ROOT "$PWD"`,
+		}},
+	}
+
+	actions := initRecommendedActions(result)
+	if len(actions) != 1 || actions[0].Command != `orbit settings set-env API_ROOT "$PWD" --json` {
+		t.Fatalf("actions = %+v", actions)
+	}
+	completion := buildInitCompletion(result, nil)
+	if completion.HumanCommand != `orbit settings set-env API_ROOT "$PWD"` {
+		t.Fatalf("human command = %q", completion.HumanCommand)
 	}
 }
 

@@ -51,8 +51,10 @@ Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
 PATH。
 
 預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
-在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。Orbit
-不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
+在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。
+`orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
+environment repository 或 project workspace。
+Orbit 不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
 `orbit up` 完成後，Orbit 會直接顯示 healthy application 的 URL 與唯一開啟
 指令；dashboard 則保留為次要選項。
 

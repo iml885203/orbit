@@ -34,7 +34,7 @@ This repo contains the neutral engine, CLI, daemon, and UI, plus optional featur
          http: 8080
    ```
 
-   `orbit init` walks through repository setup interactively. During development, `orbit env sync --path /path/to/your-env-repo` can use a local checkout. If the active environment changed, sync offers to make it current and restores only the resources that were running. Use `--no-apply` only when an interruption must be deferred; Orbit prints the exact command to finish later.
+   `orbit init --env-repo <your-env-repo-git-url>` provides the same setup path. It asks for a project workspace only after selecting an environment that actually needs one; self-contained environments do not expose that concept. During development, `orbit env sync --path /path/to/your-env-repo` can use a local checkout. If the active environment changed, sync offers to make it current and restores only the resources that were running. Use `--no-apply` only when an interruption must be deferred; Orbit prints the exact command to finish later.
 
 The released binary supplies its distribution defaults. A custom build without those defaults can set `env_repo_url` or `ORBIT_ENV_REPO_URL` for `orbit env sync`, and `ORBIT_INSTALL_URL` for `orbit update`. Services, containers, graph, logs, health checks, doctor, and the dashboard otherwise need only the env configuration. Tracing is on by default; an env opts out with an explicit `tracing.enabled: false`.
 

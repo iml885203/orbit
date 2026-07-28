@@ -266,8 +266,12 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	}
 	var actions []cli.JSONAction
 	added := make(map[string]bool)
+	workingDirectoryFailed := false
 	for _, check := range resp.Checks {
 		if check.Status == daemon.CheckFail || check.Status == daemon.CheckWarn {
+			if check.Status == daemon.CheckFail && strings.HasPrefix(check.Name, "Working directory (") {
+				workingDirectoryFailed = true
+			}
 			if cmd, ok := strings.CutPrefix(check.Hint, "run: "); ok {
 				cmd = strings.TrimSpace(cmd)
 				if strings.HasPrefix(cmd, "orbit ") && !strings.Contains(cmd, " --json") {
@@ -286,6 +290,9 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	}
 	if len(actions) > 0 {
 		return actions
+	}
+	if workingDirectoryFailed {
+		return []cli.JSONAction{}
 	}
 	return []cli.JSONAction{cli.StatusAction()}
 }

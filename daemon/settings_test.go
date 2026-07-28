@@ -91,6 +91,24 @@ func TestSettings_UserEnv(t *testing.T) {
 	_ = os.Unsetenv("CUSTOM_VAR")
 }
 
+func TestSettings_SetUserEnvPersistsAndExports(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := LoadSettings(path)
+	if err := s.SetUserEnv("API_ROOT", "/work/api"); err != nil {
+		t.Fatal(err)
+	}
+	s.ApplyToEnv()
+	t.Cleanup(func() { _ = os.Unsetenv("API_ROOT") })
+
+	if got := os.Getenv("API_ROOT"); got != "/work/api" {
+		t.Fatalf("API_ROOT = %q", got)
+	}
+	reloaded := LoadSettings(path)
+	if got := reloaded.GetUserEnv("API_ROOT"); got != "/work/api" {
+		t.Fatalf("persisted API_ROOT = %q", got)
+	}
+}
+
 func TestSettings_WorkspaceRoot(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")

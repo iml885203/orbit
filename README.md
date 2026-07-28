@@ -59,6 +59,8 @@ are documented in [Installation and development](docs/development.md).
 The default setup uses the
 [Orbit demo environment](https://github.com/iml885203/orbit-demo): a
 standard-library Python service running on the host with Redis in a container.
+`orbit init` accepts those distribution defaults without asking about an
+environment repository or project workspace the demo does not use.
 Orbit does not install Python or other project runtimes; `orbit doctor` reports
 what the selected environment expects. After `orbit up`, Orbit shows the
 healthy application URL and one command to open it; the dashboard remains a

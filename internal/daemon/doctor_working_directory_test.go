@@ -41,3 +41,20 @@ func TestServiceWorkingDirectoryChecksHonorsEmptySelection(t *testing.T) {
 		t.Fatalf("checks = %+v, want unrelated services skipped", checks)
 	}
 }
+
+func TestServiceWorkingDirectoryChecksDoesNotCallAnotherVariableWorkspaceRoot(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api": {Type: "python", Path: filepath.Join(t.TempDir(), "${API_ROOT}", "api")},
+	}}
+
+	checks := ServiceWorkingDirectoryChecks(cfg, nil)
+	if len(checks) != 1 {
+		t.Fatalf("checks = %+v, want one failure", checks)
+	}
+	if checks[0].Message != "path variable API_ROOT is unresolved in "+cfg.Services["api"].Path {
+		t.Fatalf("message = %q", checks[0].Message)
+	}
+	if checks[0].Hint != `run: orbit settings set-env API_ROOT "$PWD"` {
+		t.Fatalf("hint = %q", checks[0].Hint)
+	}
+}

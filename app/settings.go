@@ -63,11 +63,44 @@ func settingsCmd() *cobra.Command {
 		RunE:  runSettingsSet,
 	})
 	cmd.AddCommand(&cobra.Command{
+		Use:   "set-env <name> <value>",
+		Short: "Persist an environment variable used by environment configs",
+		Args:  cobra.ExactArgs(2),
+		RunE:  runSettingsSetEnv,
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "Show current settings values and allowed keys",
 		RunE:  runSettingsList,
 	})
 	return cmd
+}
+
+func runSettingsSetEnv(_ *cobra.Command, args []string) error {
+	name, value := args[0], args[1]
+	if err := daemon.ValidateUserEnvName(name); err != nil {
+		return cli.NewInvalidArgumentError(err.Error())
+	}
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	if client.Health() == nil {
+		if err := client.UpdateSettings(map[string]any{"user_env": map[string]string{name: value}}); err != nil {
+			return err
+		}
+	} else {
+		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+		if err := settings.SetUserEnv(name, value); err != nil {
+			return fmt.Errorf("saving environment variable %s: %w", name, err)
+		}
+	}
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{
+			"operation": "settings_set_env",
+			"key":       name,
+			"value":     value,
+		}, []cli.JSONAction{cli.DoctorAction()})
+	}
+	fmt.Printf("✓ %s = %s\n", name, value)
+	return nil
 }
 
 func runSettingsSet(_ *cobra.Command, args []string) error {
@@ -140,6 +173,7 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		current = map[string]any{
 			"workspace_root": settings.WorkspaceRoot,
 			"show_history":   settings.ShowHistory,
+			"user_env":       settings.UserEnv,
 		}
 	}
 
@@ -164,6 +198,26 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		}
 		out, _ := json.Marshal(val)
 		fmt.Printf("  %s = %s\n", cliKey, string(out))
+	}
+	userEnv := make(map[string]string)
+	switch values := current["user_env"].(type) {
+	case map[string]string:
+		userEnv = values
+	case map[string]any:
+		for name, value := range values {
+			if text, ok := value.(string); ok {
+				userEnv[name] = text
+			}
+		}
+	}
+	names := make([]string, 0, len(userEnv))
+	for name := range userEnv {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		out, _ := json.Marshal(userEnv[name])
+		fmt.Printf("  env.%s = %s\n", name, string(out))
 	}
 	return nil
 }

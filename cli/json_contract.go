@@ -270,7 +270,7 @@ func classify(err error) JSONError {
 		return JSONError{
 			Code:      "service_working_directory_missing",
 			Message:   msg,
-			Hint:      "Set the workspace root or correct the service path before starting resources.",
+			Hint:      "Resolve the path variable or correct the service working directory before starting resources.",
 			Retryable: true,
 		}
 	case errors.Is(err, ErrEnvRepoAccess):

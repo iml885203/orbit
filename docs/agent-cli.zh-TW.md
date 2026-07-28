@@ -143,6 +143,15 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 `recommended_actions` 中提供現存 environment 的精確
 `orbit switch <env> --json` 指令；這不代表需要重新 init。
 
+`orbit init --yes --json` 不會把 current directory 猜成
+`data.workspace_root`。自給自足的 environment 會省略此欄位。若自訂
+environment 需要 `${WORKSPACE_ROOT}`，但沒有可證明的 local workspace，
+init 會回傳 `service_working_directory_missing`，且唯一 action 為
+`orbit settings set workspace-root "$PWD" --json`。
+其他未解析的 path variable 會保留自己的名稱，並指向
+`orbit settings set-env <NAME> "$PWD" --json`；不會產生 workspace-root
+action。
+
 當 GitHub 回覆 environment repo 不存在時，Orbit 會回傳
 `env_repo_unavailable`，且不提供 recommended actions。GitHub 對拼錯／不存在
 的 repo，以及目前 credentials 看不到的 private repo，刻意使用相同回覆；
@@ -163,6 +172,7 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
 | `orbit settings set <key> <value> --json` | `settings_set` |
+| `orbit settings set-env <name> <value> --json` | `settings_set_env` |
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
