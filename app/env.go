@@ -337,14 +337,18 @@ func switchPrerequisites(path string) ([]daemon.DoctorCheck, bool, error) {
 func printSwitchPrerequisites(checks []daemon.DoctorCheck, ready bool) {
 	if ready {
 		fmt.Printf("%s prerequisites ready\n", cli.Green.Sprint("✓"))
-		return
+	} else {
+		fmt.Printf("%s setup required before `orbit up`\n", cli.Yellow.Sprint("!"))
 	}
-	fmt.Printf("%s setup required before `orbit up`\n", cli.Yellow.Sprint("!"))
 	for _, check := range checks {
-		if check.Status != daemon.CheckFail {
+		if check.Status != daemon.CheckFail && check.Status != daemon.CheckWarn {
 			continue
 		}
-		fmt.Printf("  %s %s: %s\n", cli.Red.Sprint("✗"), check.Name, check.Message)
+		icon := cli.Yellow.Sprint("!")
+		if check.Status == daemon.CheckFail {
+			icon = cli.Red.Sprint("✗")
+		}
+		fmt.Printf("  %s %s: %s\n", icon, check.Name, check.Message)
 		if check.Hint != "" {
 			_, _ = cli.Faint.Printf("      → %s\n", check.Hint)
 		}

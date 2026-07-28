@@ -875,6 +875,93 @@ services:
 	t.Fatalf("prerequisites = %+v", data.Prerequisites)
 }
 
+func TestE2E_SwitchReportsProjectRuntimeVersionMismatch(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home, err := os.MkdirTemp("/tmp", "orb-switch-version-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stop := exec.Command(binary, "daemon", "stop")
+		stop.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		_ = stop.Run()
+		_ = os.RemoveAll(home)
+	})
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".nvmrc"), []byte("999\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw := fmt.Sprintf(`
+version: "2"
+services:
+  web:
+    type: node
+    path: %q
+    command: node server.js
+`, project)
+	if err := os.WriteFile(filepath.Join(envsDir, "versioned.yaml"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	command := func(args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_DASHBOARD_PORT="+strconv.Itoa(22000+int(randByte())),
+		)
+		return cmd
+	}
+
+	human, err := command("switch", "versioned").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human switch failed: %v\n%s", err, human)
+	}
+	for _, evidence := range []string{
+		"setup required before `orbit up`",
+		"Node.js",
+		"web requires 999 (.nvmrc)",
+		"Select the project version of Node.js",
+	} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human switch missing %q:\n%s", evidence, human)
+		}
+	}
+
+	output, err := command("switch", "versioned", "--json").Output()
+	if err != nil {
+		t.Fatalf("JSON switch failed: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if !envelope.OK {
+		t.Fatalf("envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		PrerequisitesReady bool                 `json:"prerequisites_ready"`
+		Prerequisites      []daemon.DoctorCheck `json:"prerequisites"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode switch data: %v\n%s", err, envelope.Data)
+	}
+	if data.PrerequisitesReady {
+		t.Fatal("switch reported a mismatched project runtime as ready")
+	}
+	count := 0
+	for _, check := range data.Prerequisites {
+		if check.Name == "Node.js" {
+			count++
+			if check.Status != daemon.CheckFail || !strings.Contains(check.Message, "web requires 999 (.nvmrc)") {
+				t.Fatalf("Node.js prerequisite = %+v", check)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("Node.js prerequisite count = %d: %+v", count, data.Prerequisites)
+	}
+}
+
 // findOrbitBinary mirrors setupE2E's binary discovery without the docker skip
 // and without creating an e2eEnv. Useful for tests that don't need a full env.
 func findOrbitBinary(t *testing.T) string {

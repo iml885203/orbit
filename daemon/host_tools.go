@@ -15,8 +15,20 @@ type HostToolCheck struct {
 	Hint     string
 	// RequiredBy lists active services that need the tool. An empty list
 	// denotes a core Orbit dependency rather than an environment requirement.
-	RequiredBy []string
-	Version    func(path string) (string, error)
+	RequiredBy   []string
+	Version      func(path string) (string, error)
+	Requirements []HostVersionRequirement
+}
+
+// HostVersionRequirement describes a runtime version declared by a service's
+// project. ParseError is retained so Doctor can expose a broken declaration
+// instead of silently ignoring it.
+type HostVersionRequirement struct {
+	Service     string
+	ProjectPath string
+	Source      string
+	Requested   string
+	ParseError  string
 }
 
 // WorkspaceRootCheck renders a workspace root value as a DoctorCheck.

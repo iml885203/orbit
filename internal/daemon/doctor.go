@@ -87,27 +87,29 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 			Name:    c.Name,
 			Status:  status,
 			Message: c.Binary + " not found on PATH" + requiredBy,
-			Hint:    c.Hint,
+			Hint:    missingRuntimeHint(c),
 		}
 	}
 	msg := "found at " + path
+	version := ""
 	if c.Version != nil {
 		v, err := c.Version(path)
 		if err != nil {
 			slog.Debug("version probe failed", "component", "doctor", "tool", c.Binary, "err", err)
 		} else if v != "" {
+			version = v
 			msg = fmt.Sprintf("%s (%s)", msg, v)
 		}
 	}
 	msg += requiredBy
-	return DoctorCheck{Name: c.Name, Status: CheckPass, Message: msg}
+	return evaluateRuntimeRequirements(c, path, version, msg)
 }
 
 // HostEnvironmentChecks reports only the tools the selected environment
 // actually needs. Optional Orbit features contribute their own checks, so a
 // Python-only project never has to understand Node, .NET, or SQL tooling.
 func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
-	tools, nodeServices := requiredHostTools(cfg)
+	tools := requiredHostTools(cfg)
 	results := make([]DoctorCheck, len(tools), len(tools)+1)
 
 	var wg sync.WaitGroup
@@ -120,9 +122,6 @@ func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	}
 	wg.Wait()
 
-	if len(nodeServices) > 0 {
-		results = append(results, checkNode(nodeServices))
-	}
 	results = append(results, projectDependencyChecks(cfg)...)
 	return results
 }
@@ -208,7 +207,7 @@ func nodeInstallCommand(manager, path string) string {
 	}
 }
 
-func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {
+func requiredHostTools(cfg *config.Config) []HostToolCheck {
 	requirements := map[string]map[string]bool{}
 	add := func(binary, service string) {
 		if requirements[binary] == nil {
@@ -217,7 +216,7 @@ func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {
 		requirements[binary][service] = true
 	}
 
-	var nodeServices []string
+	versionRequirements := projectRuntimeVersionRequirements(cfg)
 	if cfg != nil {
 		names := make([]string, 0, len(cfg.Services))
 		for name := range cfg.Services {
@@ -234,8 +233,12 @@ func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {
 			case "dotnet":
 				add("dotnet", name)
 			case "node":
-				nodeServices = append(nodeServices, name)
-				if isNodePackageManager(binary) {
+				if binary == "bun" {
+					add("bun", name)
+				} else {
+					add("node", name)
+				}
+				if isNodePackageManager(binary) && binary != "bun" {
 					add(binary, name)
 				}
 			case "python":
@@ -252,14 +255,16 @@ func requiredHostTools(cfg *config.Config) ([]HostToolCheck, []string) {
 	}
 
 	tools := append([]HostToolCheck(nil), CoreHostToolChecks...)
-	for _, binary := range []string{"dotnet", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
+	for _, binary := range []string{"dotnet", "node", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
 		services := sortedRequirementNames(requirements[binary])
 		if len(services) == 0 {
 			continue
 		}
-		tools = append(tools, hostToolDefinition(binary, services))
+		tool := hostToolDefinition(binary, services)
+		tool.Requirements = versionRequirements[binary]
+		tools = append(tools, tool)
 	}
-	return tools, nodeServices
+	return tools
 }
 
 func commandBinary(command string) string {
@@ -319,6 +324,9 @@ func hostToolDefinition(binary string, requiredBy []string) HostToolCheck {
 		tool.Name = ".NET SDK"
 		tool.Hint = "Install the .NET SDK: https://dotnet.microsoft.com/download"
 		tool.Version = dotnetSDKVersion
+	case "node":
+		tool.Name = "Node.js"
+		tool.Hint = "Install Node.js: https://nodejs.org/"
 	case "python", "python3":
 		tool.Name = "Python"
 		tool.Hint = "Install Python 3: https://www.python.org/downloads/"
@@ -429,28 +437,6 @@ func checkOrbitOnPath() DoctorCheck {
 		Message: "orbit installed at " + exeDir + " but not on $PATH",
 		Hint:    "Add " + exeDir + " to your shell's PATH",
 	}
-}
-
-// checkNode probes the runtime only when the selected environment has a Node
-// service. Project-specific version files are the authority for acceptable
-// versions; Orbit does not impose its own Node release on user services.
-func checkNode(requiredBy []string) DoctorCheck {
-	suffix := " (required by " + strings.Join(requiredBy, ", ") + ")"
-	path, err := exec.LookPath("node")
-	if err != nil {
-		return DoctorCheck{
-			Name:    "Node.js",
-			Status:  CheckFail,
-			Message: "node not found on PATH" + suffix,
-			Hint:    "Install the version required by your project: https://nodejs.org/",
-		}
-	}
-	version, err := versionFromCmd("--version")(path)
-	if err != nil {
-		slog.Debug("version probe failed", "component", "doctor", "tool", "node", "err", err)
-		return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: "found at " + path + suffix}
-	}
-	return DoctorCheck{Name: "Node.js", Status: CheckPass, Message: fmt.Sprintf("found at %s (%s)%s", path, version, suffix)}
 }
 
 func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {

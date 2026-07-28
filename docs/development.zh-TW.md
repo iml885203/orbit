@@ -21,7 +21,10 @@
 會列出並提供安裝提示。透過 npm、pnpm、Yarn 或 Bun 啟動的 Node service，
 也會區分缺少 runtime 與尚未安裝 project packages，並提供精確的 install
 指令。`orbit switch` 會在使用者執行 `orbit up` 前，回報新 environment 的
-這些 checks。同步 environment repository 需要 Git。
+這些 checks。Runtime checks 會讀取 `.nvmrc`、`.node-version`、
+`.python-version`、`.bun-version`、`.tool-versions` 的相關項目，以及 .NET
+`global.json`。Orbit 會回報版本不符或互相衝突的宣告，但不會安裝或切換
+runtime。同步 environment repository 需要 Git。
 
 Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
 完全同等。原生 PowerShell installer 會驗證 release checksum 與版本、保留

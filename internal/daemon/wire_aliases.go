@@ -44,6 +44,7 @@ type (
 	ServiceRestarter       = pub.ServiceRestarter
 	Client                 = pub.Client
 	HostToolCheck          = pub.HostToolCheck
+	HostVersionRequirement = pub.HostVersionRequirement
 )
 
 const (

@@ -112,7 +112,7 @@ func TestDotnetSDKVersion_EmptyIsError(t *testing.T) {
 
 func TestCheckNode_MissingFailsWhenRequired(t *testing.T) {
 	t.Setenv("PATH", "")
-	got := checkNode([]string{"web"})
+	got := checkHostTool(hostToolDefinition("node", []string{"web"}))
 	if got.Status != CheckFail {
 		t.Errorf("want CheckFail, got %s", got.Status)
 	}
@@ -124,7 +124,7 @@ func TestCheckNode_MissingFailsWhenRequired(t *testing.T) {
 func TestCheckNode_ProjectOwnsVersionPolicy(t *testing.T) {
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v18.0.0'\n")
 	t.Setenv("PATH", dir)
-	got := checkNode([]string{"web"})
+	got := checkHostTool(hostToolDefinition("node", []string{"web"}))
 	if got.Status != CheckPass {
 		t.Fatalf("Orbit should not override the project's version policy, got %s (%s)", got.Status, got.Message)
 	}
@@ -136,7 +136,7 @@ func TestCheckNode_ProjectOwnsVersionPolicy(t *testing.T) {
 func TestCheckNode_ModernVersionPasses(t *testing.T) {
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v22.3.1'\n")
 	t.Setenv("PATH", dir)
-	got := checkNode([]string{"web"})
+	got := checkHostTool(hostToolDefinition("node", []string{"web"}))
 	if got.Status != CheckPass {
 		t.Fatalf("want CheckPass, got %s (%s)", got.Status, got.Message)
 	}
@@ -147,10 +147,7 @@ func TestRequiredHostTools_OnlyReportsSelectedEnvironment(t *testing.T) {
 		"demo-api": {Type: "python", Command: "python3 -m http.server 8080"},
 	}}
 
-	tools, nodeServices := requiredHostTools(cfg)
-	if len(nodeServices) != 0 {
-		t.Fatalf("node services = %v, want none", nodeServices)
-	}
+	tools := requiredHostTools(cfg)
 	var names []string
 	for _, tool := range tools {
 		names = append(names, tool.Name)
