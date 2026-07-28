@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,8 @@ import (
 	"github.com/iml885203/orbit/platform"
 	"github.com/spf13/cobra"
 )
+
+var daemonRestartDelay time.Duration
 
 func runDaemonStart(_ *cobra.Command, _ []string) error {
 	if err := ensureDaemonStarted(configFile); err != nil {
@@ -43,6 +46,9 @@ func runDaemonStart(_ *cobra.Command, _ []string) error {
 }
 
 func runDaemonRestart(cmd *cobra.Command, args []string) error {
+	if daemonRestartDelay > 0 {
+		time.Sleep(daemonRestartDelay)
+	}
 	previousPID, alive := daemon.IsDaemonRunning()
 	stopMethod, pid, running, err := restartDaemon(configFile, previousPID, alive)
 	if err != nil {
@@ -61,6 +67,29 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 		}), []cli.JSONAction{cli.StatusAction()})
 	}
 	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
+	return nil
+}
+
+func launchDashboardEnvRestart(configPath string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding orbit executable: %w", err)
+	}
+	logFile, err := os.OpenFile(daemon.DefaultLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("opening daemon log: %w", err)
+	}
+	defer func() { _ = logFile.Close() }()
+
+	cmd := exec.Command(exe, "daemon", "restart", "--config", configPath, "--handoff-delay", "250ms")
+	cmd.Dir = filepath.Dir(configPath)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	platform.DetachProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting replacement process: %w", err)
+	}
+	_ = cmd.Process.Release()
 	return nil
 }
 
@@ -301,6 +330,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
 	server.SetConfigPath(configFile)
+	server.SetRestartLauncher(launchDashboardEnvRestart)
 	// Point starting services at the receiver's actual bound endpoint. Reads
 	// live receiver state at start time, so a service launched after a port
 	// fallback gets the real port. Wired here (not in NewApp) because the

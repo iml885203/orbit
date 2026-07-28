@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +27,11 @@ func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
+	var restartedWith string
+	srv.SetRestartLauncher(func(path string) error {
+		restartedWith = path
+		return nil
+	})
 
 	body := strings.NewReader(`{"env":"newenv"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/env", body)
@@ -37,6 +43,12 @@ func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 	}
 	if srv.ConfigPath() != target {
 		t.Errorf("ConfigPath = %s, want %s", srv.ConfigPath(), target)
+	}
+	if restartedWith != target {
+		t.Errorf("restart target = %q, want %q", restartedWith, target)
+	}
+	if strings.Contains(w.Body.String(), "run `orbit daemon restart`") {
+		t.Fatalf("response leaked a manual daemon step: %s", w.Body.String())
 	}
 }
 
@@ -84,6 +96,7 @@ func TestHandleEnvSwitch_NewPath(t *testing.T) {
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
+	srv.SetRestartLauncher(func(string) error { return nil })
 
 	body := strings.NewReader(`{"env":"newenv"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", body)
@@ -95,6 +108,61 @@ func TestHandleEnvSwitch_NewPath(t *testing.T) {
 	}
 	if srv.ConfigPath() != target {
 		t.Errorf("ConfigPath = %s, want %s", srv.ConfigPath(), target)
+	}
+}
+
+func TestHandleEnvSwitchRequiresRestartLauncherBeforeMutation(t *testing.T) {
+	tmp := t.TempDir()
+	current := filepath.Join(tmp, "current.yaml")
+	target := filepath.Join(tmp, "target.yaml")
+	for _, path := range []string{current, target} {
+		if err := os.WriteFile(path, []byte("version: \"2\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := newTestServer(t, &config.Config{})
+	srv.SetConfigPath(current)
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target"}`))
+	w := httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503, body=%s", w.Code, w.Body.String())
+	}
+	if srv.ConfigPath() != current {
+		t.Fatalf("ConfigPath mutated to %q, want %q", srv.ConfigPath(), current)
+	}
+}
+
+func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
+	tmp := t.TempDir()
+	current := filepath.Join(tmp, "current.yaml")
+	target := filepath.Join(tmp, "target.yaml")
+	for _, path := range []string{current, target} {
+		if err := os.WriteFile(path, []byte("version: \"2\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := newTestServer(t, &config.Config{})
+	srv.SetConfigPath(current)
+	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target"}`))
+	w := httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500, body=%s", w.Code, w.Body.String())
+	}
+	if srv.ConfigPath() != current {
+		t.Fatalf("ConfigPath = %q, want rollback to %q", srv.ConfigPath(), current)
+	}
+	if selected := ReadCurrentEnv(); selected != current {
+		t.Fatalf("selected env = %q, want rollback to %q", selected, current)
+	}
+	if stale, reason := srv.configStale(); stale {
+		t.Fatalf("rolled-back server stayed stale: %s", reason)
 	}
 }
 

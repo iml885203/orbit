@@ -49,20 +49,22 @@ type Server struct {
 	configPath           string
 	baseline             configBaseline
 	pathMu               sync.RWMutex // guards configPath and baseline (the config itself lives in holder)
-	// engineStale marks that an API env switch published a new config while
-	// the orchestrator still tracks the previous env's service set — only a
-	// daemon restart rebuilds it. Sticky until restart by design.
+	// engineStale closes the handoff window after an API env switch publishes
+	// new config but before the replacement daemon rebuilds the service graph.
 	engineStale atomic.Bool
-	startedAt   time.Time
-	stateFile   *StateFile
-	history     *history.Recorder
-	gaps        *gaps.Collector
-	listener    net.Listener
-	httpServer  *http.Server
-	cancelFunc  context.CancelFunc // cancels the app context
-	baseCtx     context.Context
-	version     string
-	tracing     *tracing.Store
+	// restartLauncher crosses the daemon/app package boundary because only the
+	// assembled binary knows how to replace itself on every supported OS.
+	restartLauncher func(string) error
+	startedAt       time.Time
+	stateFile       *StateFile
+	history         *history.Recorder
+	gaps            *gaps.Collector
+	listener        net.Listener
+	httpServer      *http.Server
+	cancelFunc      context.CancelFunc // cancels the app context
+	baseCtx         context.Context
+	version         string
+	tracing         *tracing.Store
 	// staticFS holds the dashboard assets (already rooted at the dist
 	// contents); nil when the build embeds none. See staticHandler.
 	staticFS fs.FS
@@ -102,6 +104,10 @@ func NewServer(app *engine.App, holder *config.Holder, stateFile *StateFile, set
 		staticFS:   ui,
 	}
 	return srv
+}
+
+func (s *Server) SetRestartLauncher(launcher func(string) error) {
+	s.restartLauncher = launcher
 }
 
 // ListenAndServe starts the HTTP server on both unix socket and TCP (dashboard).

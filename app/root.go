@@ -525,6 +525,8 @@ func daemonCmd() *cobra.Command {
 		RunE:  runDaemonRestart,
 	}
 	restartCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
+	restartCmd.Flags().DurationVar(&daemonRestartDelay, "handoff-delay", 0, "delay restart for dashboard handoff")
+	_ = restartCmd.Flags().MarkHidden("handoff-delay")
 
 	statusCmd := &cobra.Command{
 		Use:   "status",

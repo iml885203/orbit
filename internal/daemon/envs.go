@@ -103,6 +103,12 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, APIResponse{Error: "env " + EnvShortName(target) + " is preview-only and cannot be activated"})
 		return
 	}
+	if s.restartLauncher == nil {
+		writeJSON(w, http.StatusServiceUnavailable, APIResponse{Error: "environment switching is unavailable in this Orbit build"})
+		return
+	}
+	previousPath := s.ConfigPath()
+	previousCfg := s.holder.Load()
 
 	// Stop everything before swapping config — including containers.
 	// Two envs may share container names but differ in image / ports /
@@ -143,13 +149,12 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		}
 		tx.Store(finalCfg)
 		tx.SetConfigPath(target)
-		// Readers now see the new env, but the orchestrator's service set and
-		// DAG are startup snapshots — flag it so status points at a restart
-		// (sticky until the daemon actually restarts).
-		tx.MarkEngineStale()
 		return nil
 	})
 	if err != nil {
+		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
+		}
 		if errors.Is(err, errEnvPreviewOnly) {
 			writeJSON(w, http.StatusConflict, APIResponse{Error: "env " + EnvShortName(target) + " is preview-only and cannot be activated"})
 			return
@@ -158,9 +163,25 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := "Env switched to " + EnvShortName(target) + " — API/dashboard now serve it; run `orbit daemon restart` to rebuild the service graph, then `orbit up`."
+	if err := s.restartLauncher(target); err != nil {
+		s.UpdateConfig(func(tx extension.ConfigTx) error {
+			tx.Store(previousCfg)
+			tx.SetConfigPath(previousPath)
+			return nil
+		})
+		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
+		}
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "schedule daemon restart: " + err.Error()})
+		return
+	}
+	// Until the delayed replacement process takes over, every status surface
+	// must admit that the in-memory graph still belongs to the previous env.
+	s.engineStale.Store(true)
+
+	msg := "Switching to " + EnvShortName(target) + " — Orbit is restarting to apply the new environment. Start its resources when the dashboard reconnects."
 	if stopped > 0 {
-		msg = "Stopped " + strconv.Itoa(stopped) + " services from previous env. " + msg
+		msg = "Stopped " + strconv.Itoa(stopped) + " running items from the previous environment. " + msg
 	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: msg})
 }
