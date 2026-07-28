@@ -211,6 +211,40 @@
       .evidence-grid { display: grid; gap: 8px; }
       .evidence-line { padding: 6px 10px; border-radius: 8px; background: #0b1328; }
       .evidence-line .label { color: #93c5fd; }
+      .ops-dashboard {
+        display: grid;
+        gap: 8px;
+      }
+      .ops-kpi-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+      .ops-kpi-card {
+        padding: 8px;
+        border-radius: 8px;
+        background: #0b1328;
+        border: 1px solid #1f2937;
+      }
+      .ops-kpi-card h4 {
+        margin: 0 0 4px;
+        font-size: 13px;
+      }
+      .ops-kpi-card .value {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .ops-kpi-card.ok .value { color: #86efac; }
+      .ops-kpi-card.warn .value { color: #fbbf24; }
+      .ops-kpi-card.error .value { color: #fb7185; }
+      .ops-kpi-card .status {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+      .ops-kpi-rows {
+        display: grid;
+        gap: 6px;
+      }
       .operation-log { display: grid; gap: 8px; max-height: 250px; overflow: auto; }
       .operation-item { padding: 8px; border-radius: 8px; background: #0b1328; border-left: 4px solid #60a5fa; }
       .operation-item.ok { border-left-color: #34d399; }
@@ -362,6 +396,21 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
     <div id="goal-summary-card" class="card">
       <h3>一眼看懂進度</h3>
       <div id="goal-summary" class="summary-grid"></div>
+    </div>
+
+    <div id="ops-dashboard-card" class="card">
+      <h3>營運快覽（無需進入技術細節）</h3>
+      <p class="hint">同一個畫面看懂「本輪是否有可交付結果」與「哪裡最值得修正」。</p>
+      <div id="ops-dashboard" class="ops-dashboard">
+        <div id="ops-kpis" class="ops-kpi-grid">
+          <div class="ops-kpi-card">
+            <h4>載入中</h4>
+            <div class="value">—</div>
+            <div class="status">請先完成一次流程</div>
+          </div>
+        </div>
+        <div id="ops-rows" class="ops-kpi-rows"></div>
+      </div>
     </div>
 
     <div id="value-signal-card" class="card">
@@ -635,6 +684,9 @@ web
       const goalSummaryEl = document.getElementById('goal-summary');
       const proofSummaryEl = document.getElementById('proof-summary');
       const valueSignalEl = document.getElementById('value-signal');
+      const opsDashboardEl = document.getElementById('ops-dashboard');
+      const opsKpisEl = document.getElementById('ops-kpis');
+      const opsRowsEl = document.getElementById('ops-rows');
       const relationCheckEl = document.getElementById('relation-check');
       const acceptanceChecklistEl = document.getElementById('acceptance-checklist');
       const runResultEl = document.getElementById('run-result');
@@ -1481,6 +1533,72 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         ].join('');
       }
 
+      function buildOpsDashboard(ordersPayload, shipmentsPayload, serviceMap) {
+        if (!opsDashboardEl || !opsKpisEl || !opsRowsEl) {
+          return;
+        }
+
+        const map = serviceMap || latestServiceMap || {};
+        const readyServices = Object.values(map).filter((svc) => svc && svc.status === 'ok').length;
+        const totalServices = Object.keys(map).length || BACKEND_SERVICE_COUNT;
+        const allServicesReady = totalServices > 0 && readyServices === totalServices;
+
+        const orders = ordersPayload?.orders || [];
+        const shipments = shipmentsPayload?.shipments || [];
+        const successfulOrders = orders.filter((order) => order.status === 'confirmed');
+        const failedOrders = orders.filter((order) => order.status === 'failed' || order.status === 'cancelled');
+        const pendingOrders = orders.filter((order) => !['confirmed', 'failed', 'cancelled'].includes(order.status));
+
+        const linkedOrderIds = new Set(
+          shipments
+            .filter((shipment) => shipment.order_id)
+            .map((shipment) => shipment.order_id)
+        );
+        const latestOrder = orders[0] || null;
+        const latestIsLinked = latestOrder ? linkedOrderIds.has(latestOrder.id) : false;
+        const latestStatusText = latestOrder
+          ? `#${latestOrder.id} ${latestOrder.customer_name || ''} x${latestOrder.quantity}`
+          : '尚未完成 checkout';
+
+        const rows = [
+          `• 成功訂單：${successfulOrders.length}`,
+          `• 失敗訂單：${failedOrders.length}`,
+          `• 待處理訂單：${pendingOrders.length}`,
+          `• 已出貨：${shipments.length} 筆`,
+          `• 最近一筆關聯：${latestOrder ? `${latestIsLinked ? '已關聯' : '尚未關聯'} (${latestStatusText})` : '無'}`,
+        ];
+
+        const serviceValue = `${readyServices}/${totalServices}`;
+        const allGreen = allServicesReady && successfulOrders.length > 0 && latestIsLinked;
+
+        opsKpisEl.innerHTML = [
+          `<div class=\"ops-kpi-card ${allServicesReady ? 'ok' : 'warn'}\">
+            <h4>服務就緒</h4>
+            <div class=\"value\">${serviceValue}</div>
+            <div class=\"status\">${allServicesReady ? '服務可運轉' : '等待依賴恢復'}</div>
+          </div>`,
+          `<div class=\"ops-kpi-card ${successfulOrders.length ? 'ok' : 'warn'}\">
+            <h4>本輪交易</h4>
+            <div class=\"value\">${successfulOrders.length}</div>
+            <div class=\"status\">成功 / 待確認 / 失敗：${successfulOrders.length} / ${pendingOrders.length} / ${failedOrders.length}</div>
+          </div>`,
+          `<div class=\"ops-kpi-card ${latestIsLinked ? 'ok' : 'warn'}\">
+            <h4>資料關聯</h4>
+            <div class=\"value\">${linkedOrderIds.size}</div>
+            <div class=\"status\">已關聯訂單數（含最近一筆）</div>
+          </div>`,
+          `<div class=\"ops-kpi-card ${allGreen ? 'ok' : 'warn'}\">
+            <h4>可 demo</h4>
+            <div class=\"value\">${allGreen ? 'Yes' : 'No'}</div>
+            <div class=\"status\">服務 + 交易 + 關聯三格</div>
+          </div>`,
+        ].join('');
+
+        opsRowsEl.innerHTML = rows
+          .map((row) => `<div class=\"session-metric-line ${allGreen ? 'ok' : 'warn'}\">${row}</div>`)
+          .join('');
+      }
+
       function buildSignalSnapshot() {
         const map = latestServiceMap || {};
         const entries = Object.entries(map);
@@ -1551,6 +1669,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function buildDemoReport() {
         const snapshot = buildSignalSnapshot();
+        const latestOrder = snapshot.latestOrder;
 
         const orderText = snapshot.latestOrder
           ? `#${snapshot.latestOrder.id} ${snapshot.latestOrder.customer_name || ''} ${snapshot.latestOrder.product_name || ''} x${snapshot.latestOrder.quantity} (status:${snapshot.latestOrder.status})`
@@ -1577,7 +1696,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           `checkout：${checkoutText}`,
           '',
           '建議下一步',
-          `- 服務信號：${allServiceReady ? '可 demo' : '先完成服務就緒'}`,
+          `- 服務信號：${snapshot.allServiceReady ? '可 demo' : '先完成服務就緒'}`,
           `- 交易信號：${latestOrder ? '可進行關聯驗證' : '先完成 checkout'}`,
           `- 關聯信號：${relationSignal === '綠' ? '已可 demo' : '先重跑一次成功流程'}`,
         ];
@@ -2530,6 +2649,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         buildFlowTrace(ordersPayload, shipmentsPayload);
         const latestOrder = ordersPayload?.orders?.[0] || null;
         buildFlowTimeline(latestOrder, shipmentsPayload, checkoutPayload);
+        buildOpsDashboard(ordersPayload, shipmentsPayload, latestServiceMap);
         setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload);
         setAcceptanceChecklist();
         if (latestOrder) {
