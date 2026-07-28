@@ -69,6 +69,16 @@
       .summary-row.warn { color: #fbbf24; }
       .summary-row.error { color: #fb7185; }
       .summary-row .dot { margin-right: 6px; }
+      .evidence-grid { display: grid; gap: 8px; }
+      .evidence-line { padding: 6px 10px; border-radius: 8px; background: #0b1328; }
+      .evidence-line .label { color: #93c5fd; }
+      .scenario-note { color: #94a3b8; font-size: 12px; margin-top: 6px; }
+      .flow-map { background: #0b1328; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; }
+      .flow-map-line { margin: 6px 0; color: #cbd5e1; }
+      .flow-map-status { font-weight: 600; display: inline-block; width: 18px; }
+      .service-status-ok { color: #86efac; }
+      .service-status-warn { color: #fbbf24; }
+      .service-status-bad { color: #fb7185; }
     </style>
   </head>
   <body>
@@ -102,6 +112,17 @@
     <div class="card">
       <h3>一眼看懂進度</h3>
       <div id="goal-summary" class="summary-grid"></div>
+    </div>
+
+    <div class="card">
+        <h3>當前可驗證結果</h3>
+      <div id="proof-summary" class="evidence-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3>流程依賴速覽（不看程式也能懂）</h3>
+      <p class="hint">這張圖只看最新狀態：如果 checkout 有問題，先看左上游服務是否 ready。</p>
+      <div id="flow-map" class="flow-map">載入服務中...</div>
     </div>
 
     <div class="card">
@@ -296,7 +317,9 @@ web
       const goalNextBtn = document.getElementById('goal-next');
       const goalReplayBtn = document.getElementById('goal-replay');
       const goalSummaryEl = document.getElementById('goal-summary');
+      const proofSummaryEl = document.getElementById('proof-summary');
       const runResultEl = document.getElementById('run-result');
+      const flowMapEl = document.getElementById('flow-map');
       const SERVICE_COUNT = 8;
       let cartHasItems = false;
       let scenarioRunning = false;
@@ -342,6 +365,13 @@ web
         'shipping-api': '物流建立 tracking',
         'checkout-api': 'Orchestrator',
       };
+
+      const serviceFlowMap = [
+        { service: 'checkout-api', dependsOn: ['cart-api', 'order-api', 'payment-api', 'shipping-api', 'inventory-api', 'catalog-api', 'customer-api'] },
+        { service: 'order-api', dependsOn: ['catalog-api', 'inventory-api', 'customer-api'] },
+        { service: 'cart-api', dependsOn: ['catalog-api'] },
+        { service: 'shipping-api', dependsOn: ['order-api'] },
+      ];
 
       function serviceLogCommand(service) {
         const services = {
@@ -473,6 +503,35 @@ web
         goalSummaryEl.innerHTML = rows
           .map((row) => `<div class="summary-row ${row.state}"><span class="dot">${row.icon}</span>${row.text}</div>`)
           .join('');
+      }
+
+      function setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload = latestCheckoutPayload) {
+        if (!proofSummaryEl) {
+          return;
+        }
+
+        const latestOrder = ordersPayload?.orders?.[0] || null;
+        const relatedShipment = latestOrder
+          ? (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+
+        const orderText = latestOrder
+          ? `訂單 #${latestOrder.id} | ${latestOrder.customer_name} | ${latestOrder.product_name} x${latestOrder.quantity} | 狀態 ${latestOrder.status}`
+          : '尚未有訂單';
+
+        const shipmentText = relatedShipment
+          ? `出貨 #${relatedShipment.id} | ${relatedShipment.tracking_no} | 狀態 ${relatedShipment.status}`
+          : '尚未有對應出貨';
+
+        const checkoutText = checkoutPayload?.code
+          ? `最後 Checkout：${checkoutPayload.code}${checkoutPayload.occurred_at ? `（${new Date(checkoutPayload.occurred_at).toLocaleTimeString()}）` : ''}`
+          : '尚未發送 checkout';
+
+        proofSummaryEl.innerHTML = [
+          `<div class="evidence-line"><span class="label">訂單：</span>${orderText}</div>`,
+          `<div class="evidence-line"><span class="label">出貨：</span>${shipmentText}</div>`,
+          `<div class="evidence-line"><span class="label">交易結果：</span>${checkoutText}</div>`,
+        ].join('');
       }
 
       function updateGoalState(state) {
@@ -696,6 +755,36 @@ web
           + `</div>`;
       }
 
+      function serviceStatusBadge(status) {
+        if (status === 'ok') {
+          return '<span class="flow-map-status service-status-ok">✅</span>';
+        }
+        if (status === 'degraded') {
+          return '<span class="flow-map-status service-status-warn">⚠️</span>';
+        }
+        if (status === 'unknown') {
+          return '<span class="flow-map-status">—</span>';
+        }
+        return '<span class="flow-map-status service-status-bad">❌</span>';
+      }
+
+      function renderFlowMap(map) {
+        if (!flowMapEl) {
+          return;
+        }
+        const rows = serviceFlowMap.map((item) => {
+          const service = item.service;
+          const status = map?.[service]?.status;
+          const statusText = map?.[service]?.status || 'unknown';
+          const statusClass = statusText === 'ok' ? 'service-status-ok' : statusText === 'degraded' || statusText === 'unknown' ? 'service-status-warn' : 'service-status-bad';
+          const dependencyText = (item.dependsOn || []).length
+            ? ` → ${item.dependsOn.join('、')}`
+            : '';
+          return `<div class="flow-map-line">${serviceStatusBadge(statusText)} <span class="${statusClass}">${service}</span>${dependencyText}</div>`;
+        });
+        flowMapEl.innerHTML = rows.join('');
+      }
+
       function updateActionState(map) {
         const allReady = Object.values(map).every((s) => s && s.status === 'ok');
         const checkoutReady = map['checkout-api']?.status === 'ok';
@@ -835,6 +924,7 @@ web
         const map = Object.fromEntries(responses);
         serviceStatus.innerHTML = responses.map(([_, payload]) => setServiceCard('', payload)).join('');
         updateActionState(map);
+        renderFlowMap(map);
         return map;
       }
 
@@ -939,6 +1029,7 @@ web
         buildFlowTrace(ordersPayload, shipmentsPayload);
         const latestOrder = ordersPayload?.orders?.[0] || null;
         buildFlowTimeline(latestOrder, shipmentsPayload, checkoutPayload);
+        setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload);
         if (latestOrder) {
           updateRunResultForOrder(latestOrder);
         } else {
@@ -1316,6 +1407,19 @@ web
       scenarioSuccessBtn.addEventListener('click', () => runScenario('success'));
       scenarioDeclineBtn.addEventListener('click', () => runScenario('decline'));
       scenarioStockBtn.addEventListener('click', () => runScenario('stock'));
+
+      [scenarioSuccessBtn, scenarioDeclineBtn, scenarioStockBtn].forEach((button) => {
+        const helper = document.createElement('div');
+        helper.className = 'scenario-note';
+        if (button === scenarioSuccessBtn) {
+          helper.textContent = '預估時間：完成時間通常 < 5 秒';
+        } else if (button === scenarioDeclineBtn) {
+          helper.textContent = '預估時間：完成時間通常 < 5 秒（會進入失敗分支）';
+        } else {
+          helper.textContent = '預估時間：完成時間通常 < 8 秒';
+        }
+        button.insertAdjacentElement('afterend', helper);
+      });
 
       document.addEventListener('click', async (event) => {
         const copyButton = event.target.closest('[data-copy-cmd]');

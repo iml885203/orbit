@@ -7,6 +7,7 @@
 - 服務健康檢查能直接反映依賴狀態（catalog / inventory / redis / cart / checkout 等）
 - 透過清楚的「流程狀態」讓新手更容易理解關聯
 - 強調一次只做一件事：先確認就緒、再加入、再 checkout
+- 新增「流程依賴速覽」讓使用者不用看程式也能理解 checkout 鏈路
 
 包含資源：
 
@@ -73,6 +74,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 點 `Checkout`，一次看到 `cart -> payment -> order -> shipping` 的結果鏈。
 - 成功後在「訂單」「出貨」區看到同一筆交易的對應資料。
 - 在「關聯流程時間軸」看到同一次 checkout 的關鍵節點，失敗時可直接看到失敗發生在哪一段（例如付款失敗）。
+- 在「流程依賴速覽」看見上游與下游服務即時狀態，先知道該先補哪個 service。
 
 ### 用戶心理模型設計（不需要背 service）
 
@@ -114,6 +116,8 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 看到成功訊息，訂單與出貨皆新增
    - 在「最近關聯交易」與「關聯流程時間軸」確認同一筆交易是否順利完成
 
+   - 同時可在「當前可驗證結果」確認：最新訂單、對應出貨、最後 checkout 結果是否已出現
+
 5. 失敗測試：
    - payment method 切成 `decline` 再 checkout，看到明確「付款失敗」提示
    - 下超出庫存的數量，看到 `insufficient_stock`
@@ -124,14 +128,20 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 「故障情境對照卡」同步高亮目前常見錯誤碼，並可直接 copy 對應 service log 指令
    - 直接複製貼上到終端執行 `orbit status --json` 與對應 `orbit logs`
 
-7. 查看「執行報告」：
+7. 先看「流程依賴速覽」：
+   - 如果 `checkout-api` 的箭頭節點顯示 ⚠️，表示上游依賴有異常，先從上游 service 開始處理
+   - 從這裡能快速縮小排查範圍，不用每次都先猜錯服務順序
+
+8. 查看「執行報告」：
    - 每次加購物車 / checkout / 情境執行都會留下可讀摘要
    - 你可以直接確認「這筆交易最後是成功還是失敗，以及下一步要做什麼」
 
-8. 直接測試情境（建議第一次使用先做這個）：
+9. 直接測試情境（建議第一次使用先做這個）：
    - 點「情境 A：成功下單」：會自動完成成功購物路徑
    - 點「情境 B：付款失敗」：會示範 `decline` 路徑與錯誤回饋
    - 點「情境 C：庫存不足」：會示範 `insufficient_stock` 的錯誤表現
+
+   - 這些情境都有「預估時間」提示，若超過時間仍未返回結果，先看「診斷命令」。
 
 ### 首次最小心智體驗（建議新手先做）
 
