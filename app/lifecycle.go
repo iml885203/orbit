@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/iml885203/orbit/cli"
@@ -89,12 +90,50 @@ func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
 	return actions
 }
 
-func lifecycleUpSuccessActions() []cli.JSONAction {
+func lifecycleUpSuccessActions(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {
+	if resource := primaryOpenableResource(serviceNames, status); resource != nil {
+		return []cli.JSONAction{{
+			Command:     "orbit open " + resource.Name + " --json",
+			Reason:      fmt.Sprintf("Open %s at %s.", resource.Name, resource.URL),
+			Destructive: false,
+		}}
+	}
 	return []cli.JSONAction{{
 		Command:     "orbit open --json",
 		Reason:      "Get the dashboard URL for the healthy environment.",
 		Destructive: false,
 	}}
+}
+
+func primaryOpenableResource(resourceNames []string, status *daemon.StatusResponse) *daemon.ResourceStatus {
+	if status == nil {
+		return nil
+	}
+	selected := make(map[string]bool, len(resourceNames))
+	for _, name := range resourceNames {
+		selected[name] = true
+	}
+	candidates := make([]*daemon.ResourceStatus, 0)
+	for i := range status.Resources {
+		resource := &status.Resources[i]
+		if len(selected) > 0 && !selected[resource.Name] {
+			continue
+		}
+		if resource.State != "healthy" || resource.URL == "" {
+			continue
+		}
+		candidates = append(candidates, resource)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Kind != candidates[j].Kind {
+			return candidates[i].Kind == daemon.ResourceKindService
+		}
+		return candidates[i].Name < candidates[j].Name
+	})
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates[0]
 }
 
 func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {

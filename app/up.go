@@ -79,7 +79,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	fmt.Println(resp.Message)
 
 	if len(resp.AffectedResources) == 0 {
-		_, _ = cli.Faint.Println("  orbit open                open web UI")
+		printUpSuccessNextStep(nil, nil)
 		return nil
 	}
 	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
@@ -136,7 +136,7 @@ func runUpJSON(args []string) error {
 		RequestedResources: names,
 		InfraOnly:          infraOnly,
 		FinalStatus:        finalStatus,
-	}), lifecycleUpSuccessActions())
+	}), lifecycleUpSuccessActions(names, finalStatus))
 }
 
 // pollLoop runs an onTick callback every 2s with the latest status snapshot
@@ -349,12 +349,23 @@ func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMe
 			}
 			if len(done) == len(watch) {
 				fmt.Println(completionMessage)
-				_, _ = cli.Faint.Println("  orbit open                open web UI")
+				printUpSuccessNextStep(serviceNames, status)
 				return true, nil
 			}
 			return false, nil
 		},
 	})
+}
+
+func printUpSuccessNextStep(resourceNames []string, status *daemon.StatusResponse) {
+	resource := primaryOpenableResource(resourceNames, status)
+	if resource == nil {
+		_, _ = cli.Faint.Println("  Next: orbit open          open dashboard")
+		return
+	}
+	fmt.Printf("  %s: %s\n", resource.Name, resource.URL)
+	_, _ = cli.Faint.Printf("  Next: orbit open %s\n", resource.Name)
+	_, _ = cli.Faint.Println("  Dashboard: orbit open")
 }
 
 func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error {

@@ -54,7 +54,9 @@ The default setup uses the
 [Orbit demo environment](https://github.com/iml885203/orbit-demo): a
 standard-library Python service running on the host with Redis in a container.
 Orbit does not install Python or other project runtimes; `orbit doctor` reports
-what the selected environment expects.
+what the selected environment expects. After `orbit up`, Orbit shows the
+healthy application URL and one command to open it; the dashboard remains a
+secondary option.
 
 macOS and Linux are supported. Windows builds are Beta; see
 [platform support and installation](docs/development.md#platform-support).

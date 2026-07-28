@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -158,7 +159,27 @@ func TestLifecycleRecommendedActionsLeadThroughRecovery(t *testing.T) {
 }
 
 func TestLifecycleUpSuccessActionsHaveOnePrimaryNextStep(t *testing.T) {
-	got := lifecycleUpSuccessActions()
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "aaa-unrelated", Kind: daemon.ResourceKindService, State: "healthy", URL: "http://localhost:2999"},
+		{Name: "redis-ui", Kind: daemon.ResourceKindContainer, State: "healthy", URL: "http://localhost:8081"},
+		{Name: "web", Kind: daemon.ResourceKindService, State: "healthy", URL: "http://localhost:3000"},
+		{Name: "admin", Kind: daemon.ResourceKindService, State: "healthy", URL: "http://localhost:3001"},
+	}}
+	got := lifecycleUpSuccessActions([]string{"redis-ui", "web", "admin"}, status)
+	if len(got) != 1 || got[0].Command != "orbit open admin --json" {
+		t.Fatalf("actions = %+v", got)
+	}
+	if !strings.Contains(got[0].Reason, "http://localhost:3001") {
+		t.Fatalf("reason = %q, want concrete URL", got[0].Reason)
+	}
+}
+
+func TestLifecycleUpSuccessActionsFallBackToDashboard(t *testing.T) {
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "redis", Kind: daemon.ResourceKindContainer, State: "healthy"},
+		{Name: "web", Kind: daemon.ResourceKindService, State: "stopped", URL: "http://localhost:3000"},
+	}}
+	got := lifecycleUpSuccessActions([]string{"redis", "web"}, status)
 	if len(got) != 1 || got[0].Command != "orbit open --json" {
 		t.Fatalf("actions = %+v", got)
 	}

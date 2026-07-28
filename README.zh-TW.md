@@ -47,6 +47,8 @@ orbit init
 預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
 在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。Orbit
 不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
+`orbit up` 完成後，Orbit 會直接顯示 healthy application 的 URL 與唯一開啟
+指令；dashboard 則保留為次要選項。
 
 升級、rollback、移除、手動下載與測試尚未發布的 `main`
 請見[安裝與開發](docs/development.zh-TW.md)。
