@@ -178,7 +178,9 @@ Probe 在 per-service 的 goroutine 跑，context 會在 stop 時被 cancel —�
 `internal/daemon/server.go` 就是那個單一長駐 process，它對外暴露:
 
 - **Unix socket**（`~/.orbit/orbit.sock`）—— CLI ↔ daemon 的 HTTP（REST `/api/...`），走 unix socket
-- **TCP :19800** —— 同一套 HTTP API，加上 Svelte 5 dashboard(透過 `go:embed` 內嵌)、SSE log/status stream
+- **Loopback TCP :19800** —— 同一套 HTTP API，加上 Svelte 5 dashboard（透過
+  `go:embed` 內嵌）與 SSE stream。Browser-facing control surface 會驗證
+  loopback Host，且 mutation 必須是 same-origin。
 
 所有 HTTP handler 依關注點分散在 `internal/daemon/*.go`:
 

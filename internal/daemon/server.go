@@ -127,7 +127,10 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 		return fmt.Errorf("listening on %s: %w", sockPath, err)
 	}
 	s.listener = unixLn
-	_ = os.Chmod(sockPath, 0660)
+	if err := os.Chmod(sockPath, 0600); err != nil {
+		_ = unixLn.Close()
+		return fmt.Errorf("restricting daemon socket permissions: %w", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
@@ -171,7 +174,9 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	registerTracingHandlers(mux, s)
 	mux.Handle("/", s.staticHandler())
 
-	s.httpServer = &http.Server{Handler: HistoryMiddleware(s.history, s.gaps)(mux)}
+	s.httpServer = &http.Server{
+		Handler: dashboardAccessMiddleware(HistoryMiddleware(s.history, s.gaps)(mux)),
+	}
 
 	slog.Info("listening", "component", "daemon", "socket", sockPath)
 

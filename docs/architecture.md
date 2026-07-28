@@ -179,7 +179,9 @@ Probes run in a per-service goroutine with a context cancelled at stop — see `
 `internal/daemon/server.go` is the single long-running process. It exposes:
 
 - **Unix socket** (`~/.orbit/orbit.sock`) — CLI ↔ daemon HTTP (REST `/api/...`) over the unix socket
-- **TCP :19800** — same HTTP API plus the Svelte 5 dashboard (embedded via `go:embed`), SSE log/status streams
+- **Loopback TCP :19800** — same HTTP API plus the Svelte 5 dashboard
+  (embedded via `go:embed`) and SSE streams. Loopback Host validation and
+  same-origin mutation checks protect the browser-facing control surface.
 
 All HTTP handlers live in `internal/daemon/*.go` by concern:
 
