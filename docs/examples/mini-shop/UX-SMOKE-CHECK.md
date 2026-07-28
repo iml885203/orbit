@@ -44,7 +44,7 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 
 各至少各做一次（各 2 分鐘）：
 
-- 付款失敗（情境 B / decling）
+- 付款失敗（情境 B / `decline`）
 - 庫存不足（情境 C）
 
 驗收條件：
