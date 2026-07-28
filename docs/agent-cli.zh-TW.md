@@ -162,12 +162,19 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit settings set <key> <value> --json` | `settings_set` |
+| `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
 對 `switch` 而言，`daemon_running_before` 與 `daemon_running_after` 描述
 daemon transition。新 env 缺少必要 runtime 或 package installation 時，
 `prerequisites_ready` 會是 false；`prerequisites` 使用與 Doctor 相同的 checks，
 而 Orbit 能判斷修復方式時，`recommended_actions` 會包含可直接執行的指令。
+
+Host service path 尚未解析或不存在時，會使用穩定的
+`service_working_directory_missing` error code。`switch` 會讓 daemon 保持
+停止，Doctor 或 `up` 會回傳精確的 workspace 設定或 config 修改 action。
+執行該 action 後再重試；此時 `up` 尚未啟動任何相依資源。
 
 當先前已有 daemon 在跑時，daemon stop/restart payload 可能包含 `stop_method`。穩定值為 `graceful`、`terminated`、`killed`。
 

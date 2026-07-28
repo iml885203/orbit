@@ -206,6 +206,27 @@ func TestLogsUnavailableJSONUsesTargetedRecoveryOnly(t *testing.T) {
 	}
 }
 
+func TestWorkingDirectoryJSONUsesExactRecoveryOnly(t *testing.T) {
+	var buf bytes.Buffer
+	err := cli.WithJSONReplacementActions(
+		cli.NewServiceWorkingDirectoryError("working directory not found"),
+		[]cli.JSONAction{{
+			Command: `orbit settings set workspace-root "$PWD" --json`,
+			Reason:  "Set the workspace root.",
+		}},
+	)
+	if err := cli.WriteJSONError(&buf, "orbit up --json", err); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "service_working_directory_missing" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != `orbit settings set workspace-root "$PWD" --json` {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestPrintExecutionErrorSkipsAlreadyRenderedJSONError(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })

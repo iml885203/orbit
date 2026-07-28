@@ -244,7 +244,7 @@ Service 是 Orbit 拉起、監看、可重啟的 dev process。
 ```yaml
 services:
   my-api:
-    type: dotnet | node | shell
+    type: python                   # dotnet 有特殊行為；其他值是 runtime label
     kind: backend               # frontend | backend | infra — graph 節點色調
     path: ./src/MyApi/MyApi.csproj
     command: pnpm dev           # 非 dotnet type：在 `path` 下執行的指令
@@ -400,13 +400,9 @@ env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專
 }
 ```
 
-`workspace_root` 是 first-class 設定（`orbit init` 會寫入，也可用 `orbit settings set workspace-root <path>` 修改），會以 `WORKSPACE_ROOT` 替換變數輸出給 env config。其他變數放在 `user_env` 底下。
+`workspace_root` 是 first-class 設定（`orbit init` 會寫入，也可用 `orbit settings set workspace-root <path>` 修改），可在 daemon 尚未啟動時設定，並會以 `WORKSPACE_ROOT` 輸出給 env config。其他變數放在 `user_env` 底下。
 
-重啟 daemon 讓變更生效：
-
-```bash
-orbit daemon restart
-```
+選擇環境後，`orbit doctor` 會驗證解析完成的 service paths。`orbit up` 也會在啟動 containers 或 host processes 前執行相同檢查，因此錯誤的 workspace 不會留下只啟動一半的環境。
 
 ## 變數替換
 

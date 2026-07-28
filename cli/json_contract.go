@@ -266,6 +266,13 @@ func classify(err error) JSONError {
 			Hint:      "Follow the recommended recovery action; there is no process output to inspect yet.",
 			Retryable: true,
 		}
+	case errors.Is(err, ErrServiceWorkingDir):
+		return JSONError{
+			Code:      "service_working_directory_missing",
+			Message:   msg,
+			Hint:      "Set the workspace root or correct the service path before starting resources.",
+			Retryable: true,
+		}
 	case errors.Is(err, ErrEnvRepoAccess):
 		return JSONError{
 			Code:        "env_repo_access",
@@ -365,6 +372,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		return []JSONAction{StatusAction()}
 	}
 	if err.Code == "logs_unavailable" {
+		return nil
+	}
+	if err.Code == "service_working_directory_missing" {
 		return nil
 	}
 	if err.Code == "env_mismatch" {

@@ -42,7 +42,7 @@ containers:
       path: /
       port: 28080
 
-# Next step: add your own services (dotnet / node / shell) alongside the
+# Next step: add your own services (using any locally installed runtime) alongside the
 # containers — see the minimal example in docs/team-adoption.md. Services
-# get connection info injected automatically (REDIS_HOST, SQL_SERVER_CONNECTION,
-# …) based on the container images they depend on.
+# get dependency connection info injected automatically based on the
+# container images they depend on.

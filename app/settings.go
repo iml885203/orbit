@@ -3,8 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/spf13/cobra"
 )
@@ -72,30 +75,72 @@ func runSettingsSet(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if jsonKey == "workspace_root" {
+		args[1], err = normalizeWorkspaceRoot(args[1])
+		if err != nil {
+			return err
+		}
+	}
 	value, err := coerceSettingsValue(jsonKey, args[1])
 	if err != nil {
 		return err
 	}
-	client, err := daemon.Dial(daemon.DefaultSocketPath())
-	if err != nil {
-		return err
+
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	if client.Health() == nil {
+		if err := client.UpdateSettings(map[string]any{jsonKey: value}); err != nil {
+			return err
+		}
+	} else {
+		if jsonKey != "workspace_root" {
+			return daemon.ErrDaemonUnreachable
+		}
+		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+		if err := settings.Set(jsonKey, value.(string)); err != nil {
+			return fmt.Errorf("saving %s: %w", args[0], err)
+		}
 	}
-	patch := map[string]any{jsonKey: value}
-	if err := client.UpdateSettings(patch); err != nil {
-		return err
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{
+			"operation": "settings_set",
+			"key":       args[0],
+			"value":     value,
+		}, []cli.JSONAction{cli.DoctorAction()})
 	}
 	fmt.Printf("✓ %s = %v\n", args[0], value)
 	return nil
 }
 
-func runSettingsList(_ *cobra.Command, _ []string) error {
-	client, err := daemon.Dial(daemon.DefaultSocketPath())
+func normalizeWorkspaceRoot(raw string) (string, error) {
+	path, err := filepath.Abs(raw)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("resolve workspace root %q: %w", raw, err)
 	}
-	current, err := client.GetSettings()
+	info, err := os.Stat(path)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("workspace root %s is not available: %w", path, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace root %s is not a directory", path)
+	}
+	return filepath.Clean(path), nil
+}
+
+func runSettingsList(_ *cobra.Command, _ []string) error {
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	var current map[string]any
+	if client.Health() == nil {
+		var err error
+		current, err = client.GetSettings()
+		if err != nil {
+			return err
+		}
+	} else {
+		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+		current = map[string]any{
+			"workspace_root": settings.WorkspaceRoot,
+			"show_history":   settings.ShowHistory,
+		}
 	}
 
 	cliKeys := make([]string, 0, len(settingsKeyMap))
@@ -103,6 +148,12 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		cliKeys = append(cliKeys, k)
 	}
 	sort.Strings(cliKeys)
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{
+			"operation": "settings_list",
+			"settings":  current,
+		}, []cli.JSONAction{})
+	}
 
 	for _, cliKey := range cliKeys {
 		jsonKey := settingsKeyMap[cliKey].jsonKey

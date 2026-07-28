@@ -1715,7 +1715,6 @@ services:
 		"Node.js",
 		"web requires 999 (.nvmrc)",
 		"Select the project version of Node.js",
-		"Next: orbit doctor",
 	} {
 		if !bytes.Contains(human, []byte(evidence)) {
 			t.Fatalf("human switch missing %q:\n%s", evidence, human)

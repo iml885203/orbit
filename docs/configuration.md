@@ -248,7 +248,7 @@ A service is a dev process Orbit spawns, watches, and can restart.
 ```yaml
 services:
   my-api:
-    type: dotnet | node | shell
+    type: python                   # dotnet is special; otherwise use a runtime label
     kind: backend               # frontend | backend | infra — graph node tint
     path: ./src/MyApi/MyApi.csproj
     command: pnpm dev           # non-dotnet types: the command to run in `path`
@@ -412,13 +412,9 @@ Env configs reference project directories via environment variables (e.g. `WORKS
 }
 ```
 
-`workspace_root` is a first-class setting (set during `orbit init`, or via `orbit settings set workspace-root <path>`). It is exported to env configs as `WORKSPACE_ROOT`. Any other variable goes under `user_env`.
+`workspace_root` is a first-class setting (set during `orbit init`, or via `orbit settings set workspace-root <path>`). It can be set before the daemon starts and is exported to env configs as `WORKSPACE_ROOT`. Any other variable goes under `user_env`.
 
-Restart the daemon to pick up changes:
-
-```bash
-orbit daemon restart
-```
+After selecting an environment, `orbit doctor` validates resolved service paths. `orbit up` performs the same check before starting containers or host processes, so an invalid workspace cannot leave a partially started environment.
 
 ## Variable substitution
 

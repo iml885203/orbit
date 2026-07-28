@@ -4,20 +4,37 @@
 
 Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 services，`orbit up` 會依照相依順序啟動，並提供 health checks、logs、tracing，以及位於 <http://localhost:19800> 的 dashboard。
 
-這個單一 repo 同時包含中性 engine、CLI、daemon、UI，以及透過明確 extension seams 接入的 ExampleTeam 功能集。其他團隊一般直接使用已發行的 Orbit binary，只在獨立 env repo 維護自己的環境設定。
+這個 repo 包含中性 engine、CLI、daemon、UI，以及透過明確 extension seams 接入的選用功能 packages。團隊一般直接使用已發行的 Orbit binary，只在獨立 env repo 維護自己的環境設定。
 
 ## 純設定採用
 
 1. 建立一個含 `envs/` 目錄與 env YAML 檔的 git repo。[examples/quickstart/dev.yaml](examples/quickstart/dev.yaml) 可作為最小起點。
-2. 將 Orbit 指向該 repo 並選擇環境：
+2. 將 Orbit 指向該 repo、告訴 Orbit 專案 checkout 的位置，然後選擇環境：
 
    ```sh
    orbit env sync --url <your-env-repo-git-url>
+   cd /path/to/your/workspace
+   orbit settings set workspace-root "$PWD"
    orbit switch dev
+   orbit doctor
    orbit up
    ```
 
-   `orbit init` 會以互動方式完成相同設定。開發期間可用 `orbit env sync --path /path/to/your-env-repo` 指向本地 checkout。若目前使用中的環境有變更，sync 會詢問是否更新目前環境，並且只恢復原先運行中的資源。只有必須延後中斷時才需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
+   workspace 設定可在 daemon 尚未啟動時寫入。`orbit doctor` 會檢查每個解析後的 service 目錄，並在 `orbit up` 啟動任何相依資源前只給一個修正指令。只有 containers 的環境可省略 workspace 步驟。
+
+   Host service 可使用任何本機已安裝的 runtime；只有 `dotnet` 具有特殊的 build 行為：
+
+   ```yaml
+   services:
+     api:
+       type: python
+       path: ${WORKSPACE_ROOT}/api
+       command: python3 -m http.server 8080
+       ports:
+         http: 8080
+   ```
+
+   `orbit init` 會以互動方式完成 repository 設定。開發期間可用 `orbit env sync --path /path/to/your-env-repo` 指向本地 checkout。若目前使用中的環境有變更，sync 會詢問是否更新目前環境，並且只恢復原先運行中的資源。只有必須延後中斷時才需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
 
 已發行 binary 會提供 distribution defaults。若自訂 build 沒有這些預設，`orbit env sync` 可設定 `env_repo_url` 或 `ORBIT_ENV_REPO_URL`，`orbit update` 可設定 `ORBIT_INSTALL_URL`。其餘 services、containers、graph、logs、health checks、doctor 與 dashboard 只需 env 設定即可運作。Tracing 預設開啟；env 可用明確的 `tracing.enabled: false` opt out。
 

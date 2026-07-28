@@ -2,9 +2,11 @@ package app
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 )
 
 func TestValidateUpSelectionRejectsIgnoredSelectors(t *testing.T) {
@@ -87,5 +89,39 @@ func TestUpCompletionMessageDescribesSelectionIntent(t *testing.T) {
 				t.Fatalf("message = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSelectedUpServicesIncludesHostDependencies(t *testing.T) {
+	originalInfraOnly, originalGroups := infraOnly, groups
+	t.Cleanup(func() {
+		infraOnly = originalInfraOnly
+		groups = originalGroups
+	})
+	infraOnly = false
+	groups = nil
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api":    {DependsOn: []string{"worker"}},
+		"worker": {},
+		"web":    {},
+	}}
+
+	if got, want := selectedUpServices(cfg, []string{"api"}), []string{"api", "worker"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("selected services = %v, want %v", got, want)
+	}
+}
+
+func TestSelectedUpServicesSkipsHostPathsForInfraOnly(t *testing.T) {
+	originalInfraOnly, originalGroups := infraOnly, groups
+	t.Cleanup(func() {
+		infraOnly = originalInfraOnly
+		groups = originalGroups
+	})
+	infraOnly = true
+	groups = nil
+	cfg := &config.Config{Services: map[string]*config.Service{"api": {}}}
+
+	if got := selectedUpServices(cfg, nil); got == nil || len(got) != 0 {
+		t.Fatalf("selected services = %#v, want a deliberate empty selection", got)
 	}
 }

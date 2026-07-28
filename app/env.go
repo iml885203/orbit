@@ -275,11 +275,16 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	if !cli.JSONOutput {
 		fmt.Printf("→ switching to %s\n", daemonsrv.EnvShortName(abs))
 	}
-	if err := ensureDaemonStarted(abs); err != nil {
-		return err
+	if prerequisitesReady {
+		if err := ensureDaemonStarted(abs); err != nil {
+			return err
+		}
 	}
 	if cli.JSONOutput {
 		pid, running := daemon.IsDaemonRunning()
+		if !prerequisitesReady {
+			daemonAction = "deferred"
+		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildSwitchJSONData(switchJSONOptions{
 			SelectedEnv:          abs,
 			DaemonAction:         daemonAction,
@@ -296,8 +301,6 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	fmt.Printf("✓ switched to %s\n", daemonsrv.EnvShortName(abs))
 	if prerequisitesReady {
 		fmt.Println("  Next: orbit up")
-	} else {
-		fmt.Println("  Next: orbit doctor")
 	}
 	return nil
 }

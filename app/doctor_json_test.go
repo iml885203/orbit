@@ -1,12 +1,14 @@
 package app
 
 import (
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
@@ -267,6 +269,18 @@ func TestDoctorFailureIncludesAllFailedCheckNames(t *testing.T) {
 	}
 	if got := err.Error(); got != "doctor found 2 failed check(s): Environment, Docker" {
 		t.Fatalf("error = %q", got)
+	}
+}
+
+func TestDoctorFailureClassifiesMissingWorkingDirectory(t *testing.T) {
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
+		Name:    "Working directory (api)",
+		Status:  daemon.CheckFail,
+		Message: "working directory not found",
+	}}}
+
+	if err := doctorFailure(resp, false); !errors.Is(err, cli.ErrServiceWorkingDir) {
+		t.Fatalf("error = %v, want service working directory classification", err)
 	}
 }
 

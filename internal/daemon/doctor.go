@@ -111,20 +111,86 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 // Python-only project never has to understand Node, .NET, or SQL tooling.
 func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	tools := requiredHostTools(cfg)
-	results := make([]DoctorCheck, len(tools), len(tools)+1)
+	results := ServiceWorkingDirectoryChecks(cfg, nil)
+	toolOffset := len(results)
+	results = append(results, make([]DoctorCheck, len(tools))...)
 
 	var wg sync.WaitGroup
 	for i, tool := range tools {
 		wg.Add(1)
 		go func(i int, tool HostToolCheck) {
 			defer wg.Done()
-			results[i] = checkHostTool(tool)
+			results[toolOffset+i] = checkHostTool(tool)
 		}(i, tool)
 	}
 	wg.Wait()
 
 	results = append(results, projectDependencyChecks(cfg)...)
 	return results
+}
+
+func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []DoctorCheck {
+	if cfg == nil {
+		return nil
+	}
+	filterEnabled := selected != nil
+	filter := make(map[string]bool, len(selected))
+	for _, name := range selected {
+		filter[name] = true
+	}
+	names := make([]string, 0, len(cfg.Services))
+	for name := range cfg.Services {
+		if !filterEnabled || filter[name] {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	var checks []DoctorCheck
+	workspaceRoot := WorkspaceRootFromEnv()
+	for _, name := range names {
+		service := cfg.Services[name]
+		if service == nil {
+			continue
+		}
+		path := service.Path
+		unresolved := strings.Contains(path, "${")
+		info, err := os.Stat(path)
+		valid := err == nil
+		if service.Type != "dotnet" {
+			valid = valid && info.IsDir()
+		}
+		if valid && !unresolved {
+			continue
+		}
+		check := DoctorCheck{
+			Name:   "Working directory (" + name + ")",
+			Status: CheckFail,
+		}
+		if unresolved {
+			check.Message = "workspace variable is unresolved in " + path
+		} else if err != nil {
+			check.Message = "working directory not found: " + path
+		} else {
+			check.Message = "working directory is not a directory: " + path
+		}
+		if unresolved || pathUsesWorkspaceRoot(path, workspaceRoot) {
+			check.Hint = `run: orbit settings set workspace-root "$PWD"`
+		} else {
+			check.Hint = "Update services." + name + ".path to an existing project directory"
+		}
+		checks = append(checks, check)
+	}
+	return checks
+}
+
+func pathUsesWorkspaceRoot(path, root string) bool {
+	if root == "" {
+		return false
+	}
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(root)
+	return cleanPath == cleanRoot || strings.HasPrefix(cleanPath, cleanRoot+string(filepath.Separator))
 }
 
 func projectDependencyChecks(cfg *config.Config) []DoctorCheck {

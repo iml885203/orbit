@@ -116,6 +116,11 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 			RestartJSONCommand: orbitRestartCommand(true),
 		}
 	}
+	for _, check := range resp.Checks {
+		if check.Status == daemon.CheckFail && strings.HasPrefix(check.Name, "Working directory (") {
+			return cli.NewServiceWorkingDirectoryError(check.Message)
+		}
+	}
 	return cli.NewChecksFailedError(fmt.Sprintf("doctor found %d failed check(s): %s", len(failed), strings.Join(failed, ", ")))
 }
 

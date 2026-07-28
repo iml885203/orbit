@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/preflight"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -53,7 +56,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
-	if err := preflightOrAbort(explicitConfig); err != nil {
+	if err := preflightOrAbort(explicitConfig, args); err != nil {
 		return err
 	}
 
@@ -594,26 +597,81 @@ func isPostStopState(state string) bool {
 
 // preflightOrAbort runs readiness checks and returns a user-friendly error if
 // any block start-up.
-func preflightOrAbort(explicitConfig bool) error {
-	if explicitConfig {
-		return nil
-	}
-	checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
-	var failures []preflight.Check
-	for _, c := range checks {
-		if !c.OK {
-			failures = append(failures, c)
+func preflightOrAbort(explicitConfig bool, resourceNames []string) error {
+	if !explicitConfig {
+		checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
+		var failures []preflight.Check
+		for _, c := range checks {
+			if !c.OK {
+				failures = append(failures, c)
+			}
+		}
+		if len(failures) > 0 {
+			var msg string
+			for _, c := range failures {
+				msg += fmt.Sprintf("  %s %s: %s\n", cli.Red.Sprint("✗"), c.Name, c.Message)
+				if c.Fix != "" {
+					msg += fmt.Sprintf("    → %s\n", c.Fix)
+				}
+			}
+			return fmt.Errorf("environment not ready:\n%s", msg)
 		}
 	}
-	if len(failures) == 0 {
+
+	cfg, err := config.Load(configFile)
+	if err != nil {
+		return cli.NewInvalidEnvironmentError("active environment is invalid: " + err.Error())
+	}
+	pathChecks := daemonsrv.ServiceWorkingDirectoryChecks(cfg, selectedUpServices(cfg, resourceNames))
+	if len(pathChecks) == 0 {
 		return nil
 	}
-	var msg string
-	for _, c := range failures {
-		msg += fmt.Sprintf("  %s %s: %s\n", cli.Red.Sprint("✗"), c.Name, c.Message)
-		if c.Fix != "" {
-			msg += fmt.Sprintf("    → %s\n", c.Fix)
+	var messages []string
+	for _, check := range pathChecks {
+		messages = append(messages, check.Name+": "+check.Message)
+	}
+	failure := cli.NewServiceWorkingDirectoryError(strings.Join(messages, "\n  "))
+	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: pathChecks})
+	return cli.WithJSONReplacementActions(failure, actions)
+}
+
+func selectedUpServices(cfg *config.Config, resourceNames []string) []string {
+	if cfg == nil || infraOnly {
+		return []string{}
+	}
+	selected := make(map[string]bool)
+	var visit func(string)
+	visit = func(name string) {
+		if selected[name] {
+			return
+		}
+		if _, ok := cfg.Services[name]; ok {
+			selected[name] = true
+		}
+		for _, dependency := range cfg.GetDependencies(name) {
+			visit(dependency)
 		}
 	}
-	return fmt.Errorf("environment not ready:\n%s", msg)
+	switch {
+	case len(groups) > 0:
+		for _, groupName := range groups {
+			for _, name := range cfg.Groups[groupName].Services {
+				visit(name)
+			}
+		}
+	case len(resourceNames) > 0:
+		for _, name := range resourceNames {
+			visit(name)
+		}
+	default:
+		for name := range cfg.Services {
+			selected[name] = true
+		}
+	}
+	names := make([]string, 0, len(selected))
+	for name := range selected {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

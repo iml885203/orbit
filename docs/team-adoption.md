@@ -4,20 +4,37 @@
 
 Orbit is a local dev orchestrator: one YAML env file describes your containers and services, and `orbit up` starts them in dependency order with health checks, logs, tracing, and a dashboard at <http://localhost:19800>.
 
-This single repo contains the neutral engine, CLI, daemon, and UI together with the ExampleTeam feature set behind explicit extension seams. Other teams normally consume the released Orbit binary and keep only their environment configuration in a separate env repo.
+This repo contains the neutral engine, CLI, daemon, and UI, plus optional feature packages behind explicit extension seams. Teams normally consume the released Orbit binary and keep only their environment configuration in a separate env repo.
 
 ## Config-only adoption
 
 1. Create a git repo with an `envs/` directory of env YAML files. [examples/quickstart/dev.yaml](examples/quickstart/dev.yaml) is a minimal starting point.
-2. Point Orbit at it and select an environment:
+2. Point Orbit at it, tell Orbit where your project checkouts live, and select an environment:
 
    ```sh
    orbit env sync --url <your-env-repo-git-url>
+   cd /path/to/your/workspace
+   orbit settings set workspace-root "$PWD"
    orbit switch dev
+   orbit doctor
    orbit up
    ```
 
-   `orbit init` walks through the same setup interactively. During development, `orbit env sync --path /path/to/your-env-repo` can use a local checkout. If the active environment changed, sync offers to make it current and restores only the resources that were running. Use `--no-apply` only when an interruption must be deferred; Orbit prints the exact command to finish later.
+   The workspace setting can be written before the daemon is running. `orbit doctor` checks every resolved service directory and gives one corrective command before `orbit up` starts any dependency. A containers-only environment can omit the workspace step.
+
+   A host service can use any locally installed runtime; only `dotnet` has special build behavior:
+
+   ```yaml
+   services:
+     api:
+       type: python
+       path: ${WORKSPACE_ROOT}/api
+       command: python3 -m http.server 8080
+       ports:
+         http: 8080
+   ```
+
+   `orbit init` walks through repository setup interactively. During development, `orbit env sync --path /path/to/your-env-repo` can use a local checkout. If the active environment changed, sync offers to make it current and restores only the resources that were running. Use `--no-apply` only when an interruption must be deferred; Orbit prints the exact command to finish later.
 
 The released binary supplies its distribution defaults. A custom build without those defaults can set `env_repo_url` or `ORBIT_ENV_REPO_URL` for `orbit env sync`, and `ORBIT_INSTALL_URL` for `orbit update`. Services, containers, graph, logs, health checks, doctor, and the dashboard otherwise need only the env configuration. Tracing is on by default; an env opts out with an explicit `tracing.enabled: false`.
 

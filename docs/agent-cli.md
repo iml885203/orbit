@@ -172,6 +172,8 @@ Stable `data.operation` values for converted control commands:
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit settings set <key> <value> --json` | `settings_set` |
+| `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
 For `switch`, `daemon_running_before` and `daemon_running_after` describe the
@@ -179,6 +181,11 @@ daemon transition. `prerequisites_ready` is false when the newly selected env
 is missing a required runtime or package installation; `prerequisites` carries
 the same checks as Doctor, and `recommended_actions` includes exact runnable
 remedies when Orbit can determine one.
+
+An unresolved or missing host-service path uses the stable
+`service_working_directory_missing` error code. `switch` leaves the daemon
+stopped, and Doctor or `up` returns the exact workspace-setting or config-edit
+action. Execute that action before retrying; `up` has not started dependencies.
 
 Daemon stop/restart payloads may include `stop_method` when a prior daemon was
 running. Stable values are `graceful`, `terminated`, and `killed`.
