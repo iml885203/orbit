@@ -39,9 +39,10 @@ type environmentApplyJSONData struct {
 
 func envApplyCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "apply",
-		Short: "Apply environment changes without losing running resources",
-		RunE:  runEnvApply,
+		Use:    "apply",
+		Short:  "Apply a previously deferred environment update",
+		Hidden: true,
+		RunE:   runEnvApply,
 	}
 }
 

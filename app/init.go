@@ -263,13 +263,13 @@ func runInit(_ *cobra.Command, _ []string) error {
 				return fmt.Errorf("--env %q not found in %s (available: %s)",
 					initEnvName, envsDir, strings.Join(envFiles, ", "))
 			}
-			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), daemonsrv.EnvShortName(chosen))
 		case initYes || len(envFiles) == 1:
 			chosen = pickDefault(envFiles)
-			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), daemonsrv.EnvShortName(chosen))
 		default:
 			for i, f := range envFiles {
-				output.printf("  %d) %s\n", i+1, f)
+				output.printf("  %d) %s\n", i+1, daemonsrv.EnvShortName(f))
 			}
 			input := prompt("  Select environment [1]: ")
 			idx := 0
@@ -279,7 +279,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 				}
 			}
 			chosen = envFiles[idx]
-			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), chosen)
+			output.printf("  %s Environment: %s\n", cli.Green.Sprint("✓"), daemonsrv.EnvShortName(chosen))
 		}
 
 		absPath := filepath.Join(envsDir, chosen)
@@ -287,7 +287,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("writing env: %w", err)
 		}
 		configFile = absPath
-		result.ActiveEnv = chosen
+		result.ActiveEnv = daemonsrv.EnvShortName(chosen)
 		result.ConfigPath = absPath
 	}
 

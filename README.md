@@ -66,7 +66,6 @@ orbit up                     # start services and their dependencies
 orbit status --json          # inspect stable machine-readable state
 orbit logs demo-api -f       # stream the default demo service
 orbit env sync               # refresh and apply shared environment files
-orbit env apply              # apply a previously deferred update
 orbit switch quickstart      # select the default demo environment
 orbit doctor --json          # diagnose the local setup
 orbit down                   # stop the environment
@@ -82,10 +81,11 @@ For a team environment, replace `demo-api` and `quickstart` with names shown by
 version or project-package setup required before `orbit up`, using the
 project's version files when present.
 
-When the active environment changes during `orbit env sync`, Orbit offers to
-apply it and restores the resources that were running beforehand. Use
-`--no-apply` to download now and run `orbit env apply` later. Resources that
-were already stopped stay stopped.
+`orbit env sync` refreshes shared configuration and, when the active
+environment changed, offers to make it current while restoring the resources
+that were running. Resources that were already stopped stay stopped. For the
+exceptional case where an interruption must be deferred, use `--no-apply`;
+Orbit then prints the exact command to finish later.
 
 For configured infrastructure containers, `orbit query redis`,
 `orbit query mongo`, and `orbit query postgres` open the container's native

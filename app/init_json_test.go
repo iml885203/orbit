@@ -68,6 +68,13 @@ func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
 	if envelope.Command == "" || envelope.Data == nil {
 		t.Fatalf("incomplete envelope: %+v", envelope)
 	}
+	data, ok := envelope.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data = %T, want object", envelope.Data)
+	}
+	if data["active_env"] != "quickstart" {
+		t.Fatalf("active_env = %q, want logical name without file extension", data["active_env"])
+	}
 }
 
 func TestInitJSONRequiresNonInteractiveMode(t *testing.T) {

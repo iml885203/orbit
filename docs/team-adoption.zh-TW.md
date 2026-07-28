@@ -17,7 +17,7 @@ Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 servic
    orbit up
    ```
 
-   `orbit init` 會以互動方式完成相同設定。開發期間可用 `orbit env sync --path /path/to/your-env-repo` 指向本地 checkout。若目前使用中的環境有變更，sync 會詢問是否套用，並且只恢復原先運行中的資源。可用 `--no-apply` 先下載，準備好後再執行 `orbit env apply`。
+   `orbit init` 會以互動方式完成相同設定。開發期間可用 `orbit env sync --path /path/to/your-env-repo` 指向本地 checkout。若目前使用中的環境有變更，sync 會詢問是否更新目前環境，並且只恢復原先運行中的資源。只有必須延後中斷時才需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
 
 已發行 binary 會提供 distribution defaults。若自訂 build 沒有這些預設，`orbit env sync` 可設定 `env_repo_url` 或 `ORBIT_ENV_REPO_URL`，`orbit update` 可設定 `ORBIT_INSTALL_URL`。其餘 services、containers、graph、logs、health checks、doctor 與 dashboard 只需 env 設定即可運作。Tracing 預設開啟；env 可用明確的 `tracing.enabled: false` opt out。
 

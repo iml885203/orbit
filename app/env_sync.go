@@ -28,28 +28,26 @@ var (
 func envSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Sync env configs from the remote env repo",
-		Long: `Clone the configured env repo and copy its envs/ tree into ~/.orbit/envs/.
+		Short: "Refresh shared environment configuration",
+		Long: `Refresh shared environment configuration and make active updates current.
 
-The repo URL is resolved in order: --url flag, settings key "env_repo_url",
-ORBIT_ENV_REPO_URL env var, then the build's distribution default (if the
-binary ships one). Use --url to override and persist a new URL; use --dry
-to preview without writing.
+If the running environment changed, Orbit offers to apply the update and
+restores the resources that were running. Use --yes to apply non-interactively,
+or --no-apply when an interruption must be deferred.
 
-The URL accepts any git-clonable form, including a local path via the
-file:// scheme (e.g. file:///Users/me/dev/orbit). Note that file:// still
-performs a git clone, so only committed changes are synced.
+By default, Orbit uses the source selected during init. Maintainers can use
+--url to select and remember another Git repository, or --path to test the
+envs/ directory in a local checkout, including uncommitted changes. A file://
+URL still performs a Git clone and therefore includes only committed changes.
 
-To sync from a local working tree (including uncommitted changes), use
---path pointing at a directory that contains an envs/ subdirectory.
-This bypasses git entirely and copies files directly from disk.`,
+Use --dry to preview changed files without downloading or applying them.`,
 		RunE: runEnvSync,
 	}
-	cmd.Flags().StringVar(&envSyncURL, "url", "", "git URL of the env repo (overrides and persists)")
-	cmd.Flags().StringVar(&envSyncPath, "path", "", "local directory containing envs/ (bypasses git; not persisted)")
-	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview without writing")
+	cmd.Flags().StringVar(&envSyncURL, "url", "", "use and remember another environment Git repository")
+	cmd.Flags().StringVar(&envSyncPath, "path", "", "use a local checkout containing envs/ without remembering it")
+	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview updates without downloading or applying")
 	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "apply updates without prompting")
-	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download updates without applying them")
+	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download now and defer applying active updates")
 	cmd.Flags().BoolVar(&envSyncNoApply, "no-restart", false, "deprecated alias for --no-apply")
 	_ = cmd.Flags().MarkHidden("no-restart")
 	return cmd
@@ -65,7 +63,7 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 	if envSyncPath != "" {
 		envsDir := filepath.Join(envSyncPath, "envs")
 		if !cli.JSONOutput {
-			fmt.Printf("Syncing from %s (local path)\n  → %s\n", envSyncPath, dest)
+			fmt.Printf("Checking for environment updates from %s...\n", envSyncPath)
 		}
 		res, err := envsync.Sync(envsDir, dest, envsync.Options{DryRun: envSyncDryRun})
 		if err != nil {
@@ -85,7 +83,7 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("no env repo URL configured; pass --url, --path, or run `orbit init`")
 	}
 	if !cli.JSONOutput {
-		fmt.Printf("Syncing from %s\n  → %s\n", url, dest)
+		fmt.Println("Checking for environment updates...")
 	}
 	res, err := envsync.SyncFromRepo(url, dest, envsync.Options{DryRun: envSyncDryRun})
 	if err != nil {
@@ -293,14 +291,14 @@ func offerEnvironmentApply() error {
 
 func printSyncResult(res envsync.Result) {
 	if len(res.Written) == 0 {
-		fmt.Println("Already up to date.")
+		fmt.Println("Environment is up to date.")
 		return
 	}
-	verb := "wrote"
+	message := "Updated"
 	if envSyncDryRun {
-		verb = "would write"
+		message = "Would update"
 	}
-	fmt.Printf("%s %d file(s):\n", verb, len(res.Written))
+	fmt.Printf("%s %d environment file(s):\n", message, len(res.Written))
 	for _, f := range res.Written {
 		fmt.Printf("  %s\n", f)
 	}

@@ -19,16 +19,18 @@ func TestEnvironmentHelpShowsDailyWorkflow(t *testing.T) {
 			visible = append(visible, child.Name())
 		}
 	}
-	if want := []string{"apply", "list", "sync"}; !slices.Equal(visible, want) {
+	if want := []string{"list", "sync"}; !slices.Equal(visible, want) {
 		t.Fatalf("visible env commands = %v, want %v", visible, want)
 	}
 }
 
 func TestAdvancedCommandsAreHidden(t *testing.T) {
+	apply := envApplyCmd()
 	commands := []struct {
 		name   string
 		hidden bool
 	}{
+		{"env " + apply.Name(), apply.Hidden},
 		{daemonCmd().Name(), daemonCmd().Hidden},
 		{edgeCmd().Name(), edgeCmd().Hidden},
 		{historyCmd().Name(), historyCmd().Hidden},
