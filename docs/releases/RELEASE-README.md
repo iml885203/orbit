@@ -10,6 +10,10 @@
   - 預熱版可見性、mini-shop 恢復路徑與 release 模板落地的文件化記錄。
 - `RELEASE-0.0.20.md`
   - 新增服務 down/restart 故障演練卡，將「故障修復」打造成可驗證 UX 路徑。
+- `RELEASE-0.0.21.md`
+  - 為故障演練加上時間量化回饋，讓 release 之間能對比 UX 變快變順。
+- `RELEASE-0.0.22.md`
+  - 新增「本次 demo 指標」panel，集中展示 1.0 核心交付條件（服務就緒、成功 checkout、關聯驗證）的即時進度。
 
 建議流程：
 

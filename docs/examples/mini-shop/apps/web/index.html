@@ -170,6 +170,32 @@
         background: #1f2937;
         color: #cbd5e1;
       }
+
+      .session-metrics-grid {
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .session-metric-line {
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #0b1328;
+        color: #cbd5e1;
+      }
+
+      .session-metric-line.ok {
+        color: #86efac;
+      }
+
+      .session-metric-line.warn {
+        color: #fbbf24;
+      }
+
+      .session-metric-line.fail {
+        color: #fb7185;
+      }
+
       .value-signal-chip.ok {
         background: #14532d;
         color: #86efac;
@@ -326,6 +352,12 @@
       <h3>快速判斷值（3 秒）</h3>
       <p class="hint">三個維度都綠了，你可以直接向別人 demo「可用」了。</p>
       <div id="value-signal" class="value-signal-grid"></div>
+    </div>
+
+    <div id="session-metrics-card" class="card">
+      <h3>本次 demo 指標</h3>
+      <p class="hint">這裡記錄你這一輪「是否可 demo」的關鍵結果，重開頁面會重置。</p>
+      <div id="session-metrics" class="session-metrics-grid"></div>
     </div>
 
     <div class="card">
@@ -591,6 +623,7 @@ web
       const modeBeginnerBtn = document.getElementById('mode-beginner');
       const modeAdvancedBtn = document.getElementById('mode-advanced');
       const modeHelpEl = document.getElementById('mode-help');
+      const sessionMetricsEl = document.getElementById('session-metrics');
       const advancedModePanelSelectors = [
         '#flow-map-card',
         '#diagnostic-panel',
@@ -615,6 +648,19 @@ web
         kind: 'idle',
         title: '尚未執行',
         items: [],
+      };
+      const sessionMetricsState = {
+        bootAt: performance.now(),
+        serviceReadyAt: 0,
+        firstSuccessAt: 0,
+        lastSuccessAt: 0,
+        relationEstablishedAt: 0,
+      };
+      const drillState = {
+        baselineStartedAt: 0,
+        baselineCompleted: false,
+        baselineCompletedAt: 0,
+        lastRecoverVerifyAt: 0,
       };
       const uiModeDefault = 'beginner';
       const singleActionDefaultText = '依目前情況，先照「下一步（照著做）」逐步前進。';
@@ -1409,7 +1455,70 @@ web
           + buildChecklistItem(allServiceReady, `服務全數就緒（${readyCount}/${serviceTotal}）`, serviceAction)
           + buildChecklistItem(hasSuccessfulOrder, '完成一筆成功 checkout', checkoutAction)
           + buildChecklistItem(hasOrderShipmentRelation, '訂單與出貨關聯成功', relationAction);
+        setSessionMetrics({
+          allServiceReady,
+          hasSuccessfulOrder,
+          hasOrderShipmentRelation,
+        });
         setValueSignal(map);
+      }
+
+      function formatSessionMetric(value, ok, fallback) {
+        const status = ok ? 'ok' : 'warn';
+        return `<div class="session-metric-line ${status}">• ${value}（${ok ? '✓' : fallback || '尚待完成'}）</div>`;
+      }
+
+      function setSessionMetrics(snapshot = {}) {
+        if (!sessionMetricsEl) {
+          return;
+        }
+
+        const now = performance.now();
+        if (snapshot.allServiceReady && !sessionMetricsState.serviceReadyAt) {
+          sessionMetricsState.serviceReadyAt = now;
+        }
+        if (snapshot.hasSuccessfulOrder && !sessionMetricsState.firstSuccessAt) {
+          sessionMetricsState.firstSuccessAt = now;
+        }
+        if (snapshot.hasSuccessfulOrder) {
+          sessionMetricsState.lastSuccessAt = now;
+        }
+
+        if (snapshot.hasOrderShipmentRelation && !sessionMetricsState.relationEstablishedAt) {
+          sessionMetricsState.relationEstablishedAt = now;
+        }
+
+        const serviceReadyElapsed = snapshot.allServiceReady
+          ? formatElapsed(sessionMetricsState.serviceReadyAt - sessionMetricsState.bootAt)
+          : `尚未就緒，已嘗試 ${formatElapsed(now - sessionMetricsState.bootAt)}`;
+
+        const orderElapsed = snapshot.hasSuccessfulOrder
+          ? `已在 ${formatElapsed(sessionMetricsState.firstSuccessAt - (sessionMetricsState.serviceReadyAt || sessionMetricsState.bootAt))} 內完成`
+          : '尚未完成';
+
+        const relationElapsed = snapshot.hasOrderShipmentRelation
+          ? `已在 ${formatElapsed((sessionMetricsState.relationEstablishedAt - sessionMetricsState.firstSuccessAt) || 0)} 內完成關聯`
+          : (sessionMetricsState.firstSuccessAt ? '訂單未關聯' : '尚未到 checkout 成功');
+
+        const readyToDemo = snapshot.allServiceReady
+          ? formatElapsed(Math.max(sessionMetricsState.lastSuccessAt || now, now) - sessionMetricsState.serviceReadyAt)
+          : '尚未可計算';
+
+        const items = [
+          formatSessionMetric('服務就緒耗時', snapshot.allServiceReady, serviceReadyElapsed),
+          formatSessionMetric('checkout 成功耗時', snapshot.hasSuccessfulOrder, orderElapsed),
+          formatSessionMetric('關聯驗證耗時', snapshot.hasOrderShipmentRelation, relationElapsed),
+        ];
+
+        const timingDetail = snapshot.allServiceReady && snapshot.hasSuccessfulOrder
+          ? `目前可 demo 耗時：約 ${readyToDemo}`
+          : '尚未可計算';
+
+        sessionMetricsEl.innerHTML = `
+          ${items.join('')}
+          <div class="session-metric-line">• 目標可交付：<strong>${snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation ? '可 demo' : '不可 demo'}</strong></div>
+          <div class="session-metric-line">• 回復可見性：${timingDetail}</div>
+        `;
       }
 
       function updateGoalState(state) {
@@ -2504,15 +2613,17 @@ web
       }
 
       async function runOneShotSuccessFlow() {
+        const startedAt = performance.now();
         disableActionButtons(true);
         appendSummary('開始一鍵成功流程：幫你快速走完最少步驟。');
+        let flowSuccess = false;
         try {
           const map = await checkAll();
           const allReady = Object.values(map).every((s) => s && s.status === 'ok');
           if (!allReady) {
             setNotice('尚未就緒：先待服務就緒後再按一次。', 'warn');
             appendSummary('一鍵流程中止：服務尚未 ok。');
-            return;
+            return false;
           }
 
           if (!customerEl.options.length) {
@@ -2521,7 +2632,7 @@ web
           if (!customerEl.options.length) {
             setNotice('找不到客戶資料，請確認 customer-api 是否正常。', 'error');
             appendSummary('一鍵流程中止：沒有可用客戶。');
-            return;
+            return false;
           }
           const customerId = Number(customerEl.value) || Number(customerEl.options[0].value);
           customerEl.value = String(customerId);
@@ -2538,7 +2649,7 @@ web
           if (!productEl.options.length) {
             setNotice('目前沒有可用商品，請確認 catalog-api。', 'error');
             appendSummary('一鍵流程中止：沒有商品可下單。');
-            return;
+            return false;
           }
           productEl.selectedIndex = 0;
             await safeFetch(`${cartApi}/carts/${customerId}/items`, {
@@ -2582,6 +2693,7 @@ web
           appendSummary('一鍵成功流程完成：已完成清空→加入→checkout。');
           scrollToAndFocus(ordersEl);
           renderErrorPlaybook(fallbackPattern.code);
+          flowSuccess = true;
         } catch (err) {
           const parsedError = parseApiError(err);
           captureCheckoutPayload({
@@ -2603,6 +2715,15 @@ web
         } finally {
           disableActionButtons(false);
         }
+
+        if (flowSuccess) {
+          const elapsed = performance.now() - startedAt;
+          const estimateMs = Math.max(elapsed, 250);
+          setCopyFeedback(`一鍵流程完成耗時：${(estimateMs / 1000).toFixed(2)} 秒`);
+          appendSummary(`一鍵流程耗時 ${formatElapsed(estimateMs)}。`);
+        }
+
+        return flowSuccess;
       }
 
       addToCartBtn.addEventListener('click', async () => {
@@ -2809,15 +2930,37 @@ web
           return;
         }
         if (event.target.closest('#drill-prime-success')) {
+          drillState.baselineStartedAt = performance.now();
+          drillState.baselineCompleted = false;
+          drillState.lastRecoverVerifyAt = 0;
           appendSummary('故障演練：先建立可重播 baseline。');
-          await runOneShotSuccessFlow();
+          const ok = await runOneShotSuccessFlow();
+          if (ok) {
+            drillState.baselineCompleted = true;
+            drillState.baselineCompletedAt = performance.now();
+            appendSummary(`故障演練基線完成：${formatElapsed(drillState.baselineCompletedAt - drillState.baselineStartedAt)}，可直接進入 down/status/restart。`);
+          } else {
+            appendSummary('故障演練基線未完成，請先確認服務/選單/資料後再試。');
+          }
           return;
         }
         if (event.target.closest('#drill-verify')) {
           scrollToAndFocus(document.getElementById('value-signal-card'));
           appendSummary('故障演練回歸：已回到快速判斷值卡。');
           const pass = setDemoSignalState();
-          appendSummary(pass ? '故障演練回歸成功：三格皆綠。' : '尚未全部回歸，請先依卡片建議完成服務恢復。');
+          drillState.lastRecoverVerifyAt = performance.now();
+          if (drillState.baselineCompleted && drillState.baselineCompletedAt) {
+            const recoveryMs = drillState.lastRecoverVerifyAt - drillState.baselineCompletedAt;
+            const recoveryText = `從 baseline 到驗證回歸：${formatElapsed(recoveryMs)}。`;
+            if (pass) {
+              appendSummary(`${recoveryText} 故障演練回歸成功：三格皆綠。`);
+              setCopyFeedback(`回歸時間：${formatElapsed(recoveryMs)}。`);
+            } else {
+              appendSummary(`${recoveryText} 尚未全部回歸，請先依卡片建議完成服務恢復。`);
+            }
+          } else {
+            appendSummary(pass ? '故障演練回歸成功：三格皆綠。' : '尚未全部回歸，請先依卡片建議完成服務恢復。');
+          }
           return;
         }
         const startDemoFlowButton = event.target.closest('#start-demo-flow');
