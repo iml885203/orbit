@@ -101,7 +101,7 @@
           <strong>目標</strong>：完成一筆成功 checkout，並在「執行報告」看到「✅ Checkout 成功」。
         </div>
         <ol id="goal-steps" class="step-list">
-          <li id="goal-step-1">等待服務就緒（8/8）</li>
+          <li id="goal-step-1">等待服務就緒（後端服務 8/8）</li>
           <li id="goal-step-2">選擇客戶</li>
           <li id="goal-step-3">加 1 件商品到購物車</li>
           <li id="goal-step-4">使用 mock_card Checkout 一筆成功訂單</li>
@@ -181,7 +181,7 @@
     <div class="card">
       <h3>快速導覽（新手友善）</h3>
       <ol>
-        <li>確認服務就緒數（8/8）</li>
+        <li>確認服務就緒數（後端服務 8/8）</li>
         <li>選客戶與商品</li>
         <li>按 <strong>加入購物車</strong>，再按 <strong>Checkout</strong></li>
         <li>在「訂單」與「出貨」看到關聯結果</li>
@@ -199,14 +199,14 @@
     <div id="action-notice" class="notice">載入中</div>
 
     <div class="grid">
-      <div class="card">
+      <div class="card" id="customer-panel">
         <h3>選擇客戶</h3>
         <div class="row">
           <select id="customer-id"></select>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="product-panel">
         <h3>商品</h3>
         <div id="products"></div>
         <div class="row"><label>產品:</label><select id="product-id"></select></div>
@@ -215,13 +215,13 @@
         <button id="refresh-products">重整商品</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="cart-panel">
         <h3>購物車</h3>
         <div id="cart">先選客戶</div>
         <div class="row"><button id="clear-cart">清空購物車</button></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="checkout-panel">
         <h3>Checkout</h3>
         <div class="row"><label>付款方式:</label>
           <select id="payment-method">
@@ -232,32 +232,32 @@
         <button id="checkout">下單 Checkout</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="orders-panel">
         <h3>訂單</h3>
         <div id="orders"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="inventory-panel">
         <h3>庫存快覽</h3>
         <div id="inventory-summary" class="hint">尚未載入</div>
       </div>
 
-      <div class="card">
+      <div class="card" id="shipments-panel">
         <h3>出貨</h3>
         <div id="shipments"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="trace-panel">
         <h3>最近關聯交易</h3>
         <div id="flow-trace" class="hint">尚未有交易</div>
       </div>
 
-      <div class="card">
+      <div class="card" id="flow-timeline-panel">
         <h3>關聯流程時間軸</h3>
         <div id="flow-timeline" class="hint">尚未有流程紀錄</div>
       </div>
 
-      <div class="card result-card">
+      <div class="card result-card" id="result-panel">
         <h3>執行報告</h3>
         <div id="run-result" class="hint">尚未執行</div>
       </div>
@@ -473,12 +473,12 @@ web
           actions.push({
             label: '前往購物車',
             type: 'focus',
-            payload: '#cart',
+            payload: '#cart-panel',
           });
           actions.push({
             label: '前往商品選擇',
             type: 'focus',
-            payload: '#products',
+            payload: '#product-panel',
           });
         }
         if (!normalized && action.includes('checkout')) {
@@ -595,7 +595,7 @@ web
         if (!allReady) {
           return {
             step: 1,
-            text: '正在等待所有服務就緒（8/8）。建議先保持 5-10 秒，或檢查每個服務是否 ok。',
+            text: '正在等待所有服務就緒（後端服務 8/8）。建議先保持 5-10 秒，或檢查每個服務是否 ok。',
             action: '重新檢查服務狀態',
           };
         }
@@ -714,7 +714,28 @@ web
           return;
         }
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus({ preventScroll: true });
+        const hadTabIndex = el.hasAttribute('tabindex');
+        let shouldCleanupTabIndex = false;
+        if (!hadTabIndex && !['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A'].includes(el.tagName)) {
+          el.setAttribute('tabindex', '-1');
+          shouldCleanupTabIndex = true;
+        }
+        if (typeof el.focus === 'function') {
+          el.focus({ preventScroll: true });
+        }
+        if (typeof el.focus !== 'function' || shouldCleanupTabIndex) {
+          const focusable = el.querySelector('button, input, select, textarea, a');
+          if (focusable) {
+            focusable.focus({ preventScroll: true });
+          }
+          if (shouldCleanupTabIndex) {
+            setTimeout(() => {
+              if (el.getAttribute('tabindex') === '-1') {
+                el.removeAttribute('tabindex');
+              }
+            }, 250);
+          }
+        }
       }
 
       function renderErrorPlaybook(activeCode = fallbackPattern.code) {
@@ -897,7 +918,7 @@ web
         let stage = 0;
         if (!allReady) {
           stage = 1;
-          stateText = '第 1 步：先讓所有服務就緒（目標 8/8）。';
+          stateText = '第 1 步：先讓所有服務就緒（目標後端服務 8/8）。';
         } else if (!customerSelected) {
           stage = 2;
           stateText = '第 2 步：選一位客戶。';
@@ -2044,7 +2065,7 @@ web
 
       resetFlowBtn.addEventListener('click', resetFlow);
 
-      setRunResult('warn', '準備中', ['尚未開始操作', '請先確認 9 個資源就緒']);
+      setRunResult('warn', '準備中', ['尚未開始操作', '請先確認 9 個資源就緒（含 web）']);
       renderErrorPlaybook(fallbackPattern.code);
       refresh();
       async function refreshTicker() {
