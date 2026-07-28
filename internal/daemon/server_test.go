@@ -158,6 +158,9 @@ func TestHandleUp_InfraOnly(t *testing.T) {
 	if got, want := strings.Join(response.AffectedServices, ","), "db,redis"; got != want {
 		t.Fatalf("affected services = %q, want %q", got, want)
 	}
+	if response.Message != "Starting infrastructure (2 containers)." {
+		t.Fatalf("message = %q", response.Message)
+	}
 
 	// Containers should be pending/ready; services should still be stopped.
 	infos := s.app.Orchestrator.GetAllServices()
@@ -196,7 +199,7 @@ func TestHandleUp_EmptyEnvironmentReportsSuccessfulNoOp(t *testing.T) {
 	if !response.OK {
 		t.Fatalf("response = %+v, want successful no-op", response)
 	}
-	if response.Message != "No services or containers are enabled for this environment." {
+	if response.Message != "No resources are enabled for this environment." {
 		t.Fatalf("message = %q", response.Message)
 	}
 	if len(response.AffectedServices) != 0 {
@@ -222,6 +225,55 @@ func TestHandleUp_SelectedGroupReportsActualDependencies(t *testing.T) {
 	}
 	if got, want := strings.Join(response.AffectedServices, ","), "api,db,redis,web"; got != want {
 		t.Fatalf("affected services = %q, want %q", got, want)
+	}
+	if response.Message != "Starting group frontend (4 resources)." {
+		t.Fatalf("message = %q", response.Message)
+	}
+}
+
+func TestHandleUp_MessageDescribesSelectionIntent(t *testing.T) {
+	tests := []struct {
+		name    string
+		request UpRequest
+		want    string
+	}{
+		{
+			name:    "whole environment",
+			request: UpRequest{},
+			want:    "Starting environment (4 resources).",
+		},
+		{
+			name:    "one container",
+			request: UpRequest{Services: []string{"redis"}},
+			want:    "Starting redis.",
+		},
+		{
+			name:    "one service with dependencies",
+			request: UpRequest{Services: []string{"web"}},
+			want:    "Starting web with 2 dependencies.",
+		},
+		{
+			name:    "multiple resources with shared dependency",
+			request: UpRequest{Services: []string{"api", "web"}},
+			want:    "Starting 2 requested resources with 1 dependency.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(t, testConfig())
+			body, _ := json.Marshal(tt.request)
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/up", bytes.NewReader(body))
+			s.handleUp(rr, req)
+
+			var response APIResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if response.Message != tt.want {
+				t.Fatalf("message = %q, want %q", response.Message, tt.want)
+			}
+		})
 	}
 }
 

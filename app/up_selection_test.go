@@ -58,3 +58,34 @@ func TestValidateUpSelectionAcceptsOneSelector(t *testing.T) {
 		}
 	}
 }
+
+func TestUpCompletionMessageDescribesSelectionIntent(t *testing.T) {
+	originalInfraOnly, originalGroups := infraOnly, groups
+	t.Cleanup(func() {
+		infraOnly = originalInfraOnly
+		groups = originalGroups
+	})
+
+	tests := []struct {
+		name   string
+		args   []string
+		infra  bool
+		groups []string
+		want   string
+	}{
+		{name: "environment", want: "Environment is healthy."},
+		{name: "infrastructure", infra: true, want: "Infrastructure is healthy."},
+		{name: "one resource", args: []string{"redis"}, want: "redis is healthy."},
+		{name: "requested resources", args: []string{"api", "web"}, want: "Requested resources are healthy."},
+		{name: "one group", groups: []string{"frontend"}, want: "Group frontend is healthy."},
+		{name: "selected groups", groups: []string{"frontend", "jobs"}, want: "Selected groups are healthy."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			infraOnly, groups = tt.infra, tt.groups
+			if got := upCompletionMessage(tt.args); got != tt.want {
+				t.Fatalf("message = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

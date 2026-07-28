@@ -119,14 +119,10 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 
 	if req.InfraOnly {
 		containerNames := sortedKeys(s.holder.Load().Containers)
-		message := fmt.Sprintf("starting %d containers", len(containerNames))
-		if len(containerNames) == 0 {
-			message = "No containers are configured for this environment."
-		}
 		s.app.StartServices(containerNames)
 		writeJSON(w, http.StatusOK, APIResponse{
 			OK:               true,
-			Message:          message,
+			Message:          upStartMessage(req, containerNames),
 			AffectedServices: containerNames,
 		})
 		return
@@ -143,19 +139,76 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sort.Strings(names)
-	message := fmt.Sprintf("starting %d services", len(names))
-	if len(names) == 0 {
-		message = "No services or containers are enabled for this environment."
-		if len(req.Groups) > 0 {
-			message = fmt.Sprintf("No services match the selected groups: %s.", strings.Join(req.Groups, ", "))
-		}
-	}
 	s.app.StartServices(names)
 	writeJSON(w, http.StatusOK, APIResponse{
 		OK:               true,
-		Message:          message,
+		Message:          upStartMessage(req, names),
 		AffectedServices: names,
 	})
+}
+
+func upStartMessage(req UpRequest, affected []string) string {
+	if len(affected) == 0 {
+		switch {
+		case req.InfraOnly:
+			return "No containers are configured for this environment."
+		case len(req.Groups) > 0:
+			return fmt.Sprintf("No resources match the selected groups: %s.", strings.Join(req.Groups, ", "))
+		default:
+			return "No resources are enabled for this environment."
+		}
+	}
+	switch {
+	case req.InfraOnly:
+		return fmt.Sprintf("Starting infrastructure (%s).", countNoun(len(affected), "container"))
+	case len(req.Services) == 1:
+		dependencies := len(affected) - 1
+		if dependencies == 0 {
+			return fmt.Sprintf("Starting %s.", req.Services[0])
+		}
+		return fmt.Sprintf("Starting %s with %s.", req.Services[0], countNoun(dependencies, "dependency"))
+	case len(req.Services) > 1:
+		requested := uniqueCount(req.Services)
+		dependencies := len(affected) - requested
+		if dependencies == 0 {
+			return fmt.Sprintf("Starting %s.", countNoun(requested, "requested resource"))
+		}
+		return fmt.Sprintf(
+			"Starting %s with %s.",
+			countNoun(requested, "requested resource"),
+			countNoun(dependencies, "dependency"),
+		)
+	case len(req.Groups) == 1:
+		return fmt.Sprintf("Starting group %s (%s).", req.Groups[0], countNoun(len(affected), "resource"))
+	case len(req.Groups) > 1:
+		return fmt.Sprintf(
+			"Starting %s (%s).",
+			countNoun(len(req.Groups), "group"),
+			countNoun(len(affected), "resource"),
+		)
+	default:
+		return fmt.Sprintf("Starting environment (%s).", countNoun(len(affected), "resource"))
+	}
+}
+
+func countNoun(count int, noun string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, noun)
+	}
+	switch noun {
+	case "dependency":
+		return fmt.Sprintf("%d dependencies", count)
+	default:
+		return fmt.Sprintf("%d %ss", count, noun)
+	}
+}
+
+func uniqueCount(values []string) int {
+	unique := make(map[string]bool, len(values))
+	for _, value := range values {
+		unique[value] = true
+	}
+	return len(unique)
 }
 
 var errUnknownGroup = errors.New("unknown group")

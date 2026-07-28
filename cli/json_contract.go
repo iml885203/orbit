@@ -153,7 +153,7 @@ func classify(err error) JSONError {
 		return JSONError{
 			Code:        "timeout",
 			Message:     msg,
-			Hint:        "Inspect service state and logs before retrying.",
+			Hint:        "Inspect resource state and logs before retrying.",
 			Retryable:   true,
 			NextCommand: "orbit status --json",
 		}

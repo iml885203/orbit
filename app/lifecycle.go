@@ -191,7 +191,7 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 	for {
 		select {
 		case <-deadline:
-			return last, cli.NewTimeoutError(fmt.Sprintf("timeout waiting for services to become %s", wantState))
+			return last, cli.NewTimeoutError(fmt.Sprintf("timeout waiting for resources to become %s", wantState))
 		case <-ticker.C:
 			status, err := client.Status()
 			if err != nil {

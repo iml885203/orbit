@@ -343,7 +343,15 @@ func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 func TestE2E_SwitchRejectsInvalidTargetBeforeStoppingCurrentEnvironment(t *testing.T) {
 	env := setupE2E(t)
 	env.run(t, "daemon", "start")
-	env.run(t, "up", "redis")
+	upOutput := env.run(t, "up", "redis")
+	for _, want := range []string{"Starting redis.", "redis is healthy."} {
+		if !strings.Contains(upOutput, want) {
+			t.Fatalf("resource-specific up output missing %q:\n%s", want, upOutput)
+		}
+	}
+	if strings.Contains(upOutput, "requested services") {
+		t.Fatalf("container up output mislabeled redis as a service:\n%s", upOutput)
+	}
 	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
 		return env.serviceState(t, "redis") == "healthy"
 	})
@@ -549,7 +557,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	if elapsed := time.Since(started); elapsed >= 3*time.Second {
 		t.Fatalf("human up took %s, want an immediate no-op", elapsed)
 	}
-	if !bytes.Contains(human, []byte("No services or containers are enabled for this environment.")) {
+	if !bytes.Contains(human, []byte("No resources are enabled for this environment.")) {
 		t.Fatalf("human output did not explain the no-op:\n%s", human)
 	}
 	if bytes.Contains(human, []byte("starting 0")) {
@@ -568,7 +576,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		t.Fatalf("parse lifecycle data: %v\n%s", err, jsonOutput)
 	}
-	if data.Message != "No services or containers are enabled for this environment." {
+	if data.Message != "No resources are enabled for this environment." {
 		t.Fatalf("json message = %q", data.Message)
 	}
 	if len(data.RequestedServices) != 0 || len(data.Services) != 0 {

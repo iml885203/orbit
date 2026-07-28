@@ -82,13 +82,24 @@ func runUp(cmd *cobra.Command, args []string) error {
 		_, _ = cli.Faint.Println("  orbit open                open web UI")
 		return nil
 	}
-	if infraOnly {
-		return waitForUpHealthy(client, resp.AffectedServices, "All infrastructure healthy.")
+	return waitForUpHealthy(client, resp.AffectedServices, upCompletionMessage(args))
+}
+
+func upCompletionMessage(args []string) string {
+	switch {
+	case infraOnly:
+		return "Infrastructure is healthy."
+	case len(args) == 1:
+		return args[0] + " is healthy."
+	case len(args) > 1:
+		return "Requested resources are healthy."
+	case len(groups) == 1:
+		return "Group " + groups[0] + " is healthy."
+	case len(groups) > 1:
+		return "Selected groups are healthy."
+	default:
+		return "Environment is healthy."
 	}
-	if len(args) > 0 {
-		return waitForServicesHealthy(client, args)
-	}
-	return waitForUpHealthy(client, resp.AffectedServices, "All services healthy.")
 }
 
 func validateUpSelection(args []string) error {
@@ -321,7 +332,7 @@ func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMe
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
+		timeoutErr: cli.NewTimeoutError("timeout waiting for resources to become healthy"),
 		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			for name := range watch {
@@ -356,7 +367,7 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		timeoutErr: cli.NewTimeoutError("timeout waiting for services to become healthy"),
+		timeoutErr: cli.NewTimeoutError("timeout waiting for requested resources to become healthy"),
 		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			for name := range watch {
@@ -378,7 +389,11 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 				}
 			}
 			if len(done) == len(watch) {
-				fmt.Println("All requested services are healthy.")
+				if len(serviceNames) == 1 {
+					fmt.Printf("%s is healthy.\n", serviceNames[0])
+				} else {
+					fmt.Println("Requested resources are healthy.")
+				}
 				return true, nil
 			}
 			return false, nil
@@ -419,7 +434,7 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 			}
 			return e.kind == eventTransition && e.to == "stopped"
 		},
-		timeoutErr: cli.NewTimeoutError("timeout waiting for services to stop"),
+		timeoutErr: cli.NewTimeoutError("timeout waiting for resources to stop"),
 		onTick: func(_ map[string]progressSnapshot, done map[string]bool, _ *daemon.StatusResponse) (bool, error) {
 			if len(done) == len(watch) {
 				if len(stopFailed) > 0 {
