@@ -105,6 +105,7 @@
         <div class="goal-action">
           <button id="goal-next" class="small-btn inline-btn">下一步操作建議</button>
           <button id="goal-replay" class="small-btn inline-btn danger">重做一次成功流程</button>
+          <button id="one-shot-success" class="small-btn inline-btn">一鍵完成成功流程</button>
         </div>
       </div>
     </div>
@@ -316,6 +317,7 @@ web
       const goalStep5 = document.getElementById('goal-step-5');
       const goalNextBtn = document.getElementById('goal-next');
       const goalReplayBtn = document.getElementById('goal-replay');
+      const oneShotSuccessBtn = document.getElementById('one-shot-success');
       const goalSummaryEl = document.getElementById('goal-summary');
       const proofSummaryEl = document.getElementById('proof-summary');
       const runResultEl = document.getElementById('run-result');
@@ -678,6 +680,8 @@ web
         scenarioStockBtn.disabled = disabledState;
         refreshProductBtn.disabled = disabledState;
         resetFlowBtn.disabled = disabledState;
+        goalReplayBtn.disabled = disabledState;
+        oneShotSuccessBtn.disabled = disabledState;
       }
 
       function setFlowState(allReady, customerSelected, cartReady) {
@@ -1295,6 +1299,96 @@ web
         }
       }
 
+      async function runOneShotSuccessFlow() {
+        disableActionButtons(true);
+        appendSummary('開始一鍵成功流程：幫你快速走完最少步驟。');
+        try {
+          const map = await checkAll();
+          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          if (!allReady) {
+            setNotice('尚未就緒：先待服務就緒後再按一次。', 'warn');
+            appendSummary('一鍵流程中止：服務尚未 ok。');
+            return;
+          }
+
+          if (!customerEl.options.length) {
+            await loadCustomers();
+          }
+          if (!customerEl.options.length) {
+            setNotice('找不到客戶資料，請確認 customer-api 是否正常。', 'error');
+            appendSummary('一鍵流程中止：沒有可用客戶。');
+            return;
+          }
+          const customerId = Number(customerEl.value) || Number(customerEl.options[0].value);
+          customerEl.value = String(customerId);
+
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+
+          if (!productEl.options.length) {
+            await loadProducts();
+          }
+          if (!productEl.options.length) {
+            setNotice('目前沒有可用商品，請確認 catalog-api。', 'error');
+            appendSummary('一鍵流程中止：沒有商品可下單。');
+            return;
+          }
+          productEl.selectedIndex = 0;
+          await safeFetch(`${cartApi}/carts/${customerId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: Number(productEl.value), quantity: 1 }),
+          });
+
+          paymentMethodEl.value = 'mock_card';
+          const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method: 'mock_card' }),
+          });
+          captureCheckoutPayload(payload, '一鍵成功流程');
+
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);
+
+          if (payload?.orders?.[0]) {
+            updateRunResultForOrder(payload.orders[0]);
+          } else {
+            setRunResult('warn', '✅ 一鍵流程已提交', ['請到結果區確認關聯交易。']);
+          }
+
+          setNotice('一鍵成功流程完成，你可直接看「當前可驗證結果」與「關聯流程時間軸」。', 'ok');
+          appendSummary('一鍵成功流程完成：已完成清空→加入→checkout。');
+          scrollToAndFocus(ordersEl);
+          renderErrorPlaybook(fallbackPattern.code);
+        } catch (err) {
+          const parsedError = parseApiError(err);
+          captureCheckoutPayload({
+            code: parsedError?.code || 'checkout_failed',
+            message: parsedError?.message || 'checkout failed',
+            ...parsedError,
+          }, '一鍵成功流程');
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);
+          setNotice(errorText(parsedError), 'error');
+          appendSummary('一鍵成功流程失敗，已保留操作紀錄與結果卡。');
+          updateRunResultForError(errorText(parsedError), '一鍵成功流程', parsedError);
+        } finally {
+          disableActionButtons(false);
+        }
+      }
+
       addToCartBtn.addEventListener('click', async () => {
         const customerId = Number(customerEl.value);
         const productId = Number(productEl.value);
@@ -1549,8 +1643,9 @@ web
       });
 
       goalReplayBtn.addEventListener('click', () => {
-        resetFlow();
+        runOneShotSuccessFlow();
       });
+      oneShotSuccessBtn.addEventListener('click', () => runOneShotSuccessFlow());
 
       async function resetFlow() {
         disableActionButtons(true);
