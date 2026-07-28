@@ -336,6 +336,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </div>
       <div class="row">
         <button id="drill-verify" class="small-btn inline-btn">回到 3 秒可 demo 指標</button>
+        <button id="copy-drill-report" class="small-btn inline-btn">複製故障回歸報告</button>
       </div>
       <p class="hint">目標是確認流程能在不離開頁面思路的情況下，完成「故障→定位→恢復→回歸」。</p>
     </div>
@@ -609,6 +610,7 @@ web
       const verifyDemoSignalBtn = document.getElementById('verify-demo-signal');
       const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
       const copyDemoReportBtn = document.getElementById('copy-demo-report');
+      const copyDrillReportBtn = document.getElementById('copy-drill-report');
       const goalCurrentText = document.getElementById('goal-current-text');
       const goalStep1 = document.getElementById('goal-step-1');
       const goalStep2 = document.getElementById('goal-step-2');
@@ -1416,33 +1418,90 @@ web
         ].join('');
       }
 
-      function buildDemoReport() {
+      function buildSignalSnapshot() {
         const map = latestServiceMap || {};
         const entries = Object.entries(map);
         const serviceTotal = entries.length || BACKEND_SERVICE_COUNT;
         const readyCount = entries.filter(([, payload]) => payload && payload.status === 'ok').length;
-        const servicesReady = serviceTotal > 0 ? `${readyCount}/${serviceTotal}` : '0/0';
         const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
+        const servicesReady = serviceTotal > 0 ? `${readyCount}/${serviceTotal}` : '0/0';
 
         const latestOrder = latestOrdersPayload?.orders?.[0] || null;
         const relatedShipment = latestOrder
           ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
           : null;
-        const latestCode = latestCheckoutPayload?.code || latestCheckoutPayload?.status;
 
-        const orderText = latestOrder
-          ? `#${latestOrder.id} ${latestOrder.customer_name || ''} ${latestOrder.product_name || ''} x${latestOrder.quantity} (status:${latestOrder.status})`
+        return {
+          serviceTotal,
+          readyCount,
+          servicesReady,
+          allServiceReady,
+          latestOrder,
+          relatedShipment,
+          hasSuccessfulOrder: Boolean(latestOrder && latestOrder.status === 'confirmed'),
+          hasOrderShipmentRelation: Boolean(latestOrder && relatedShipment && relatedShipment.order_id === latestOrder.id),
+          latestCode: latestCheckoutPayload?.code || latestCheckoutPayload?.status || 'N/A',
+        };
+      }
+
+      function buildRecoveryReport() {
+        const snapshot = buildSignalSnapshot();
+        if (!drillState.baselineCompleted) {
+          return 'Orbit mini-shop 故障回歸報告（未完成）\n請先完成「先做一輪成功流程」後再複製回歸報告。';
+        }
+
+        const serviceSignal = snapshot.allServiceReady ? '綠' : '未全綠';
+        const checkoutSignal = snapshot.hasSuccessfulOrder ? '綠' : '未完成';
+        const relationSignal = snapshot.hasOrderShipmentRelation ? '綠' : '未關聯';
+        const baselineElapsed = drillState.baselineCompletedAt
+          ? `基線耗時：${formatElapsed(drillState.baselineCompletedAt - drillState.baselineStartedAt)}`
+          : '基線耗時：未建立';
+        const recoveryElapsed = drillState.lastRecoverVerifyAt && drillState.baselineCompletedAt
+          ? `回歸耗時：${formatElapsed(drillState.lastRecoverVerifyAt - drillState.baselineCompletedAt)}`
+          : '回歸耗時：未驗證';
+
+        const demoGreen = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation;
+        const orderText = snapshot.latestOrder
+          ? `#${snapshot.latestOrder.id} ${snapshot.latestOrder.customer_name || ''} ${snapshot.latestOrder.product_name || ''} x${snapshot.latestOrder.quantity} (status:${snapshot.latestOrder.status})`
           : '尚未有訂單';
-        const shipmentText = relatedShipment
-          ? `#${relatedShipment.id} tracking=${relatedShipment.tracking_no || 'N/A'} status=${relatedShipment.status}`
+        const shipmentText = snapshot.relatedShipment
+          ? `#${snapshot.relatedShipment.id} tracking=${snapshot.relatedShipment.tracking_no || 'N/A'} status=${snapshot.relatedShipment.status}`
           : '尚未關聯出貨';
-        const checkoutText = latestCode
-          ? `最後 checkout code=${latestCode}${latestCheckoutPayload.occurred_at ? ` 時間=${new Date(latestCheckoutPayload.occurred_at).toLocaleString()}` : ''}`
+
+        return [
+          'Orbit mini-shop 故障回歸報告',
+          `時間：${new Date().toLocaleString()}`,
+          baselineElapsed,
+          recoveryElapsed,
+          `服務信號：${serviceSignal} (${snapshot.servicesReady})`,
+          `交易信號：${checkoutSignal}`,
+          `關聯信號：${relationSignal}`,
+          `最後 checkout：${snapshot.latestCode}`,
+          `訂單：${orderText}`,
+          `出貨：${shipmentText}`,
+          `可 demo：${demoGreen ? '是' : '否'}（依三格信號判斷）`,
+          demoGreen ? '結論：故障演練回歸成功，可直接進行 demo。' : '結論：故障回歸未達標，請依「故障演練」下一步修復。',
+          '',
+          `下一步：${demoGreen ? '可直接發表 demo 結果' : '請重跑故障演練 baseline 或檢查故障情境對照卡'}`
+        ].join('\n');
+      }
+
+      function buildDemoReport() {
+        const snapshot = buildSignalSnapshot();
+
+        const orderText = snapshot.latestOrder
+          ? `#${snapshot.latestOrder.id} ${snapshot.latestOrder.customer_name || ''} ${snapshot.latestOrder.product_name || ''} x${snapshot.latestOrder.quantity} (status:${snapshot.latestOrder.status})`
+          : '尚未有訂單';
+        const shipmentText = snapshot.relatedShipment
+          ? `#${snapshot.relatedShipment.id} tracking=${snapshot.relatedShipment.tracking_no || 'N/A'} status=${snapshot.relatedShipment.status}`
+          : '尚未關聯出貨';
+        const checkoutText = snapshot.latestCode
+          ? `最後 checkout code=${snapshot.latestCode}${latestCheckoutPayload?.occurred_at ? ` 時間=${new Date(latestCheckoutPayload.occurred_at).toLocaleString()}` : ''}`
           : '尚未執行 checkout';
-        const serviceSignal = allServiceReady ? '綠' : '未全綠';
-        const serviceReadyText = `服務信號：${serviceSignal} (${servicesReady})`;
-        const checkoutSignal = latestOrder && latestOrder.status === 'confirmed' ? '綠' : '未完成';
-        const relationSignal = relatedShipment && latestOrder && relatedShipment.order_id === latestOrder.id ? '綠' : '未關聯';
+        const serviceSignal = snapshot.allServiceReady ? '綠' : '未全綠';
+        const serviceReadyText = `服務信號：${serviceSignal} (${snapshot.servicesReady})`;
+        const checkoutSignal = snapshot.hasSuccessfulOrder ? '綠' : '未完成';
+        const relationSignal = snapshot.hasOrderShipmentRelation ? '綠' : '未關聯';
 
         const lines = [
           'Orbit mini-shop 心智模型簡版報告',
@@ -3194,6 +3253,17 @@ web
           const report = buildDemoReport();
           if (!report) {
             setCopyFeedback('目前沒有可複製報告，請先刷新頁面後重試');
+            return;
+          }
+          await copyTextToClipboard(report, setCopyFeedback);
+        });
+      }
+
+      if (copyDrillReportBtn) {
+        copyDrillReportBtn.addEventListener('click', async () => {
+          const report = buildRecoveryReport();
+          if (!report) {
+            setCopyFeedback('目前沒有可複製故障回歸報告');
             return;
           }
           await copyTextToClipboard(report, setCopyFeedback);
