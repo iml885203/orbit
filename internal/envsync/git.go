@@ -39,10 +39,14 @@ func (e *CloneError) IsGitHub() bool {
 	return strings.HasPrefix(strings.ToLower(e.URL), "git@github.com:")
 }
 
-func (e *CloneError) ReportsRepositoryNotFound() bool {
+func (e *CloneError) ReportsAmbiguousGitHubAvailability() bool {
+	if !e.IsGitHub() {
+		return false
+	}
 	output := strings.ToLower(e.Output)
 	return strings.Contains(output, "repository not found") ||
-		strings.Contains(output, "repository does not exist")
+		strings.Contains(output, "repository does not exist") ||
+		strings.Contains(output, "could not read username for 'https://github.com")
 }
 
 // Clone performs a shallow clone of url into destDir. destDir must be empty

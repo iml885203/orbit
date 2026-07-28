@@ -203,6 +203,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	envsDir := envsDestDir()
 	var syncFailure error
+	var syncWarning string
 	result.EnvsDir = envsDir
 	result.EnvRepoURL = repoURL
 	localEnvsDir := filepath.Join(root, "envs")
@@ -212,8 +213,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		syncRes, err := envsync.Sync(localEnvsDir, envsDir, envsync.Options{})
 		if err != nil {
 			syncFailure = err
-			warning := "env sync failed: " + err.Error()
-			result.Warnings = append(result.Warnings, warning)
+			syncWarning = "env sync failed: " + err.Error()
 			output.warnln("  ! Could not sync the local environment files")
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
@@ -232,8 +232,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			err = envRepoSyncError(err)
 			syncFailure = err
-			warning := "env sync failed: " + err.Error()
-			result.Warnings = append(result.Warnings, warning)
+			syncWarning = "env sync failed: " + err.Error()
 			output.warnln("  ! Could not sync the environment repository")
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
@@ -245,6 +244,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 	envFiles := listEnvFiles(envsDir)
 	if len(envFiles) == 0 && syncFailure != nil {
 		return finishInit(output, result, syncFailure)
+	}
+	if syncWarning != "" {
+		result.Warnings = append(result.Warnings, syncWarning)
 	}
 	output.println()
 	output.boldln("Step 3: Environment")

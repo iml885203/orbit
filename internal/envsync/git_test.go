@@ -98,22 +98,49 @@ func TestCloneErrorRedactsURLCredentials(t *testing.T) {
 	}
 }
 
-func TestCloneErrorRecognizesRepositoryNotFoundOutput(t *testing.T) {
+func TestCloneErrorRecognizesAmbiguousGitHubAvailability(t *testing.T) {
 	tests := []struct {
 		name   string
+		url    string
 		output string
 		want   bool
 	}{
-		{name: "GitHub", output: "remote: Repository not found.\nfatal: repository unavailable", want: true},
-		{name: "generic host", output: "fatal: repository does not exist", want: true},
-		{name: "authentication", output: "fatal: Authentication failed", want: false},
-		{name: "network", output: "fatal: unable to access: Could not resolve host", want: false},
+		{
+			name:   "GitHub repository not found",
+			url:    "https://github.com/example/missing.git",
+			output: "remote: Repository not found.\nfatal: repository unavailable",
+			want:   true,
+		},
+		{
+			name:   "macOS anonymous Git cannot prompt for GitHub username",
+			url:    "https://github.com/example/missing.git",
+			output: "fatal: could not read Username for 'https://github.com': Device not configured",
+			want:   true,
+		},
+		{
+			name:   "same prompt failure on another host is not GitHub ambiguity",
+			url:    "https://git.example.com/example/missing.git",
+			output: "fatal: could not read Username for 'https://git.example.com': Device not configured",
+			want:   false,
+		},
+		{
+			name:   "explicit GitHub authentication failure",
+			url:    "https://github.com/example/private.git",
+			output: "fatal: Authentication failed",
+			want:   false,
+		},
+		{
+			name:   "GitHub network failure",
+			url:    "https://github.com/example/repo.git",
+			output: "fatal: unable to access: Could not resolve host",
+			want:   false,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := &CloneError{Output: test.output}
-			if got := err.ReportsRepositoryNotFound(); got != test.want {
-				t.Fatalf("ReportsRepositoryNotFound() = %v, want %v", got, test.want)
+			err := &CloneError{URL: test.url, Output: test.output}
+			if got := err.ReportsAmbiguousGitHubAvailability(); got != test.want {
+				t.Fatalf("ReportsAmbiguousGitHubAvailability() = %v, want %v", got, test.want)
 			}
 		})
 	}

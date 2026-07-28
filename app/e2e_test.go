@@ -1169,8 +1169,9 @@ func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
 		t.Fatalf("envelope = %+v:\n%s", envelope, output)
 	}
 	var data struct {
-		Checks []json.RawMessage `json:"checks"`
-		Ready  bool              `json:"ready"`
+		Checks   []json.RawMessage `json:"checks"`
+		Warnings []string          `json:"warnings"`
+		Ready    bool              `json:"ready"`
 	}
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		t.Fatalf("decode diagnostic data: %v\n%s", err, envelope.Data)
@@ -1180,6 +1181,9 @@ func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
 	}
 	if len(data.Checks) != 0 {
 		t.Fatalf("sync failure ran unrelated health checks: %s", envelope.Data)
+	}
+	if len(data.Warnings) != 0 {
+		t.Fatalf("fatal sync error was duplicated as a warning: %s", envelope.Data)
 	}
 	commands := make(map[string]bool, len(envelope.RecommendedActions))
 	for _, action := range envelope.RecommendedActions {

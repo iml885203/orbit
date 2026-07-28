@@ -116,7 +116,7 @@ func TestMissingGitHubRepoDoesNotRecommendAuthenticationOrBlindRetry(t *testing.
 	syncFailure := envRepoSyncError(&envsync.CloneError{
 		URL:    "https://github.com/example/typo-env.git",
 		Err:    errors.New("exit status 128"),
-		Output: "remote: Repository not found.",
+		Output: "fatal: could not read Username for 'https://github.com': Device not configured",
 	})
 	failure := initFailure(result, syncFailure)
 
