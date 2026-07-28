@@ -15,7 +15,10 @@ containers:
       port: 6379
 
   mongo:
-    image: mongo:8.0
+    # MongoDB 8.0+ crashes on Linux kernel 6.19, including the kernel used by
+    # current Docker Desktop releases. Pin the maintained 7.0 line so this
+    # cross-platform fixture tests Orbit rather than an upstream incompatibility.
+    image: mongo:7.0.37
     ports:
       mongo: 27017
     # Cap WiredTiger cache: mongod defaults to ~half the Docker VM's RAM per
