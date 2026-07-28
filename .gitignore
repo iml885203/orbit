@@ -12,3 +12,5 @@ cmd/orbit/dist/
 .superpowers/
 .playwright-cli/
 ui/node_modules/
+__pycache__/
+*.pyc

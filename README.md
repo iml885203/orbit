@@ -87,6 +87,10 @@ are documented in [Installation and development](docs/development.md).
 The default setup uses the
 [Orbit demo environment](https://github.com/iml885203/orbit-demo): a
 standard-library Python service running on the host with Redis in a container.
+
+For a more complete relation example (`frontend + multiple backend services + db/cache`), try
+[mini-shop demo](docs/examples/mini-shop/README.md): `docs/examples/mini-shop/dev.yaml`.
+
 `orbit init` accepts those distribution defaults without asking about an
 environment repository or project workspace the demo does not use.
 Orbit does not install project runtimes or dependencies implicitly;

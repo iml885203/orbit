@@ -81,7 +81,8 @@ PATH。
 預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
 在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。
 `orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
-environment repository 或 project workspace。
+environment repository 或 project workspace。`mini-shop` 範例（`docs/examples/mini-shop/README.md`）
+提供 front-end + 多 backend + db/cache 的關聯示意。
 Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
 environment 需要的工具，並在啟動前偵測未滿足的 Python
 `requirements.txt`。

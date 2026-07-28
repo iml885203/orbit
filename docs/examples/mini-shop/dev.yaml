@@ -1,0 +1,68 @@
+version: "2"
+
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "26379:6379"
+    health_check:
+      type: tcp
+      port: 26379
+
+services:
+  catalog-api:
+    type: python
+    kind: backend
+    path: ./apps/catalog-api
+    command: python3 main.py
+    ports:
+      http: 3001
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /health
+      port: 3001
+    env:
+      DATABASE_PATH: mini_shop_catalog.db
+      DATA_DIR: .
+
+  order-api:
+    type: python
+    kind: backend
+    path: ./apps/order-api
+    command: python3 main.py
+    ports:
+      http: 3002
+    depends_on: [catalog-api, redis]
+    health_check:
+      type: http
+      path: /health
+      port: 3002
+    env:
+      CATALOG_API_URL: http://127.0.0.1:3001
+      DATABASE_PATH: mini_shop_orders.db
+      DATA_DIR: .
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "26379"
+
+  web:
+    type: python
+    kind: frontend
+    path: ./apps/web
+    command: python3 main.py
+    ports:
+      http: 3000
+    depends_on: [order-api]
+    health_check:
+      type: http
+      path: /
+      port: 3000
+    env:
+      PORT: "3000"
+      CATALOG_API_URL: http://127.0.0.1:3001
+      ORDER_API_URL: http://127.0.0.1:3002
+
+groups:
+  mini-shop:
+    enabled: true
+    services: [catalog-api, order-api, web]

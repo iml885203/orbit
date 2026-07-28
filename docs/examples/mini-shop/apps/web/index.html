@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbit mini-shop</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 24px; background: #0b1020; color: #f3f4f6; }
+      h1 { margin-top: 0; }
+      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .card { background: #111827; padding: 12px; border-radius: 12px; }
+      button { padding: 8px 12px; border-radius: 8px; background: #22d3ee; border: 0; color: #042f2e; cursor: pointer; }
+      pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow: auto; }
+      .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      input { width: 100px; }
+    </style>
+  </head>
+  <body>
+    <h1>Orbit mini-shop</h1>
+    <p>前後端 + 兩個 backend + Redis container，演示 Orbit 多服務關聯啟動。</p>
+    <div id="status">載入中...</div>
+    <div class="grid">
+      <div class="card">
+        <h3>商品</h3>
+        <div id="products"></div>
+      </div>
+      <div class="card">
+        <h3>下單</h3>
+        <div class="row">
+          <label>商品 ID:</label>
+          <input id="product-id" type="number" value="1" min="1" />
+        </div>
+        <div class="row">
+          <label>數量:</label>
+          <input id="quantity" type="number" value="1" min="1" />
+        </div>
+        <button id="place-order">建立訂單</button>
+      </div>
+      <div class="card">
+        <h3>訂單</h3>
+        <div id="orders"></div>
+      </div>
+    </div>
+
+    <script>
+      const catalogApi = '{{CATALOG_API_URL}}';
+      const orderApi = '{{ORDER_API_URL}}';
+
+      const status = document.getElementById('status');
+      const products = document.getElementById('products');
+      const orders = document.getElementById('orders');
+
+      async function checkAll() {
+        try {
+          const [catalogHealth, orderHealth] = await Promise.all([
+            fetch(`${catalogApi}/health`),
+            fetch(`${orderApi}/health`),
+          ]);
+          const catalogPayload = await catalogHealth.json();
+          const orderPayload = await orderHealth.json();
+          status.textContent = `服務狀態：${catalogPayload.service}=${catalogPayload.status}，${orderPayload.service}=${orderPayload.status}`;
+        } catch (e) {
+          status.textContent = '初始化失敗，請先確認 orbit up 已完整啟動所有服務。';
+        }
+      }
+
+      async function loadProducts() {
+        const resp = await fetch(`${catalogApi}/products`);
+        const payload = await resp.json();
+        products.innerHTML = '';
+        payload.products.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.textContent = `${item.id}. ${item.name} — $${item.price.toFixed(2)}`;
+          products.appendChild(row);
+        });
+      }
+
+      async function loadOrders() {
+        const resp = await fetch(`${orderApi}/orders`);
+        const payload = await resp.json();
+        orders.innerHTML = '';
+        payload.orders.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.textContent = `#${item.id} x${item.quantity} ${item.product_name} (${item.product_price})`;
+          orders.appendChild(row);
+        });
+      }
+
+      document.getElementById('place-order').addEventListener('click', async () => {
+        const productId = Number(document.getElementById('product-id').value);
+        const quantity = Number(document.getElementById('quantity').value);
+        const resp = await fetch(`${orderApi}/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: productId, quantity }),
+        });
+        const payload = await resp.json();
+        if (!resp.ok) {
+          alert(payload.message || '建立失敗');
+          return;
+        }
+        await loadOrders();
+      });
+
+      async function main() {
+        try {
+          await Promise.all([checkAll(), loadProducts(), loadOrders()]);
+          setInterval(checkAll, 4000);
+        } catch (e) {
+          status.textContent = '載入錯誤，請先確認所有 services 已啟動。';
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
