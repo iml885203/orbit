@@ -131,7 +131,7 @@ func runUpJSON(args []string) error {
 	names := resp.AffectedResources
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
-		return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
+		return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
 	}
 	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 		Operation:          "up",
@@ -535,12 +535,7 @@ func serviceStartError(name string, snapshot progressSnapshot, evidence string) 
 	if evidence != "" && evidence != snapshot.reason {
 		message += "\n  Last log: " + evidence
 	}
-	return fmt.Errorf(
-		"%s\n  → View logs: orbit logs %s\n  → Retry after fixing it: orbit restart %s",
-		message,
-		name,
-		name,
-	)
+	return fmt.Errorf("%s\n  Next: orbit logs %s", message, name)
 }
 
 func recentLogEvidence(client *daemon.Client, name string) string {
@@ -622,16 +617,44 @@ func preflightOrAbort(explicitConfig bool, resourceNames []string) error {
 	if err != nil {
 		return cli.NewInvalidEnvironmentError("active environment is invalid: " + err.Error())
 	}
-	pathChecks := daemonsrv.ServiceWorkingDirectoryChecks(cfg, selectedUpServices(cfg, resourceNames))
-	if len(pathChecks) == 0 {
+	if infraOnly {
 		return nil
 	}
-	var messages []string
-	for _, check := range pathChecks {
-		messages = append(messages, check.Name+": "+check.Message)
+	selected := selectedUpServices(cfg, resourceNames)
+	selectedConfig := *cfg
+	selectedConfig.Services = make(map[string]*config.Service, len(selected))
+	for _, name := range selected {
+		selectedConfig.Services[name] = cfg.Services[name]
 	}
-	failure := cli.NewServiceWorkingDirectoryError(strings.Join(messages, "\n  "))
-	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: pathChecks})
+	checks := daemonsrv.HostEnvironmentChecks(&selectedConfig)
+	var failed []daemon.DoctorCheck
+	for _, check := range checks {
+		if check.Status == daemon.CheckFail {
+			failed = append(failed, check)
+		}
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+
+	response := &daemon.DoctorResponse{Checks: failed}
+	actions := doctorRecommendedActions(response)
+	for _, check := range failed {
+		if strings.HasPrefix(check.Name, "Working directory (") {
+			failure := cli.NewServiceWorkingDirectoryError(check.Message)
+			return cli.WithJSONReplacementActions(failure, actions)
+		}
+	}
+
+	var messages []string
+	for _, check := range failed {
+		message := check.Name + ": " + check.Message
+		if check.Hint != "" {
+			message += "\n    → " + check.Hint
+		}
+		messages = append(messages, message)
+	}
+	failure := cli.NewChecksFailedError("environment not ready:\n  " + strings.Join(messages, "\n  "))
 	return cli.WithJSONReplacementActions(failure, actions)
 }
 

@@ -280,8 +280,15 @@ func statusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceS
 }
 
 func serviceFailureReason(svc daemon.ResourceStatus) string {
+	reason := svc.StateReason
+	if svc.FailureEvidence != "" && svc.FailureEvidence != reason {
+		if reason != "" {
+			return reason + " — " + svc.FailureEvidence
+		}
+		return svc.FailureEvidence
+	}
 	if svc.StateReason != "" {
-		return svc.StateReason
+		return reason
 	}
 	if svc.HealthProgress != nil {
 		return svc.HealthProgress.LastErr
@@ -380,6 +387,7 @@ type jsonService struct {
 	Kind                string                       `json:"kind"`
 	State               string                       `json:"state"`
 	StateReason         string                       `json:"state_reason,omitempty"`
+	FailureEvidence     string                       `json:"failure_evidence,omitempty"`
 	PortConflict        *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
 	LogsAvailable       bool                         `json:"logs_available,omitempty"`
 	PendingDependencies []string                     `json:"pending_dependencies,omitempty"`
@@ -543,7 +551,8 @@ func printEnvironmentSelectionRecovery(selection environmentSelection) {
 func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {
 	target.State = source.State
 	if source.State == "degraded" {
-		target.StateReason = serviceFailureReason(source)
+		target.StateReason = source.StateReason
+		target.FailureEvidence = source.FailureEvidence
 		target.PortConflict = source.PortConflict
 	}
 	target.PendingDependencies = append([]string{}, source.PendingDependencies...)

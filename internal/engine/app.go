@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,8 +109,29 @@ func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {
 		if err != nil {
 			msg = fmt.Sprintf("exited: %v", err)
 		}
-		orch.Events() <- Event{Type: EventProcessExited, Service: name, Message: msg, Generation: epoch}
+		orch.Events() <- Event{
+			Type:       EventProcessExited,
+			Service:    name,
+			Message:    msg,
+			Evidence:   processFailureEvidence(logs.GetLastLines(name, 20)),
+			Generation: epoch,
+		}
 	}
+}
+
+func processFailureEvidence(lines []string) string {
+	const maxLength = 240
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || strings.HasPrefix(line, "[orbit]") {
+			continue
+		}
+		if len(line) > maxLength {
+			return line[:maxLength-1] + "…"
+		}
+		return line
+	}
+	return ""
 }
 
 func (a *App) wireContainerCallbacks(mgr *container.Manager) {
@@ -294,7 +316,13 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 			if willRecover {
 				checker.MarkRecovering(name, generation)
 			}
-			orch.Events() <- Event{Type: EventHealthFail, Service: name, Message: err.Error(), Generation: generation}
+			orch.Events() <- Event{
+				Type:       EventHealthFail,
+				Service:    name,
+				Message:    err.Error(),
+				Err:        err,
+				Generation: generation,
+			}
 			if !willRecover {
 				return
 			}

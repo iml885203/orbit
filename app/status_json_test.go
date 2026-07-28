@@ -150,6 +150,41 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	}
 }
 
+func TestStatusDetailKeepsExitAndApplicationEvidence(t *testing.T) {
+	service := daemon.ResourceStatus{
+		Name:            "worker",
+		State:           "degraded",
+		StateReason:     "exited: exit status 1",
+		FailureEvidence: "ModuleNotFoundError: No module named 'humanize'",
+	}
+	want := "exited: exit status 1 — ModuleNotFoundError: No module named 'humanize'"
+	if got := statusDetail(service, map[string]daemon.ResourceStatus{"worker": service}); got != want {
+		t.Fatalf("detail = %q, want %q", got, want)
+	}
+}
+
+func TestStatusJSONKeepsFailureEvidenceStructured(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
+	running := map[string]daemon.ResourceStatus{
+		"worker": {
+			Name:            "worker",
+			Kind:            daemon.ResourceKindService,
+			State:           "degraded",
+			StateReason:     "exited: exit status 1",
+			FailureEvidence: "ModuleNotFoundError: No module named 'humanize'",
+			LogsAvailable:   true,
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	service := envelope.Data.Resources[0]
+	if service.StateReason != "exited: exit status 1" {
+		t.Fatalf("state_reason = %q", service.StateReason)
+	}
+	if service.FailureEvidence != "ModuleNotFoundError: No module named 'humanize'" {
+		t.Fatalf("failure_evidence = %q", service.FailureEvidence)
+	}
+}
+
 func TestStatusJSON_ExposesBufferedLogEvidence(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
 	running := map[string]daemon.ResourceStatus{

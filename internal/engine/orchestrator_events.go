@@ -64,7 +64,9 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 				// Recovery probing can produce a sharper diagnosis than
 				// the original exhaustion message (e.g. zombie detection)
 				// — refresh the reason without a state change.
-				if evt.Message != "" {
+				// Cancellation caused by a process exit is follow-on noise,
+				// not better evidence than the exit already recorded.
+				if evt.Message != "" && !(errors.Is(evt.Err, context.Canceled) && info.StateReason != "") {
 					info.StateReason = evt.Message
 				}
 			}
@@ -108,6 +110,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 				reason = "process exited unexpectedly"
 			}
 			info.StateReason = reason
+			info.FailureEvidence = evt.Evidence
 			// The process is gone: any startup poll or recovery probing for
 			// this generation is now pointless (nothing will start answering
 			// on its own), and a live recovery loop would keep the service

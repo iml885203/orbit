@@ -117,6 +117,7 @@ export interface ResourceStatus {
    * failure, build failure); empty in every other state.
    */
   state_reason?: string;
+  failure_evidence?: string;
   port_conflict?: ResourcePortConflict;
   logs_available?: boolean;
   restart_count: number /* int */;

@@ -53,6 +53,17 @@ func TestSnapshotWorkloads_MapsStatusAndDependencies(t *testing.T) {
 	}
 }
 
+func TestResourceFailureSummaryKeepsLifecycleCauseAndEvidence(t *testing.T) {
+	status := ResourceStatus{
+		StateReason:     "exited: exit status 1",
+		FailureEvidence: "ModuleNotFoundError: No module named 'humanize'",
+	}
+	want := "exited: exit status 1 — ModuleNotFoundError: No module named 'humanize'"
+	if got := resourceFailureSummary(status); got != want {
+		t.Fatalf("summary = %q, want %q", got, want)
+	}
+}
+
 func TestSortResources_ParentsFirstDeterministic(t *testing.T) {
 	in := []ResourceSnapshot{
 		{Name: "/callback/pay", Type: "route", Parent: "tunnel-5001"},

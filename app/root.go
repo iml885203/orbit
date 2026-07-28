@@ -15,6 +15,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/history"
 	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
@@ -692,14 +693,14 @@ func runRestart(_ *cobra.Command, args []string) error {
 			return fmt.Errorf("restart failed: %w", err)
 		}
 		if observedStatus, err := waitForLifecycleRestartObserved(client, name, priorRestartCount); err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, observedStatus))
+			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, observedStatus))
 		}
 		if stoppedStatus, err := waitForLifecycleJSONOrPast(client, []string{name}, "stopped", lifecycleRestartPastStopState); err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, stoppedStatus))
+			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, stoppedStatus))
 		}
 		finalStatus, err := waitForLifecycleRestartHealthyJSON(client, []string{name})
 		if err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, finalStatus))
+			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, finalStatus))
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 			Operation:          "restart",
@@ -810,17 +811,26 @@ func runLogs(_ *cobra.Command, args []string) error {
 			resource = current
 		}
 	}
-	actions := logsRecoveryActions(resource)
+	actions := logsRecoveryActions(resource, projectDependencySetupCommand(name))
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLogsJSONData(name, logLines, resp), actions)
 	}
 	for _, line := range resp.Lines {
 		fmt.Println(line)
 	}
-	if len(actions) == 1 && strings.HasPrefix(actions[0].Command, "orbit restart ") {
+	if len(actions) == 1 {
 		fmt.Println("Next: " + strings.TrimSuffix(actions[0].Command, " --json"))
 	}
 	return nil
+}
+
+func projectDependencySetupCommand(resource string) string {
+	cfg, err := config.Load(configFile)
+	if err != nil {
+		return ""
+	}
+	command, _ := daemonsrv.ProjectDependencySetupCommand(cfg, resource)
+	return command
 }
 
 type logsJSONData struct {

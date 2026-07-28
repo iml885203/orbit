@@ -94,6 +94,11 @@ a dependency-blocked resource unless this evidence is true. A direct
 on a live port recheck: inspect the current owner while occupied, or retry only
 that resource after the port is released.
 
+A degraded host process may include both `state_reason` (for example,
+`exited: exit status 1`) and `failure_evidence`, the last meaningful
+application log line captured for that failed generation. Treat the evidence
+as supporting detail, not a replacement for the lifecycle reason.
+
 ## Converted Commands
 
 These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
@@ -304,9 +309,11 @@ Stable `readiness.state` values:
 
 For a terminal degraded resource with buffered output, `inspect`, `status`, and
 `doctor` lead only to `orbit logs <resource> --json`. After returning the exit
-output, `logs` rechecks live state and leads only to
+output, `logs` rechecks live state. If a supported project dependency check is
+failing, its sole action installs the declared dependencies and then restarts
+only that resource; otherwise the sole action is
 `orbit restart <resource> --json`. Follow that sequence instead of skipping
-ahead: a newly observed port, dependency, or runtime cause can replace the
+ahead: a newly observed port, dependency, or runtime cause can replace a blind
 restart with its safer cause-specific action.
 
 `converging` may also be returned when daemon resource status is temporarily

@@ -285,7 +285,6 @@ func TestServiceStartErrorExplainsEvidenceAndRecovery(t *testing.T) {
 		"address already in use",
 		"Last log: OSError: Address already in use",
 		"orbit logs worker",
-		"orbit restart worker",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing %q", err, want)
@@ -335,7 +334,6 @@ func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
 		"api cannot start because dependency redis is unhealthy",
 		"redis failed to become healthy: container exited unexpectedly",
 		"orbit logs redis",
-		"orbit restart redis",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error missing %q:\n%s", want, err)

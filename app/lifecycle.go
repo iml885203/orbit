@@ -172,7 +172,29 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 		}
 	}
 	if len(terminalNames) > 0 {
-		return lifecycleRecommendedActions(terminalNames)
+		var actions []cli.JSONAction
+		seen := make(map[string]bool, len(terminalNames))
+		for _, name := range terminalNames {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			service := byName[name]
+			if service != nil && service.LogsAvailable {
+				actions = append(actions, cli.JSONAction{
+					Command:     "orbit logs " + name + " --json",
+					Reason:      "Inspect the failure evidence for " + name + " before choosing a recovery.",
+					Destructive: false,
+				})
+				continue
+			}
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit restart " + name + " --json",
+				Reason:      "Retry only " + name + "; it produced no output to inspect.",
+				Destructive: false,
+			})
+		}
+		return actions
 	}
 
 	evidenceNames := make([]string, 0, len(serviceNames))
@@ -227,7 +249,7 @@ func noLogsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
 	}}
 }
 
-func logsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
+func logsRecoveryActions(resource *daemon.ResourceStatus, dependencySetup string) []cli.JSONAction {
 	if resource == nil || resource.State != "degraded" {
 		return []cli.JSONAction{cli.StatusAction()}
 	}
@@ -238,6 +260,13 @@ func logsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
 	}
 	if resource.HealthProgress != nil && resource.HealthProgress.Recovering {
 		return []cli.JSONAction{cli.StatusAction()}
+	}
+	if dependencySetup != "" {
+		return []cli.JSONAction{{
+			Command:     dependencySetup + " && orbit restart " + resource.Name + " --json",
+			Reason:      "Install the declared project dependencies, then retry only " + resource.Name + ".",
+			Destructive: false,
+		}}
 	}
 	return []cli.JSONAction{{
 		Command:     "orbit restart " + resource.Name + " --json",

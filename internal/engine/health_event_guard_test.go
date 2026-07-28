@@ -120,6 +120,34 @@ func TestProcessExited_CancelsLifecycleCtx(t *testing.T) {
 	}
 }
 
+func TestProcessExitEvidenceSurvivesCancellationNoise(t *testing.T) {
+	o := singleServiceOrchestrator(t)
+	setServiceState(o, "api", StateHealthy, 2)
+
+	_ = o.handleEvent(context.Background(), Event{
+		Type:       EventProcessExited,
+		Service:    "api",
+		Message:    "exited: exit status 1",
+		Evidence:   "ModuleNotFoundError: No module named 'humanize'",
+		Generation: 2,
+	})
+	_ = o.handleEvent(context.Background(), Event{
+		Type:       EventHealthFail,
+		Service:    "api",
+		Message:    "context canceled",
+		Err:        context.Canceled,
+		Generation: 2,
+	})
+
+	info, _ := o.GetServiceInfo("api")
+	if info.StateReason != "exited: exit status 1" {
+		t.Fatalf("state reason = %q", info.StateReason)
+	}
+	if info.FailureEvidence != "ModuleNotFoundError: No module named 'humanize'" {
+		t.Fatalf("failure evidence = %q", info.FailureEvidence)
+	}
+}
+
 // A late exit notification from a replaced process must not degrade — or
 // (worse) cancel the lifecycle of — the successor generation.
 func TestProcessExited_StaleGenerationIgnored(t *testing.T) {

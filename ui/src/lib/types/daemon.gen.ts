@@ -15,6 +15,10 @@ import type { KafkaIO } from "./config.gen";
 
 
 //////////
+// source: doctor_project_dependencies.go
+
+
+//////////
 // source: envs.go
 
 /**

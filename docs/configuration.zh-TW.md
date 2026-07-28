@@ -412,7 +412,17 @@ orbit settings set-env API_ROOT /path/to/api
 
 這些值會存放在 `user_env` 底下。
 
-選擇環境後，`orbit doctor` 會驗證解析完成的 service paths。`orbit up` 也會在啟動 containers 或 host processes 前執行相同檢查，因此錯誤的 workspace 不會留下只啟動一半的環境。
+選擇 environment 後，`orbit doctor` 會驗證解析完成的 service paths。對於由
+Python interpreter 啟動的 `type: python` service，也會使用該 interpreter
+檢查專案根目錄的 `requirements.txt`，過程不會下載或安裝任何內容。若
+requirements 尚未滿足，Doctor 會提供明確的 `pip install` 指令。command
+已指向 virtual environment 時會沿用它；否則套件只會安裝到 user
+installation，且只有 interpreter 表明需要時才加入 pip 的
+externally-managed override。
+
+`orbit up` 會在啟動 containers 或 host processes 前執行相同檢查，因此錯誤
+workspace 或已知缺少的 project dependency 不會留下只啟動一半的
+environment。安裝 dependency 仍是使用者明確執行的動作。
 
 ## 變數替換
 

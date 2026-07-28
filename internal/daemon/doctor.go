@@ -113,6 +113,7 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	tools := requiredHostTools(cfg)
 	results := ServiceWorkingDirectoryChecks(cfg, nil)
+	results = append(results, configuredPythonInterpreterChecks(cfg)...)
 	toolOffset := len(results)
 	results = append(results, make([]DoctorCheck, len(tools))...)
 
@@ -223,17 +224,47 @@ func projectDependencyChecks(cfg *config.Config) []DoctorCheck {
 	}
 	sort.Strings(names)
 
-	var checks []DoctorCheck
+	type checkTask func() (DoctorCheck, bool)
+	var tasks []checkTask
 	for _, name := range names {
+		name := name
 		service := cfg.Services[name]
-		if service == nil || service.Type != "node" {
+		if service == nil {
 			continue
 		}
-		manager := commandBinary(service.Command)
-		if !isNodePackageManager(manager) {
-			continue
+		switch service.Type {
+		case "node":
+			manager := commandBinary(service.Command)
+			if !isNodePackageManager(manager) {
+				continue
+			}
+			tasks = append(tasks, func() (DoctorCheck, bool) {
+				return nodeProjectDependencyCheck(name, service.Path, manager), true
+			})
+		case "python":
+			tasks = append(tasks, func() (DoctorCheck, bool) {
+				return pythonProjectDependencyCheck(name, service)
+			})
 		}
-		checks = append(checks, nodeProjectDependencyCheck(name, service.Path, manager))
+	}
+
+	results := make([]DoctorCheck, len(tasks))
+	supported := make([]bool, len(tasks))
+	var wg sync.WaitGroup
+	for i, task := range tasks {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], supported[i] = task()
+		}()
+	}
+	wg.Wait()
+
+	checks := make([]DoctorCheck, 0, len(results))
+	for i := range results {
+		if supported[i] {
+			checks = append(checks, results[i])
+		}
 	}
 	return checks
 }
@@ -332,6 +363,9 @@ func requiredHostTools(cfg *config.Config) []HostToolCheck {
 				if binary == "" {
 					binary = "python3"
 				}
+				if strings.ContainsAny(commandExecutable(service.Command), `/\`) {
+					continue
+				}
 				add(binary, name)
 			default:
 				if isKnownRuntime(binary) {
@@ -355,6 +389,10 @@ func requiredHostTools(cfg *config.Config) []HostToolCheck {
 }
 
 func commandBinary(command string) string {
+	return filepath.Base(commandExecutable(command))
+}
+
+func commandExecutable(command string) string {
 	fields := strings.Fields(command)
 	for len(fields) > 0 && strings.Contains(fields[0], "=") {
 		fields = fields[1:]
@@ -368,7 +406,7 @@ func commandBinary(command string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	return filepath.Base(fields[0])
+	return fields[0]
 }
 
 func isNodePackageManager(binary string) bool {
@@ -647,6 +685,9 @@ func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 			detail := service.Name
 			if service.StateReason != "" {
 				detail += " — " + service.StateReason
+			}
+			if service.FailureEvidence != "" && service.FailureEvidence != service.StateReason {
+				detail += " — " + service.FailureEvidence
 			}
 			degraded = append(degraded, detail)
 		default:

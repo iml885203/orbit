@@ -216,7 +216,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		}
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
-			n.StateReason = st.StateReason
+			n.StateReason = resourceFailureSummary(st)
 			n.PortConflict = graphPortConflict(st.PortConflict)
 			n.LogsAvailable = st.LogsAvailable
 			n.Ports = st.Ports
@@ -240,7 +240,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		}
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
-			n.StateReason = st.StateReason
+			n.StateReason = resourceFailureSummary(st)
 			n.PortConflict = graphPortConflictFor(name, statuses, nil)
 			n.LogsAvailable = st.LogsAvailable
 			n.Mode = st.Mode

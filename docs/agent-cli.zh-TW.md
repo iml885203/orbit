@@ -86,6 +86,11 @@ retry 或讀取 logs。
 `logs_unavailable`，而不是空的成功結果。唯一 recommended action 會依即時
 port 重驗結果決定：仍被占用時檢查目前 owner，釋放後則只 retry 該 resource。
 
+Degraded host process 可能同時包含 `state_reason`（例如
+`exited: exit status 1`）與 `failure_evidence`；後者是針對該次失敗
+generation 保存的最後一行有效 application log。它是 lifecycle reason 的
+佐證，不是取代 reason。
+
 ## Converted Commands
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：
@@ -281,10 +286,11 @@ Inspect payload 包含：
 
 對於有 buffered output 的 terminal degraded resource，`inspect`、`status`
 與 `doctor` 只會引導至 `orbit logs <resource> --json`。`logs` 回傳 exit
-output 後會重新檢查即時狀態，並只引導至
-`orbit restart <resource> --json`。Agent 應依序執行，不要直接跳過 log；
-若期間出現新的 port、dependency 或 runtime 原因，Orbit 會改用更安全的
-cause-specific action 取代 restart。
+output 後會重新檢查即時狀態。若支援的 project dependency check 失敗，
+唯一 action 會先安裝已宣告 dependencies，再只 restart 該 resource；否則
+唯一 action 才是 `orbit restart <resource> --json`。Agent 應依序執行，不要
+直接跳過 log；若期間出現新的 port、dependency 或 runtime 原因，Orbit
+會用更安全的 cause-specific action 取代 blind restart。
 
 當 daemon resource status 暫時不可用時，也可能回傳 `converging`。這種情況會用
 `status_unavailable` risk 說明原因。

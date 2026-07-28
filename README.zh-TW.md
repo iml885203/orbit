@@ -54,7 +54,9 @@ PATH。
 在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。
 `orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
 environment repository 或 project workspace。
-Orbit 不會安裝 Python 或其他專案 runtime；`orbit doctor` 會回報所選環境需要的工具。
+Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
+environment 需要的工具，並在啟動前偵測未滿足的 Python
+`requirements.txt`。
 `orbit up` 完成後，Orbit 會直接顯示 healthy application 的 URL 與唯一開啟
 指令；dashboard 則保留為次要選項。
 

@@ -90,6 +90,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			State:               svc.State.String(),
 			PendingDependencies: pendingDependencies,
 			StateReason:         svc.StateReason,
+			FailureEvidence:     svc.FailureEvidence,
 			PortConflict:        resourcePortConflict(svc),
 			LogsAvailable:       resourceLogsAvailable(s.app.Logs, svc.Name),
 			RestartCount:        svc.RestartCount,

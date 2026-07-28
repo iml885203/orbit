@@ -90,10 +90,11 @@ func (e EventType) String() string {
 
 // Event is sent through the orchestrator event channel.
 type Event struct {
-	Type    EventType
-	Service string
-	Message string
-	Err     error
+	Type     EventType
+	Service  string
+	Message  string
+	Evidence string
+	Err      error
 	// Generation identifies which start of the service produced a health
 	// event. handleEvent drops health events whose generation doesn't match
 	// the service's current one: a probe goroutine from a previous start —
@@ -119,8 +120,13 @@ type ServiceInfo struct {
 	// failure, build failure). Populated only while State is Degraded —
 	// Transition clears it on every other target so a stale reason never
 	// survives a restart. Mutation requires the owning Orchestrator's mu.
-	StateReason  string
-	PortConflict *port.ConflictError
+	StateReason string
+	// FailureEvidence preserves the last meaningful application log line
+	// associated with the current degradation. It is cleared with StateReason
+	// so evidence from an earlier generation never survives recovery.
+	// Mutation requires the owning Orchestrator's mu.
+	FailureEvidence string
+	PortConflict    *port.ConflictError
 	// AwaitingContainerRemoval distinguishes a failed stop whose Docker
 	// removal may still finish from a startup failure where no container
 	// ever existed. The poller may reconcile only the former to stopped.
@@ -187,6 +193,7 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		// invalidates them. Callers set StateReason right after a
 		// Transition(StateDegraded).
 		i.StateReason = ""
+		i.FailureEvidence = ""
 		i.PortConflict = nil
 		i.AwaitingContainerRemoval = false
 	}

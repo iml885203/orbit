@@ -222,11 +222,29 @@ func TestLogsRecoveryActionsLeadFromCrashOutputToTargetedRestart(t *testing.T) {
 		StateReason:   "exited: signal: killed",
 		LogsAvailable: true,
 	}
-	actions := logsRecoveryActions(resource)
+	actions := logsRecoveryActions(resource, "")
 	if len(actions) != 1 || actions[0].Command != "orbit restart api --json" {
 		t.Fatalf("actions = %+v", actions)
 	}
 	if !strings.Contains(actions[0].Reason, "after reviewing its exit output") {
+		t.Fatalf("reason = %q", actions[0].Reason)
+	}
+}
+
+func TestLogsRecoveryActionsSetUpDependenciesBeforeTargetedRestart(t *testing.T) {
+	resource := &daemon.ResourceStatus{
+		Name:          "api",
+		State:         "degraded",
+		StateReason:   "exited: exit status 1",
+		LogsAvailable: true,
+	}
+	setup := "python3 -m pip install -r /workspace/api/requirements.txt"
+	actions := logsRecoveryActions(resource, setup)
+	want := setup + " && orbit restart api --json"
+	if len(actions) != 1 || actions[0].Command != want {
+		t.Fatalf("actions = %+v, want %q", actions, want)
+	}
+	if !strings.Contains(actions[0].Reason, "declared project dependencies") {
 		t.Fatalf("reason = %q", actions[0].Reason)
 	}
 }
@@ -240,7 +258,7 @@ func TestLogsRecoveryActionsKeepRecoveringServiceOnStatus(t *testing.T) {
 			Recovering: true,
 		},
 	}
-	actions := logsRecoveryActions(resource)
+	actions := logsRecoveryActions(resource, "")
 	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
 		t.Fatalf("actions = %+v", actions)
 	}
@@ -391,29 +409,17 @@ func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
 			State:               "pending",
 			PendingDependencies: []string{"redis"},
 		},
-		{Name: "redis", State: "degraded"},
+		{Name: "redis", State: "degraded", LogsAvailable: true},
 	}}
 	actions := lifecycleRecommendedActionsForStatus([]string{"api"}, status)
-	var foundLogs, foundRestart bool
-	for _, action := range actions {
-		if action.Command == "orbit logs api --json" {
-			t.Fatalf("actions = %+v, dependent has no logs before it starts", actions)
-		}
-		if action.Command == "orbit logs redis --json" {
-			foundLogs = true
-		}
-		if action.Command == "orbit restart redis --json" {
-			foundRestart = true
-		}
-	}
-	if !foundLogs || !foundRestart {
-		t.Fatalf("actions = %+v, want dependency logs and restart", actions)
+	if len(actions) != 1 || actions[0].Command != "orbit logs redis --json" {
+		t.Fatalf("actions = %+v, want only dependency logs", actions)
 	}
 }
 
 func TestLifecycleRecommendedActionsExcludeHealthyResources(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{Name: "mongo", State: "degraded", StateReason: "container exited unexpectedly"},
+		{Name: "mongo", State: "degraded", StateReason: "container exited unexpectedly", LogsAvailable: true},
 		{Name: "redis", State: "healthy"},
 	}}
 	actions := lifecycleRecommendedActionsForStatus([]string{"mongo", "redis"}, status)
@@ -421,11 +427,7 @@ func TestLifecycleRecommendedActionsExcludeHealthyResources(t *testing.T) {
 	for _, action := range actions {
 		got = append(got, action.Command)
 	}
-	want := []string{
-		"orbit status --json",
-		"orbit logs mongo --json",
-		"orbit restart mongo --json",
-	}
+	want := []string{"orbit logs mongo --json"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("actions = %v, want %v", got, want)
 	}
@@ -468,18 +470,14 @@ func TestLifecycleRecommendedActionsPrioritizeTerminalFailureOverConvergingResou
 			PendingDependencies: []string{"cache", "database"},
 		},
 		{Name: "cache", State: "starting"},
-		{Name: "database", State: "degraded", StateReason: "container exited unexpectedly"},
+		{Name: "database", State: "degraded", StateReason: "container exited unexpectedly", LogsAvailable: true},
 	}}
 	actions := lifecycleRecommendedActionsForStatus([]string{"api", "cache", "database"}, status)
 	got := make([]string, 0, len(actions))
 	for _, action := range actions {
 		got = append(got, action.Command)
 	}
-	want := []string{
-		"orbit status --json",
-		"orbit logs database --json",
-		"orbit restart database --json",
-	}
+	want := []string{"orbit logs database --json"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("actions = %v, want %v", got, want)
 	}

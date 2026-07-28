@@ -425,7 +425,19 @@ orbit settings set-env API_ROOT /path/to/api
 
 These values are stored under `user_env`.
 
-After selecting an environment, `orbit doctor` validates resolved service paths. `orbit up` performs the same check before starting containers or host processes, so an invalid workspace cannot leave a partially started environment.
+After selecting an environment, `orbit doctor` validates resolved service
+paths. For a `type: python` service launched by a Python interpreter, a
+project-root `requirements.txt` is also checked against that exact interpreter
+without downloading or installing anything. If requirements are unsatisfied,
+Doctor gives an explicit `pip install` command. It uses the active virtual
+environment when the command names one; otherwise it keeps packages in the
+user installation and adds pip's externally-managed override only when that
+interpreter reports it is required.
+
+`orbit up` performs the same checks before starting containers or host
+processes, so an invalid workspace or known-missing project dependency cannot
+leave a partially started environment. Dependency installation remains an
+explicit user action.
 
 ## Variable substitution
 
