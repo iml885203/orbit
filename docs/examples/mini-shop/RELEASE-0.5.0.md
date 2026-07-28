@@ -11,6 +11,7 @@
 1. 頁面常駐卡片
    - 新增 `故障情境對照卡（先照表走）`
    - 每個卡片顯示：錯誤代碼 / 症狀 / 建議動作 / 快速命令
+   - 同步做錯誤碼 Normalize，讓 `forced_decline / insufficient_funds / payment_failed / order_failed_release_failed` 之類會對到最熟悉的情境，減少「不知道哪張卡是對的」。
 
 2. 錯誤反饋一致化
    - 發生錯誤時會同時更新執行報告與故障對照卡高亮，降低「錯誤後不知道下一步」的摩擦。

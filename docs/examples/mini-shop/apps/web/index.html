@@ -274,6 +274,8 @@ web
         { code: 'order_unreachable', symptom: 'order-api 未回應', step: '先補齊 order 服務後再重試 checkout。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f' },
         { code: 'payment_unreachable', symptom: 'payment-api 未回應', step: '先補齊 payment 服務後再重試。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs payment-api -f' },
         { code: 'checkout_failed', symptom: 'checkout 非預期失敗', step: '回到情境 A 先跑一次成功流程，再查看 checkout/api log。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs checkout-api -f' },
+        { code: 'customer_unreachable', symptom: 'customer-api 未回應', step: '先確認 customer 服務是否 ready，缺失時重啟該服務。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs customer-api -f' },
+        { code: 'payment_failed', symptom: '付款流程異常', step: '先確認 payment-api 是否 ready，必要時重啟。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs payment-api -f' },
       ];
       const fallbackPattern = {
         code: 'default',
@@ -308,19 +310,39 @@ web
         return `orbit -c docs/examples/mini-shop/dev.yaml logs ${services[service]} -f`;
       }
 
+      function normalizeErrorCode(code) {
+        if (!code) {
+          return '';
+        }
+        if (code === 'forced_decline' || code === 'insufficient_funds') {
+          return 'payment_declined';
+        }
+        if (code === 'order_failed_release_failed') {
+          return 'order_unreachable';
+        }
+        if (code === 'catalog_not_found') {
+          return 'catalog_unreachable';
+        }
+        return code;
+      }
+
       function recoveryHintsForErrorCode(code) {
+        const normalized = normalizeErrorCode(code);
         if (!code) return ['建議：先查看診斷命令，確認哪個服務回報異常。'];
-        if (code === 'insufficient_stock') {
+        if (normalized === 'insufficient_stock') {
           return ['建議：降低商品數量後重試；若持續失敗請檢查 inventory-api 的 stock。', '可直接執行：`inventory` 服務日誌（下一步命令見時間軸）。'];
         }
-        if (code === 'cart_empty') {
+        if (normalized === 'cart_empty') {
           return ['建議：先加入至少 1 件商品再 checkout。', '可先到 cart-api 檢查目前購物車內容。'];
         }
-        if (code === 'cart_unreachable' || code === 'catalog_unreachable' || code === 'order_unreachable' || code === 'payment_unreachable' || code === 'inventory_unreachable' || code === 'customer_unreachable') {
+        if (normalized === 'cart_unreachable' || normalized === 'catalog_unreachable' || normalized === 'order_unreachable' || normalized === 'payment_unreachable' || normalized === 'inventory_unreachable' || normalized === 'customer_unreachable') {
           return ['建議：先確認服務就緒（status），再重試。', '如果某 service 仍 not ready，先重啟該服務容器。'];
         }
-        if (code === 'payment_declined' || code === 'forced_decline' || code === 'insufficient_funds' || code === 'payment_failed') {
+        if (normalized === 'payment_declined' || normalized === 'payment_failed') {
           return ['建議：改用 mock_card 重試；若仍失敗再檢查 payment-api。'];
+        }
+        if (normalized === 'checkout_failed') {
+          return ['建議：回到情境 A 先跑一次成功流程，確認資料鏈路完整。'];
         }
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
       }
@@ -838,7 +860,8 @@ web
           setRunResult('ok', `✅ Checkout 成功：訂單 ${order.id}`, lines);
         } else if (order.status === 'failed' || order.status === 'cancelled') {
           setRunResult('error', `❌ Checkout 結果：訂單 ${order.id}（已失敗）`, lines);
-          renderErrorPlaybook(fallbackPattern.code);
+          const orderCode = latestCheckoutPayload?.code || 'checkout_failed';
+          renderErrorPlaybook(normalizeErrorCode(orderCode));
         } else {
           setRunResult('warn', `🧭 Checkout 已啟動：訂單 ${order.id}`, lines);
           renderErrorPlaybook(fallbackPattern.code);
@@ -852,9 +875,10 @@ web
         ];
         const parsed = payload || latestCheckoutPayload;
         const code = parsed?.code;
+        const normalizedCode = normalizeErrorCode(code);
         const hints = recoveryHintsForErrorCode(code);
         lines.push(...hints);
-        renderErrorPlaybook(code);
+        renderErrorPlaybook(normalizedCode);
         setRunResult('error', '❌ 操作失敗', lines);
       }
 
@@ -886,7 +910,7 @@ web
           const parsed = parseApiError(err);
           setNotice(errorText(parsed), 'error');
           appendSummary('刷新失敗，請檢查服務可用性。');
-          renderErrorPlaybook(parsed?.code || '');
+          renderErrorPlaybook(normalizeErrorCode(parsed?.code || ''));
         }
       }
 
