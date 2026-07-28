@@ -43,6 +43,22 @@
       .timeline-item.done { border-left: 3px solid #22c55e; }
       .timeline-item.warn { border-left: 3px solid #f59e0b; }
       .timeline-item.error { border-left: 3px solid #fb7185; }
+      .timeline-step {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        font-size: 12px;
+        margin-right: 6px;
+        background: #334155;
+        color: #e5e7eb;
+        font-weight: 700;
+      }
+      .timeline-step.done { background: #166534; }
+      .timeline-step.warn { background: #92400e; }
+      .timeline-step.error { background: #9f1239; }
       .timeline-btn { margin-top: 6px; margin-right: 6px; }
       .timeline-cmd { margin-top: 6px; color: #94a3b8; font-size: 12px; word-break: break-all; }
       .result-card { border-left: 4px solid #60a5fa; }
@@ -1371,10 +1387,20 @@ web
           return;
         }
 
+        const buildTimelineStep = (index, title, status, body, service) => {
+          const stepClass = status === 'error' ? 'error' : status === 'warn' ? 'warn' : 'done';
+          return `<div class="timeline-item ${stepClass}">`
+            + `<div><span class="timeline-step ${stepClass}">${index}</span><strong>${title}</strong></div>`
+            + `<div class="hint">${body}</div>`
+            + (service ? timelineLogButton(service) : '')
+            + `</div>`;
+        };
+
         const steps = [];
         const nowLabel = new Date().toLocaleTimeString();
-        steps.push(`<div class="timeline-item done"><strong>${nowLabel}｜開始 Checkout</strong><div class="hint">讀取購物車、整理訂單明細</div>${timelineLogButton('checkout-api')}</div>`);
-        steps.push(`<div class="timeline-item done"><strong>${nowLabel}｜庫存保留</strong><div class="hint">cart-api + inventory-api：商品 ${order.product_name} x${order.quantity}</div>${timelineLogButton('inventory-api')}<div class="timeline-cmd hint">cart-api 也有對應變更可比對</div></div>`);
+        const relatedShipment = (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === order.id);
+        steps.push(buildTimelineStep(1, `${nowLabel}｜開始 Checkout`, 'done', '讀取購物車、整理訂單明細', 'checkout-api'));
+        steps.push(buildTimelineStep(2, `${nowLabel}｜庫存保留`, 'done', `cart-api + inventory-api：商品 ${order.product_name} x${order.quantity}`, 'inventory-api'));
 
         if (checkoutPayload?.payment) {
           const paymentStatus = checkoutPayload.payment.status || 'paid';
@@ -1382,20 +1408,30 @@ web
           const paymentText = paymentStatus === 'paid'
             ? `<div class="hint">payment-api：交易成功（${checkoutPayload.payment.method}）${paymentId}</div>`
             : `<div class="hint">payment-api：${paymentStatus}</div>`;
-          steps.push(`<div class="timeline-item ${paymentStatus === 'paid' ? 'done' : 'error'}"><strong>${nowLabel}｜付款 ${paymentStatus}</strong>${paymentText}${timelineLogButton('payment-api')}</div>`);
+          const paymentClass = paymentStatus === 'paid' ? 'done' : 'error';
+          steps.push(buildTimelineStep(3, `${nowLabel}｜付款 ${paymentStatus}`, paymentClass, paymentText, 'payment-api'));
         } else if (checkoutPayload?.code) {
-          steps.push(`<div class="timeline-item error"><strong>${nowLabel}｜付款失敗</strong><div class="hint">原因：${checkoutPayload.code}</div>${timelineLogButton('payment-api')}</div>`);
+          steps.push(`<div class="timeline-item error"><div><span class="timeline-step error">3</span><strong>${nowLabel}｜付款失敗</strong></div><div class="hint">原因：${checkoutPayload.code}</div>${timelineLogButton('payment-api')}</div>`);
         } else {
-          steps.push(`<div class="timeline-item warn"><strong>${nowLabel}｜付款</strong><div class="hint">尚未拿到付款結果（可參考執行報告）</div>${timelineLogButton('payment-api')}</div>`);
+          steps.push(`<div class="timeline-item warn"><div><span class="timeline-step warn">3</span><strong>${nowLabel}｜付款</strong></div><div class="hint">尚未拿到付款結果（可參考執行報告）</div>${timelineLogButton('payment-api')}</div>`);
         }
 
-        steps.push(`<div class="timeline-item done"><strong>${nowLabel}｜建立訂單</strong><div class="hint">order-api：訂單 #${order.id}，狀態 ${order.status}</div>${timelineLogButton('order-api')}</div>`);
+        const orderStatusClass = order.status === 'confirmed' ? 'done' : order.status === 'pending' ? 'warn' : 'error';
+        steps.push(`<div class="timeline-item ${orderStatusClass}"><div><span class="timeline-step ${orderStatusClass}">4</span><strong>${nowLabel}｜建立訂單</strong></div><div class="hint">order-api：訂單 #${order.id}，狀態 ${order.status}</div>${timelineLogButton('order-api')}</div>`);
+        const shippingText = relatedShipment
+          ? `shipping-api：${relatedShipment.tracking_no}（${relatedShipment.status}）`
+          : 'shipping-api：尚未回傳出貨紀錄';
+        const shippingStatus = relatedShipment ? 'done' : 'warn';
+        steps.push(`<div class="timeline-item ${shippingStatus}"><div><span class="timeline-step ${shippingStatus}">5</span><strong>${nowLabel}｜建立出貨</strong></div><div class="hint">${shippingText}</div>${timelineLogButton('shipping-api')}</div>`);
 
-        const relatedShipment = (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === order.id);
-        if (relatedShipment) {
-          steps.push(`<div class="timeline-item done"><strong>${nowLabel}｜建立出貨</strong><div class="hint">shipping-api：${relatedShipment.tracking_no}（${relatedShipment.status}）</div>${timelineLogButton('shipping-api')}</div>`);
+        if (relatedShipment && relatedShipment.status === 'pending') {
+          steps.push(`<div class="timeline-item warn"><div><span class="timeline-step warn">6</span><strong>${nowLabel}｜待處理完成</strong></div><div class="hint">shipping 仍在處理中，稍後會看到最終結果。</div></div>`);
+        }
+
+        if (!relatedShipment) {
+          steps.push(`<div class="timeline-item warn"><div><span class="timeline-step warn">6</span><strong>${nowLabel}｜待關聯驗證</strong></div><div class="hint">尚未看到對應出貨，建議確認 order 與 shipping 流程。</div></div>`);
         } else {
-          steps.push(`<div class="timeline-item warn"><strong>${nowLabel}｜建立出貨</strong><div class="hint">shipping-api：尚未回傳出貨紀錄</div>${timelineLogButton('shipping-api')}</div>`);
+          steps.push(`<div class="timeline-item done"><div><span class="timeline-step done">6</span><strong>${nowLabel}｜交易閉環完成</strong></div><div class="hint">可在「最近關聯交易」核對 cart / order / shipment 對照。</div></div>`);
         }
 
         flowTimelineEl.innerHTML = steps.join('');
