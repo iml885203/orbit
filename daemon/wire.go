@@ -71,6 +71,7 @@ type ResourceStatus struct {
 	// failure, build failure); empty in every other state.
 	StateReason    string                `json:"state_reason,omitempty"`
 	PortConflict   *ResourcePortConflict `json:"port_conflict,omitempty"`
+	LogsAvailable  bool                  `json:"logs_available,omitempty"`
 	RestartCount   int                   `json:"restart_count"`
 	Ports          map[string]int        `json:"ports,omitempty"`
 	URL            string                `json:"url,omitempty"`

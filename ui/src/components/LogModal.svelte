@@ -4,9 +4,10 @@
   import { analyzeLines } from '$lib/logClassify'
   import { flashLogLine } from '$lib/logScroll'
 
-  let { service, lines, onClose, onOpenTrace }: {
+  let { service, lines, loading = false, onClose, onOpenTrace }: {
     service: string
     lines: string[]
+    loading?: boolean
     onClose: () => void
     // Forwarded to LogPanel — hosts that can navigate to a trace pass it.
     onOpenTrace?: (traceId: string) => void
@@ -131,13 +132,17 @@
         <button type="button" class:active={filterLevel === 'warn'} aria-pressed={filterLevel === 'warn'} onclick={() => (filterLevel = 'warn')}>Warn</button>
       </div>
       <span class="meta">
-        {filteredLines.length === lines.length ? `${lines.length} lines` : `${filteredLines.length}/${lines.length} lines`} ·
-        {#if errorGroups.length === 0}
-          0 errors
-        {:else if selectedErrorGroupIndex === null}
-          {errorGroups.length} errors
+        {#if loading}
+          Loading logs…
         {:else}
-          error {selectedErrorGroupIndex + 1} / {errorGroups.length}
+          {filteredLines.length === lines.length ? `${lines.length} lines` : `${filteredLines.length}/${lines.length} lines`} ·
+          {#if errorGroups.length === 0}
+            0 errors
+          {:else if selectedErrorGroupIndex === null}
+            {errorGroups.length} errors
+          {:else}
+            error {selectedErrorGroupIndex + 1} / {errorGroups.length}
+          {/if}
         {/if}
       </span>
       <Btn label="⏮ prev err" disabled={errorGroups.length === 0} onclick={() => jumpRelativeError(-1)} />
@@ -149,15 +154,21 @@
       <button type="button" class="close" onclick={onClose} aria-label="Close">✕</button>
     </header>
     <div class="body" bind:this={panelEl}>
-      <LogPanel
-        lines={filteredLines}
-        open
-        id={'modal-logs-' + service}
-        maxHeight="calc(90vh - 3rem)"
-        {follow}
-        actions
-        {onOpenTrace}
-      />
+      {#if loading}
+        <p class="empty-state" role="status">Loading buffered logs…</p>
+      {:else if lines.length === 0}
+        <p class="empty-state" role="status">No log output yet.</p>
+      {:else}
+        <LogPanel
+          lines={filteredLines}
+          open
+          id={'modal-logs-' + service}
+          maxHeight="calc(90vh - 3rem)"
+          {follow}
+          actions
+          {onOpenTrace}
+        />
+      {/if}
     </div>
   </div>
 </div>
@@ -182,6 +193,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+  .empty-state {
+    color: var(--dim);
+    margin: 0;
+    padding: var(--space-4);
+    text-align: center;
   }
   header {
     display: flex;

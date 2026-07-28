@@ -42,7 +42,7 @@ class DaemonStore {
   services = $state<Record<string, ResourceStatus>>({})
   logBuffers = $state<Record<string, string[]>>({})
   openLogs = $state<Record<string, boolean>>({})
-  logModal = $state<{ target: string | null }>({ target: null })
+  logModal = $state<{ target: string | null; loading: boolean }>({ target: null, loading: false })
   envToggles = $state<EnvToggleInfo[]>([])
   envs = $state<EnvsResponse | null>(null)
   doctorChecks = $state<DoctorCheck[]>([])
@@ -147,6 +147,7 @@ function graphDataKey(graph: GraphResponse): string {
       state: n.state,
       stateReason: n.stateReason ?? '',
       portConflict: n.portConflict ?? null,
+      logsAvailable: n.logsAvailable ?? false,
       mode: n.mode ?? '',
       url: n.url ?? '',
       ports: n.ports ?? {},
@@ -181,6 +182,7 @@ export function resetForNewDaemon() {
   store.daemon.envs = null
   store.daemon.doctorChecks = []
   store.daemon.logModal.target = null
+  store.daemon.logModal.loading = false
 }
 
 export function appendLog(service: string, line: string) {
@@ -189,6 +191,22 @@ export function appendLog(service: string, line: string) {
   if (store.daemon.logBuffers[service].length > MAX_LINES) {
     store.daemon.logBuffers[service] = store.daemon.logBuffers[service].slice(-MAX_LINES)
   }
+}
+
+export function openLogViewer(service: string) {
+  store.daemon.logModal = { target: service, loading: true }
+}
+
+export function hydrateLogs(service: string, snapshot: string[]) {
+  const live = store.daemon.logBuffers[service] ?? []
+  let overlap = Math.min(snapshot.length, live.length)
+  while (overlap > 0) {
+    const snapshotTail = snapshot.slice(snapshot.length - overlap)
+    const liveHead = live.slice(0, overlap)
+    if (snapshotTail.every((line, index) => line === liveHead[index])) break
+    overlap--
+  }
+  store.daemon.logBuffers[service] = [...snapshot, ...live.slice(overlap)].slice(-MAX_LINES)
 }
 
 export function toggleLog(name: string) {

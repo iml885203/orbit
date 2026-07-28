@@ -6,7 +6,8 @@
   import OperationBanner from '../components/graph/OperationBanner.svelte'
   import LogModal from '../components/LogModal.svelte'
   import { push } from 'svelte-spa-router'
-  import { store } from '$lib/stores.svelte'
+  import { hydrateLogs, store } from '$lib/stores.svelte'
+  import { fetchLogs } from '$lib/api'
 
   const target = $derived(store.daemon.logModal.target)
   const lines = $derived(target ? (store.daemon.logBuffers[target] ?? []) : [])
@@ -15,6 +16,18 @@
       ? store.graph.data.nodes.find(n => n.name === store.graph.selectedNode) ?? null
       : null
   )
+
+  let logRequest = 0
+  $effect(() => {
+    const service = target
+    if (!service) return
+    const request = ++logRequest
+    fetchLogs(service).then((snapshot) => {
+      if (request !== logRequest || store.daemon.logModal.target !== service) return
+      if (snapshot) hydrateLogs(service, snapshot)
+      store.daemon.logModal.loading = false
+    })
+  })
 </script>
 
 <section class="services-page" aria-label="Services">
@@ -30,6 +43,7 @@
   <LogModal
     service={target}
     {lines}
+    loading={store.daemon.logModal.loading}
     onClose={() => store.daemon.logModal.target = null}
     onOpenTrace={(id) => { store.daemon.logModal.target = null; push('/tracing/' + id) }}
   />

@@ -118,6 +118,7 @@ export interface ResourceStatus {
    */
   state_reason?: string;
   port_conflict?: ResourcePortConflict;
+  logs_available?: boolean;
   restart_count: number /* int */;
   ports?: { [key: string]: number /* int */};
   url?: string;

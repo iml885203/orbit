@@ -26,6 +26,7 @@
     return (resp.resources ?? [])
       .map((s) => [
         s.name, s.state, s.state_reason ?? '', s.mode ?? '', s.url ?? '',
+        s.logs_available ? 'logs' : '',
         JSON.stringify(s.ports ?? {}),
         s.health_progress ? `${s.health_progress.attempts}/${s.health_progress.last_err ?? ''}` : '',
       ].join('|'))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { replaceGraphData, store } from './stores.svelte'
+import { hydrateLogs, replaceGraphData, store } from './stores.svelte'
 import type { GraphResponse } from './types.gen'
 
 const graph = (state = 'healthy'): GraphResponse => ({
@@ -33,5 +33,35 @@ describe('replaceGraphData', () => {
 
     expect(store.graph.data).not.toBe(first)
     expect(store.graph.data?.nodes[0].state).toBe('healthy')
+  })
+
+  it('replaces the graph when buffered logs become available', () => {
+    const first = graph()
+    store.graph.data = first
+    const next = graph()
+    next.nodes[0].logsAvailable = true
+
+    replaceGraphData(next)
+
+    expect(store.graph.data).not.toBe(first)
+    expect(store.graph.data?.nodes[0].logsAvailable).toBe(true)
+  })
+})
+
+describe('hydrateLogs', () => {
+  it('merges a buffered snapshot with newer streamed lines without duplicates', () => {
+    store.daemon.logBuffers.api = ['second', 'third']
+
+    hydrateLogs('api', ['first', 'second'])
+
+    expect(store.daemon.logBuffers.api).toEqual(['first', 'second', 'third'])
+  })
+
+  it('keeps a complete buffered snapshot when live lines are already its tail', () => {
+    store.daemon.logBuffers.api = ['second', 'third']
+
+    hydrateLogs('api', ['first', 'second', 'third'])
+
+    expect(store.daemon.logBuffers.api).toEqual(['first', 'second', 'third'])
   })
 })

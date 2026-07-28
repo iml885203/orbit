@@ -73,11 +73,27 @@ describe('ServiceNode', () => {
         inspect_command: 'lsof -nP -iTCP:6379 -sTCP:LISTEN',
       },
     }
-    const { queryByRole, getByRole } = render(ServiceNode, { props: { data: node, id: 'api' } })
+    const { queryByRole } = render(ServiceNode, { props: { data: node, id: 'api' } })
 
     expect(queryByRole('button', { name: /^start api$/i })).toBeNull()
     expect(queryByRole('button', { name: /^restart api$/i })).toBeNull()
     expect(queryByRole('button', { name: /^stop api$/i })).toBeNull()
+    expect(queryByRole('button', { name: /open logs for api/i })).toBeNull()
+  })
+
+  it('keeps logs available for a blocked service with buffered output', () => {
+    const node = {
+      ...baseNode,
+      state: 'pending',
+      logsAvailable: true,
+      portConflict: {
+        port: 6379,
+        resource: 'redis',
+        inspect_command: 'lsof -nP -iTCP:6379 -sTCP:LISTEN',
+      },
+    }
+    const { getByRole } = render(ServiceNode, { props: { data: node, id: 'api' } })
+
     expect(getByRole('button', { name: /open logs for api/i })).toBeTruthy()
   })
 

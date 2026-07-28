@@ -93,6 +93,7 @@ export interface GraphNode {
    */
   stateReason?: string;
   portConflict?: GraphPortConflict;
+  logsAvailable?: boolean;
   mode?: string; // services only
   url?: string;
   ports?: { [key: string]: number /* int */};

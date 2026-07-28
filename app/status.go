@@ -376,6 +376,7 @@ type jsonService struct {
 	State               string                       `json:"state"`
 	StateReason         string                       `json:"state_reason,omitempty"`
 	PortConflict        *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
+	LogsAvailable       bool                         `json:"logs_available,omitempty"`
 	PendingDependencies []string                     `json:"pending_dependencies,omitempty"`
 	BlockedBy           string                       `json:"blocked_by,omitempty"`
 	URL                 string                       `json:"url,omitempty"`
@@ -541,6 +542,7 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 		target.PortConflict = source.PortConflict
 	}
 	target.PendingDependencies = append([]string{}, source.PendingDependencies...)
+	target.LogsAvailable = source.LogsAvailable
 	target.StartupTime = source.StartupTime
 	target.Uptime = source.Uptime
 	if blocker := statusDependencyBlocker(source, running); blocker != nil {

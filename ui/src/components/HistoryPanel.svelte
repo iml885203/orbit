@@ -3,7 +3,7 @@
   import { CheckCircle2, Clock3, Copy, ScrollText, X, XCircle } from '@lucide/svelte'
   import { fetchHistoryList } from '$lib/api'
   import { history, type HistoryFilter, type HistoryRecord } from '$lib/history.svelte'
-  import { store, toast } from '$lib/stores.svelte'
+  import { openLogViewer, store, toast } from '$lib/stores.svelte'
   import { tooltip } from '$lib/tooltip.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
@@ -54,8 +54,13 @@
     return null
   }
 
+  function serviceWithLogs(rec: HistoryRecord): string | null {
+    const service = serviceOf(rec)
+    return service && store.daemon.services[service].logs_available ? service : null
+  }
+
   function openLogs(name: string) {
-    store.daemon.logModal.target = name
+    openLogViewer(name)
     onclose()
   }
 
@@ -88,8 +93,8 @@
           <span class="status status-{rec.status}" aria-label={rec.status}><StatusIcon size={14} /></span>
           <span class="cmd">{rec.command || rec.summary}</span>
           <span class="duration">{rec.status === 'pending' ? 'pending' : `${rec.durationMs ?? 0} ms`}</span>
-          {#if serviceOf(rec)}
-            <button class="copy" aria-label="Open logs for {serviceOf(rec)}" use:tooltip={{ content: `Logs: ${serviceOf(rec)}` }} onclick={() => openLogs(serviceOf(rec)!)}><ScrollText size={14} /></button>
+          {#if serviceWithLogs(rec)}
+            <button class="copy" aria-label="Open logs for {serviceWithLogs(rec)}" use:tooltip={{ content: `Logs: ${serviceWithLogs(rec)}` }} onclick={() => openLogs(serviceWithLogs(rec)!)}><ScrollText size={14} /></button>
           {/if}
           <button class="copy" aria-label="Copy command" use:tooltip={{ content: 'Copy' }} onclick={() => copyRecord(rec)}><Copy size={14} /></button>
         </div>

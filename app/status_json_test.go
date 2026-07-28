@@ -103,6 +103,23 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	}
 }
 
+func TestStatusJSON_ExposesBufferedLogEvidence(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
+	running := map[string]daemon.ResourceStatus{
+		"worker": {
+			Name:          "worker",
+			Kind:          daemon.ResourceKindService,
+			State:         "stopped",
+			LogsAvailable: true,
+		},
+	}
+
+	status := renderStatusJSON(t, cfg, running, daemonStatus{Running: true})
+	if len(status.Resources) != 1 || !status.Resources[0].LogsAvailable {
+		t.Fatalf("resources = %+v, want logs_available evidence", status.Resources)
+	}
+}
+
 func TestStatusPortConflictRecommendsInspectionInsteadOfRestart(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{"redis": {}},

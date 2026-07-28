@@ -79,6 +79,10 @@ evidence（`port`、`resource`、可取得時的 owner，以及 `inspect_command
 在停止 owner 或於 shared environment 選用其他 host port 前，不應盲目
 retry 或讀取 logs。
 
+只有 running daemon 已替該 resource 緩衝輸出時，resource status 才會包含
+`logs_available: true`。欄位不存在代表目前沒有歷史輸出可檢查；dependency
+卡住的 resource 若沒有這項證據，client 不應把 Logs 當成復原動作。
+
 ## Converted Commands
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：

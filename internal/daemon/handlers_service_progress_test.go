@@ -79,3 +79,24 @@ func TestHandleStatus_OmitsHealthProgressWhenServiceHasNoHealthCheck(t *testing.
 		}
 	}
 }
+
+func TestHandleStatus_ReportsBufferedLogsWithoutGuessingFromLifecycleState(t *testing.T) {
+	cfg := &config.Config{
+		Services: map[string]*config.Service{
+			"api": {Name: "api", Type: "node"},
+		},
+		Containers: map[string]*config.Container{},
+	}
+	srv := newTestServer(t, cfg)
+
+	statuses := srv.computeStatuses(cfg)
+	if len(statuses) != 1 || statuses[0].LogsAvailable {
+		t.Fatalf("fresh service logs_available = %v, want false", statuses)
+	}
+
+	srv.app.Logs.Write("api", "server listening")
+	statuses = srv.computeStatuses(cfg)
+	if len(statuses) != 1 || !statuses[0].LogsAvailable {
+		t.Fatalf("buffered service logs_available = %v, want true", statuses)
+	}
+}

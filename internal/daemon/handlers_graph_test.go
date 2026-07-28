@@ -135,8 +135,9 @@ func TestBuildGraphNodes_PropagatesDependencyPortConflict(t *testing.T) {
 	}
 	statuses := map[string]ResourceStatus{
 		"redis": {
-			Name:  "redis",
-			State: "degraded",
+			Name:          "redis",
+			State:         "degraded",
+			LogsAvailable: true,
 			PortConflict: &ResourcePortConflict{
 				Port:           6379,
 				Resource:       "redis",
@@ -162,6 +163,12 @@ func TestBuildGraphNodes_PropagatesDependencyPortConflict(t *testing.T) {
 	}
 	if conflict.Resource != "redis" || conflict.Port != 6379 {
 		t.Fatalf("api port conflict = %#v, want redis:6379", conflict)
+	}
+	if !byName["redis"].LogsAvailable {
+		t.Fatal("redis logs_available = false, want buffered log evidence")
+	}
+	if byName["api"].LogsAvailable {
+		t.Fatal("api logs_available = true, dependency evidence must not imply api output")
 	}
 }
 

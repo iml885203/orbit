@@ -63,14 +63,15 @@ type GraphNode struct {
 	Color string `json:"color,omitempty"` // externals only; hex color tint
 	State string `json:"state"`
 	// StateReason says why the node is degraded; empty otherwise.
-	StateReason  string              `json:"stateReason,omitempty"`
-	PortConflict *GraphPortConflict  `json:"portConflict,omitempty"`
-	Mode         string              `json:"mode,omitempty"` // services only
-	URL          string              `json:"url,omitempty"`
-	Ports        map[string]int      `json:"ports,omitempty"`
-	Health       *HealthProgressInfo `json:"health,omitempty"`
-	Sidecars     []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
-	InfraDeps    []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
+	StateReason   string              `json:"stateReason,omitempty"`
+	PortConflict  *GraphPortConflict  `json:"portConflict,omitempty"`
+	LogsAvailable bool                `json:"logsAvailable,omitempty"`
+	Mode          string              `json:"mode,omitempty"` // services only
+	URL           string              `json:"url,omitempty"`
+	Ports         map[string]int      `json:"ports,omitempty"`
+	Health        *HealthProgressInfo `json:"health,omitempty"`
+	Sidecars      []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
+	InfraDeps     []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
 	// Kafka carries the produces/consumes declarations the node owns.
 	// Services with no declared topics get nil (omitted from JSON);
 	// externals are required by validation to declare at least one
@@ -217,6 +218,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.State = st.State
 			n.StateReason = st.StateReason
 			n.PortConflict = graphPortConflict(st.PortConflict)
+			n.LogsAvailable = st.LogsAvailable
 			n.Ports = st.Ports
 			n.URL = st.URL
 			n.Health = st.HealthProgress
@@ -240,6 +242,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.State = st.State
 			n.StateReason = st.StateReason
 			n.PortConflict = graphPortConflictFor(name, statuses, nil)
+			n.LogsAvailable = st.LogsAvailable
 			n.Mode = st.Mode
 			n.Ports = st.Ports
 			n.URL = st.URL

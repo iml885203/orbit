@@ -85,6 +85,11 @@ also includes `port_conflict` evidence (`port`, `resource`, optional owner, and
 `inspect_command`). Do not retry or fetch logs until the owner is stopped or
 the shared environment selects a different host port.
 
+Resource status includes `logs_available: true` only when the running daemon
+has buffered output for that resource. Absence means there is no historical
+output to inspect yet; clients should not present Logs as a recovery action for
+a dependency-blocked resource unless this evidence is true.
+
 ## Converted Commands
 
 These commands currently use the `orbit.cli.v1` envelope when `--json` is set:

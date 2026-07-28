@@ -4,7 +4,7 @@
   import ServiceControls from '../ServiceControls.svelte'
   import NodeEnvPanel from './NodeEnvPanel.svelte'
   import NodeDepsPanel from './NodeDepsPanel.svelte'
-  import { store, toast, mutationsDisabled } from '../../lib/stores.svelte'
+  import { openLogViewer, store, toast, mutationsDisabled } from '../../lib/stores.svelte'
   import { ICONS, COLORS } from '../../lib/constants'
   import Badge from '../Badge.svelte'
   import { apiPost } from '../../lib/api'
@@ -130,7 +130,7 @@
     if (node?.url) window.open(node.url, '_blank')
   }
   function openLogs() {
-    if (node) store.daemon.logModal.target = node.name
+    if (node) openLogViewer(node.name)
   }
   function openSidecar(url: string) {
     window.open(url, '_blank')
@@ -296,10 +296,12 @@
             </button>
           {/each}
         {/if}
-        <button class="secondary-btn" type="button" disabled={readOnly} onclick={openLogs}>
-          <ScrollText size={14} strokeWidth={2.25} />
-          <span>Logs</span>
-        </button>
+        {#if !node.portConflict || node.logsAvailable}
+          <button class="secondary-btn" type="button" disabled={readOnly} onclick={openLogs}>
+            <ScrollText size={14} strokeWidth={2.25} />
+            <span>Logs</span>
+          </button>
+        {/if}
         {#if firstPort}
           <!-- Preview: URL is meaningless (no live process), so collapse to
                the copy-port path. The copy itself stays useful for

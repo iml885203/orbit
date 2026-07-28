@@ -2,7 +2,7 @@
   import { Handle, Position } from '@xyflow/svelte'
   import type { GraphNode } from '../../lib/types.gen'
   import { ICONS, COLORS } from '../../lib/constants'
-  import { store, isRunning, toast, mutationsDisabled } from '../../lib/stores.svelte'
+  import { store, isRunning, openLogViewer, toast, mutationsDisabled } from '../../lib/stores.svelte'
   import { playback } from '../../lib/tracePlayback.svelte'
   import { apiPost } from '../../lib/api'
   import { Play, RotateCcw, Square, ExternalLink, AppWindow, ScrollText, Cog, Radio } from '@lucide/svelte'
@@ -106,7 +106,7 @@
 
   function openLog(e: MouseEvent) {
     e.stopPropagation()
-    store.daemon.logModal.target = id
+    openLogViewer(id)
   }
 
   function openUrl(e: MouseEvent) {
@@ -219,13 +219,15 @@
             ><AppWindow size={15} strokeWidth={2} /></button>
           {/each}
         {/if}
-        <button
-          class="action-btn"
-          type="button"
-          aria-label="Open logs for {node.name}"
-          use:tooltip={{ content: 'Logs' }}
-          onclick={openLog}
-        ><ScrollText size={15} strokeWidth={2} /></button>
+        {#if !node.portConflict || node.logsAvailable}
+          <button
+            class="action-btn"
+            type="button"
+            aria-label="Open logs for {node.name}"
+            use:tooltip={{ content: 'Logs' }}
+            onclick={openLog}
+          ><ScrollText size={15} strokeWidth={2} /></button>
+        {/if}
       </div>
     {/if}
     {#if showInfraStrip}

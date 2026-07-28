@@ -1,4 +1,4 @@
-import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse, ServiceEnvResponse } from './types.gen'
+import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse, LogsResponse, ServiceEnvResponse } from './types.gen'
 import type { HistoryRecord, HistoryFilter } from './history.svelte'
 import { toast } from './stores.svelte'
 
@@ -81,6 +81,14 @@ export async function fetchGraph(env?: string): Promise<GraphResponse | null> {
   return getJSON(url)
 }
 
+export async function fetchLogs(name: string): Promise<string[] | null> {
+  const response = await getJSON<LogsResponse>(
+    `/api/logs/${encodeURIComponent(name)}?lines=1000`,
+    'logs unavailable',
+  )
+  return response?.lines ?? null
+}
+
 export async function fetchServiceEnv(name: string): Promise<ServiceEnvResponse | null> {
   return getJSON(`/api/service-env/${encodeURIComponent(name)}`, 'service env unavailable')
 }
@@ -101,4 +109,3 @@ export async function fetchHistoryList(filter: HistoryFilter = {}): Promise<Hist
   if (filter.limit) params.set('limit', String(filter.limit))
   return (await getJSON<HistoryRecord[]>(`/api/history/list?${params.toString()}`, 'history unavailable')) ?? []
 }
-

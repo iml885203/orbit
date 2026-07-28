@@ -13,6 +13,7 @@ import (
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/logging"
 )
 
 // handleHealth responds with {OK:true} for liveness probes.
@@ -90,6 +91,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			PendingDependencies: pendingDependencies,
 			StateReason:         svc.StateReason,
 			PortConflict:        resourcePortConflict(svc),
+			LogsAvailable:       resourceLogsAvailable(s.app.Logs, svc.Name),
 			RestartCount:        svc.RestartCount,
 			Ports:               ports,
 			URL:                 url,
@@ -102,6 +104,11 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		})
 	}
 	return out
+}
+
+func resourceLogsAvailable(logs *logging.Multiplexer, name string) bool {
+	buffer := logs.GetBuffer(name)
+	return buffer != nil && buffer.Count() > 0
 }
 
 func resourcePortConflict(svc *engine.ServiceInfo) *ResourcePortConflict {

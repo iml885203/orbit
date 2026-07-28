@@ -62,6 +62,7 @@ describe('NodeDrawer', () => {
     expect(getByText('Copy inspection command')).toBeTruthy()
     expect(getByText('Port blocked')).toBeTruthy()
     expect(queryByText('Restart')).toBeNull()
+    expect(queryByText('Logs')).toBeNull()
   })
 
   it('names the dependency whose port must change', () => {

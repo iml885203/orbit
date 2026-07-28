@@ -196,18 +196,19 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		sidecars := getSidecarInfos(cfg, svc.Name, svc.Kind)
 		image := getContainerImage(cfg, svc.Name, svc.Kind)
 		tracked[svc.Name] = ResourceStatus{
-			Name:         svc.Name,
-			Kind:         ResourceKind(svc.Kind),
-			State:        svc.State.String(),
-			StateReason:  svc.StateReason,
-			PortConflict: resourcePortConflict(svc),
-			RestartCount: svc.RestartCount,
-			Ports:        ports,
-			URL:          url,
-			Image:        image,
-			StartupTime:  startupTime,
-			Uptime:       uptime,
-			Sidecars:     sidecars,
+			Name:          svc.Name,
+			Kind:          ResourceKind(svc.Kind),
+			State:         svc.State.String(),
+			StateReason:   svc.StateReason,
+			PortConflict:  resourcePortConflict(svc),
+			LogsAvailable: resourceLogsAvailable(s.app.Logs, svc.Name),
+			RestartCount:  svc.RestartCount,
+			Ports:         ports,
+			URL:           url,
+			Image:         image,
+			StartupTime:   startupTime,
+			Uptime:        uptime,
+			Sidecars:      sidecars,
 		}
 	}
 	stale, staleReason := s.configStale()
