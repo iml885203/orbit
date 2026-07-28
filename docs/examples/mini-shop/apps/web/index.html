@@ -888,6 +888,8 @@ web
         errorPlaybookEl.innerHTML = '';
         const all = [...faultPatterns, fallbackPattern];
         all.forEach((pattern) => {
+          const selectors = errorFocusMap[pattern.code] || [];
+          const focusTarget = selectors[0] || '';
           const card = document.createElement('div');
           card.className = `error-item${pattern.code === activeCode ? ' active' : ''}`;
           card.innerHTML = `
@@ -895,7 +897,10 @@ web
             <div class="hint">症狀：${pattern.symptom}</div>
             <div class="hint">建議：${pattern.step}</div>
             <div class="cmd">快速命令：${pattern.command}</div>
-            <button type="button" class="small-btn inline-btn timeline-btn" data-copy-cmd="${pattern.command}">複製命令</button>
+            <div class="operation-actions">
+              <button type="button" class="small-btn inline-btn timeline-btn" data-copy-cmd="${pattern.command}">複製命令</button>
+              ${focusTarget ? `<button type="button" class="small-btn inline-btn timeline-btn" data-error-focus="${focusTarget}">定位到對應區塊</button>` : ''}
+            </div>
           `;
           errorPlaybookEl.appendChild(card);
         });
@@ -2023,9 +2028,23 @@ web
         const operationCopyButton = event.target.closest('[data-operation-copy]');
         const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
         const operationFocusButton = event.target.closest('[data-operation-focus]');
+        const errorFocusButton = event.target.closest('[data-error-focus]');
+
         if (operationRunCheckoutButton) {
           const method = operationRunCheckoutButton.dataset.operationRunCheckout || 'mock_card';
           await runCheckoutAction(method, 'operation 快照重試');
+          return;
+        }
+        if (errorFocusButton) {
+          const selector = errorFocusButton.dataset.errorFocus;
+          const target = selector ? document.querySelector(selector) : null;
+          if (target) {
+            scrollToAndFocus(target);
+            setNotice('已幫你跳到對應區塊：先按那裡的下一步。', 'ok');
+            appendSummary('從故障情境卡定位到對應區塊。');
+          } else {
+            setNotice('目前找不到對應區塊，請重整後再試。', 'warn');
+          }
           return;
         }
         if (operationFocusButton) {
