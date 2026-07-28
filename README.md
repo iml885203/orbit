@@ -81,6 +81,12 @@ For a team environment, replace `demo-api` and `quickstart` with names shown by
 version or project-package setup required before `orbit up`, using the
 project's version files when present.
 
+For configured infrastructure containers, `orbit query redis`,
+`orbit query mongo`, and `orbit query postgres` open the container's native
+client. PostgreSQL uses the container's `POSTGRES_USER` and `POSTGRES_DB`;
+pass `--database` only when you need another database. These query helpers are
+separate from the optional SQL Server schema-project workflow below.
+
 ## Optional workflows
 
 The related dashboard pages and setup checks stay hidden, and the commands are

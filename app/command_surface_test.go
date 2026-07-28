@@ -216,6 +216,21 @@ func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
 	assertCommandHidden(t, root, "trace", false)
 }
 
+func TestContextualHelpShowsQueryForPostgresOnlyEnvironment(t *testing.T) {
+	root := commandVisibilityTestRoot()
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{
+			"database": {
+				Ports: map[string]config.PortDef{"postgres": {Host: 5432, Target: 5432}},
+			},
+		},
+	}
+
+	applyContextualCommandVisibility(root, cfg, nil)
+
+	assertCommandHidden(t, root, "query", false)
+}
+
 func commandVisibilityTestRoot() *cobra.Command {
 	root := &cobra.Command{Use: "orbit"}
 	for _, name := range []string{"db", "exec", "query", "seed", "topics", "trace", "tunnel", "up"} {

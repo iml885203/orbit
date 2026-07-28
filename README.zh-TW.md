@@ -75,6 +75,12 @@ resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默�
 `orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的
 project packages。
 
+若 environment 設定了對應的 infrastructure container，`orbit query redis`、
+`orbit query mongo` 與 `orbit query postgres` 會開啟 container 的原生 client。
+PostgreSQL 會沿用 container 的 `POSTGRES_USER` 與 `POSTGRES_DB`；只有要查其他
+database 時才需要傳入 `--database`。這些 query helper 與下方選用的 SQL
+Server schema-project workflow 是兩件不同的事。
+
 ## 選用 workflows
 
 除非 active environment 明確啟用對應 extension，相關 dashboard 頁面與設定

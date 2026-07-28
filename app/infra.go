@@ -37,6 +37,7 @@ func queryCmd() *cobra.Command {
 
 Examples:
   orbit query mongo mydb '{"name":"test"}'
+  orbit query postgres "SELECT current_database();"
   orbit query redis GET session:123`,
 	}
 	cmd.AddCommand(&cobra.Command{
@@ -61,6 +62,26 @@ Examples:
   orbit query redis KEYS '*'`,
 		RunE: runQueryRedis,
 	})
+	postgres := &cobra.Command{
+		Use:     "postgres [sql]",
+		Aliases: []string{"postgresql"},
+		Short:   "Query PostgreSQL",
+		Long: `Query PostgreSQL using psql inside the configured container.
+
+The container's POSTGRES_USER and POSTGRES_DB select the default connection.
+
+Examples:
+  orbit query postgres
+  orbit query postgres "SELECT current_database();"
+  orbit query postgres --database app "SELECT * FROM users LIMIT 5"`,
+		Args: cobra.ArbitraryArgs,
+	}
+	var postgresDatabase string
+	postgres.Flags().StringVarP(&postgresDatabase, "database", "d", "", "database name (defaults to POSTGRES_DB)")
+	postgres.RunE = func(_ *cobra.Command, args []string) error {
+		return runQueryPostgres(postgresDatabase, args)
+	}
+	cmd.AddCommand(postgres)
 	return cmd
 }
 
@@ -121,6 +142,44 @@ func runQueryRedis(_ *cobra.Command, args []string) error {
 	cmdArgs = append(cmdArgs, args...)
 
 	return execDocker(cmdArgs)
+}
+
+func runQueryPostgres(database string, queryParts []string) error {
+	cfg, err := config.Load(configFile)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	container := findPostgresContainer(cfg)
+	if container == "" {
+		return fmt.Errorf("no PostgreSQL container found in config")
+	}
+
+	return execDocker(postgresQueryDockerArgs(orbitContainerName(container), database, queryParts))
+}
+
+func postgresQueryDockerArgs(containerName, database string, queryParts []string) []string {
+	const runPSQL = `user="${POSTGRES_USER:-postgres}"
+database="${1:-${POSTGRES_DB:-$user}}"
+if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -z "${PGPASSWORD:-}" ]; then
+  export PGPASSWORD="$POSTGRES_PASSWORD"
+fi
+if [ -n "$2" ]; then
+  exec psql -U "$user" -d "$database" -c "$2"
+fi
+exec psql -U "$user" -d "$database"`
+
+	query := ""
+	if len(queryParts) > 0 {
+		query = strings.Join(queryParts, " ")
+	}
+	return []string{
+		"exec", "-it", containerName,
+		"/bin/sh", "-c", runPSQL,
+		"orbit-query-postgres",
+		database,
+		query,
+	}
 }
 
 func topicsCmd() *cobra.Command {
@@ -307,6 +366,13 @@ func findContainer(cfg *config.Config, portLabel string) string {
 		}
 	}
 	return ""
+}
+
+func findPostgresContainer(cfg *config.Config) string {
+	if name := findContainer(cfg, "postgres"); name != "" {
+		return name
+	}
+	return findContainer(cfg, "postgresql")
 }
 
 // execDocker replaces the current process with docker exec (no subprocess overhead).

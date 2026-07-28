@@ -215,7 +215,9 @@ func coreCommandVisibility(cfg *config.Config) map[string]bool {
 	}
 
 	visibility["exec"] = len(cfg.Containers) > 0
-	visibility["query"] = findContainer(cfg, "mongo") != "" || findContainer(cfg, "redis") != ""
+	visibility["query"] = findContainer(cfg, "mongo") != "" ||
+		findContainer(cfg, "redis") != "" ||
+		findPostgresContainer(cfg) != ""
 	if _, err := findKafkaContainer(cfg); err == nil {
 		visibility["topics"] = true
 	}

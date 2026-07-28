@@ -1,6 +1,7 @@
 # SQL Server workflow design for 1.0
 
-Status: accepted product direction; implementation pending.
+Status: implemented pre-1.0; release verification is tracked in
+[`1.0-test-matrix.md`](1.0-test-matrix.md).
 
 ## Decision
 
