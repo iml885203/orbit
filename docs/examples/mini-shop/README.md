@@ -160,6 +160,78 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
    - 這些情境都有「預估時間」提示，若超過時間仍未返回結果，先看「診斷命令」。
 
+### 命令列示範腳本（可直接複製）
+
+如果你要完全用 terminal 做打磨/驗收，下面三支腳本是「最小心智模型」版本：每次只要對應一個明確結果，不用猜下一步。
+
+- 先執行一次成功（A）當基線，再做 B/C。
+
+1) 成功（A）
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H 'Content-Type: application/json' \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":1}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"mock_card"}'
+
+echo "訂單/出貨結果："
+curl -s "http://$BASE:3002/orders"
+curl -s "http://$BASE:3008/shipments"
+```
+
+2) 付款失敗（B）
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H 'Content-Type: application/json' \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":1}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"decline"}'
+```
+
+3) 庫存不足（C）
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H 'Content-Type: application/json' \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":999}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"mock_card"}'
+```
+
+你可直接複製貼上執行；若有服務沒有預設 port，先用 `orbit status --json` 對應到 `catalog-api/inventory-api/...` 的對應網址。
+
 ### 失敗後最短回復（建議默認作法）
 
 遇到卡住時，不要先切服務或重開整個環境，先用這條路徑：

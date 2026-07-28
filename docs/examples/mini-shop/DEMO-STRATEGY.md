@@ -42,11 +42,18 @@
 - README 與指令頁補上「失敗後最短回復流程」
   - 例如：`down -> status -> restart`
 
+- 已補上「命令列示範腳本」三件組（A 成功 / B 付款失敗 / C 庫存不足）
+  - 基線固定、失敗再回歸；讓 review 或 CI 能重複驗證，而不是靠口頭講解。
+
 ### P2（觀察期）
 
 - 可再增加一個「更偏混合語言」的 profile（但不作為預設 demo）
   - 只在進階章節提供：展示 `orbit switch` / env 切換價值
   - 維持 mini-shop 作為主線，避免把第一印象變成環境維護負擔
+
+- 可做的擴充（不改主線）：
+  - 新增一個 `mini-shop-advanced` env，用不同 stack（例如一個小型 worker）來示範「同樣 UX，不同 service」；
+  - 但維持主線 mini-shop 的 30 秒 demo 不變，確保每次上手都能成功。
 
 ### 避免的方向
 - 不要直接上完整 `eShopOnContainers` 作為唯一主 demo
