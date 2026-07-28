@@ -557,9 +557,9 @@ func runDown(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("status: %w", err)
 	}
-	names := make([]string, 0, len(status.Services))
-	for i := range status.Services {
-		names = append(names, status.Services[i].Name)
+	names := make([]string, 0, len(status.Resources))
+	for i := range status.Resources {
+		names = append(names, status.Resources[i].Name)
 	}
 
 	if cli.JSONOutput {
@@ -572,10 +572,10 @@ func runDown(_ *cobra.Command, _ []string) error {
 			return err
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:         "down",
-			Message:           resp.Message,
-			RequestedServices: names,
-			FinalStatus:       finalStatus,
+			Operation:          "down",
+			Message:            resp.Message,
+			RequestedResources: names,
+			FinalStatus:        finalStatus,
 		}), []cli.JSONAction{cli.StatusAction()})
 	}
 
@@ -616,10 +616,10 @@ func runRestart(_ *cobra.Command, args []string) error {
 			return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus([]string{name}, finalStatus))
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:         "restart",
-			Message:           resp.Message,
-			RequestedServices: []string{name},
-			FinalStatus:       finalStatus,
+			Operation:          "restart",
+			Message:            resp.Message,
+			RequestedResources: []string{name},
+			FinalStatus:        finalStatus,
 		}), []cli.JSONAction{cli.StatusAction()})
 	}
 
@@ -656,10 +656,10 @@ func runStop(_ *cobra.Command, args []string) error {
 			return cli.WithJSONActions(err, lifecycleRecommendedActions([]string{name}))
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:         "down",
-			Message:           resp.Message,
-			RequestedServices: []string{name},
-			FinalStatus:       finalStatus,
+			Operation:          "down",
+			Message:            resp.Message,
+			RequestedResources: []string{name},
+			FinalStatus:        finalStatus,
 		}), []cli.JSONAction{cli.StatusAction()})
 	}
 
@@ -726,7 +726,7 @@ func runLogs(_ *cobra.Command, args []string) error {
 }
 
 type logsJSONData struct {
-	Service        string   `json:"service"`
+	Resource       string   `json:"resource"`
 	LinesRequested int      `json:"lines_requested"`
 	Lines          []string `json:"lines"`
 	Truncated      bool     `json:"truncated"`
@@ -735,40 +735,40 @@ type logsJSONData struct {
 type logJSONEvent struct {
 	SchemaVersion string `json:"schema_version"`
 	Type          string `json:"type"`
-	Service       string `json:"service"`
+	Resource      string `json:"resource"`
 	Line          string `json:"line"`
 }
 
 type logJSONErrorEvent struct {
 	SchemaVersion string        `json:"schema_version"`
 	Type          string        `json:"type"`
-	Service       string        `json:"service"`
+	Resource      string        `json:"resource"`
 	Error         cli.JSONError `json:"error"`
 }
 
-func buildLogsJSONData(service string, requested int, resp *daemon.LogsResponse) logsJSONData {
+func buildLogsJSONData(resource string, requested int, resp *daemon.LogsResponse) logsJSONData {
 	lines := []string{}
 	if resp != nil && resp.Lines != nil {
 		lines = resp.Lines
 	}
 	return logsJSONData{
-		Service:        service,
+		Resource:       resource,
 		LinesRequested: requested,
 		Lines:          lines,
 		Truncated:      requested > 0 && len(lines) >= requested,
 	}
 }
 
-func writeLogJSONEvent(w io.Writer, service, line string) error {
+func writeLogJSONEvent(w io.Writer, resource, line string) error {
 	return json.NewEncoder(w).Encode(logJSONEvent{
 		SchemaVersion: cli.SchemaVersion,
 		Type:          "log",
-		Service:       service,
+		Resource:      resource,
 		Line:          line,
 	})
 }
 
-func writeLogJSONErrorEvent(w io.Writer, service string, err error) error {
+func writeLogJSONErrorEvent(w io.Writer, resource string, err error) error {
 	msg := ""
 	if err != nil {
 		msg = err.Error()
@@ -776,7 +776,7 @@ func writeLogJSONErrorEvent(w io.Writer, service string, err error) error {
 	return json.NewEncoder(w).Encode(logJSONErrorEvent{
 		SchemaVersion: cli.SchemaVersion,
 		Type:          "error",
-		Service:       service,
+		Resource:      resource,
 		Error: cli.JSONError{
 			Code:      "log_stream_error",
 			Message:   msg,
@@ -802,8 +802,8 @@ func runOpen(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("status failed: %w", err)
 	}
 
-	for i := range status.Services {
-		svc := &status.Services[i]
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		if svc.Name == name {
 			if svc.URL == "" {
 				return fmt.Errorf("no url configured for %s — add 'url' to config", name)

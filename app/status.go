@@ -35,8 +35,8 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
 				return mismatch
 			}
-			for i := range status.Services {
-				running[status.Services[i].Name] = status.Services[i]
+			for i := range status.Resources {
+				running[status.Resources[i].Name] = status.Resources[i]
 			}
 			dstatus.ConfigStale = status.ConfigStale
 			dstatus.ConfigStaleReason = status.ConfigStaleReason
@@ -307,7 +307,7 @@ type statusJSONData struct {
 	SetupRequired bool          `json:"setup_required"`
 	SetupMessage  string        `json:"setup_message,omitempty"`
 	Daemon        daemonStatus  `json:"daemon"`
-	Services      []jsonService `json:"services"`
+	Resources     []jsonService `json:"resources"`
 }
 
 type statusSetupState struct {
@@ -346,7 +346,7 @@ func writeStatusJSON(
 	dstatus daemonStatus,
 	setup statusSetupState,
 ) error {
-	services := make([]jsonService, 0)
+	resources := make([]jsonService, 0)
 
 	if cfg != nil {
 		for name, c := range cfg.Containers {
@@ -359,7 +359,7 @@ func writeStatusJSON(
 			if r, ok := running[name]; ok {
 				applyRuntimeStatus(&svc, r, running)
 			}
-			services = append(services, svc)
+			resources = append(resources, svc)
 		}
 		for name, s := range cfg.Services {
 			svc := jsonService{Name: name, Kind: "service", State: "stopped", URL: s.URL}
@@ -371,15 +371,15 @@ func writeStatusJSON(
 			if r, ok := running[name]; ok {
 				applyRuntimeStatus(&svc, r, running)
 			}
-			services = append(services, svc)
+			resources = append(resources, svc)
 		}
 	}
 
-	sort.Slice(services, func(i, j int) bool {
-		if services[i].Kind != services[j].Kind {
-			return services[i].Kind < services[j].Kind
+	sort.Slice(resources, func(i, j int) bool {
+		if resources[i].Kind != resources[j].Kind {
+			return resources[i].Kind < resources[j].Kind
 		}
-		return services[i].Name < services[j].Name
+		return resources[i].Name < resources[j].Name
 	})
 
 	var actions []cli.JSONAction
@@ -405,7 +405,7 @@ func writeStatusJSON(
 		SetupRequired: setup.Required,
 		SetupMessage:  setup.Message,
 		Daemon:        dstatus,
-		Services:      services,
+		Resources:     resources,
 	}, actions)
 }
 
@@ -426,9 +426,9 @@ func statusDependencyBlocker(service daemon.ServiceStatus, running map[string]da
 	if service.State != "pending" || len(service.PendingDependencies) == 0 {
 		return nil
 	}
-	status := &daemon.StatusResponse{Services: make([]daemon.ServiceStatus, 0, len(running))}
+	status := &daemon.StatusResponse{Resources: make([]daemon.ServiceStatus, 0, len(running))}
 	for _, candidate := range running {
-		status.Services = append(status.Services, candidate)
+		status.Resources = append(status.Resources, candidate)
 	}
 	return terminalDependencyBlocker(status, service.PendingDependencies)
 }

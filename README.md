@@ -72,7 +72,7 @@ orbit down                   # stop the environment
 
 `orbit up` is the normal start command. Use `orbit up --infra` only when you
 intentionally want containers without host services. To narrow startup, choose
-either service names or one or more `--group` flags; Orbit rejects combinations
+either resource names or one or more `--group` flags; Orbit rejects combinations
 instead of silently ignoring part of the command.
 
 For a team environment, replace `demo-api` and `quickstart` with names shown by

@@ -23,7 +23,7 @@
   // every 2s. Refetching the graph only when this key changes turns the
   // steady-state 2s fetch+deep-compare loop into a no-op.
   function graphKeyOf(resp: StatusResponse): string {
-    return (resp.services ?? [])
+    return (resp.resources ?? [])
       .map((s) => [
         s.name, s.state, s.state_reason ?? '', s.mode ?? '', s.url ?? '',
         JSON.stringify(s.ports ?? {}),
@@ -66,7 +66,7 @@
         store.daemon.daemonEpoch = resp.epoch
       }
       store.daemon.connected = true
-      replaceServices(resp.services || [])
+      replaceServices(resp.resources || [])
       const key = graphKeyOf(resp)
       if (key !== lastGraphKey || !store.graph.data) {
         lastGraphKey = key

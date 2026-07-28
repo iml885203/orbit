@@ -114,8 +114,8 @@ func TestHandleStatus_ListsAllServices(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	got := make(map[string]string, len(resp.Services))
-	for _, svc := range resp.Services {
+	got := make(map[string]string, len(resp.Resources))
+	for _, svc := range resp.Resources {
 		got[svc.Name] = string(svc.Kind)
 	}
 	want := map[string]string{
@@ -156,7 +156,7 @@ func TestHandleUp_InfraOnly(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got, want := strings.Join(response.AffectedServices, ","), "db,redis"; got != want {
+	if got, want := strings.Join(response.AffectedResources, ","), "db,redis"; got != want {
 		t.Fatalf("affected services = %q, want %q", got, want)
 	}
 	if response.Message != "Starting infrastructure (2 containers)." {
@@ -203,8 +203,8 @@ func TestHandleUp_EmptyEnvironmentReportsSuccessfulNoOp(t *testing.T) {
 	if response.Message != "No resources are enabled for this environment." {
 		t.Fatalf("message = %q", response.Message)
 	}
-	if len(response.AffectedServices) != 0 {
-		t.Fatalf("affected services = %v, want none", response.AffectedServices)
+	if len(response.AffectedResources) != 0 {
+		t.Fatalf("affected resources = %v, want none", response.AffectedResources)
 	}
 }
 
@@ -224,7 +224,7 @@ func TestHandleUp_SelectedGroupReportsActualDependencies(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got, want := strings.Join(response.AffectedServices, ","), "api,db,redis,web"; got != want {
+	if got, want := strings.Join(response.AffectedResources, ","), "api,db,redis,web"; got != want {
 		t.Fatalf("affected services = %q, want %q", got, want)
 	}
 	if response.Message != "Starting group frontend (4 resources)." {
@@ -245,17 +245,17 @@ func TestHandleUp_MessageDescribesSelectionIntent(t *testing.T) {
 		},
 		{
 			name:    "one container",
-			request: UpRequest{Services: []string{"redis"}},
+			request: UpRequest{Resources: []string{"redis"}},
 			want:    "Starting redis.",
 		},
 		{
 			name:    "one service with dependencies",
-			request: UpRequest{Services: []string{"web"}},
+			request: UpRequest{Resources: []string{"web"}},
 			want:    "Starting web with 2 dependencies.",
 		},
 		{
 			name:    "multiple resources with shared dependency",
-			request: UpRequest{Services: []string{"api", "web"}},
+			request: UpRequest{Resources: []string{"api", "web"}},
 			want:    "Starting 2 requested resources with 1 dependency.",
 		},
 	}

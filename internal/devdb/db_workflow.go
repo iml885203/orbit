@@ -69,7 +69,7 @@ func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish
 		return sqlpublish.Opts{}, fmt.Errorf("checking SQL Server readiness: %w", err)
 	}
 	state := ""
-	for _, service := range status.Services {
+	for _, service := range status.Resources {
 		if service.Name == serviceName {
 			state = service.State
 			break

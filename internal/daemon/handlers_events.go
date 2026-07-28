@@ -210,12 +210,12 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 	}
 	stale, staleReason := s.configStale()
-	resp := StatusResponse{Epoch: s.epoch(), Services: make([]ServiceStatus, 0),
+	resp := StatusResponse{Epoch: s.epoch(), Resources: make([]ServiceStatus, 0),
 		ConfigPath:  s.ConfigPath(),
 		ConfigStale: stale, ConfigStaleReason: staleReason}
 	for name, c := range cfg.Containers {
 		if ss, ok := tracked[name]; ok {
-			resp.Services = append(resp.Services, ss)
+			resp.Resources = append(resp.Resources, ss)
 			continue
 		}
 		ports := make(map[string]int, len(c.Ports))
@@ -223,21 +223,21 @@ func (s *Server) buildStatusResponse() StatusResponse {
 			ports[label] = p.Host
 		}
 		sidecars := getSidecarInfos(cfg, name, "container")
-		resp.Services = append(resp.Services, ServiceStatus{
+		resp.Resources = append(resp.Resources, ServiceStatus{
 			Name: name, Kind: ServiceKindContainer, State: engine.StateStopped.String(),
 			Ports: ports, Image: c.Image, Sidecars: sidecars,
 		})
 	}
 	for name, svc := range cfg.Services {
 		if ss, ok := tracked[name]; ok {
-			resp.Services = append(resp.Services, ss)
+			resp.Resources = append(resp.Resources, ss)
 			continue
 		}
 		ports := make(map[string]int, len(svc.Ports))
 		for label, p := range svc.Ports {
 			ports[label] = p.Host
 		}
-		resp.Services = append(resp.Services, ServiceStatus{
+		resp.Resources = append(resp.Resources, ServiceStatus{
 			Name: name, Kind: ServiceKindService, State: engine.StateStopped.String(),
 			Ports: ports, URL: svc.URL,
 		})

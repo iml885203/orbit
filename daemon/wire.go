@@ -14,7 +14,7 @@ import (
 
 // UpRequest is the body for POST /api/up.
 type UpRequest struct {
-	Services  []string `json:"services"`
+	Resources []string `json:"resources"`
 	InfraOnly bool     `json:"infra_only"`
 	Groups    []string `json:"groups"`
 }
@@ -31,8 +31,8 @@ type StatusResponse struct {
 	// changes on every restart, so clients can detect when their cached
 	// env-derived state belongs to a previous daemon. Milliseconds (not
 	// nanoseconds) keeps the value safely within JS Number precision.
-	Epoch    int64           `json:"epoch"`
-	Services []ServiceStatus `json:"services"`
+	Epoch     int64           `json:"epoch"`
+	Resources []ServiceStatus `json:"resources"`
 	// ConfigPath identifies the environment loaded by the running daemon.
 	// CLI clients compare it with their selected config before combining
 	// local config with daemon state.
@@ -104,9 +104,9 @@ type APIResponse struct {
 	OK      bool   `json:"ok,omitempty"`
 	Message string `json:"message,omitempty"`
 	Error   string `json:"error,omitempty"`
-	// AffectedServices identifies the resources accepted by a lifecycle
+	// AffectedResources identifies the resources accepted by a lifecycle
 	// request, including dependencies selected by the daemon.
-	AffectedServices []string `json:"affected_services,omitempty"`
+	AffectedResources []string `json:"affected_resources,omitempty"`
 	// Code is a stable, machine-readable discriminator a client can
 	// switch on when the plain Error string isn't enough — e.g. the
 	// reset endpoint's "reset_requires_recreate". Empty for most errors.

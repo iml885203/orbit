@@ -9,53 +9,53 @@ import (
 )
 
 type lifecycleJSONOptions struct {
-	Operation         string
-	Message           string
-	RequestedServices []string
-	InfraOnly         bool
-	FinalStatus       *daemon.StatusResponse
-	TimedOutServices  []string
+	Operation          string
+	Message            string
+	RequestedResources []string
+	InfraOnly          bool
+	FinalStatus        *daemon.StatusResponse
+	TimedOutResources  []string
 }
 
 type lifecycleJSONData struct {
-	Operation         string                 `json:"operation"`
-	Message           string                 `json:"message,omitempty"`
-	RequestedServices []string               `json:"requested_services"`
-	InfraOnly         bool                   `json:"infra_only,omitempty"`
-	Services          []daemon.ServiceStatus `json:"services"`
-	DegradedServices  []string               `json:"degraded_services"`
-	TimedOutServices  []string               `json:"timed_out_services"`
+	Operation          string                 `json:"operation"`
+	Message            string                 `json:"message,omitempty"`
+	RequestedResources []string               `json:"requested_resources"`
+	InfraOnly          bool                   `json:"infra_only,omitempty"`
+	Resources          []daemon.ServiceStatus `json:"resources"`
+	DegradedResources  []string               `json:"degraded_resources"`
+	TimedOutResources  []string               `json:"timed_out_resources"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
-	requestedServices := append([]string{}, opts.RequestedServices...)
-	timedOutServices := append([]string{}, opts.TimedOutServices...)
-	requested := make(map[string]bool, len(requestedServices))
-	for _, name := range requestedServices {
+	requestedResources := append([]string{}, opts.RequestedResources...)
+	timedOutResources := append([]string{}, opts.TimedOutResources...)
+	requested := make(map[string]bool, len(requestedResources))
+	for _, name := range requestedResources {
 		requested[name] = true
 	}
-	services := make([]daemon.ServiceStatus, 0, len(requested))
+	resources := make([]daemon.ServiceStatus, 0, len(requested))
 	degraded := []string{}
 	if opts.FinalStatus != nil {
-		for i := range opts.FinalStatus.Services {
-			svc := &opts.FinalStatus.Services[i]
+		for i := range opts.FinalStatus.Resources {
+			svc := &opts.FinalStatus.Resources[i]
 			if len(requested) > 0 && !requested[svc.Name] {
 				continue
 			}
-			services = append(services, *svc)
+			resources = append(resources, *svc)
 			if svc.State == "degraded" {
 				degraded = append(degraded, svc.Name)
 			}
 		}
 	}
 	return lifecycleJSONData{
-		Operation:         opts.Operation,
-		Message:           opts.Message,
-		RequestedServices: requestedServices,
-		InfraOnly:         opts.InfraOnly,
-		Services:          services,
-		DegradedServices:  degraded,
-		TimedOutServices:  timedOutServices,
+		Operation:          opts.Operation,
+		Message:            opts.Message,
+		RequestedResources: requestedResources,
+		InfraOnly:          opts.InfraOnly,
+		Resources:          resources,
+		DegradedResources:  degraded,
+		TimedOutResources:  timedOutResources,
 	}
 }
 
@@ -99,9 +99,9 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 	if status == nil {
 		return lifecycleRecommendedActions(serviceNames)
 	}
-	byName := make(map[string]*daemon.ServiceStatus, len(status.Services))
-	for i := range status.Services {
-		service := &status.Services[i]
+	byName := make(map[string]*daemon.ServiceStatus, len(status.Resources))
+	for i := range status.Resources {
+		service := &status.Resources[i]
 		byName[service.Name] = service
 	}
 	terminalNames := make([]string, 0, len(serviceNames))
@@ -211,8 +211,8 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 			if lifecycleServicesDoneOrPast(status, names, wantState, pastState) {
 				return status, nil
 			}
-			for i := range status.Services {
-				prevStates[status.Services[i].Name] = status.Services[i].State
+			for i := range status.Resources {
+				prevStates[status.Resources[i].Name] = status.Resources[i].State
 			}
 		}
 	}
@@ -224,8 +224,8 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 // was degraded before the stop began is not misread as a stop failure.
 func lifecycleStopFailedError(status *daemon.StatusResponse, names []string, prevStates map[string]string) error {
 	watch := watchSet(names)
-	for i := range status.Services {
-		s := &status.Services[i]
+	for i := range status.Resources {
+		s := &status.Resources[i]
 		if !watch[s.Name] || s.State != "degraded" || prevStates[s.Name] != "stopping" {
 			continue
 		}
@@ -268,8 +268,8 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 	for _, name := range names {
 		watched[name] = true
 	}
-	for i := range status.Services {
-		svc := &status.Services[i]
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		if len(watched) > 0 && !watched[svc.Name] {
 			continue
 		}
@@ -322,11 +322,11 @@ func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencie
 	if status == nil {
 		return nil
 	}
-	byName := make(map[string]*daemon.ServiceStatus, len(status.Services))
-	for i := range status.Services {
-		byName[status.Services[i].Name] = &status.Services[i]
+	byName := make(map[string]*daemon.ServiceStatus, len(status.Resources))
+	for i := range status.Resources {
+		byName[status.Resources[i].Name] = &status.Resources[i]
 	}
-	visited := make(map[string]bool, len(status.Services))
+	visited := make(map[string]bool, len(status.Resources))
 	var find func([]string) *daemon.ServiceStatus
 	find = func(names []string) *daemon.ServiceStatus {
 		for _, name := range names {
@@ -364,8 +364,8 @@ func lifecycleResourceExists(status *daemon.StatusResponse, name string) bool {
 	if status == nil {
 		return false
 	}
-	for i := range status.Services {
-		svc := &status.Services[i]
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		if svc.Name == name {
 			return true
 		}
@@ -377,8 +377,8 @@ func lifecycleRestartCount(status *daemon.StatusResponse, name string) *int {
 	if status == nil {
 		return nil
 	}
-	for i := range status.Services {
-		svc := &status.Services[i]
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		if svc.Name == name {
 			count := svc.RestartCount
 			return &count
@@ -397,8 +397,8 @@ func lifecycleRestartObserved(status *daemon.StatusResponse, name string, priorR
 	if status == nil {
 		return false
 	}
-	for i := range status.Services {
-		svc := &status.Services[i]
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		if svc.Name != name {
 			continue
 		}
@@ -414,9 +414,9 @@ func lifecycleServicesDoneOrPast(status *daemon.StatusResponse, names []string, 
 	if status == nil {
 		return false
 	}
-	byName := make(map[string]string, len(status.Services))
-	for i := range status.Services {
-		svc := &status.Services[i]
+	byName := make(map[string]string, len(status.Resources))
+	for i := range status.Resources {
+		svc := &status.Resources[i]
 		byName[svc.Name] = svc.State
 	}
 	for _, name := range names {

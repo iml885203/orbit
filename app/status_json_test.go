@@ -11,8 +11,8 @@ import (
 )
 
 type statusJSON struct {
-	Daemon   daemonStatus  `json:"daemon"`
-	Services []jsonService `json:"services"`
+	Daemon    daemonStatus  `json:"daemon"`
+	Resources []jsonService `json:"resources"`
 }
 
 type renderedStatusEnvelope struct {
@@ -51,6 +51,32 @@ func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemo
 	return envelope.Data
 }
 
+func TestStatusJSONUsesResourceVocabulary(t *testing.T) {
+	var buf bytes.Buffer
+	if err := writeStatusJSON(
+		&buf,
+		"orbit status --json",
+		&config.Config{},
+		nil,
+		daemonStatus{},
+		statusSetupState{},
+	); err != nil {
+		t.Fatalf("writeStatusJSON: %v", err)
+	}
+	var envelope struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := envelope.Data["resources"]; !ok {
+		t.Fatalf("resources missing from %s", buf.String())
+	}
+	if _, ok := envelope.Data["services"]; ok {
+		t.Fatalf("legacy services field present in %s", buf.String())
+	}
+}
+
 func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
 	running := map[string]daemon.ServiceStatus{
@@ -61,7 +87,7 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 		},
 	}
 	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
-	service := envelope.Data.Services[0]
+	service := envelope.Data.Resources[0]
 	if service.StateReason != "exited: exit status 17" {
 		t.Fatalf("state_reason = %q", service.StateReason)
 	}
@@ -95,7 +121,7 @@ func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
 	}
 	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
 	var api jsonService
-	for _, service := range envelope.Data.Services {
+	for _, service := range envelope.Data.Resources {
 		if service.Name == "api" {
 			api = service
 		}
@@ -148,8 +174,8 @@ func TestStatusJSON_DaemonStopped(t *testing.T) {
 	}
 	var envelope struct {
 		Data struct {
-			Daemon   daemonStatus  `json:"daemon"`
-			Services []jsonService `json:"services"`
+			Daemon    daemonStatus  `json:"daemon"`
+			Resources []jsonService `json:"resources"`
 		} `json:"data"`
 		RecommendedActions []struct {
 			Command string `json:"command"`
@@ -168,8 +194,8 @@ func TestStatusJSON_DaemonStopped(t *testing.T) {
 	if got.Daemon.UpdateAvailable {
 		t.Errorf("UpdateAvailable: got true, want false")
 	}
-	if got.Services == nil {
-		t.Error("services: got null, want empty array")
+	if got.Resources == nil {
+		t.Error("resources: got null, want empty array")
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit up --json" {
 		t.Errorf("recommended_actions: got %+v", envelope.RecommendedActions)
@@ -277,7 +303,7 @@ func TestStatusJSON_DaemonIsObjectNotBool(t *testing.T) {
 	}
 }
 
-func TestStatusJSON_ServicesFromConfigAndRunning(t *testing.T) {
+func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{
 			"redis": {Ports: map[string]config.PortDef{"cli": {Host: 16379}}},
@@ -291,16 +317,16 @@ func TestStatusJSON_ServicesFromConfigAndRunning(t *testing.T) {
 	}
 	got := renderStatusJSON(t, cfg, running, daemonStatus{Running: true})
 
-	if len(got.Services) != 2 {
-		t.Fatalf("Services count: got %d, want 2", len(got.Services))
+	if len(got.Resources) != 2 {
+		t.Fatalf("Resources count: got %d, want 2", len(got.Resources))
 	}
 	var redis, worker *jsonService
-	for i := range got.Services {
-		switch got.Services[i].Name {
+	for i := range got.Resources {
+		switch got.Resources[i].Name {
 		case "redis":
-			redis = &got.Services[i]
+			redis = &got.Resources[i]
 		case "worker":
-			worker = &got.Services[i]
+			worker = &got.Resources[i]
 		}
 	}
 	if redis == nil || redis.State != "healthy" || redis.Kind != "container" {

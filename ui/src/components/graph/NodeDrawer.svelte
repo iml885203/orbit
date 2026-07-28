@@ -58,7 +58,7 @@
           icon: 'play',
           tone: 'primary',
           disabled: busy,
-          run: () => withBusy(() => apiPost('/api/up', { services: [name] }), 'Failed to start'),
+          run: () => withBusy(() => apiPost('/api/up', { resources: [name] }), 'Failed to start'),
         }
       case 'healthy':
       case 'degraded':

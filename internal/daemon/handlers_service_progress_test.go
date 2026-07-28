@@ -36,9 +36,9 @@ func TestHandleStatus_IncludesHealthProgressWhenAvailable(t *testing.T) {
 	}
 
 	var found *ServiceStatus
-	for i := range resp.Services {
-		if resp.Services[i].Name == "worker" {
-			found = &resp.Services[i]
+	for i := range resp.Resources {
+		if resp.Resources[i].Name == "worker" {
+			found = &resp.Resources[i]
 			break
 		}
 	}
@@ -73,7 +73,7 @@ func TestHandleStatus_OmitsHealthProgressWhenServiceHasNoHealthCheck(t *testing.
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	for _, s := range resp.Services {
+	for _, s := range resp.Resources {
 		if s.Name == "no-hc" && s.HealthProgress != nil {
 			t.Errorf("HealthProgress should be nil for service without health check, got %+v", s.HealthProgress)
 		}

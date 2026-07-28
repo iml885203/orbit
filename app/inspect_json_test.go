@@ -94,8 +94,8 @@ func TestBuildInspectDataDaemonDown(t *testing.T) {
 	if len(got.Risks) != 1 || got.Risks[0].Code != "environment_stopped" {
 		t.Fatalf("risks = %+v", got.Risks)
 	}
-	if got.Services.Total != 2 || len(got.Services.Stopped) != 2 {
-		t.Fatalf("services = %+v", got.Services)
+	if got.Resources.Total != 2 || len(got.Resources.Stopped) != 2 {
+		t.Fatalf("resources = %+v", got.Resources)
 	}
 	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions[0])
@@ -120,7 +120,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 		ConfigEnvName: "development",
 		DaemonRunning: true,
 		DaemonEnv:     "local",
-		Status: &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 			{Name: "redis", State: "healthy"},
 		}},
 	})
@@ -178,7 +178,7 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 			{Name: "worker", State: "degraded"},
 			{Name: "payments", State: "stopped"},
 		}},
@@ -193,7 +193,7 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 	if len(got.Risks) != 2 {
 		t.Fatalf("risks = %+v, want 2 risks", got.Risks)
 	}
-	if got.Risks[0].Code != "service_degraded" || got.Risks[0].Service != "worker" {
+	if got.Risks[0].Code != "resource_degraded" || got.Risks[0].Resource != "worker" {
 		t.Fatalf("first risk = %+v", got.Risks[0])
 	}
 	if got.RecommendedActions[0].Command != "orbit logs worker --json" {
@@ -237,7 +237,7 @@ func TestBuildInspectDataStoppingAndRestartingAreConverging(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 			{Name: "worker", State: "restarting"},
 			{Name: "payments", State: "stopping"},
 		}},
@@ -246,9 +246,9 @@ func TestBuildInspectDataStoppingAndRestartingAreConverging(t *testing.T) {
 	if got.Readiness.State != inspectReadinessConverging {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConverging)
 	}
-	assertStringSlice(t, got.Services.Starting, []string{"payments", "worker"})
-	assertStringSlice(t, got.Services.ByState["restarting"], []string{"worker"})
-	assertStringSlice(t, got.Services.ByState["stopping"], []string{"payments"})
+	assertStringSlice(t, got.Resources.Starting, []string{"payments", "worker"})
+	assertStringSlice(t, got.Resources.ByState["restarting"], []string{"worker"})
+	assertStringSlice(t, got.Resources.ByState["stopping"], []string{"payments"})
 }
 
 func TestBuildInspectDataEnvelopePayload(t *testing.T) {
@@ -259,7 +259,7 @@ func TestBuildInspectDataEnvelopePayload(t *testing.T) {
 		PID:           123,
 		Version:       "dev",
 		Dashboard:     "http://localhost:7171",
-		Status: &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 			{Name: "redis", State: "healthy"},
 		}},
 	})
@@ -281,6 +281,16 @@ func TestBuildInspectDataEnvelopePayload(t *testing.T) {
 	}
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal inspect data: %v\n%s", err, raw)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("unmarshal inspect fields: %v", err)
+	}
+	if _, ok := fields["resources"]; !ok {
+		t.Fatalf("resources missing from %s", raw)
+	}
+	if _, ok := fields["services"]; ok {
+		t.Fatalf("legacy services field present in %s", raw)
 	}
 	if got.SchemaVersion != inspectJSONSchemaVersion {
 		t.Fatalf("schema_version = %q", got.SchemaVersion)

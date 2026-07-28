@@ -175,11 +175,11 @@ type e2eStatus struct {
 		Running bool   `json:"running"`
 		Version string `json:"version,omitempty"`
 	} `json:"daemon"`
-	Services []struct {
+	Resources []struct {
 		Name  string `json:"name"`
 		Kind  string `json:"kind"`
 		State string `json:"state"`
-	} `json:"services"`
+	} `json:"resources"`
 }
 
 type e2eCLIEnvelope struct {
@@ -225,7 +225,7 @@ func (e *e2eEnv) status(t *testing.T) e2eStatus {
 
 func (e *e2eEnv) serviceState(t *testing.T, name string) string {
 	t.Helper()
-	for _, svc := range e.status(t).Services {
+	for _, svc := range e.status(t).Resources {
 		if svc.Name == name {
 			return svc.State
 		}
@@ -254,7 +254,7 @@ func TestE2E_DaemonStartAlone(t *testing.T) {
 	if !s.Daemon.Running {
 		t.Fatal("expected daemon running, got not running")
 	}
-	for _, svc := range s.Services {
+	for _, svc := range s.Resources {
 		if svc.State != "stopped" {
 			t.Errorf("%s state = %s, want stopped (daemon start should not auto-launch)", svc.Name, svc.State)
 		}
@@ -335,8 +335,8 @@ func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 	if containerRunning(t, redisName) {
 		t.Fatalf("%s still running after switch reported success", redisName)
 	}
-	if services := env.status(t).Services; len(services) != 0 {
-		t.Fatalf("new environment services = %+v, want none", services)
+	if resources := env.status(t).Resources; len(resources) != 0 {
+		t.Fatalf("new environment resources = %+v, want none", resources)
 	}
 }
 
@@ -579,7 +579,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	if data.Message != "No resources are enabled for this environment." {
 		t.Fatalf("json message = %q", data.Message)
 	}
-	if len(data.RequestedServices) != 0 || len(data.Services) != 0 {
+	if len(data.RequestedResources) != 0 || len(data.Resources) != 0 {
 		t.Fatalf("json lifecycle data = %+v, want no affected resources", data)
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit open --json" {
@@ -799,8 +799,8 @@ services:
 	if data.Readiness.State != inspectReadinessStopped || !data.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", data.Readiness)
 	}
-	if data.Services.Total != 1 || len(data.Services.Stopped) != 1 || data.Services.Stopped[0] != "demo-api" {
-		t.Fatalf("services = %+v", data.Services)
+	if data.Resources.Total != 1 || len(data.Resources.Stopped) != 1 || data.Resources.Stopped[0] != "demo-api" {
+		t.Fatalf("resources = %+v", data.Resources)
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit up --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
@@ -877,14 +877,14 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 		t.Fatalf("logs envelope not ok: %+v\n%s", logsEnvelope.Error, logsOut)
 	}
 	var logsData struct {
-		Service string   `json:"service"`
-		Lines   []string `json:"lines"`
+		Resource string   `json:"resource"`
+		Lines    []string `json:"lines"`
 	}
 	if err := json.Unmarshal(logsEnvelope.Data, &logsData); err != nil {
 		t.Fatalf("logs data: %v\n%s", err, logsEnvelope.Data)
 	}
-	if logsData.Service != "redis" {
-		t.Fatalf("logs service = %q", logsData.Service)
+	if logsData.Resource != "redis" {
+		t.Fatalf("logs resource = %q", logsData.Resource)
 	}
 }
 
@@ -1063,20 +1063,20 @@ services:
 		t.Fatalf("status envelope not ok: %s", jsonOutput)
 	}
 	var status struct {
-		Services []jsonService `json:"services"`
+		Resources []jsonService `json:"resources"`
 	}
 	if err := json.Unmarshal(envelope.Data, &status); err != nil {
 		t.Fatalf("status data: %v\n%s", err, jsonOutput)
 	}
-	services := make(map[string]jsonService, len(status.Services))
-	for _, service := range status.Services {
-		services[service.Name] = service
+	resources := make(map[string]jsonService, len(status.Resources))
+	for _, resource := range status.Resources {
+		resources[resource.Name] = resource
 	}
-	if services["api-runtime"].StateReason == "" {
+	if resources["api-runtime"].StateReason == "" {
 		t.Fatalf("api-runtime state_reason empty:\n%s", jsonOutput)
 	}
-	if services["web-app"].BlockedBy != "api-runtime" {
-		t.Fatalf("web-app blocked_by = %q:\n%s", services["web-app"].BlockedBy, jsonOutput)
+	if resources["web-app"].BlockedBy != "api-runtime" {
+		t.Fatalf("web-app blocked_by = %q:\n%s", resources["web-app"].BlockedBy, jsonOutput)
 	}
 	commands := make(map[string]bool, len(envelope.RecommendedActions))
 	for _, action := range envelope.RecommendedActions {

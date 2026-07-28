@@ -67,7 +67,7 @@ orbit down                   # 停止環境
 
 一般啟動只需使用 `orbit up`。只有刻意想單獨啟動 containers、不啟動 host
 services 時，才使用 `orbit up --infra`。需要縮小啟動範圍時，請選擇指定
-service names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
+resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
 
 使用團隊自己的 environment 時，請把 `demo-api` 與 `quickstart` 換成
 `orbit status` 和 `orbit env list` 顯示的名稱。切換後，Orbit 會在

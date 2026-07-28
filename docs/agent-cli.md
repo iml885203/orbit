@@ -87,11 +87,11 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 |---|---|
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
-| `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, service risks, and recommended follow-up commands. |
-| `orbit status --json` | Returns setup readiness, daemon state, and configured service state in `data`. |
+| `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, and recommended follow-up commands. |
+| `orbit status --json` | Returns setup readiness, daemon state, and configured resource state in `data.resources`. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
-| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out services, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
+| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
 | `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
@@ -115,10 +115,17 @@ next action, `orbit open --json`. A failed start recommends status, logs for the
 root failed resource, and a targeted restart after the reported cause is fixed;
 it does not send agents through unrelated setup diagnostics.
 
-`data.requested_services` on `up` is the daemon-resolved start set, despite the
-legacy field name. It includes selected dependencies and excludes resources
-filtered out by groups. This is the exact set whose terminal state the command
-waits for.
+Lifecycle payloads use resource vocabulary consistently:
+
+- `requested_resources` is the daemon-resolved set, including selected
+  dependencies and excluding resources filtered out by groups.
+- `resources` contains the observed final state for that set.
+- `degraded_resources` and `timed_out_resources` identify unsuccessful
+  outcomes without treating containers as services.
+
+This is the exact set whose terminal state the command waits for. Status and
+inspect likewise expose mixed host processes and containers under `resources`.
+Log payloads and NDJSON events identify their source with `resource`.
 
 Before first setup, status remains a successful state query with
 `data.setup_required: true`, a human-readable `setup_message`, and exactly one
@@ -229,8 +236,8 @@ The inspect payload contains:
 | `readiness` | Stable decision state with `state`, `blocked`, and `summary`. |
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `env` | Current config path, env name, preview-only flag, and daemon-reported env when available. |
-| `services` | Bounded service summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `service_degraded`, `service_converging`, and `service_stopped`. |
+| `resources` | Bounded resource summary grouped by state. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:
@@ -241,12 +248,12 @@ Stable `readiness.state` values:
 | `config_invalid` | true | The selected config cannot be loaded. |
 | `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
 | `needs_daemon` | true | A running daemon is serving a different env than the selected config. |
-| `degraded` | false | At least one service reports `degraded`. |
-| `converging` | false | At least one service is `pending`, `starting`, `building`, `stopping`, or `restarting`. |
-| `partial` | false | At least one service is stopped and no higher-priority risk exists. |
+| `degraded` | false | At least one resource reports `degraded`. |
+| `converging` | false | At least one resource is `pending`, `starting`, `building`, `stopping`, or `restarting`. |
+| `partial` | false | At least one resource is stopped and no higher-priority risk exists. |
 | `ready` | false | No inspect risk was detected. |
 
-`converging` may also be returned when daemon service status is temporarily
+`converging` may also be returned when daemon resource status is temporarily
 unavailable. In that case, a `status_unavailable` risk explains the condition.
 
 Agents should treat `blocked: true` as a stop-and-recover state. Agents may run

@@ -72,7 +72,7 @@ func TestWriteLogJSONErrorEvent(t *testing.T) {
 	var got struct {
 		SchemaVersion string `json:"schema_version"`
 		Type          string `json:"type"`
-		Service       string `json:"service"`
+		Resource      string `json:"resource"`
 		Error         struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -87,8 +87,15 @@ func TestWriteLogJSONErrorEvent(t *testing.T) {
 	if got.Type != "error" {
 		t.Fatalf("type = %q", got.Type)
 	}
-	if got.Service != "redis" {
-		t.Fatalf("service = %q", got.Service)
+	if got.Resource != "redis" {
+		t.Fatalf("resource = %q", got.Resource)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &fields); err != nil {
+		t.Fatalf("decode event fields: %v", err)
+	}
+	if _, ok := fields["service"]; ok {
+		t.Fatalf("event contains legacy service field: %s", buf.String())
 	}
 	if got.Error.Code != "log_stream_error" {
 		t.Fatalf("error code = %q", got.Error.Code)

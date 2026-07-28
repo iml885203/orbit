@@ -67,7 +67,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	req := daemon.UpRequest{
-		Services:  args,
+		Resources: args,
 		InfraOnly: infraOnly,
 		Groups:    groups,
 	}
@@ -78,11 +78,11 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println(resp.Message)
 
-	if len(resp.AffectedServices) == 0 {
+	if len(resp.AffectedResources) == 0 {
 		_, _ = cli.Faint.Println("  orbit open                open web UI")
 		return nil
 	}
-	return waitForUpHealthy(client, resp.AffectedServices, upCompletionMessage(args))
+	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
 }
 
 func upCompletionMessage(args []string) string {
@@ -120,22 +120,22 @@ func runUpJSON(args []string) error {
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
-	req := daemon.UpRequest{Services: args, InfraOnly: infraOnly, Groups: groups}
+	req := daemon.UpRequest{Resources: args, InfraOnly: infraOnly, Groups: groups}
 	resp, err := client.Up(req)
 	if err != nil {
 		return fmt.Errorf("up failed: %w", err)
 	}
-	names := resp.AffectedServices
+	names := resp.AffectedResources
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
 		return cli.WithJSONActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
 	}
 	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-		Operation:         "up",
-		Message:           resp.Message,
-		RequestedServices: names,
-		InfraOnly:         infraOnly,
-		FinalStatus:       finalStatus,
+		Operation:          "up",
+		Message:            resp.Message,
+		RequestedResources: names,
+		InfraOnly:          infraOnly,
+		FinalStatus:        finalStatus,
 	}), lifecycleUpSuccessActions())
 }
 
@@ -249,10 +249,10 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 	err := pollLoop(client, timeout, opts.timeoutErr,
 		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
 			frame++
-			watched := make([]daemon.ServiceStatus, 0, len(status.Services))
-			progressByName := make(map[string]*daemon.HealthProgressInfo, len(status.Services))
-			for i := range status.Services {
-				s := &status.Services[i]
+			watched := make([]daemon.ServiceStatus, 0, len(status.Resources))
+			progressByName := make(map[string]*daemon.HealthProgressInfo, len(status.Resources))
+			for i := range status.Resources {
+				s := &status.Resources[i]
 				if opts.filter != nil && !opts.filter(s) {
 					continue
 				}

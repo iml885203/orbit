@@ -81,8 +81,8 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 |---|---|
 | `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
-| `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、service risks，以及建議後續指令。 |
-| `orbit status --json` | 在 `data` 中回傳 setup readiness、daemon 與已設定 service 的狀態。 |
+| `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、resource risks，以及建議後續指令。 |
+| `orbit status --json` | 在 `data.resources` 中回傳 setup readiness、daemon 與已設定 resource 的狀態。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
@@ -107,9 +107,17 @@ Lifecycle actions 會依結果提供。成功的 `up` 只回傳一個主要下�
 `orbit open --json`。啟動失敗時則建議查看 status、根因 resource 的 logs，
 並在修正原因後只 restart 該 resource；不會把 agent 導向無關的 setup 診斷。
 
-`up` 的 `data.requested_services` 雖沿用舊欄位名稱，內容是 daemon 解析後的
-實際啟動集合：包含被選中的相依，並排除由 groups 篩掉的 resources。指令只會
-等待這個集合進入 terminal state。
+Lifecycle payload 全面使用 resource vocabulary：
+
+- `requested_resources` 是 daemon 解析後的集合，包含被選中的相依，並排除
+  由 groups 篩掉的 resources。
+- `resources` 帶有該集合觀察到的最終狀態。
+- `degraded_resources` 與 `timed_out_resources` 直接指出未成功的結果，不再
+  把 container 稱為 service。
+
+指令只會等待這個集合進入 terminal state。Status 與 inspect 同樣把混合的
+host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
+則使用 `resource` 標示來源。
 
 第一次 setup 前，status 仍是成功的狀態查詢，但會回傳
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的
@@ -207,8 +215,8 @@ Inspect payload 包含：
 | `readiness` | 穩定的決策狀態，包含 `state`、`blocked`、`summary`。 |
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `env` | 目前 config path、env 名稱、preview-only flag，以及可用時 daemon 回報的 env。 |
-| `services` | 依 state 分組的 service 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`service_degraded`、`service_converging`、`service_stopped`。 |
+| `resources` | 依 state 分組的 resource 摘要。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：
@@ -219,12 +227,12 @@ Inspect payload 包含：
 | `config_invalid` | true | 選到的 config 無法載入。 |
 | `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
 | `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |
-| `degraded` | false | 至少一個 service 回報 `degraded`。 |
-| `converging` | false | 至少一個 service 是 `pending`、`starting`、`building`、`stopping` 或 `restarting`。 |
-| `partial` | false | 至少一個 service 停止，且沒有更高優先級的風險。 |
+| `degraded` | false | 至少一個 resource 回報 `degraded`。 |
+| `converging` | false | 至少一個 resource 是 `pending`、`starting`、`building`、`stopping` 或 `restarting`。 |
+| `partial` | false | 至少一個 resource 停止，且沒有更高優先級的風險。 |
 | `ready` | false | inspect 沒有偵測到風險。 |
 
-當 daemon service status 暫時不可用時，也可能回傳 `converging`。這種情況會用
+當 daemon resource status 暫時不可用時，也可能回傳 `converging`。這種情況會用
 `status_unavailable` risk 說明原因。
 
 Agents 應把 `blocked: true` 視為需要先恢復的狀態。Agents 可以直接執行

@@ -32,7 +32,7 @@ type inspectJSONData struct {
 	Readiness          inspectReadiness      `json:"readiness"`
 	Daemon             inspectDaemonSummary  `json:"daemon"`
 	Env                inspectEnvSummary     `json:"env"`
-	Services           inspectServiceSummary `json:"services"`
+	Resources          inspectServiceSummary `json:"resources"`
 	Risks              []inspectRisk         `json:"risks"`
 	RecommendedActions []cli.JSONAction      `json:"recommended_actions"`
 }
@@ -72,7 +72,7 @@ type inspectRisk struct {
 	Code     string `json:"code"`
 	Severity string `json:"severity"`
 	Message  string `json:"message"`
-	Service  string `json:"service,omitempty"`
+	Resource string `json:"resource,omitempty"`
 }
 
 type inspectBuildOptions struct {
@@ -163,7 +163,7 @@ func alivePID(pid int, alive bool) int {
 func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	services := emptyInspectServiceSummary()
 	if opts.Status != nil {
-		services = buildInspectServiceSummary(opts.Status.Services)
+		services = buildInspectServiceSummary(opts.Status.Resources)
 	} else if len(opts.Configured) > 0 {
 		services = buildInspectServiceSummary(opts.Configured)
 	}
@@ -192,7 +192,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 			Dashboard:       inspectDashboard(opts),
 		},
 		Env:                env,
-		Services:           services,
+		Resources:          services,
 		Risks:              risks,
 		RecommendedActions: actions,
 	}
@@ -311,26 +311,26 @@ func inspectServiceRisks(services inspectServiceSummary) []inspectRisk {
 	risks := make([]inspectRisk, 0, len(services.Degraded)+len(services.Starting)+len(services.Stopped))
 	for _, name := range services.Degraded {
 		risks = append(risks, inspectRisk{
-			Code:     "service_degraded",
+			Code:     "resource_degraded",
 			Severity: "high",
 			Message:  name + " is degraded",
-			Service:  name,
+			Resource: name,
 		})
 	}
 	for _, name := range services.Starting {
 		risks = append(risks, inspectRisk{
-			Code:     "service_converging",
+			Code:     "resource_converging",
 			Severity: "medium",
 			Message:  name + " is not healthy yet",
-			Service:  name,
+			Resource: name,
 		})
 	}
 	for _, name := range services.Stopped {
 		risks = append(risks, inspectRisk{
-			Code:     "service_stopped",
+			Code:     "resource_stopped",
 			Severity: "low",
 			Message:  name + " is stopped",
-			Service:  name,
+			Resource: name,
 		})
 	}
 	return risks
@@ -350,18 +350,18 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 		return inspectReadiness{State: inspectReadinessStopped, Blocked: true, Summary: "the selected environment is not running"}
 	}
 	if opts.StatusErr != nil {
-		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running, but service status is unavailable"}
+		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running, but resource status is unavailable"}
 	}
 	if len(services.Degraded) > 0 {
-		return inspectReadiness{State: inspectReadinessDegraded, Summary: "daemon is running, but one or more services are degraded"}
+		return inspectReadiness{State: inspectReadinessDegraded, Summary: "daemon is running, but one or more resources are degraded"}
 	}
 	if len(services.Starting) > 0 {
-		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running and services are still converging"}
+		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running and resources are still converging"}
 	}
 	if len(services.Stopped) > 0 {
-		return inspectReadiness{State: inspectReadinessPartial, Summary: "daemon is running, but one or more services are stopped"}
+		return inspectReadiness{State: inspectReadinessPartial, Summary: "daemon is running, but one or more resources are stopped"}
 	}
-	return inspectReadiness{State: inspectReadinessReady, Summary: "daemon is running and no service risks were detected"}
+	return inspectReadiness{State: inspectReadinessReady, Summary: "daemon is running and no resource risks were detected"}
 }
 
 func inspectEnvMismatch(opts inspectBuildOptions) bool {

@@ -75,7 +75,7 @@ func TestPlatformSmokeCleanUserJourney(t *testing.T) {
 		Daemon struct {
 			Running bool `json:"running"`
 		} `json:"daemon"`
-		Services []json.RawMessage `json:"services"`
+		Resources []json.RawMessage `json:"resources"`
 	}
 	if err := json.Unmarshal(statusEnvelope.Data, &statusData); err != nil {
 		t.Fatalf("status data: %v\n%s", err, statusOutput)
@@ -83,8 +83,8 @@ func TestPlatformSmokeCleanUserJourney(t *testing.T) {
 	if statusData.Daemon.Running {
 		t.Fatal("clean-user status unexpectedly reports a running daemon")
 	}
-	if statusData.Services == nil || len(statusData.Services) != 0 {
-		t.Fatalf("services must be an empty array, got %s", statusEnvelope.Data)
+	if statusData.Resources == nil || len(statusData.Resources) != 0 {
+		t.Fatalf("resources must be an empty array, got %s", statusEnvelope.Data)
 	}
 
 	doctorOutput := runPlatformSmokeCommand(t, workspace, commandEnv, binary, "doctor", "--json")

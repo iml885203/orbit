@@ -100,7 +100,7 @@
     }
   }
 
-  async function doStart()   { await withBusy(() => apiPost('/api/up', { services: [node.name] }), 'Failed to start') }
+  async function doStart()   { await withBusy(() => apiPost('/api/up', { resources: [node.name] }), 'Failed to start') }
   async function doRestart() { await withBusy(() => apiPost('/api/restart/' + node.name),         'Failed to restart') }
   async function doStop()    { await withBusy(() => apiPost('/api/stop/' + node.name),            'Failed to stop') }
 

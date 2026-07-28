@@ -31,7 +31,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	stale, staleReason := s.configStale()
 	resp := StatusResponse{
 		Epoch:             s.epoch(),
-		Services:          statuses,
+		Resources:         statuses,
 		ConfigPath:        s.ConfigPath(),
 		ConfigStale:       stale,
 		ConfigStaleReason: staleReason,
@@ -121,9 +121,9 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 		containerNames := sortedKeys(s.holder.Load().Containers)
 		s.app.StartServices(containerNames)
 		writeJSON(w, http.StatusOK, APIResponse{
-			OK:               true,
-			Message:          upStartMessage(req, containerNames),
-			AffectedServices: containerNames,
+			OK:                true,
+			Message:           upStartMessage(req, containerNames),
+			AffectedResources: containerNames,
 		})
 		return
 	}
@@ -146,9 +146,9 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(names)
 	s.app.StartServices(names)
 	writeJSON(w, http.StatusOK, APIResponse{
-		OK:               true,
-		Message:          upStartMessage(req, names),
-		AffectedServices: names,
+		OK:                true,
+		Message:           upStartMessage(req, names),
+		AffectedResources: names,
 	})
 }
 
@@ -166,14 +166,14 @@ func upStartMessage(req UpRequest, affected []string) string {
 	switch {
 	case req.InfraOnly:
 		return fmt.Sprintf("Starting infrastructure (%s).", countNoun(len(affected), "container"))
-	case len(req.Services) == 1:
+	case len(req.Resources) == 1:
 		dependencies := len(affected) - 1
 		if dependencies == 0 {
-			return fmt.Sprintf("Starting %s.", req.Services[0])
+			return fmt.Sprintf("Starting %s.", req.Resources[0])
 		}
-		return fmt.Sprintf("Starting %s with %s.", req.Services[0], countNoun(dependencies, "dependency"))
-	case len(req.Services) > 1:
-		requested := uniqueCount(req.Services)
+		return fmt.Sprintf("Starting %s with %s.", req.Resources[0], countNoun(dependencies, "dependency"))
+	case len(req.Resources) > 1:
+		requested := uniqueCount(req.Resources)
 		dependencies := len(affected) - requested
 		if dependencies == 0 {
 			return fmt.Sprintf("Starting %s.", countNoun(requested, "requested resource"))
@@ -235,8 +235,8 @@ func writeUnknownResource(w http.ResponseWriter, name string) {
 }
 
 func (s *Server) resolveServicesFromRequest(req UpRequest) ([]string, error) {
-	if len(req.Services) > 0 {
-		return s.resolveExplicitServices(req.Services)
+	if len(req.Resources) > 0 {
+		return s.resolveExplicitServices(req.Resources)
 	}
 	cfg := s.holder.Load()
 	unknown := make([]string, 0, len(req.Groups))

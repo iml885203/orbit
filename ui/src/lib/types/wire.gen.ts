@@ -49,7 +49,7 @@ here depends on it.
  * UpRequest is the body for POST /api/up.
  */
 export interface UpRequest {
-  services: string[];
+  resources: string[];
   infra_only: boolean;
   groups: string[];
 }
@@ -71,7 +71,7 @@ export interface StatusResponse {
    * nanoseconds) keeps the value safely within JS Number precision.
    */
   epoch: number /* int64 */;
-  services: ServiceStatus[];
+  resources: ServiceStatus[];
   /**
    * ConfigPath identifies the environment loaded by the running daemon.
    * CLI clients compare it with their selected config before combining
@@ -157,10 +157,10 @@ export interface APIResponse {
   message?: string;
   error?: string;
   /**
-   * AffectedServices identifies the resources accepted by a lifecycle
+   * AffectedResources identifies the resources accepted by a lifecycle
    * request, including dependencies selected by the daemon.
    */
-  affected_services?: string[];
+  affected_resources?: string[];
   /**
    * Code is a stable, machine-readable discriminator a client can
    * switch on when the plain Error string isn't enough — e.g. the

@@ -312,7 +312,7 @@ func TestLastServiceLogLineSkipsOrbitNarration(t *testing.T) {
 }
 
 func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 		{
 			Name:        "redis",
 			State:       "degraded",
@@ -344,7 +344,7 @@ func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
 }
 
 func TestBlockedDependencyErrorWaitsForRecoveringDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
 		{
 			Name:  "redis",
 			State: "degraded",
