@@ -64,6 +64,13 @@ orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f
 - `web` 在 `order-api` ready 後啟動；打開頁面後可以直接下單，並看到商品、
   庫存、訂單資料。
 
+與 1.0 打磨對齊的友善體驗：
+
+- 頁面有即時服務狀態卡片（catalog / inventory / order）
+- 常見錯誤用可行動訊息呈現（包含下一步建議）
+- 服務未就緒時，下單按鈕會停用，避免亂按造成誤會
+- 成功/失敗皆會回到明確可繼續操作的流程
+
 訂單流程是：
 
 - `web` -> `order-api`
@@ -106,6 +113,16 @@ orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f
    - `orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f`
    - `orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f`
    - `orbit -c docs/examples/mini-shop/dev.yaml logs catalog-api -f`
+
+### 常見錯誤對照
+
+| 錯誤代碼 | 可能原因 | 建議操作 |
+| --- | --- | --- |
+| `insufficient_stock` | 庫存不足 | 降低 `quantity` 再試 |
+| `catalog_unreachable` | catalog 服務未就緒 | 先確認 `orbit status --json` 中 catalog ready |
+| `inventory_unavailable` | inventory 服務未就緒 | 先確認 `orbit status --json` 中 inventory ready |
+| `product_not_found` | 商品不存在 | 查看左側商品清單，使用有效的 product id |
+| `order_failed_release_failed` | 下單後回補失敗 | 稍後重試，避免反覆點擊 |
 
 ## 依賴關係（簡化）
 

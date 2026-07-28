@@ -10,15 +10,26 @@
       .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
       .card { background: #111827; padding: 12px; border-radius: 12px; }
       button { padding: 8px 12px; border-radius: 8px; background: #22d3ee; border: 0; color: #042f2e; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
       pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow: auto; }
       .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
       input { width: 100px; }
+      .notice { padding: 8px; border-radius: 8px; background: #111827; margin: 8px 0; }
+      .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .service { border-left: 4px solid #6b7280; padding: 8px; border-radius: 8px; background: #0f172a; }
+      .service.ready { border-left-color: #22c55e; }
+      .service.warn { border-left-color: #f59e0b; }
+      .service.bad { border-left-color: #ef4444; }
+      .notice.ok { color: #bef264; }
+      .notice.warn { color: #fbbf24; }
+      .notice.error { color: #fb7185; }
     </style>
   </head>
   <body>
     <h1>Orbit mini-shop</h1>
     <p>前後端 + 3 個 backend + Redis container，演示 Orbit 多服務關聯啟動。</p>
     <div id="status">載入中...</div>
+    <div class="status-grid" id="service-status"></div>
     <div class="help card" id="help">
       <h3>第一次啟動檢查（最少心智負擔）</h3>
       <ol>
@@ -45,6 +56,7 @@
           <input id="quantity" type="number" value="1" min="1" />
         </div>
         <button id="place-order">建立訂單</button>
+        <div id="action-notice" class="notice">待機中：可嘗試新增一筆訂單。</div>
       </div>
       <div class="card">
         <h3>庫存</h3>
@@ -66,27 +78,111 @@
       const orders = document.getElementById('orders');
       const stock = document.getElementById('stock');
       const help = document.getElementById('help');
+      const serviceStatus = document.getElementById('service-status');
+      const actionNotice = document.getElementById('action-notice');
+      const placeOrderButton = document.getElementById('place-order');
+
+      function setNotice(message, kind = 'ok') {
+        actionNotice.textContent = message;
+        actionNotice.className = `notice ${kind}`;
+      }
+
+      function formatServiceError(payload) {
+        if (!payload || !payload.code) return '操作失敗，請重試';
+        if (payload.code === 'insufficient_stock') {
+          const available = typeof payload.available === 'number' ? payload.available : '?';
+          return `庫存不足：目前可用 ${available} 件，請改小一點數量`;
+        }
+        if (payload.code === 'inventory_unavailable') {
+          return '庫存服務尚未就緒：請先確認 inventory-api 是否 ready，或稍後重試';
+        }
+        if (payload.code === 'order_failed_release_failed') {
+          return '下單異常且回復庫存失敗，請先稍後再試，避免重複嘗試';
+        }
+        if (payload.code === 'order_failed') {
+          return '下單失敗，庫存已回補，請重試';
+        }
+        if (payload.code === 'product_not_found') {
+          return '商品不存在，請先確認商品 ID';
+        }
+        if (payload.code === 'catalog_unreachable') {
+          return '產品服務未就緒，請先確認 catalog-api 是否已 ready';
+        }
+        return payload.message || '建立失敗，請重試';
+      }
+
+      function setServiceStatusItem(label, serviceStatusPayload) {
+        const serviceName = serviceStatusPayload?.service || label;
+        const status = serviceStatusPayload?.status || 'unknown';
+        const isOk = status === 'ok';
+        const isWarn = status === 'degraded';
+
+        const dependencies = serviceStatusPayload?.dependencies || {};
+        const dependencyLines = Object.entries(dependencies)
+          .map(([name, dep]) => `• ${name}: ${dep?.ready ? 'ready' : 'not ready'}`)
+          .join('<br/>');
+        const dependencyText = dependencyLines ? `<div style="font-size:12px;color:#94a3b8">${dependencyLines}</div>` : '';
+
+        return `<div class="service ${isOk ? 'ready' : isWarn ? 'warn' : 'bad'}">` +
+          `<div><b>${serviceName}</b> <span style="color:#94a3b8">${status}</span></div>` +
+          `${dependencyText}` +
+          `</div>`;
+      }
+
+      function setHelpPanel(message) {
+        help.dataset.orderOk = message.orderOk ? 'true' : 'false';
+        if (message.orderOk) {
+          help.innerHTML = `<h3>第一次啟動檢查（最少心智負擔）</h3>
+            <ol>
+              <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
+              <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開始操作</li>
+              <li>下單 1 件最常見商品（商品 ID 1、數量 1）</li>
+            </ol>
+            <p>若下單失敗，先看上方紅字；通常是 <code>insufficient_stock</code> 或某服務未啟動（先確認 <code>orbit status --json</code>）。</p>`;
+          return;
+        }
+
+        help.innerHTML = `<h3>健康檢查（下一步）</h3>
+          <ul>
+            <li>${message.items.join('</li><li>')}</li>
+          </ul>
+          <p>你可以直接執行：<code>orbit -c docs/examples/mini-shop/dev.yaml status --json</code></p>`;
+      }
+
+      async function safeFetch(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          let payload = null;
+          try {
+            payload = await resp.json();
+          } catch (_) {
+            payload = null;
+          }
+          throw new Error(JSON.stringify(payload || { code: 'http_error', message: `HTTP ${resp.status}` }));
+        }
+        return resp.json();
+      }
 
       async function checkAll() {
         try {
-          const [catalogHealth, orderHealth, inventoryHealth] = await Promise.all([
-            fetch(`${catalogApi}/health`),
-            fetch(`${orderApi}/health`),
-            fetch(`${inventoryApi}/health`),
+          const [catalogPayload, orderPayload, inventoryPayload] = await Promise.all([
+            safeFetch(`${catalogApi}/health`),
+            safeFetch(`${orderApi}/health`),
+            safeFetch(`${inventoryApi}/health`),
           ]);
-          const catalogPayload = await catalogHealth.json();
-          const orderPayload = await orderHealth.json();
-          const inventoryPayload = await inventoryHealth.json();
-          const checks = [
-            `catalog (${catalogPayload.service}) = ${catalogPayload.status}`,
-            `order (${orderPayload.service}) = ${orderPayload.status}`,
-            `inventory (${inventoryPayload.service}) = ${inventoryPayload.status}`,
-          ];
-          status.textContent = `服務狀態：${checks.join(' / ')}`;
+          status.textContent = `服務健康：order=${orderPayload.status}，catalog=${catalogPayload.status}，inventory=${inventoryPayload.status}`;
+
+          serviceStatus.innerHTML = [
+            setServiceStatusItem('catalog', catalogPayload),
+            setServiceStatusItem('inventory', inventoryPayload),
+            setServiceStatusItem('order', orderPayload),
+          ].join('');
 
           const orderDeps = orderPayload.dependencies || {};
           const inventoryDeps = inventoryPayload.dependencies || {};
-          help.dataset.orderOk = (orderPayload.status === 'ok') ? 'true' : 'false';
+          const orderReady = orderPayload.status === 'ok';
+          placeOrderButton.disabled = !orderReady;
+
           if (orderPayload.status !== 'ok') {
             const issues = [];
             if (!orderDeps.catalog_api?.ready) {
@@ -98,27 +194,24 @@
             if (!orderDeps.redis?.ready) {
               issues.push('redis 不可用，請重啟 redis container');
             }
-            if (issues.length) {
-              help.innerHTML = `<h3>第一輪健康檢查</h3><ul><li>${issues.join('</li><li>')}</li></ul>`;
+            if (!inventoryDeps.sqlite?.ready) {
+              issues.push('inventory sqlite 未 ready，請再試一次');
             }
-          } else if (help.dataset.orderOk === 'true') {
-            help.innerHTML = `<h3>第一次啟動檢查（最少心智負擔）</h3>
-              <ol>
-                <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
-                <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開分頁</li>
-                <li>用「下單」下 1 個產品、1 件數量，若成功會同時更新訂單與庫存</li>
-              </ol>
-              <p>若下單失敗，先看錯誤訊息：通常是 <code>insufficient_stock</code>（庫存不足）或
-              某服務未啟動（先確認 <code>orbit status --json</code>）。</p>`;
+            setHelpPanel({ orderOk: false, items: issues });
+          } else {
+            setHelpPanel({ orderOk: true });
+            setNotice('系統已就緒，可以下單', 'ok');
           }
         } catch (e) {
           status.textContent = '初始化失敗，請先確認 orbit up 已完整啟動所有服務。';
+          setNotice('後端未就緒，請稍後再試', 'error');
+          placeOrderButton.disabled = true;
         }
       }
 
       async function loadProducts() {
-        const resp = await fetch(`${catalogApi}/products`);
-        const payload = await resp.json();
+        try {
+          const payload = await safeFetch(`${catalogApi}/products`);
         products.innerHTML = '';
         payload.products.forEach((item) => {
           const row = document.createElement('div');
@@ -126,11 +219,14 @@
           row.textContent = `${item.id}. ${item.name} — $${item.price.toFixed(2)}`;
           products.appendChild(row);
         });
+        } catch (e) {
+          products.innerHTML = '<div class="notice error">商品載入失敗：先確認 catalog-api 是否 ready。</div>';
+        }
       }
 
       async function loadStock() {
-        const resp = await fetch(`${inventoryApi}/stock`);
-        const payload = await resp.json();
+        try {
+          const payload = await safeFetch(`${inventoryApi}/stock`);
         stock.innerHTML = '';
         payload.items.forEach((item) => {
           const row = document.createElement('div');
@@ -138,11 +234,14 @@
           row.textContent = `產品 ${item.product_id}：剩餘 ${item.stock}`;
           stock.appendChild(row);
         });
+        } catch (e) {
+          stock.innerHTML = '<div class="notice error">庫存載入失敗：先確認 inventory-api 是否 ready。</div>';
+        }
       }
 
       async function loadOrders() {
-        const resp = await fetch(`${orderApi}/orders`);
-        const payload = await resp.json();
+        try {
+          const payload = await safeFetch(`${orderApi}/orders`);
         orders.innerHTML = '';
         payload.orders.forEach((item) => {
           const row = document.createElement('div');
@@ -150,26 +249,47 @@
           row.textContent = `#${item.id} x${item.quantity} ${item.product_name} (${item.product_price})`;
           orders.appendChild(row);
         });
+        } catch (e) {
+          orders.innerHTML = '<div class="notice warn">訂單載入失敗：先確認 order-api 是否 ready。</div>';
+        }
       }
 
       document.getElementById('place-order').addEventListener('click', async () => {
+        if (placeOrderButton.disabled) return;
         const productId = Number(document.getElementById('product-id').value);
         const quantity = Number(document.getElementById('quantity').value);
-        const resp = await fetch(`${orderApi}/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ product_id: productId, quantity }),
-        });
-        const payload = await resp.json();
-        if (!resp.ok) {
-          alert(payload.message || '建立失敗');
-          return;
+        const buttonOriginalLabel = placeOrderButton.textContent;
+        setNotice('下單中...', 'warn');
+        placeOrderButton.disabled = true;
+        placeOrderButton.textContent = '建立中...';
+        let payload = null;
+        try {
+          const resp = await fetch(`${orderApi}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId, quantity }),
+          });
+          payload = await resp.json();
+          if (!resp.ok) {
+            setNotice(formatServiceError(payload), 'error');
+            await checkAll();
+            return;
+          }
+          await Promise.all([loadOrders(), loadStock()]);
+          setNotice('建立成功 ✓，可再下一筆', 'ok');
+        } catch (e) {
+          setNotice(formatServiceError(payload), 'error');
+        } finally {
+          placeOrderButton.textContent = buttonOriginalLabel;
+          try {
+            await checkAll();
+          } catch (_) {}
         }
-        await Promise.all([loadOrders(), loadStock()]);
       });
 
       async function main() {
         try {
+          setHelpPanel({ orderOk: false, items: ['等待服務啟動…'] });
           await Promise.all([checkAll(), loadProducts(), loadOrders(), loadStock()]);
           setInterval(checkAll, 4000);
         } catch (e) {

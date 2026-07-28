@@ -54,8 +54,9 @@ def list_orders() -> list[dict]:
     return rows
 
 
-def create_order(product_id: int, quantity: int) -> dict:
-    product = fetch_product(product_id)
+def create_order(product_id: int, quantity: int, product: dict | None = None) -> dict:
+    if product is None:
+        product, _ = fetch_product(product_id)
     if not product:
         raise ValueError("product_not_found")
 
@@ -111,15 +112,19 @@ def release_inventory(product_id: int, quantity: int) -> bool:
         return False
 
 
-def fetch_product(product_id: int) -> dict:
+def fetch_product(product_id: int) -> tuple[dict | None, str | None]:
     try:
         with urllib.request.urlopen(f"{CATALOG_API_URL}/products/{product_id}", timeout=1) as resp:
             if resp.status != 200:
-                return None
+                if resp.status == 404:
+                    return None, "product_not_found"
+                return None, "catalog_unreachable"
             payload = json.load(resp)
-    except (urllib.error.URLError, ValueError):
-        return None
-    return payload
+    except urllib.error.URLError:
+        return None, "catalog_unreachable"
+    except (ValueError, json.JSONDecodeError):
+        return None, "catalog_unreachable"
+    return payload, None
 
 
 def cache_ready() -> bool:
@@ -240,17 +245,22 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, HTTPStatus.BAD_REQUEST, headers, body)
             return
 
-        product = fetch_product(product_id)
-        if not product:
+        product, product_error = fetch_product(product_id)
+        if product_error == "product_not_found":
             payload = {"code": "product_not_found", "message": f"product {product_id} not found"}
             headers, body = write_json(payload, HTTPStatus.NOT_FOUND)
             json_response(self, HTTPStatus.NOT_FOUND, headers, body)
+            return
+        if product_error:
+            payload = {"code": "catalog_unreachable", "message": "catalog API not reachable"}
+            headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
+            json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
             return
 
         try:
             reserve_inventory(product_id, quantity)
             try:
-                order = create_order(product_id, quantity)
+                order = create_order(product_id, quantity, product=product)
             except sqlite3.Error:
                 if not release_inventory(product_id, quantity):
                     payload = {
@@ -285,6 +295,11 @@ class Handler(BaseHTTPRequestHandler):
                 status = HTTPStatus.SERVICE_UNAVAILABLE
             headers, body = write_json(payload, status)
             json_response(self, status, headers, body)
+            return
+        except urllib.error.URLError:
+            payload = {"code": "inventory_unavailable", "message": "inventory API not reachable"}
+            headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
+            json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
             return
         headers, body = write_json(order, HTTPStatus.CREATED)
         json_response(self, HTTPStatus.CREATED, headers, body)

@@ -151,13 +151,21 @@ def reserve_to_response(product_id: int, quantity: int) -> tuple[int, dict]:
     if current < quantity:
         return (
             HTTPStatus.CONFLICT,
-            {"code": "insufficient_stock", "message": "not enough stock"},
+            {
+                "code": "insufficient_stock",
+                "message": "not enough stock",
+                "available": current,
+            },
         )
 
     if not reserve_stock(product_id, quantity):
         return (
             HTTPStatus.CONFLICT,
-            {"code": "insufficient_stock", "message": "not enough stock"},
+            {
+                "code": "insufficient_stock",
+                "message": "not enough stock",
+                "available": get_stock(product_id),
+            },
         )
     return (
         HTTPStatus.OK,
