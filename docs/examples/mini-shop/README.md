@@ -101,6 +101,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 已顯示 9 個 resource
    - 服務狀態卡中有 8/8 ready，或至少 `checkout-api` 顯示 `status: ok`
    - 先看「下一步（照著做）」與「目前進度（你在第幾步）」卡片，或直接點「重置流程」回到起始狀點
+   - 「一眼看懂進度」會即時顯示服務 / 客戶 / 購物車 / 成功訂單 4 個狀態
 
 3. 加入購物車：
    - 選客戶

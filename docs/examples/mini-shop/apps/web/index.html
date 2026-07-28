@@ -63,6 +63,12 @@
       .goal-state { margin: 8px 0; padding: 8px; border-radius: 8px; background: #0b1328; }
       .goal-state b { color: #93c5fd; }
       .goal-action { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+      .summary-grid { display: grid; gap: 8px; }
+      .summary-row { padding: 6px 10px; border-radius: 8px; background: #0b1328; color: #cbd5e1; }
+      .summary-row.ok { color: #86efac; }
+      .summary-row.warn { color: #fbbf24; }
+      .summary-row.error { color: #fb7185; }
+      .summary-row .dot { margin-right: 6px; }
     </style>
   </head>
   <body>
@@ -91,6 +97,11 @@
           <button id="goal-replay" class="small-btn inline-btn danger">重做一次成功流程</button>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h3>一眼看懂進度</h3>
+      <div id="goal-summary" class="summary-grid"></div>
     </div>
 
     <div class="card">
@@ -284,6 +295,7 @@ web
       const goalStep5 = document.getElementById('goal-step-5');
       const goalNextBtn = document.getElementById('goal-next');
       const goalReplayBtn = document.getElementById('goal-replay');
+      const goalSummaryEl = document.getElementById('goal-summary');
       const runResultEl = document.getElementById('run-result');
       const SERVICE_COUNT = 8;
       let cartHasItems = false;
@@ -430,6 +442,37 @@ web
           text: '核對訂單、出貨、時間軸都要有結果；再按「重做」可回到最小流程。',
           action: '核對結果並重做下一輪',
         };
+      }
+
+      function setGoalSummary(allReady, customerSelected, cartReady, hasSuccessfulOrder) {
+        if (!goalSummaryEl) {
+          return;
+        }
+        const rows = [
+          {
+            text: allReady ? '服務已就緒' : '服務尚未就緒',
+            state: allReady ? 'ok' : 'warn',
+            icon: allReady ? '✅' : '◯',
+          },
+          {
+            text: customerSelected ? '已選擇客戶' : '尚未選擇客戶',
+            state: customerSelected ? 'ok' : 'warn',
+            icon: customerSelected ? '✅' : '◯',
+          },
+          {
+            text: cartReady ? '購物車已加入商品' : '購物車尚未加入商品',
+            state: cartReady ? 'ok' : 'warn',
+            icon: cartReady ? '✅' : '◯',
+          },
+          {
+            text: hasSuccessfulOrder ? '已完成一筆成功訂單' : '尚未完成成功訂單',
+            state: hasSuccessfulOrder ? 'ok' : 'warn',
+            icon: hasSuccessfulOrder ? '✅' : '◯',
+          },
+        ];
+        goalSummaryEl.innerHTML = rows
+          .map((row) => `<div class="summary-row ${row.state}"><span class="dot">${row.icon}</span>${row.text}</div>`)
+          .join('');
       }
 
       function updateGoalState(state) {
@@ -712,6 +755,7 @@ web
         const hasSuccessfulOrder = hasLatestSuccessfulOrder();
         const goalState = computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder);
         updateGoalState(goalState);
+        setGoalSummary(allReady, customerSelected, cartReady, hasSuccessfulOrder);
         setNotice(
           allReady
             ? (cartReady ? '購物車有資料可結帳。' : '先加入 1 件商品再 checkout。')
