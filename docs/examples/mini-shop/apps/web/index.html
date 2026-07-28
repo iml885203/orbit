@@ -310,6 +310,8 @@
         <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
         <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
         <button id="copy-demo-report" class="small-btn inline-btn quick-start-action">複製 demo 報告</button>
+        <button id="copy-smoke-script" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/smoke-demo.sh all">複製 smoke demo 腳本命令</button>
+        <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action">一鍵 demo 檢核（成功→核對）</button>
       </div>
       <p class="hint">如果你要用 terminal 驗收，直接複製一個場景腳本就能看到預期結果。</p>
       <div class="row">
@@ -619,6 +621,7 @@ web
       const verifyDemoSignalBtn = document.getElementById('verify-demo-signal');
       const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
       const copyDemoReportBtn = document.getElementById('copy-demo-report');
+      const demoQuickAcceptanceBtn = document.getElementById('demo-quick-acceptance');
       const copyDrillReportBtn = document.getElementById('copy-drill-report');
       const goalCurrentText = document.getElementById('goal-current-text');
       const goalStep1 = document.getElementById('goal-step-1');
@@ -3345,6 +3348,30 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             return;
           }
           await copyTextToClipboard(report, setCopyFeedback);
+        });
+      }
+
+      if (demoQuickAcceptanceBtn) {
+        demoQuickAcceptanceBtn.addEventListener('click', async () => {
+          appendSummary('一鍵 demo 檢核：先跑一輪成功流程，再直接判斷三格。');
+          const startedAt = performance.now();
+          const ok = await runOneShotSuccessFlow();
+          const pass = setDemoSignalState();
+          scrollToAndFocus(document.getElementById('value-signal-card'));
+          const cost = formatElapsed(performance.now() - startedAt);
+          if (ok && pass) {
+            setNotice('一鍵 demo 檢核通過：服務、交易、關聯三格皆綠。', 'ok');
+            appendSummary(`一鍵 demo 檢核通過，耗時 ${cost}。可直接對外 demo。`);
+            setCopyFeedback(`一鍵 demo 檢核通過：${cost}`);
+          } else if (ok && !pass) {
+            setNotice('流程已執行完成，但三格未全綠，請依「下一步（照著做）」處理。', 'warn');
+            appendSummary('一鍵 demo 檢核停在部分失敗，建議先跟著下一步提示修正。');
+            setCopyFeedback('一鍵 demo 檢核結果：流程完成但仍未達可 demo 狀態');
+          } else {
+            setNotice('一鍵 demo 檢核中止，請先確認服務就緒後再試。', 'error');
+            appendSummary('一鍵 demo 檢核中止：未完成成功流程');
+            setCopyFeedback('一鍵 demo 檢核未完成，請先讓服務與資料回復可用');
+          }
         });
       }
 

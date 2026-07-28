@@ -164,6 +164,18 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
 如果你要完全用 terminal 做打磨/驗收，下面三支腳本是「最小心智模型」版本：每次只要對應一個明確結果，不用猜下一步。
 
+你也可以直接執行專案內建的一鍵腳本（預設跑 3 種情境）：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-demo.sh
+```
+
+只驗證成功流程可改 `success`：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-demo.sh success
+```
+
 - 先執行一次成功（A）當基線，再做 B/C。
 
 1) 成功（A）
