@@ -167,6 +167,35 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
   3. 快速庫存不足
 - 每個入口都會直接執行最少步驟並帶到可驗證結果（訂單 / 出貨 / 時間軸 / 報告），適合剛接觸者先驗證 demo 是否「可用」。
 
+### 故障演練（服務 down → 恢復）
+
+你可以用 4 步練一次「故障→定位→恢復」：
+
+1. 先點「故障演練」中的「先做一輪成功流程」建立 baseline。
+2. 在 terminal 貼上：
+
+   ```bash
+   orbit -c docs/examples/mini-shop/dev.yaml down cart-api --json
+   ```
+
+   模擬 `cart-api` 異常。
+3. 再貼上：
+
+   ```bash
+   orbit -c docs/examples/mini-shop/dev.yaml status --json
+   ```
+
+   看 `cart-api` 是否變紅、頁面的錯誤建議是否清楚。
+4. 貼上：
+
+   ```bash
+   orbit -c docs/examples/mini-shop/dev.yaml restart cart-api --json
+   ```
+
+5. 回頁面點「故障演練（1/2 分鐘）」的「回到 3 秒可 demo 指標」，確認「服務 / 交易 / 關聯」再回到綠。
+
+這樣你可以確認這個 demo 不只「能用」，而且「壞掉之後也可自己恢復」。
+
 ### 首次最小心智體驗（建議新手先做）
 
 1. 開啟後先不用看所有卡片。

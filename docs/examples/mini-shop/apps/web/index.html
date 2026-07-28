@@ -284,6 +284,29 @@
       </div>
     </div>
 
+    <div class="card">
+      <h3>故障演練（1/2 分鐘）</h3>
+      <p class="hint">這是給「真的會壞掉」的情境設計：先建立成功 baseline，再停止一個 service，接著照步驟恢復。</p>
+      <ol class="step-list">
+        <li>先點「先做一輪成功流程」建立可重播 baseline。</li>
+        <li>在 terminal 貼上「停止 cart-api」命令，模擬單點故障。</li>
+        <li>貼上「檢查狀態」找出卡住節點並回到對應卡片。</li>
+        <li>貼上「重啟 cart-api」讓服務恢復，最後用「回到 3 秒可 demo 指標」確認回歸。</li>
+      </ol>
+      <div class="row">
+        <button id="drill-prime-success" class="small-btn inline-btn">先做一輪成功流程</button>
+        <button class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml down cart-api --json">複製：停止 cart-api</button>
+      </div>
+      <div class="row">
+        <button class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml status --json">複製：檢查服務狀態</button>
+        <button class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml restart cart-api --json">複製：重啟 cart-api</button>
+      </div>
+      <div class="row">
+        <button id="drill-verify" class="small-btn inline-btn">回到 3 秒可 demo 指標</button>
+      </div>
+      <p class="hint">目標是確認流程能在不離開頁面思路的情況下，完成「故障→定位→恢復→回歸」。</p>
+    </div>
+
     <div id="mode-control-panel" class="card">
       <h3>切換檢視模式</h3>
       <p class="hint">先用「新手」快速完成流程；需要排查時再切「進階」看更多診斷資訊。</p>
@@ -528,6 +551,8 @@ web
       const scenarioSuccessBtn = document.getElementById('scenario-success');
       const scenarioDeclineBtn = document.getElementById('scenario-decline');
       const scenarioStockBtn = document.getElementById('scenario-stock');
+      const drillPrimeSuccessBtn = document.getElementById('drill-prime-success');
+      const drillVerifyBtn = document.getElementById('drill-verify');
       const quickSuccessBtn = document.getElementById('quick-success');
       const quickFailPaymentBtn = document.getElementById('quick-fail-payment');
       const quickFailStockBtn = document.getElementById('quick-fail-stock');
@@ -2781,6 +2806,18 @@ web
         }
         if (oneShotButton) {
           runOneShotSuccessFlow();
+          return;
+        }
+        if (event.target.closest('#drill-prime-success')) {
+          appendSummary('故障演練：先建立可重播 baseline。');
+          await runOneShotSuccessFlow();
+          return;
+        }
+        if (event.target.closest('#drill-verify')) {
+          scrollToAndFocus(document.getElementById('value-signal-card'));
+          appendSummary('故障演練回歸：已回到快速判斷值卡。');
+          const pass = setDemoSignalState();
+          appendSummary(pass ? '故障演練回歸成功：三格皆綠。' : '尚未全部回歸，請先依卡片建議完成服務恢復。');
           return;
         }
         const startDemoFlowButton = event.target.closest('#start-demo-flow');

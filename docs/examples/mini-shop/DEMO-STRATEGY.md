@@ -36,13 +36,14 @@
   - 一鍵失敗回歸（付款/缺貨）
 - 每次 release 前都在 `UX-SMOKE-CHECK` + `UX-ACCEPTANCE-CHECKLIST` 有紀錄
 
-### P1（本輪可直接加）
-- 增加一個「最小故障演練」片段（例如：停掉單一 service，再重啟）
+### P1（已完成）
+- 已補上「最小故障演練」片段（停掉單一 service，再重啟）
   - 目標：驗證新手不用猜，能直接跟著頁面建議修復
 - README 與指令頁補上「失敗後最短回復流程」
-  - 例如：`status -> 看到一個被阻塞節點 -> 去 logs -> 重啟該節點`
+  - 例如：`down -> status -> restart`
 
 ### P2（觀察期）
+
 - 可再增加一個「更偏混合語言」的 profile（但不作為預設 demo）
   - 只在進階章節提供：展示 `orbit switch` / env 切換價值
   - 維持 mini-shop 作為主線，避免把第一印象變成環境維護負擔

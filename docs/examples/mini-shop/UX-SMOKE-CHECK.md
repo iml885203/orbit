@@ -53,7 +53,23 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 - 可以直接點「建議行為」或「命令複製」完成下一步；
 - 時間軸有對到失敗節點（例如付款或出貨）。
 
-## 5) 重置與再次演示
+## 5) service down 演練（至少做一次）
+
+在頁面「故障演練（1/2 分鐘）」依序做：
+
+- 「先做一輪成功流程」
+- 貼上 `orbit ... down cart-api --json`
+- 貼上 `orbit ... status --json`
+- 貼上 `orbit ... restart cart-api --json`
+- 點「回到 3 秒可 demo 指標」
+
+驗收條件：
+
+- 無需查看程式碼就知道哪個步驟沒做好；
+- 只要頁面提示 + 兩條 CLI 命令就能回歸；
+- 3 秒指標可再度回到綠色。
+
+## 6) 重置與再次演示
 
 點「重置流程」後要能在兩步內回到起始（服務不重建、流程 UI 可重跑）。
 
@@ -67,6 +83,7 @@ orbit -c docs/examples/mini-shop/dev.yaml down
 - [ ] 一輪成功 demo 無需查說明文件可完成；
 - [ ] 失敗情境可由頁面給出可執行後續；
 - [ ] 時間軸可定位出問題節點；
+- [ ] `service down → restart` 演練可由頁面引導完成並回到可 demo 狀態；
 - [ ] 重置後可快速回到可 demo 狀態。
 
 不通過的項目，直接在 release note 記成「修正項」並回到對應卡片優先改善。
