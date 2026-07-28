@@ -72,12 +72,14 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 先選一個客戶，加入 1 件商品到購物車。
 - 點 `Checkout`，一次看到 `cart -> payment -> order -> shipping` 的結果鏈。
 - 成功後在「訂單」「出貨」區看到同一筆交易的對應資料。
+- 在「關聯流程時間軸」看到同一次 checkout 的關鍵節點，失敗時可直接看到失敗發生在哪一段（例如付款失敗）。
 
 ### 用戶心理模型設計（不需要背 service）
 
 - 按鈕會在服務未就緒時停用，避免「為什麼按了沒反應」。
 - 錯誤訊息會回報「下一步建議」，例如付款失敗直接提示改 `mock_card`。
 - 「服務關係」區塊讓使用者不需讀原始碼就理解服務怎麼串起來。
+- 新增「故障情境對照卡」後，看到錯誤碼就能直接對到對應修復動作，不必先猜原因。
 
 與 1.0 打磨對齊的友善體驗：
 
@@ -109,7 +111,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 選 payment method `mock_card`
    - 點「Checkout」
    - 看到成功訊息，訂單與出貨皆新增
-   - 在「最近關聯交易」看到同一筆交易如何對到出貨追蹤
+   - 在「最近關聯交易」與「關聯流程時間軸」確認同一筆交易是否順利完成
 
 5. 失敗測試：
    - payment method 切成 `decline` 再 checkout，看到明確「付款失敗」提示
@@ -117,6 +119,8 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
 6. 卡住時也不用猜：
    - 看頁面「診斷命令（可複製）」的建議指令
+   - 時間軸每個節點也提供該 service 的 log 指令，點一下即可 copy，直接貼上 terminal 對應 service 做定點排錯
+   - 「故障情境對照卡」同步高亮目前常見錯誤碼，並可直接 copy 對應 service log 指令
    - 直接複製貼上到終端執行 `orbit status --json` 與對應 `orbit logs`
 
 7. 查看「執行報告」：
