@@ -500,6 +500,86 @@ func TestE2E_UpBlockedWhenNoEnvs(t *testing.T) {
 	}
 }
 
+func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	command := func(args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+
+	human, err := command("status").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human status failed: %v\n%s", err, human)
+	}
+	for _, evidence := range []string{"Orbit is not set up yet.", "Next: orbit init"} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human status missing %q:\n%s", evidence, human)
+		}
+	}
+	if bytes.Contains(human, []byte("orbit up")) {
+		t.Fatalf("human status suggested startup before setup:\n%s", human)
+	}
+
+	output, err := command("status", "--json").Output()
+	if err != nil {
+		t.Fatalf("JSON status failed: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if !envelope.OK {
+		t.Fatalf("status envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		SetupRequired bool   `json:"setup_required"`
+		SetupMessage  string `json:"setup_message"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("status data: %v\n%s", err, envelope.Data)
+	}
+	if !data.SetupRequired || data.SetupMessage == "" {
+		t.Fatalf("status data = %+v", data)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit init --yes --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
+func TestE2E_StatusRejectsInvalidSelectedEnvironment(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	invalidEnv := filepath.Join(home, "broken.yaml")
+	if err := os.WriteFile(invalidEnv, []byte("version: \"2\"\nservices: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", invalidEnv}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+
+	human, err := command("status").CombinedOutput()
+	if err == nil {
+		t.Fatalf("human status accepted invalid environment:\n%s", human)
+	}
+	if !bytes.Contains(human, []byte("active environment broken.yaml is invalid")) {
+		t.Fatalf("human status error:\n%s", human)
+	}
+
+	output, err := command("status", "--json").Output()
+	if err == nil {
+		t.Fatalf("JSON status accepted invalid environment:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if envelope.Error == nil || envelope.Error.Code != "invalid_environment" {
+		t.Fatalf("status envelope = %+v:\n%s", envelope, output)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != envelope.Command {
+		t.Fatalf("recommended_actions = %+v, command = %q", envelope.RecommendedActions, envelope.Command)
+	}
+}
+
 func TestE2E_AgentJSONWorkflow(t *testing.T) {
 	env := setupE2E(t)
 

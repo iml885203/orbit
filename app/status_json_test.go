@@ -26,7 +26,7 @@ type renderedStatusEnvelope struct {
 func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) renderedStatusEnvelope {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d); err != nil {
+	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d, statusSetupState{}); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
 	var envelope renderedStatusEnvelope
@@ -136,7 +136,14 @@ func TestStatusDetail_ExplainsFailureAndDependencyBlock(t *testing.T) {
 
 func TestStatusJSON_DaemonStopped(t *testing.T) {
 	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{Running: false}); err != nil {
+	if err := writeStatusJSON(
+		&buf,
+		"orbit status --json",
+		&config.Config{},
+		nil,
+		daemonStatus{Running: false},
+		statusSetupState{},
+	); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
 	var envelope struct {
@@ -166,6 +173,33 @@ func TestStatusJSON_DaemonStopped(t *testing.T) {
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit up --json" {
 		t.Errorf("recommended_actions: got %+v", envelope.RecommendedActions)
+	}
+}
+
+func TestStatusJSON_SetupRequiredRecommendsInitInsteadOfUp(t *testing.T) {
+	var buf bytes.Buffer
+	setup := statusSetupState{
+		Required: true,
+		Message:  "No usable environment is selected. Run Orbit setup first.",
+	}
+	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{}, setup); err != nil {
+		t.Fatalf("writeStatusJSON: %v", err)
+	}
+	var envelope struct {
+		Data struct {
+			SetupRequired bool   `json:"setup_required"`
+			SetupMessage  string `json:"setup_message"`
+		} `json:"data"`
+		RecommendedActions []cli.JSONAction `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !envelope.Data.SetupRequired || envelope.Data.SetupMessage != setup.Message {
+		t.Fatalf("setup data = %+v", envelope.Data)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit init --yes --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }
 
@@ -209,7 +243,7 @@ func TestStatusJSON_UpdateAvailable(t *testing.T) {
 // Guards against regression to pre-migration schema where daemon was a bool.
 func TestStatusJSON_DaemonIsObjectNotBool(t *testing.T) {
 	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{Running: true}); err != nil {
+	if err := writeStatusJSON(&buf, "orbit status --json", nil, nil, daemonStatus{Running: true}, statusSetupState{}); err != nil {
 		t.Fatalf("writeStatusJSON: %v", err)
 	}
 	var raw map[string]json.RawMessage

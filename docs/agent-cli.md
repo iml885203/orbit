@@ -88,7 +88,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, service risks, and recommended follow-up commands. |
-| `orbit status --json` | Returns daemon and configured service state in `data`. |
+| `orbit status --json` | Returns setup readiness, daemon state, and configured service state in `data`. |
 | `orbit logs <service> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <service> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns requested services, observed final states, degraded/timed-out services, and recommended follow-up commands. |
@@ -114,6 +114,11 @@ Lifecycle actions are outcome-specific. A successful `up` returns one primary
 next action, `orbit open --json`. A failed start recommends status, logs for the
 root failed resource, and a targeted restart after the reported cause is fixed;
 it does not send agents through unrelated setup diagnostics.
+
+Before first setup, status remains a successful state query with
+`data.setup_required: true`, a human-readable `setup_message`, and exactly one
+`orbit init --yes --json` action. A present but invalid environment file is
+instead an `invalid_environment` error, because startup cannot safely use it.
 
 Stable `data.operation` values for converted control commands:
 

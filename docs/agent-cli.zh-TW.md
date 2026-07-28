@@ -82,7 +82,7 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、service risks，以及建議後續指令。 |
-| `orbit status --json` | 在 `data` 中回傳 daemon 與已設定 service 的狀態。 |
+| `orbit status --json` | 在 `data` 中回傳 setup readiness、daemon 與已設定 service 的狀態。 |
 | `orbit logs <service> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <service> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳請求的 services、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。 |
@@ -106,6 +106,11 @@ Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout
 Lifecycle actions 會依結果提供。成功的 `up` 只回傳一個主要下一步：
 `orbit open --json`。啟動失敗時則建議查看 status、根因 resource 的 logs，
 並在修正原因後只 restart 該 resource；不會把 agent 導向無關的 setup 診斷。
+
+第一次 setup 前，status 仍是成功的狀態查詢，但會回傳
+`data.setup_required: true`、可讀的 `setup_message`，以及唯一的
+`orbit init --yes --json` action。若 environment 檔案存在但內容無效，則回傳
+`invalid_environment` error，因為 Orbit 無法安全使用它啟動。
 
 已轉換控制指令的穩定 `data.operation` 值：
 

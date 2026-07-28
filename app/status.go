@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -48,16 +49,42 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	setup := statusSetupState{}
+	if cfgErr != nil && configFileExists(configFile) {
+		err := cli.NewInvalidEnvironmentError(
+			fmt.Sprintf("active environment %s is invalid: %v", filepath.Base(configFile), cfgErr),
+		)
+		return cli.WithJSONActions(err, []cli.JSONAction{{
+			Command:     commandString(),
+			Reason:      "Retry status after fixing the reported environment file.",
+			Destructive: false,
+		}})
+	}
+	if cfgErr != nil && daemonRunning {
+		err := cli.NewInvalidEnvironmentError(
+			fmt.Sprintf("active environment is unavailable while the daemon is still running: %v", cfgErr),
+		)
+		return cli.WithJSONActions(err, []cli.JSONAction{{
+			Command:     "orbit init --yes --json",
+			Reason:      "Restore setup and select an environment without stopping the running daemon.",
+			Destructive: false,
+		}})
+	}
 	if cfgErr != nil && !daemonRunning {
-		if cli.JSONOutput {
-			return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus)
+		setup = statusSetupState{
+			Required: true,
+			Message:  "No usable environment is selected. Run Orbit setup first.",
 		}
-		fmt.Println("No daemon running. Start it with 'orbit up'.")
+		if cli.JSONOutput {
+			return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
+		}
+		fmt.Println("Orbit is not set up yet.")
+		fmt.Println("  Next: orbit init")
 		return nil
 	}
 
 	if cli.JSONOutput {
-		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus)
+		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
 	}
 
 	printDaemonHeader(dstatus)
@@ -126,6 +153,14 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func configFileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func printContainerLine(name string, svc daemon.ServiceStatus) {
@@ -269,8 +304,15 @@ func configPorts(ports map[string]config.PortDef) string {
 }
 
 type statusJSONData struct {
-	Daemon   daemonStatus  `json:"daemon"`
-	Services []jsonService `json:"services"`
+	SetupRequired bool          `json:"setup_required"`
+	SetupMessage  string        `json:"setup_message,omitempty"`
+	Daemon        daemonStatus  `json:"daemon"`
+	Services      []jsonService `json:"services"`
+}
+
+type statusSetupState struct {
+	Required bool
+	Message  string
 }
 
 type jsonService struct {
@@ -296,7 +338,14 @@ type daemonStatus struct {
 	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
 }
 
-func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running map[string]daemon.ServiceStatus, dstatus daemonStatus) error {
+func writeStatusJSON(
+	w io.Writer,
+	command string,
+	cfg *config.Config,
+	running map[string]daemon.ServiceStatus,
+	dstatus daemonStatus,
+	setup statusSetupState,
+) error {
 	services := make([]jsonService, 0)
 
 	if cfg != nil {
@@ -334,7 +383,12 @@ func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running ma
 	})
 
 	var actions []cli.JSONAction
-	if !dstatus.Running {
+	if setup.Required {
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit init --yes --json",
+			Reason:  "Set up a workspace and select an environment before starting Orbit.",
+		})
+	} else if !dstatus.Running {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit up --json",
 			Reason:  "Start the selected environment and its daemon.",
@@ -348,8 +402,10 @@ func writeStatusJSON(w io.Writer, command string, cfg *config.Config, running ma
 	}
 	actions = cli.MergeActions(actions, statusRecoveryActions(running))
 	return cli.WriteJSONSuccess(w, command, statusJSONData{
-		Daemon:   dstatus,
-		Services: services,
+		SetupRequired: setup.Required,
+		SetupMessage:  setup.Message,
+		Daemon:        dstatus,
+		Services:      services,
 	}, actions)
 }
 
