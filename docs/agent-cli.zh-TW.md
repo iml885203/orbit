@@ -81,7 +81,10 @@ retry 或讀取 logs。
 
 只有 running daemon 已替該 resource 緩衝輸出時，resource status 才會包含
 `logs_available: true`。欄位不存在代表目前沒有歷史輸出可檢查；dependency
-卡住的 resource 若沒有這項證據，client 不應把 Logs 當成復原動作。
+卡住的 resource 若沒有這項證據，client 不應把 Logs 當成復原動作。若 resource
+從未成功啟動，直接執行 `orbit logs <resource> --json` 會回傳
+`logs_unavailable`，而不是空的成功結果。唯一 recommended action 會依即時
+port 重驗結果決定：仍被占用時檢查目前 owner，釋放後則只 retry 該 resource。
 
 ## Converted Commands
 

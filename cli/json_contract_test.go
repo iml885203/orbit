@@ -69,6 +69,29 @@ func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorAlignsNextCommandWithReplacementAction(t *testing.T) {
+	var buf bytes.Buffer
+	inspectCommand := "lsof -nP -iTCP:28080 -sTCP:LISTEN"
+	err := WithJSONReplacementActions(
+		NewChecksFailedError("port 28080 is already in use"),
+		[]JSONAction{{
+			Command:     inspectCommand,
+			Reason:      "Inspect the process that owns the port.",
+			Destructive: false,
+		}},
+	)
+	if writeErr := WriteJSONError(&buf, "orbit doctor --json", err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.NextCommand != inspectCommand {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != got.Error.NextCommand {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit db list --json", &daemon.ConfigMismatchError{

@@ -166,6 +166,46 @@ func TestPrintExecutionErrorHumanExplainsPortRecovery(t *testing.T) {
 	}
 }
 
+func TestPrintExecutionErrorHumanExplainsNoLogsRecovery(t *testing.T) {
+	origJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = origJSON })
+	cli.JSONOutput = false
+
+	var buf bytes.Buffer
+	err := cli.WithJSONActions(
+		cli.NewLogsUnavailableError("no logs for api: the resource did not start"),
+		[]cli.JSONAction{{Command: "orbit up api --json"}},
+	)
+	printExecutionError(&buf, err)
+
+	for _, evidence := range []string{"no logs for api", "Next: orbit up api"} {
+		if !strings.Contains(buf.String(), evidence) {
+			t.Fatalf("human error missing %q: %s", evidence, buf.String())
+		}
+	}
+}
+
+func TestLogsUnavailableJSONUsesTargetedRecoveryOnly(t *testing.T) {
+	var buf bytes.Buffer
+	err := cli.WithJSONActions(
+		cli.NewLogsUnavailableError("no logs for api: the resource did not start"),
+		[]cli.JSONAction{{
+			Command: "orbit up api --json",
+			Reason:  "Retry api.",
+		}},
+	)
+	if err := cli.WriteJSONError(&buf, "orbit logs api --json", err); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "logs_unavailable" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up api --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestPrintExecutionErrorSkipsAlreadyRenderedJSONError(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })

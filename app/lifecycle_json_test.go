@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -182,6 +183,35 @@ func TestLifecycleUpSuccessActionsFallBackToDashboard(t *testing.T) {
 	got := lifecycleUpSuccessActions([]string{"redis", "web"}, status)
 	if len(got) != 1 || got[0].Command != "orbit open --json" {
 		t.Fatalf("actions = %+v", got)
+	}
+}
+
+func TestNoLogsRecoveryActionsRevalidateResolvedPortConflict(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+	resource := &daemon.ResourceStatus{
+		Name:  "api",
+		State: "degraded",
+		PortConflict: &daemon.ResourcePortConflict{
+			Port:     portNumber,
+			Resource: "api",
+		},
+	}
+
+	occupied := noLogsRecoveryActions(resource)
+	if len(occupied) != 1 || strings.HasPrefix(occupied[0].Command, "orbit up") {
+		t.Fatalf("occupied actions = %+v", occupied)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	released := noLogsRecoveryActions(resource)
+	if len(released) != 1 || released[0].Command != "orbit up api --json" {
+		t.Fatalf("released actions = %+v", released)
 	}
 }
 

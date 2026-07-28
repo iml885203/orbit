@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 
 	"github.com/iml885203/orbit/platform"
@@ -47,12 +48,18 @@ func NewConflictError(conflict Conflict) *ConflictError {
 // Returns a list of conflicts if any ports are in use.
 func CheckPorts(portMap map[string][]int) []Conflict {
 	var conflicts []Conflict
-
-	for service, ports := range portMap {
-		for _, port := range ports {
-			if pid, proc, inUse := isPortInUse(port); inUse {
+	services := make([]string, 0, len(portMap))
+	for service := range portMap {
+		services = append(services, service)
+	}
+	sort.Strings(services)
+	for _, service := range services {
+		ports := append([]int(nil), portMap[service]...)
+		sort.Ints(ports)
+		for _, portNumber := range ports {
+			if pid, proc, inUse := isPortInUse(portNumber); inUse {
 				conflicts = append(conflicts, Conflict{
-					Port:    port,
+					Port:    portNumber,
 					Service: service,
 					PID:     pid,
 					Process: proc,
@@ -68,13 +75,22 @@ func isPortInUse(port int) (pid string, process string, inUse bool) {
 	addresses := []struct {
 		network string
 		address string
-	}{{network: "tcp4", address: "0.0.0.0:" + strconv.Itoa(port)}}
+	}{
+		{network: "tcp4", address: "127.0.0.1:" + strconv.Itoa(port)},
+		{network: "tcp4", address: "0.0.0.0:" + strconv.Itoa(port)},
+	}
 	if probe, err := net.Listen("tcp6", "[::1]:0"); err == nil {
 		_ = probe.Close()
-		addresses = append(addresses, struct {
-			network string
-			address string
-		}{network: "tcp6", address: "[::]:" + strconv.Itoa(port)})
+		addresses = append(addresses,
+			struct {
+				network string
+				address string
+			}{network: "tcp6", address: "[::1]:" + strconv.Itoa(port)},
+			struct {
+				network string
+				address string
+			}{network: "tcp6", address: "[::]:" + strconv.Itoa(port)},
+		)
 	}
 	for _, address := range addresses {
 		listener, err := net.Listen(address.network, address.address)

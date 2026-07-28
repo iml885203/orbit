@@ -60,9 +60,17 @@ func WriteJSONError(w io.Writer, command string, err error) error {
 // truthful exit result.
 func WriteJSONFailure(w io.Writer, command string, data any, err error, actions []JSONAction) error {
 	classified := classify(err)
-	actions = MergeActions(recommendedActionsForError(classified), actions)
-	if withActions, ok := err.(interface{ CLIJSONActions() []JSONAction }); ok {
-		actions = MergeActions(actions, withActions.CLIJSONActions())
+	if replacement, ok := err.(interface{ CLIJSONReplacementActions() []JSONAction }); ok {
+		actions = replacement.CLIJSONReplacementActions()
+		classified.NextCommand = ""
+		if len(actions) > 0 {
+			classified.NextCommand = actions[0].Command
+		}
+	} else {
+		actions = MergeActions(recommendedActionsForError(classified), actions)
+		if withActions, ok := err.(interface{ CLIJSONActions() []JSONAction }); ok {
+			actions = MergeActions(actions, withActions.CLIJSONActions())
+		}
 	}
 	return writeJSON(w, JSONEnvelope{
 		SchemaVersion:      SchemaVersion,
@@ -251,6 +259,13 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit status --json",
 		}
+	case errors.Is(err, ErrLogsUnavailable):
+		return JSONError{
+			Code:      "logs_unavailable",
+			Message:   msg,
+			Hint:      "Follow the recommended recovery action; there is no process output to inspect yet.",
+			Retryable: true,
+		}
 	case errors.Is(err, ErrEnvRepoAccess):
 		return JSONError{
 			Code:        "env_repo_access",
@@ -349,6 +364,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {
 		return []JSONAction{StatusAction()}
 	}
+	if err.Code == "logs_unavailable" {
+		return nil
+	}
 	if err.Code == "env_mismatch" {
 		return []JSONAction{{
 			Command:     err.NextCommand,
@@ -381,6 +399,26 @@ type actionError struct {
 	actions []JSONAction
 }
 
+type replacementActionError struct {
+	err     error
+	actions []JSONAction
+}
+
+func (e replacementActionError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e replacementActionError) Unwrap() error {
+	return e.err
+}
+
+func (e replacementActionError) CLIJSONReplacementActions() []JSONAction {
+	return e.actions
+}
+
 func (e actionError) Error() string {
 	if e.err == nil {
 		return ""
@@ -401,6 +439,13 @@ func WithJSONActions(err error, actions []JSONAction) error {
 		return nil
 	}
 	return actionError{err: err, actions: actions}
+}
+
+func WithJSONReplacementActions(err error, actions []JSONAction) error {
+	if err == nil {
+		return nil
+	}
+	return replacementActionError{err: err, actions: actions}
 }
 
 func MergeActions(base, extra []JSONAction) []JSONAction {

@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -20,7 +17,6 @@ import (
 	"github.com/iml885203/orbit/internal/env"
 	"github.com/iml885203/orbit/internal/health"
 	"github.com/iml885203/orbit/logging"
-	"github.com/iml885203/orbit/platform"
 	"github.com/iml885203/orbit/port"
 	"github.com/iml885203/orbit/process"
 )
@@ -242,40 +238,13 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 }
 
 func ensureServicePortsAvailable(name string, svc *config.Service) error {
-	type endpoint struct {
-		network string
-		address string
-	}
 	ports := make([]int, 0, len(svc.Ports))
-	for _, port := range svc.Ports {
-		ports = append(ports, port.Host)
+	for _, definition := range svc.Ports {
+		ports = append(ports, definition.Host)
 	}
-	sort.Ints(ports)
-	for _, hostPort := range ports {
-		addresses := []endpoint{{network: "tcp4", address: "127.0.0.1:" + strconv.Itoa(hostPort)}}
-		if probe, err := net.Listen("tcp6", "[::1]:0"); err == nil {
-			_ = probe.Close()
-			addresses = append(addresses, endpoint{network: "tcp6", address: "[::1]:" + strconv.Itoa(hostPort)})
-		}
-		available := true
-		for _, address := range addresses {
-			listener, err := net.Listen(address.network, address.address)
-			if err != nil {
-				available = false
-				break
-			}
-			_ = listener.Close()
-		}
-		if available {
-			continue
-		}
-		pid, processName := platform.FindPortOwner(hostPort)
-		return port.NewConflictError(port.Conflict{
-			Port:    hostPort,
-			Service: name,
-			PID:     pid,
-			Process: processName,
-		})
+	conflicts := port.CheckPorts(map[string][]int{name: ports})
+	if len(conflicts) > 0 {
+		return port.NewConflictError(conflicts[0])
 	}
 	return nil
 }

@@ -1012,7 +1012,21 @@ services:
 		)
 		return cmd
 	}
-	t.Cleanup(func() { _ = command("daemon", "stop").Run() })
+	t.Cleanup(func() {
+		_ = command("down").Run()
+		_ = command("daemon", "stop").Run()
+	})
+
+	doctorOut, err := command("doctor", "--json").Output()
+	if err == nil {
+		t.Fatalf("doctor unexpectedly accepted occupied port %d:\n%s", servicePort, doctorOut)
+	}
+	doctorEnvelope := parseE2EEnvelope(t, string(doctorOut))
+	if doctorEnvelope.Error == nil || doctorEnvelope.Error.Code != "checks_failed" ||
+		len(doctorEnvelope.RecommendedActions) != 1 ||
+		strings.HasPrefix(doctorEnvelope.RecommendedActions[0].Command, "orbit up") {
+		t.Fatalf("doctor conflict recovery = %+v\n%s", doctorEnvelope, doctorOut)
+	}
 
 	out, err := command("up", "--json").Output()
 	if err == nil {
@@ -1041,6 +1055,50 @@ services:
 	}
 	if strings.Contains(strings.ToLower(envelope.Error.Message), "kill") {
 		t.Errorf("error should not suggest killing a process:\n%s", out)
+	}
+
+	emptyLogs, err := command("logs", "occupied-service", "--json").Output()
+	if err == nil {
+		t.Fatalf("empty logs unexpectedly reported success:\n%s", emptyLogs)
+	}
+	emptyLogsEnvelope := parseE2EEnvelope(t, string(emptyLogs))
+	if emptyLogsEnvelope.Error == nil || emptyLogsEnvelope.Error.Code != "logs_unavailable" ||
+		len(emptyLogsEnvelope.RecommendedActions) != 1 ||
+		strings.HasPrefix(emptyLogsEnvelope.RecommendedActions[0].Command, "orbit up") {
+		t.Fatalf("occupied empty-log recovery = %+v\n%s", emptyLogsEnvelope, emptyLogs)
+	}
+
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	recoveredDoctorOut, err := command("doctor", "--json").Output()
+	if err != nil {
+		t.Fatalf("doctor kept stale conflict after release: %v\n%s", err, recoveredDoctorOut)
+	}
+	recoveredDoctor := parseE2EEnvelope(t, string(recoveredDoctorOut))
+	if !recoveredDoctor.OK || len(recoveredDoctor.RecommendedActions) != 1 ||
+		recoveredDoctor.RecommendedActions[0].Command != "orbit up occupied-service --json" {
+		t.Fatalf("released doctor recovery = %+v\n%s", recoveredDoctor, recoveredDoctorOut)
+	}
+
+	releasedLogs, err := command("logs", "occupied-service", "--json").Output()
+	if err == nil {
+		t.Fatalf("empty logs unexpectedly reported success after release:\n%s", releasedLogs)
+	}
+	releasedLogsEnvelope := parseE2EEnvelope(t, string(releasedLogs))
+	if releasedLogsEnvelope.Error == nil || releasedLogsEnvelope.Error.Code != "logs_unavailable" ||
+		len(releasedLogsEnvelope.RecommendedActions) != 1 ||
+		releasedLogsEnvelope.RecommendedActions[0].Command != "orbit up occupied-service --json" {
+		t.Fatalf("released empty-log recovery = %+v\n%s", releasedLogsEnvelope, releasedLogs)
+	}
+
+	retryOut, err := command("up", "occupied-service", "--json").Output()
+	if err != nil {
+		t.Fatalf("targeted retry failed: %v\n%s", err, retryOut)
+	}
+	retryEnvelope := parseE2EEnvelope(t, string(retryOut))
+	if !retryEnvelope.OK {
+		t.Fatalf("targeted retry envelope = %+v\n%s", retryEnvelope, retryOut)
 	}
 }
 

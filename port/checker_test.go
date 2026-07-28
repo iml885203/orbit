@@ -20,3 +20,17 @@ func TestFindFree_ReturnsBindablePort(t *testing.T) {
 	}
 	_ = ln.Close()
 }
+
+func TestCheckPortsDetectsIPv4LoopbackListener(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+
+	conflicts := CheckPorts(map[string][]int{"api": {portNumber}})
+	if len(conflicts) != 1 || conflicts[0].Port != portNumber || conflicts[0].Service != "api" {
+		t.Fatalf("conflicts = %+v", conflicts)
+	}
+}

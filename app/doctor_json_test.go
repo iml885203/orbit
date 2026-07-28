@@ -1,8 +1,10 @@
 package app
 
 import (
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
@@ -115,6 +117,42 @@ func TestDoctorRecommendedActionsUseJSONForOrbitHints(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing machine-readable logs action: %+v", got)
+}
+
+func TestLocalPortChecksDetectIPv4LoopbackOwner(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api": {Ports: map[string]config.PortDef{"http": {Host: portNumber, Target: portNumber}}},
+	}}
+
+	checks := localPortChecks(cfg)
+	if len(checks) != 1 || checks[0].Name != "Port "+strconv.Itoa(portNumber) ||
+		checks[0].Status != daemon.CheckFail {
+		t.Fatalf("checks = %+v", checks)
+	}
+	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
+	if len(actions) != 1 || actions[0].Command == "orbit up --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
+func TestDoctorResolvedPortConflictPointsDirectlyToResourceRetry(t *testing.T) {
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{
+		{Name: "Port 28080", Status: daemon.CheckPass, Message: "available (api); previous conflict resolved"},
+		{Name: "Daemon", Status: daemon.CheckPass, Message: "api ready to retry", Hint: "run: orbit up api"},
+	}}
+	if got := doctorStartCommand(resp); got != "orbit up api" {
+		t.Fatalf("start command = %q", got)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit up api --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
 }
 
 func TestUpdateDoctorCheckOnlyRecommendsRestart(t *testing.T) {

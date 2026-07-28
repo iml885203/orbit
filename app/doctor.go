@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"sort"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/port"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +44,11 @@ func runDoctorWithOptions(options doctorOptions) error {
 	failure := doctorFailure(resp, options.showDaemon)
 	if cli.JSONOutput {
 		if failure != nil {
-			if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, doctorRecommendedActions(resp)); err != nil {
+			actions := doctorRecommendedActions(resp)
+			if _, onlyPortConflicts := doctorPortConflictActions(resp); onlyPortConflicts {
+				failure = cli.WithJSONReplacementActions(failure, actions)
+			}
+			if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, actions); err != nil {
 				return err
 			}
 			return errCLIJSONAlreadyRendered{err: failure}
@@ -71,8 +75,10 @@ func runDoctorWithOptions(options doctorOptions) error {
 			_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
 		}
 	}
-	if options.showDaemon && failure == nil && doctorReadyToStart(resp) {
-		fmt.Println("  Next: orbit up")
+	if options.showDaemon && failure == nil {
+		if next := doctorStartCommand(resp); next != "" {
+			fmt.Println("  Next: " + next)
+		}
 	}
 	return failure
 }
@@ -216,13 +222,12 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 			Status:  daemon.CheckPass,
 			Message: "available (" + entry.name + ")",
 		}
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", entry.port))
-		if err != nil {
+		conflicts := port.CheckPorts(map[string][]int{entry.name: {entry.port}})
+		if len(conflicts) > 0 {
+			conflict := port.NewConflictError(conflicts[0])
 			check.Status = daemon.CheckFail
-			check.Message = "already in use (needed by " + entry.name + ")"
-			check.Hint = fmt.Sprintf("Stop the process using port %d or change %s's host port.", entry.port, entry.name)
-		} else {
-			_ = listener.Close()
+			check.Message = conflict.Error()
+			check.Hint = "run: " + conflict.InspectCommand
 		}
 		checks = append(checks, check)
 	}
@@ -243,11 +248,14 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 			}
 		}
 	}
-	if doctorReadyToStart(resp) {
+	if start := doctorStartCommand(resp); start != "" {
 		return []cli.JSONAction{{
-			Command: "orbit up --json",
+			Command: start + " --json",
 			Reason:  "Start the selected environment.",
 		}}
+	}
+	if actions, onlyPortConflicts := doctorPortConflictActions(resp); onlyPortConflicts {
+		return actions
 	}
 	actions := []cli.JSONAction{cli.StatusAction()}
 	if resp == nil {
@@ -280,19 +288,50 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 }
 
 func doctorReadyToStart(resp *daemon.DoctorResponse) bool {
+	return doctorStartCommand(resp) != ""
+}
+
+func doctorStartCommand(resp *daemon.DoctorResponse) string {
 	if resp == nil {
-		return false
+		return ""
 	}
-	ready := false
 	for _, check := range resp.Checks {
 		if check.Status == daemon.CheckFail {
-			return false
-		}
-		if check.Hint == "run: orbit up" {
-			ready = true
+			return ""
 		}
 	}
-	return ready
+	for _, check := range resp.Checks {
+		if command, ok := strings.CutPrefix(check.Hint, "run: "); ok &&
+			(command == "orbit up" || strings.HasPrefix(command, "orbit up ")) {
+			return command
+		}
+	}
+	return ""
+}
+
+func doctorPortConflictActions(resp *daemon.DoctorResponse) ([]cli.JSONAction, bool) {
+	if resp == nil {
+		return nil, false
+	}
+	var actions []cli.JSONAction
+	for _, check := range resp.Checks {
+		if check.Status != daemon.CheckFail {
+			continue
+		}
+		if !strings.HasPrefix(check.Name, "Port ") {
+			return nil, false
+		}
+		command, ok := strings.CutPrefix(check.Hint, "run: ")
+		if !ok || strings.TrimSpace(command) == "" {
+			return nil, false
+		}
+		actions = append(actions, cli.JSONAction{
+			Command:     strings.TrimSpace(command),
+			Reason:      "Inspect the process currently using " + check.Name + ".",
+			Destructive: false,
+		})
+	}
+	return actions, len(actions) > 0
 }
 
 func addUpdateDoctorCheck(resp *daemon.DoctorResponse, version *daemon.VersionResponse) *daemon.DoctorResponse {

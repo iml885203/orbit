@@ -7,6 +7,7 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/port"
 )
 
 const downCompletionMessage = "Environment stopped. Orbit is ready for the next 'orbit up'."
@@ -196,6 +197,32 @@ func resourcePortConflictActions(conflict *daemon.ResourcePortConflict) []cli.JS
 	return []cli.JSONAction{{
 		Command:     conflict.InspectCommand,
 		Reason:      fmt.Sprintf("Inspect the process using port %d required by %s.", conflict.Port, conflict.Resource),
+		Destructive: false,
+	}}
+}
+
+func noLogsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
+	if resource == nil {
+		return nil
+	}
+	if resource.PortConflict != nil {
+		conflicts := port.CheckPorts(map[string][]int{
+			resource.Name: {resource.PortConflict.Port},
+		})
+		if len(conflicts) > 0 {
+			current := port.NewConflictError(conflicts[0])
+			return resourcePortConflictActions(&daemon.ResourcePortConflict{
+				Port:           current.Port,
+				Resource:       current.Service,
+				PID:            current.PID,
+				Process:        current.Process,
+				InspectCommand: current.InspectCommand,
+			})
+		}
+	}
+	return []cli.JSONAction{{
+		Command:     "orbit up " + resource.Name + " --json",
+		Reason:      "Retry " + resource.Name + "; no process output exists because it did not start.",
 		Destructive: false,
 	}}
 }
@@ -438,16 +465,20 @@ func lifecycleServicesDone(status *daemon.StatusResponse, names []string, wantSt
 }
 
 func lifecycleResourceExists(status *daemon.StatusResponse, name string) bool {
+	return lifecycleResourceStatus(status, name) != nil
+}
+
+func lifecycleResourceStatus(status *daemon.StatusResponse, name string) *daemon.ResourceStatus {
 	if status == nil {
-		return false
+		return nil
 	}
 	for i := range status.Resources {
 		svc := &status.Resources[i]
 		if svc.Name == name {
-			return true
+			return svc
 		}
 	}
-	return false
+	return nil
 }
 
 func lifecycleRestartCount(status *daemon.StatusResponse, name string) *int {

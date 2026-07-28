@@ -266,6 +266,16 @@ func printExecutionError(w io.Writer, err error) {
 		return
 	}
 	_, _ = fmt.Fprintf(w, "Error: %v\n", err)
+	if errors.Is(err, cli.ErrLogsUnavailable) {
+		var withActions interface{ CLIJSONActions() []cli.JSONAction }
+		if errors.As(err, &withActions) {
+			actions := withActions.CLIJSONActions()
+			if len(actions) > 0 {
+				next := strings.TrimSuffix(actions[0].Command, " --json")
+				_, _ = fmt.Fprintf(w, "  Next: %s\n", next)
+			}
+		}
+	}
 }
 
 type errCLIJSONAlreadyRendered struct {
@@ -759,15 +769,13 @@ func runLogs(_ *cobra.Command, args []string) error {
 	}
 
 	name := args[0]
-
-	if follow {
-		status, err := client.Status()
-		if err != nil {
-			return fmt.Errorf("status: %w", err)
-		}
-		if !lifecycleResourceExists(status, name) {
-			return cli.NewUnknownResourceError(name)
-		}
+	status, err := client.Status()
+	if err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	resource := lifecycleResourceStatus(status, name)
+	if resource == nil {
+		return cli.NewUnknownResourceError(name)
 	}
 
 	if follow {
@@ -791,6 +799,11 @@ func runLogs(_ *cobra.Command, args []string) error {
 	resp, err := client.Logs(name, logLines)
 	if err != nil {
 		return fmt.Errorf("logs failed: %w", err)
+	}
+	if (resp == nil || len(resp.Lines) == 0) && !resource.LogsAvailable &&
+		(resource.State == "degraded" || resource.State == "pending" || resource.State == "stopped") {
+		err := cli.NewLogsUnavailableError("no logs for " + name + ": the resource did not start")
+		return cli.WithJSONActions(err, noLogsRecoveryActions(resource))
 	}
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLogsJSONData(name, logLines, resp), []cli.JSONAction{cli.StatusAction()})

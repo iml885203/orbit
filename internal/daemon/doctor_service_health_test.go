@@ -1,10 +1,13 @@
 package daemon
 
 import (
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/port"
 )
 
 func TestServiceHealthCheckReportsDegradedEvidence(t *testing.T) {
@@ -62,5 +65,39 @@ func TestServiceHealthCheckWarnsWhileConverging(t *testing.T) {
 	}
 	if !strings.Contains(check.Message, "api (starting)") {
 		t.Fatalf("message = %q", check.Message)
+	}
+}
+
+func TestLiveServiceHealthChecksRevalidatePortConflict(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+	service := engine.ServiceInfo{
+		Name:  "api",
+		State: engine.StateDegraded,
+		PortConflict: port.NewConflictError(port.Conflict{
+			Port:    portNumber,
+			Service: "api",
+		}),
+	}
+
+	occupied := liveServiceHealthChecks([]engine.ServiceInfo{service})
+	if len(occupied) != 2 || occupied[0].Name != "Port "+strconv.Itoa(portNumber) ||
+		occupied[0].Status != CheckFail || !strings.Contains(occupied[0].Hint, "run: ") {
+		t.Fatalf("occupied checks = %+v", occupied)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	released := liveServiceHealthChecks([]engine.ServiceInfo{service})
+	if len(released) != 2 || released[0].Status != CheckPass ||
+		!strings.Contains(released[0].Message, "previous conflict resolved") {
+		t.Fatalf("released port check = %+v", released)
+	}
+	if released[1].Status != CheckPass || released[1].Hint != "run: orbit up api" {
+		t.Fatalf("released health check = %+v", released[1])
 	}
 }

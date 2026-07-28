@@ -17,6 +17,7 @@ import (
 	"github.com/iml885203/orbit/dockerctx"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/shellquote"
+	"github.com/iml885203/orbit/port"
 	"github.com/moby/moby/client"
 )
 
@@ -470,7 +471,7 @@ func (s *Server) runDoctorChecks() []DoctorCheck {
 	}
 
 	services := s.app.Orchestrator.GetAllServices()
-	checks = append(checks, serviceHealthCheck(services))
+	checks = append(checks, liveServiceHealthChecks(services)...)
 
 	checks = append(checks, HostEnvironmentChecks(s.Config())...)
 	checks = append(checks, checkOrbitOnPath())
@@ -481,6 +482,50 @@ func (s *Server) runDoctorChecks() []DoctorCheck {
 		checks = append(checks, contribute()...)
 	}
 	return checks
+}
+
+func liveServiceHealthChecks(services []engine.ServiceInfo) []DoctorCheck {
+	current := append([]engine.ServiceInfo(nil), services...)
+	var checks []DoctorCheck
+	var retry []string
+	var occupied bool
+	for i := range current {
+		service := &current[i]
+		if service.State != engine.StateDegraded || service.PortConflict == nil {
+			continue
+		}
+		portNumber := service.PortConflict.Port
+		conflicts := port.CheckPorts(map[string][]int{service.Name: {portNumber}})
+		service.State = engine.StateStopped
+		service.StateReason = ""
+		service.PortConflict = nil
+		if len(conflicts) == 0 {
+			checks = append(checks, DoctorCheck{
+				Name:    fmt.Sprintf("Port %d", portNumber),
+				Status:  CheckPass,
+				Message: "available (" + service.Name + "); previous conflict resolved",
+			})
+			retry = append(retry, service.Name)
+			continue
+		}
+		occupied = true
+		conflict := port.NewConflictError(conflicts[0])
+		checks = append(checks, DoctorCheck{
+			Name:    fmt.Sprintf("Port %d", portNumber),
+			Status:  CheckFail,
+			Message: conflict.Error(),
+			Hint:    "run: " + conflict.InspectCommand,
+		})
+	}
+
+	health := serviceHealthCheck(current)
+	if len(retry) > 0 && !occupied && health.Status == CheckPass {
+		sort.Strings(retry)
+		command := "orbit up " + strings.Join(retry, " ")
+		health.Message = strings.Join(retry, ", ") + " ready to retry; previous port conflict resolved"
+		health.Hint = "run: " + command
+	}
+	return append(checks, health)
 }
 
 // ResolveWorkspaceRoot is the exported form for feature-owned doctor

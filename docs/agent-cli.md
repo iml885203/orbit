@@ -88,7 +88,11 @@ the shared environment selects a different host port.
 Resource status includes `logs_available: true` only when the running daemon
 has buffered output for that resource. Absence means there is no historical
 output to inspect yet; clients should not present Logs as a recovery action for
-a dependency-blocked resource unless this evidence is true.
+a dependency-blocked resource unless this evidence is true. A direct
+`orbit logs <resource> --json` request for a resource that never started returns
+`logs_unavailable`, not an empty success. Its sole recommended action is based
+on a live port recheck: inspect the current owner while occupied, or retry only
+that resource after the port is released.
 
 ## Converted Commands
 
