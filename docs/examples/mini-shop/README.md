@@ -98,6 +98,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 2. 打開頁面，確認：
    - 已顯示 9 個 resource
    - 服務狀態卡中有 8/8 ready，或至少 `checkout-api` 顯示 `status: ok`
+   - 先看「下一步（照著做）」與「目前進度（你在第幾步）」卡片，或直接點「重置流程」回到起始狀點
 
 3. 加入購物車：
    - 選客戶
@@ -108,6 +109,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 選 payment method `mock_card`
    - 點「Checkout」
    - 看到成功訊息，訂單與出貨皆新增
+   - 在「最近關聯交易」看到同一筆交易如何對到出貨追蹤
 
 5. 失敗測試：
    - payment method 切成 `decline` 再 checkout，看到明確「付款失敗」提示
@@ -116,6 +118,14 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 6. 卡住時也不用猜：
    - 看頁面「診斷命令（可複製）」的建議指令
    - 直接複製貼上到終端執行 `orbit status --json` 與對應 `orbit logs`
+
+7. 直接測試情境（建議第一次使用先做這個）：
+   - 點「情境 A：成功下單」：會自動完成成功購物路徑
+   - 點「情境 B：付款失敗」：會示範 `decline` 路徑與錯誤回饋
+   - 點「情境 C：庫存不足」：會示範 `insufficient_stock` 的錯誤表現
+
+你可把「操作摘要」當作目前這一步的進度日誌，搭配「診斷命令」快速定位。
+想重複 demo 時，直接按「重置流程」即可回到起始節點（清空購物車、回到預設付款方式）。
 
 ### 常見錯誤對照
 

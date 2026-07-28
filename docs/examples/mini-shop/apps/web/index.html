@@ -30,6 +30,19 @@
       .step-list { margin: 0; padding-left: 20px; }
       .small-btn { font-size: 12px; padding: 4px 8px; background: #93c5fd; }
       .copy-feedback { color: #86efac; font-size: 12px; min-height: 16px; }
+      .inline-btn { background: #93c5fd; }
+      .inline-btn.warn { background: #fdba74; }
+      .inline-btn.danger { background: #fdba74; }
+      .summary-list { max-height: 140px; overflow: auto; padding: 8px; background: #0b1328; border-radius: 8px; }
+      .summary-line { margin: 4px 0; }
+      .summary-time { color: #cbd5e1; font-size: 12px; margin-right: 8px; }
+      .trace-item { background: #0f172a; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; margin-top: 8px; }
+      .trace-item .label { color: #93c5fd; }
+      .trace-item .value { color: #f8fafc; }
+      .progress-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+      .progress-item { padding: 6px 10px; border-radius: 8px; background: #0b1328; }
+      .progress-item.done { color: #86efac; }
+      .progress-item.current { color: #93c5fd; font-weight: 600; }
     </style>
   </head>
   <body>
@@ -42,6 +55,18 @@
       <ul id="next-steps" class="hint step-list">
         <li>等待服務就緒</li>
       </ul>
+      <div>
+        <h4 class="hint" style="margin-top: 12px; margin-bottom: 6px;">流程完成度</h4>
+        <ul id="progress-steps" class="progress-list hint"></ul>
+      </div>
+      <div class="row">
+        <button id="reset-flow" class="small-btn inline-btn">重置流程</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>目前進度（你在第幾步）</h3>
+      <div id="flow-state" class="hint">初始化...</div>
     </div>
 
     <div class="card">
@@ -56,7 +81,17 @@
 
     <div class="card">
       <h3>操作摘要（你現在做了什麼）</h3>
-      <div id="run-summary" class="hint">尚未開始</div>
+      <div id="run-summary" class="summary-list hint">尚未開始</div>
+    </div>
+
+    <div class="card">
+      <h3>一鍵情境（新手友善）</h3>
+      <div class="row">
+        <button id="scenario-success" class="inline-btn">情境 A：成功下單</button>
+        <button id="scenario-decline" class="inline-btn warn">情境 B：付款失敗</button>
+        <button id="scenario-stock" class="inline-btn danger">情境 C：庫存不足</button>
+      </div>
+      <p class="hint">每個情境都會自動引導你到可驗證結果：訂單/出貨/失敗訊息。</p>
     </div>
 
     <div class="card">
@@ -113,8 +148,18 @@
       </div>
 
       <div class="card">
+        <h3>庫存快覽</h3>
+        <div id="inventory-summary" class="hint">尚未載入</div>
+      </div>
+
+      <div class="card">
         <h3>出貨</h3>
         <div id="shipments"></div>
+      </div>
+
+      <div class="card">
+        <h3>最近關聯交易</h3>
+        <div id="flow-trace" class="hint">尚未有交易</div>
       </div>
 
       <div class="card">
@@ -159,12 +204,25 @@ web
       const checkoutBtn = document.getElementById('checkout');
       const paymentMethodEl = document.getElementById('payment-method');
       const refreshProductBtn = document.getElementById('refresh-products');
+      const scenarioSuccessBtn = document.getElementById('scenario-success');
+      const scenarioDeclineBtn = document.getElementById('scenario-decline');
+      const scenarioStockBtn = document.getElementById('scenario-stock');
       const diagnosticCmd = document.getElementById('diagnostic-cmd');
       const diagnosticFeedback = document.getElementById('diagnostic-feedback');
       const copyDiagnosticBtn = document.getElementById('copy-diagnostic');
       const runSummary = document.getElementById('run-summary');
+      const inventorySummaryEl = document.getElementById('inventory-summary');
+      const flowTraceEl = document.getElementById('flow-trace');
+      const flowStateEl = document.getElementById('flow-state');
+      const progressSteps = document.getElementById('progress-steps');
+      const resetFlowBtn = document.getElementById('reset-flow');
       const SERVICE_COUNT = 8;
       let cartHasItems = false;
+      let scenarioRunning = false;
+      let latestOrdersPayload = null;
+      let latestShipmentsPayload = null;
+      const summaryMaxItems = 6;
+      const summaryLines = [];
 
       const serviceDependencies = {
         'catalog-api': '商品主檔',
@@ -187,7 +245,20 @@ web
       }
 
       function appendSummary(message) {
-        runSummary.textContent = `${new Date().toLocaleTimeString()} ${message}`;
+        summaryLines.push(`${new Date().toLocaleTimeString()} ${message}`);
+        while (summaryLines.length > summaryMaxItems) {
+          summaryLines.shift();
+        }
+        runSummary.innerHTML = '';
+        summaryLines.forEach((line) => {
+          const row = document.createElement('div');
+          row.className = 'summary-line';
+          const splitIndex = line.indexOf(' ');
+          const time = splitIndex > 0 ? line.slice(0, splitIndex) : '';
+          const msg = splitIndex > 0 ? line.slice(splitIndex + 1) : line;
+          row.innerHTML = `<span class="summary-time">${time}</span>${msg}`;
+          runSummary.appendChild(row);
+        });
       }
 
       function setCopyFeedback(text) {
@@ -197,6 +268,67 @@ web
             diagnosticFeedback.textContent = '';
           }
         }, 1500);
+      }
+
+      function disableActionButtons(disabled) {
+        const disabledState = Boolean(disabled);
+        scenarioRunning = disabledState;
+        addToCartBtn.disabled = disabledState;
+        clearCartBtn.disabled = disabledState;
+        checkoutBtn.disabled = disabledState;
+        scenarioSuccessBtn.disabled = disabledState;
+        scenarioDeclineBtn.disabled = disabledState;
+        scenarioStockBtn.disabled = disabledState;
+        refreshProductBtn.disabled = disabledState;
+        resetFlowBtn.disabled = disabledState;
+      }
+
+      function setFlowState(allReady, customerSelected, cartReady) {
+        let stateText = '尚未開始';
+        let stage = 0;
+        const progressItems = [
+          { id: 1, text: '服務啟動完畢', done: allReady },
+          { id: 2, text: '已選擇客戶', done: allReady && customerSelected },
+          { id: 3, text: '購物車有商品', done: allReady && customerSelected && cartReady },
+          {
+            id: 4,
+            text: 'Checkout 完成一筆關聯訂單',
+            done: Boolean(latestOrdersPayload?.orders?.length),
+          },
+        ];
+
+        progressSteps.innerHTML = progressItems
+          .map((item) => {
+            if (item.done) {
+              return `<li class="progress-item done">✅ ${item.text}</li>`;
+            }
+            if (item.id === stage + 1) {
+              return `<li class="progress-item current">👉 ${item.text}</li>`;
+            }
+            return `<li class="progress-item">◯ ${item.text}</li>`;
+          })
+          .join('');
+
+        if (!allReady) {
+          stage = 1;
+          stateText = '第 1 步：先讓所有服務就緒（目標 8/8）。';
+        } else if (!customerSelected) {
+          stage = 2;
+          stateText = '第 2 步：選一位客戶。';
+        } else if (!cartReady) {
+          stage = 3;
+          stateText = '第 3 步：加入 1 件商品到購物車。';
+        } else {
+          stage = 4;
+          const latestOrder = latestOrdersPayload?.orders?.[0];
+          if (latestOrder) {
+            stateText = '第 4 步：Checkout 已可執行，提交後請到「最近關聯交易」看 order → shipment。';
+          } else {
+            stateText = '第 4 步：Cart 已有資料，現在可 Checkout。';
+          }
+        }
+        flowStateEl.textContent = stateText;
+        flowStateEl.className = `hint stage-${stage}`;
       }
 
       function formatActionNotice(map) {
@@ -280,12 +412,24 @@ web
         nextStepList.innerHTML = steps.map((item) => `<li>${item}</li>`).join('');
 
         status.textContent = formatActionNotice(map);
+        setFlowState(allReady, customerSelected, cartReady);
         setNotice(
           allReady
             ? (cartReady ? '購物車有資料可結帳。' : '先加入 1 件商品再 checkout。')
             : '請先把所有服務恢復為 ok 後再操作。',
           allReady ? 'ok' : 'warn'
         );
+
+        if (scenarioRunning) {
+          addToCartBtn.disabled = true;
+          clearCartBtn.disabled = true;
+          checkoutBtn.disabled = true;
+          scenarioSuccessBtn.disabled = true;
+          scenarioDeclineBtn.disabled = true;
+          scenarioStockBtn.disabled = true;
+          refreshProductBtn.disabled = true;
+          return;
+        }
       }
 
       async function safeFetch(url, options = {}) {
@@ -407,10 +551,11 @@ web
 
       async function loadOrders() {
         const payload = await safeFetch(`${orderApi}/orders`);
+        latestOrdersPayload = payload;
         ordersEl.innerHTML = '';
         if (!payload.orders.length) {
           ordersEl.textContent = '尚未有訂單';
-          return;
+          return payload;
         }
         payload.orders.forEach((item) => {
           const line = document.createElement('div');
@@ -418,22 +563,69 @@ web
           line.textContent = `#${item.id} ${item.customer_name} - ${item.product_name} x${item.quantity} (${item.status})`;
           ordersEl.appendChild(line);
         });
+        return payload;
       }
 
       async function loadShipments() {
         const customerId = Number(customerEl.value);
         const suffix = customerId ? `?customer_id=${customerId}` : '';
         const payload = await safeFetch(`${shippingApi}/shipments${suffix}`);
+        latestShipmentsPayload = payload;
         shipmentsEl.innerHTML = '';
         if (!payload.shipments.length) {
           shipmentsEl.textContent = customerId ? '尚未出貨' : '先選客戶可看該客戶出貨';
-          return;
+          return payload;
         }
         payload.shipments.forEach((item) => {
           const line = document.createElement('div');
           line.className = 'row';
           line.textContent = `#${item.id} order=${item.order_id} ${item.tracking_no} ${item.status}`;
           shipmentsEl.appendChild(line);
+        });
+        return payload;
+      }
+
+      function formatStatusBadge(status) {
+        if (status === 'confirmed') return '✅';
+        if (status === 'pending') return '🚚';
+        if (status === 'failed' || status === 'cancelled') return '❌';
+        return '⏳';
+      }
+
+      function buildFlowTrace(ordersPayload, shipmentsPayload) {
+        if (!ordersPayload?.orders?.length) {
+          flowTraceEl.textContent = '尚未有交易';
+          return;
+        }
+
+        const latestOrder = ordersPayload.orders[0];
+        const relatedShipment = (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id);
+        const shipmentText = relatedShipment
+          ? `#${relatedShipment.id} ${relatedShipment.tracking_no} (${relatedShipment.status})`
+          : '尚未有出貨';
+
+        flowTraceEl.innerHTML = `
+          <div class="trace-item">
+            <div><span class="label">客戶:</span> <span class="value">#${latestOrder.customer_id} ${latestOrder.customer_name}</span></div>
+            <div><span class="label">商品:</span> <span class="value">#${latestOrder.product_id} ${latestOrder.product_name} x${latestOrder.quantity}</span></div>
+            <div><span class="label">關聯:</span> <span class="value">${formatStatusBadge(latestOrder.status)} 訂單 #${latestOrder.id} (${latestOrder.status})</span></div>
+            <div><span class="label">出貨:</span> <span class="value">${shipmentText}</span></div>
+          </div>
+        `;
+      }
+
+      async function loadInventory() {
+        const payload = await safeFetch(`${inventoryApi}/stock`);
+        if (!payload.items.length) {
+          inventorySummaryEl.textContent = '目前尚未有庫存資料';
+          return;
+        }
+        inventorySummaryEl.innerHTML = '';
+        payload.items.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.textContent = `商品 #${item.product_id}：剩餘 ${item.stock}`;
+          inventorySummaryEl.appendChild(row);
         });
       }
 
@@ -442,12 +634,122 @@ web
           await checkAll();
           await loadProducts();
           await loadCustomers();
-          await Promise.all([loadCart(), loadOrders(), loadShipments()]);
+          const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments()]);
+          await Promise.all([loadCart(), loadInventory()]);
+          buildFlowTrace(ordersPayload, shipmentsPayload);
           appendSummary('已完成頁面刷新，服務與資料已同步。');
         } catch (err) {
           const parsed = parseApiError(err);
           setNotice(errorText(parsed), 'error');
           appendSummary('刷新失敗，請檢查服務可用性。');
+        }
+      }
+
+      function getFirstCustomerId() {
+        if (Number(customerEl.value) > 0) {
+          return Number(customerEl.value);
+        }
+        if (customerEl.options.length > 0) {
+          customerEl.selectedIndex = 0;
+          return Number(customerEl.options[0].value);
+        }
+        return 0;
+      }
+
+      async function runScenario(type) {
+        disableActionButtons(true);
+        appendSummary(`開始執行情境：${type}`);
+        try {
+          const map = await checkAll();
+          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          if (!allReady) {
+            setNotice('服務尚未就緒，先等待或啟動服務後再執行情境。', 'warn');
+            appendSummary('情境中止：服務尚未就緒');
+            return;
+          }
+
+          if (!customerEl.options.length) {
+            await loadCustomers();
+          }
+          const customerId = getFirstCustomerId();
+          if (!customerId) {
+            setNotice('找不到客戶資料，請確認 customer-api 正常', 'error');
+            appendSummary('情境中止：沒有客戶資料');
+            return;
+          }
+          customerEl.value = String(customerId);
+
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+          await loadProducts();
+          if (!productEl.options.length) {
+            setNotice('找不到商品資料，請確認 catalog-api 正常', 'error');
+            appendSummary('情境中止：沒有商品可測試');
+            return;
+          }
+          productEl.selectedIndex = 0;
+
+          const scenarios = {
+            success: { qty: 1, method: 'mock_card', notice: '情境 A 成功下單' },
+            decline: { qty: 1, method: 'decline', notice: '情境 B 付款失敗' },
+            stock: { qty: 999, method: 'mock_card', notice: '情境 C 庫存不足' },
+          };
+          const plan = scenarios[type];
+          paymentMethodEl.value = plan.method;
+          quantityEl.value = plan.qty;
+
+          try {
+            await safeFetch(`${cartApi}/carts/${customerId}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_id: Number(productEl.value), quantity: plan.qty }),
+            });
+          } catch (err) {
+            const parsedError = parseApiError(err);
+            setNotice(errorText(parsedError), 'warn');
+            if (type === 'stock') {
+              appendSummary('情境 C 命中預期錯誤：請直接按 checkout 觀察不足情境');
+            } else {
+              appendSummary(`情境中斷：無法加到購物車（${errorText(parsedError)}）`);
+            }
+          }
+
+          const [ordersPayloadFinal, shipmentsPayloadFinal] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          buildFlowTrace(ordersPayloadFinal, shipmentsPayloadFinal);
+
+          if (type === 'stock') {
+            setNotice('情境 C：先觀察加到購物車結果，接著會嘗試 checkout 示範不足庫存回饋。', 'warn');
+          }
+
+          try {
+            const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ method: plan.method }),
+            });
+            setNotice(`${plan.notice}已完成：建立 ${payload.orders.length} 筆訂單`, 'ok');
+            appendSummary(`${plan.notice}完成`);
+          } catch (err) {
+            const parsedError = parseApiError(err);
+            setNotice(errorText(parsedError), 'warn');
+            appendSummary(`${plan.notice}：示範錯誤（${errorText(parsedError)}）`);
+          }
+
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          buildFlowTrace(ordersPayload, shipmentsPayload);
+        } finally {
+          disableActionButtons(false);
         }
       }
 
@@ -468,7 +770,9 @@ web
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product_id: productId, quantity }),
           });
+          const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments()]);
           await Promise.all([loadCart(), checkAll()]);
+          buildFlowTrace(ordersPayload, shipmentsPayload);
           setNotice('已加入購物車', 'ok');
           appendSummary(`加入成功：客戶 #${customerId} 的購物車加了產品 #${productId} x${quantity}`);
         } catch (e) {
@@ -482,8 +786,14 @@ web
         if (!customerId) return;
         try {
           await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
-          await loadCart();
-          await checkAll();
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            checkAll(),
+            loadInventory(),
+          ]);
+          buildFlowTrace(ordersPayload, shipmentsPayload);
           setNotice('購物車已清空', 'ok');
           appendSummary(`已清空客戶 #${customerId} 的購物車`);
         } catch (_e) {
@@ -505,7 +815,14 @@ web
             body: JSON.stringify({ method }),
           });
           setNotice(`Checkout 成功：建立 ${payload.orders.length} 筆訂單`, 'ok');
-          await Promise.all([loadCart(), loadOrders(), loadShipments(), checkAll()]);
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          buildFlowTrace(ordersPayload, shipmentsPayload);
           appendSummary(`Checkout 成功：客戶 #${customerId} 建立 ${payload.orders.length} 筆訂單`);
         } catch (e) {
           setNotice(errorText(parseApiError(e)), 'error');
@@ -515,10 +832,20 @@ web
         }
       });
 
+      scenarioSuccessBtn.addEventListener('click', () => runScenario('success'));
+      scenarioDeclineBtn.addEventListener('click', () => runScenario('decline'));
+      scenarioStockBtn.addEventListener('click', () => runScenario('stock'));
+
       refreshProductBtn.addEventListener('click', loadProducts);
       customerEl.addEventListener('change', async () => {
         await loadCart();
-        await Promise.all([loadShipments(), checkAll()]);
+        const [ordersPayload, shipmentsPayload] = await Promise.all([
+          loadOrders(),
+          loadShipments(),
+          checkAll(),
+          loadInventory(),
+        ]);
+        buildFlowTrace(ordersPayload, shipmentsPayload);
       });
 
       copyDiagnosticBtn.addEventListener('click', async () => {
@@ -534,9 +861,56 @@ web
         }
       });
 
+      async function resetFlow() {
+        disableActionButtons(true);
+        appendSummary('開始重置流程：回到可重複執行的起點。');
+        try {
+          if (customerEl.options.length > 0) {
+            customerEl.selectedIndex = 0;
+          }
+          if (productEl.options.length > 0) {
+            productEl.selectedIndex = 0;
+          }
+          quantityEl.value = 1;
+          paymentMethodEl.value = 'mock_card';
+
+          const firstCustomer = Number(customerEl.value);
+          if (firstCustomer > 0) {
+            await safeFetch(`${cartApi}/carts/${firstCustomer}/clear`, { method: 'POST' });
+          }
+
+          await refresh();
+          setNotice('流程已重置，從「選擇客戶」開始。', 'ok');
+          appendSummary('重置流程完成：已清空購物車並回到預設設定。');
+        } catch (_e) {
+          setNotice('重置流程失敗，請先確認服務是否 ready。', 'warn');
+          appendSummary('重置流程失敗');
+        } finally {
+          disableActionButtons(false);
+        }
+      }
+
+      resetFlowBtn.addEventListener('click', resetFlow);
+
       refresh();
+      async function refreshTicker() {
+        try {
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            checkAll(),
+            loadInventory(),
+          ]);
+          if (!scenarioRunning) {
+            buildFlowTrace(ordersPayload, shipmentsPayload);
+          }
+        } catch (_e) {
+          return;
+        }
+      }
+
       setInterval(() => {
-        checkAll();
+        refreshTicker();
       }, 5000);
     </script>
   </body>
