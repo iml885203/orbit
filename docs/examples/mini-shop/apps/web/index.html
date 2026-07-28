@@ -24,6 +24,24 @@
       .notice.ok { color: #bef264; }
       .notice.warn { color: #fbbf24; }
       .notice.error { color: #fb7185; }
+      .relation-state { display: grid; gap: 8px; }
+      .relation-state .row-label { color: #93c5fd; }
+      .relation-state .row-value { color: #e2e8f0; }
+      .relation-state .row-value.ok { color: #86efac; }
+      .relation-state .row-value.warn { color: #fbbf24; }
+      .relation-state .row-value.error { color: #fb7185; }
+      .acceptance-checklist { display: grid; gap: 8px; }
+      .acceptance-item { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: #0b1328; }
+      .acceptance-item.pass { color: #86efac; }
+      .acceptance-item.warn { color: #fbbf24; }
+      .acceptance-item.fail { color: #fb7185; }
+      .acceptance-item-content { display: inline-flex; align-items: center; gap: 8px; }
+      .acceptance-item-action { margin-left: 8px; }
+      .acceptance-item-action .small-btn { padding: 2px 6px; font-size: 11px; }
+      .acceptance-dot { width: 10px; height: 10px; border-radius: 999px; background: #64748b; display: inline-block; }
+      .acceptance-item.pass .acceptance-dot { background: #86efac; }
+      .acceptance-item.warn .acceptance-dot { background: #f59e0b; }
+      .acceptance-item.fail .acceptance-dot { background: #fb7185; }
       .hint { color: #94a3b8; font-size: 13px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       li { margin: 4px 0; }
@@ -76,6 +94,27 @@
       .error-playbook { display: grid; gap: 8px; }
       .error-item { border: 1px solid #1f2937; background: #0f172a; border-radius: 8px; padding: 8px; }
       .error-item.active { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.15); }
+      .error-item-details { margin-top: 8px; }
+      .error-item-summary {
+        cursor: pointer;
+        display: grid;
+        gap: 4px;
+      }
+      .error-item-summary .error-code {
+        font-weight: 600;
+        color: #f8fafc;
+      }
+      .error-item-summary .error-symptom {
+        color: #cbd5e1;
+        font-size: 12px;
+      }
+      .error-item-summary .error-hint {
+        color: #93c5fd;
+        font-size: 12px;
+      }
+      .error-item-body { margin-top: 8px; }
+      .error-item-body .hint { margin-top: 4px; }
+      .error-item-body .cmd { color: #7dd3fc; font-size: 12px; word-break: break-all; margin-top: 4px; }
       .error-item .title { font-weight: 600; color: #f8fafc; }
       .error-item .hint { margin-top: 4px; }
       .error-item .cmd { color: #7dd3fc; font-size: 12px; word-break: break-all; margin-top: 4px; }
@@ -83,12 +122,66 @@
       .goal-state { margin: 8px 0; padding: 8px; border-radius: 8px; background: #0b1328; }
       .goal-state b { color: #93c5fd; }
       .goal-action { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+      .single-action-area { display: grid; gap: 8px; }
+      .single-action-text { color: #dbeafe; }
+      .mode-switch { display: flex; gap: 8px; align-items: center; }
+      .mode-switch .mode-btn {
+        border: 1px solid #374151;
+        background: #1f2937;
+        color: #f8fafc;
+      }
+      .mode-switch .mode-btn.active {
+        border-color: #93c5fd;
+        background: #2563eb;
+      }
+      .quick-start-card .quick-start-action {
+        margin-right: 8px;
+        margin-top: 8px;
+      }
+      .hidden {
+        display: none !important;
+      }
       .summary-grid { display: grid; gap: 8px; }
       .summary-row { padding: 6px 10px; border-radius: 8px; background: #0b1328; color: #cbd5e1; }
       .summary-row.ok { color: #86efac; }
       .summary-row.warn { color: #fbbf24; }
       .summary-row.error { color: #fb7185; }
       .summary-row .dot { margin-right: 6px; }
+      .value-signal-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      .value-signal-card {
+        padding: 8px;
+        border-radius: 8px;
+        background: #0b1328;
+        border: 1px solid #1f2937;
+      }
+      .value-signal-card h4 {
+        margin: 0 0 6px;
+        font-size: 13px;
+      }
+      .value-signal-chip {
+        display: inline-block;
+        border-radius: 999px;
+        font-size: 12px;
+        padding: 4px 8px;
+        background: #1f2937;
+        color: #cbd5e1;
+      }
+      .value-signal-chip.ok {
+        background: #14532d;
+        color: #86efac;
+      }
+      .value-signal-chip.warn {
+        background: #78350f;
+        color: #fbbf24;
+      }
+      .value-signal-chip.fail {
+        background: #7f1d1d;
+        color: #fecaca;
+      }
       .evidence-grid { display: grid; gap: 8px; }
       .evidence-line { padding: 6px 10px; border-radius: 8px; background: #0b1328; }
       .evidence-line .label { color: #93c5fd; }
@@ -116,6 +209,11 @@
 
       .panel-attention-pulse {
         animation: panel-attention-pulse 1.6s ease-in-out infinite;
+      }
+
+      .timeline-item[data-timeline-error="checkout_failed"] .timeline-step.error,
+      .timeline-item[data-timeline-error="payment_declined"] .timeline-step.error {
+        border-radius: 999px;
       }
 
       @keyframes panel-attention-pulse {
@@ -168,17 +266,69 @@
       </div>
     </div>
 
-    <div class="card">
+    <div id="single-action-panel" class="card">
+      <h3>現在只要做一件事</h3>
+      <div id="single-action-text" class="single-action-text goal-state">系統初始化中...</div>
+      <div class="single-action-area">
+        <button id="single-action-btn" class="small-btn inline-btn" disabled>等待建議</button>
+      </div>
+    </div>
+
+    <div id="quick-start-card" class="card quick-start-card">
+      <h3>第一次 demo（30 秒）</h3>
+      <p class="hint">給第一次看 demo 的同事，按順序最少點擊也能看到完整關聯。</p>
+      <div class="row">
+        <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
+        <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
+        <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
+      </div>
+    </div>
+
+    <div id="mode-control-panel" class="card">
+      <h3>切換檢視模式</h3>
+      <p class="hint">先用「新手」快速完成流程；需要排查時再切「進階」看更多診斷資訊。</p>
+      <div class="mode-switch">
+        <button id="mode-beginner" class="small-btn mode-btn active">新手</button>
+        <button id="mode-advanced" class="small-btn mode-btn">進階</button>
+      </div>
+      <p id="mode-help" class="hint">新手模式預設只保留最少步驟；進階模式展開完整故障排查卡。</p>
+    </div>
+
+    <div id="goal-summary-card" class="card">
       <h3>一眼看懂進度</h3>
       <div id="goal-summary" class="summary-grid"></div>
     </div>
 
-    <div class="card">
-        <h3>當前可驗證結果</h3>
-      <div id="proof-summary" class="evidence-grid"></div>
+    <div id="value-signal-card" class="card">
+      <h3>快速判斷值（3 秒）</h3>
+      <p class="hint">三個維度都綠了，你可以直接向別人 demo「可用」了。</p>
+      <div id="value-signal" class="value-signal-grid"></div>
     </div>
 
     <div class="card">
+      <h3>當前可驗證結果</h3>
+      <div id="proof-summary" class="evidence-grid"></div>
+    </div>
+
+    <div id="relation-check-card" class="card">
+      <h3>關聯完整性快檢查</h3>
+      <p class="hint">不用猜：只看一個卡片就能知道這筆 checkout 是否關聯成功。</p>
+      <div id="relation-check" class="relation-state">
+        <div class="hint">尚未開始，請先完成一次 checkout</div>
+      </div>
+    </div>
+
+    <div id="acceptance-card" class="card">
+      <h3>1.0 交付前檢核</h3>
+      <p class="hint">如果這三項都綠了，就可以把 demo 視為可交付結果。</p>
+      <div id="acceptance-checklist" class="acceptance-checklist">
+      <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>服務全數就緒（8/8）</span></div>
+        <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>完成一筆成功 checkout</span></div>
+        <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>訂單與出貨關聯成功</span></div>
+      </div>
+    </div>
+
+    <div id="flow-map-card" class="card advanced-only">
       <h3>流程依賴速覽（不看程式也能懂）</h3>
       <p class="hint">這張圖只看最新狀態：如果 checkout 有問題，先看左上游服務是否 ready。</p>
       <div id="flow-map" class="flow-map">載入服務中...</div>
@@ -203,7 +353,7 @@
       <div id="flow-state" class="hint">初始化...</div>
     </div>
 
-    <div class="card">
+    <div id="diagnostic-panel" class="card advanced-only">
       <h3>診斷命令（可複製）</h3>
       <p class="hint">當卡住時，先貼到 terminal 執行，就能快速定位是哪個 service 導致流程停住。</p>
       <textarea id="diagnostic-cmd" readonly spellcheck="false"></textarea>
@@ -229,6 +379,17 @@
     </div>
 
     <div class="card">
+      <h3>最短重現路徑（建議優先）</h3>
+      <p class="hint">只保留最小可重現步驟：點一下就能跑到指定狀態。</p>
+      <div class="row">
+        <button id="quick-success" class="inline-btn">1) 最短成功路徑</button>
+        <button id="quick-fail-payment" class="inline-btn warn">2) 快速付款失敗</button>
+        <button id="quick-fail-stock" class="inline-btn danger">3) 快速庫存不足</button>
+      </div>
+      <p class="hint">如果你想比較結果，可直接再點「一鍵完成成功流程」或「重做一次成功流程」。</p>
+    </div>
+
+    <div class="card">
       <h3>快速導覽（新手友善）</h3>
       <ol>
         <li>確認服務就緒數（後端服務 8/8）</li>
@@ -239,7 +400,7 @@
     </div>
 
     <div class="card">
-      <h3>故障情境對照卡（先照表走）</h3>
+    <h3>故障情境對照卡（先照表走）</h3>
       <p class="hint">一看到錯誤碼就對到這張卡：它會告訴你下一步該做什麼。</p>
       <div id="error-playbook" class="error-playbook"></div>
     </div>
@@ -329,7 +490,7 @@ web
         <p class="hint">也就是你只要追一個主流程節點 checkout-api 即可理解全域。</p>
       </div>
 
-      <div class="card">
+      <div id="operation-log-card" class="card advanced-only">
         <h3>操作回應快照</h3>
         <p class="hint">每次關鍵操作都會留下服務回應與耗時，能快速知道「是 API 還是服務本身」卡住。</p>
         <div id="operation-log" class="operation-log">
@@ -367,6 +528,9 @@ web
       const scenarioSuccessBtn = document.getElementById('scenario-success');
       const scenarioDeclineBtn = document.getElementById('scenario-decline');
       const scenarioStockBtn = document.getElementById('scenario-stock');
+      const quickSuccessBtn = document.getElementById('quick-success');
+      const quickFailPaymentBtn = document.getElementById('quick-fail-payment');
+      const quickFailStockBtn = document.getElementById('quick-fail-stock');
       const diagnosticCmd = document.getElementById('diagnostic-cmd');
       const diagnosticFeedback = document.getElementById('diagnostic-feedback');
       const copyDiagnosticBtn = document.getElementById('copy-diagnostic');
@@ -377,6 +541,9 @@ web
       const flowStateEl = document.getElementById('flow-state');
       const progressSteps = document.getElementById('progress-steps');
       const resetFlowBtn = document.getElementById('reset-flow');
+      const startDemoFlowBtn = document.getElementById('start-demo-flow');
+      const verifyDemoSignalBtn = document.getElementById('verify-demo-signal');
+      const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
       const goalCurrentText = document.getElementById('goal-current-text');
       const goalStep1 = document.getElementById('goal-step-1');
       const goalStep2 = document.getElementById('goal-step-2');
@@ -388,15 +555,33 @@ web
       const oneShotSuccessBtn = document.getElementById('one-shot-success');
       const goalSummaryEl = document.getElementById('goal-summary');
       const proofSummaryEl = document.getElementById('proof-summary');
+      const valueSignalEl = document.getElementById('value-signal');
+      const relationCheckEl = document.getElementById('relation-check');
+      const acceptanceChecklistEl = document.getElementById('acceptance-checklist');
       const runResultEl = document.getElementById('run-result');
       const flowMapEl = document.getElementById('flow-map');
       const operationLogEl = document.getElementById('operation-log');
-      const SERVICE_COUNT = 8;
+      const singleActionTextEl = document.getElementById('single-action-text');
+      const singleActionBtn = document.getElementById('single-action-btn');
+      const modeBeginnerBtn = document.getElementById('mode-beginner');
+      const modeAdvancedBtn = document.getElementById('mode-advanced');
+      const modeHelpEl = document.getElementById('mode-help');
+      const advancedModePanelSelectors = [
+        '#flow-map-card',
+        '#diagnostic-panel',
+        '#operation-log-card',
+      ];
+      let errorPlaybookCard = null;
+      const BACKEND_SERVICE_COUNT = 8;
+      const SERVICE_COUNT = BACKEND_SERVICE_COUNT;
+      const TOTAL_RESOURCE_COUNT = 9;
       let cartHasItems = false;
       let scenarioRunning = false;
       let latestOrdersPayload = null;
       let latestShipmentsPayload = null;
       let latestCheckoutPayload = null;
+      let latestServiceMap = null;
+      let lastAutoFocusedErrorCode = '';
       const operationLog = [];
       const operationLogMaxItems = 12;
       const summaryMaxItems = 6;
@@ -406,8 +591,11 @@ web
         title: '尚未執行',
         items: [],
       };
+      const uiModeDefault = 'beginner';
+      const singleActionDefaultText = '依目前情況，先照「下一步（照著做）」逐步前進。';
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
+      errorPlaybookCard = errorPlaybookEl?.parentElement || null;
       const panelAttentionTimers = new Map();
       const goalPanelFocusMap = {
         1: ['#service-overview-panel', '#flow-overview-panel'],
@@ -415,6 +603,12 @@ web
         3: ['#product-panel', '#cart-panel'],
         4: ['#checkout-panel', '#orders-panel', '#flow-timeline-panel', '#result-panel'],
         5: ['#orders-panel', '#shipments-panel', '#flow-timeline-panel', '#result-panel'],
+      };
+      const acceptanceChecklistActionLabels = {
+        serviceUnready: '前往服務總覽',
+        checkoutBlocked: '補齊流程',
+        relationMissing: '查看關聯結果',
+        reviewGoal: '先看下一步建議',
       };
       const errorFocusMap = {
         cart_empty: ['#product-panel', '#cart-panel'],
@@ -429,8 +623,21 @@ web
         customer_unreachable: ['#customer-panel'],
         payment_failed: ['#checkout-panel', '#result-panel'],
       };
+      const timelineErrorStepMap = {
+        cart_empty: '[data-timeline-step="2"]',
+        insufficient_stock: '[data-timeline-step="2"]',
+        payment_declined: '[data-timeline-step="3"]',
+        payment_failed: '[data-timeline-step="3"]',
+        checkout_failed: '[data-timeline-step="3"], [data-timeline-step="4"]',
+        order_unreachable: '[data-timeline-step="4"]',
+        catalog_unreachable: '[data-timeline-step="4"]',
+        inventory_unreachable: '[data-timeline-step="2"]',
+        cart_unreachable: '[data-timeline-step="1"]',
+        customer_unreachable: '[data-timeline-step="1"]',
+      };
       const ATTENTION_DURATION_MS = 1600;
       let lastGoalAttentionStep = 0;
+      let uiMode = uiModeDefault;
 
       const faultPatterns = [
         { code: 'cart_empty', symptom: '購物車是空的', step: '先加入 1 件商品後再 checkout。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f' },
@@ -606,6 +813,68 @@ web
         return actions.slice(0, 5);
       }
 
+      async function executeErrorGuidanceAction(action) {
+        if (!action || !action.type) {
+          return;
+        }
+        switch (action.type) {
+          case 'copy-cmd': {
+            if (!action.payload) return;
+            try {
+              await navigator.clipboard.writeText(action.payload);
+              setCopyFeedback(`已複製：${action.payload}`);
+            } catch (_error) {
+              setCopyFeedback('無法複製，請手動選取複製');
+            }
+            return;
+          }
+          case 'focus':
+            if (!action.payload) return;
+            const [selector, errorHint] = action.payload.split('|error:');
+            const focusTarget = selector ? document.querySelector(selector) : null;
+            if (focusTarget) {
+              scrollToAndFocus(focusTarget);
+              if (errorHint) {
+                focusTimelineError(errorHint);
+              }
+            } else {
+              setNotice('無法定位對應區塊，請稍後重試。', 'warn');
+            }
+            return;
+          case 'set-quantity': {
+            const qty = Number(action.payload);
+            if (Number.isFinite(qty) && qty > 0) {
+              quantityEl.value = String(qty);
+              setNotice(`已將數量調為 ${qty}，再按下一步即可。`, 'ok');
+            }
+            return;
+          }
+          case 'set-payment-method':
+            if (action.payload) {
+              paymentMethodEl.value = action.payload;
+              setNotice(`已將付款方式切為 ${action.payload}`, 'ok');
+            }
+            return;
+          case 'run-checkout':
+            runCheckoutAction(action.payload || 'mock_card', '快捷修復動作');
+            return;
+          case 'run-scenario':
+            if (action.payload === 'success') {
+              runScenario('success');
+            } else if (action.payload === 'decline') {
+              runScenario('decline');
+            } else if (action.payload === 'stock') {
+              runScenario('stock');
+            }
+            return;
+          case 'one-shot':
+            runOneShotSuccessFlow();
+            return;
+          default:
+            return;
+        }
+      }
+
       function clearAllPanelAttention() {
         document.querySelectorAll('.panel-attention, .panel-attention-pulse').forEach((element) => {
           element.classList.remove('panel-attention', 'panel-attention-pulse');
@@ -665,6 +934,94 @@ web
           return;
         }
         markPanelsBySelectors(selectors, 2600, true);
+      }
+
+      function setSingleAction(text, action) {
+        const fallbackAction = {
+          label: '看下一步建議',
+          type: 'focus',
+          payload: '#goal-next',
+        };
+
+        if (!singleActionTextEl || !singleActionBtn) {
+          return;
+        }
+
+        singleActionTextEl.textContent = text || singleActionDefaultText;
+        const normalized = action || fallbackAction;
+        singleActionBtn.textContent = normalized.label || fallbackAction.label;
+        singleActionBtn.dataset.singleActionType = normalized.type || 'focus';
+        singleActionBtn.dataset.singleActionPayload = normalized.payload ? String(normalized.payload) : '';
+        singleActionBtn.disabled = !normalized;
+        singleActionBtn.hidden = false;
+      }
+
+      function setUiMode(mode) {
+        if (mode !== 'beginner' && mode !== 'advanced') {
+          mode = uiModeDefault;
+        }
+        uiMode = mode;
+        try {
+          localStorage.setItem('miniShopMiniShopUiMode', mode);
+        } catch (_error) {
+          // no-op
+        }
+
+        if (modeBeginnerBtn) {
+          modeBeginnerBtn.classList.toggle('active', mode === 'beginner');
+        }
+        if (modeAdvancedBtn) {
+          modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
+        }
+
+        if (modeHelpEl) {
+          modeHelpEl.textContent = mode === 'beginner'
+            ? '新手模式：只保留最少步驟，先把一筆流程跑通。'
+            : '進階模式：保留相同主流程，但會顯示更多診斷與錯誤導向。';
+        }
+
+        advancedModePanelSelectors.forEach((selector) => {
+          const panel = document.querySelector(selector);
+          if (!panel) {
+            return;
+          }
+          if (mode === 'beginner') {
+            panel.classList.add('hidden');
+          } else {
+            panel.classList.remove('hidden');
+          }
+        });
+
+        if (errorPlaybookCard) {
+          if (mode === 'beginner') {
+            errorPlaybookCard.classList.add('hidden');
+          } else {
+            errorPlaybookCard.classList.remove('hidden');
+          }
+        }
+
+        if (mode === 'advanced' && runResultState?.kind !== 'error') {
+          renderErrorPlaybook(fallbackPattern.code);
+        }
+      }
+
+      async function runSingleAction() {
+        const type = singleActionBtn?.dataset.singleActionType;
+        const payload = singleActionBtn?.dataset.singleActionPayload || '';
+        if (!type) {
+          return;
+        }
+        const action = {
+          type,
+          payload,
+          label: singleActionBtn.textContent || '',
+        };
+        try {
+          await executeErrorGuidanceAction(action);
+          appendSummary(`已執行建議動作：${action.label}`);
+        } catch (_error) {
+          appendSummary('建議動作執行失敗，請先手動依提示處理。');
+        }
       }
 
       function operationRecoveryActions(errorCode, service, action) {
@@ -816,7 +1173,7 @@ web
         if (!allReady) {
           return {
             step: 1,
-            text: '正在等待所有服務就緒（後端服務 8/8）。建議先保持 5-10 秒，或檢查每個服務是否 ok。',
+            text: `正在等待所有服務就緒（後端服務 ${BACKEND_SERVICE_COUNT}/${BACKEND_SERVICE_COUNT}）。建議先保持 5-10 秒，或檢查每個服務是否 ok。`,
             action: '重新檢查服務狀態',
           };
         }
@@ -879,6 +1236,36 @@ web
           .join('');
       }
 
+      function formatValueSignalChip(label, ok, detail) {
+        return `<div class=\"value-signal-card\"><h4>${label}</h4><span class=\"value-signal-chip ${ok ? 'ok' : 'warn'}\">${ok ? '✅ ' : '◯ '}${detail}</span></div>`;
+      }
+
+      function setValueSignal(map) {
+        if (!valueSignalEl) {
+          return;
+        }
+        const readyCount = map
+          ? Object.values(map).filter((svc) => svc && svc.status === 'ok').length
+          : 0;
+        const serviceReady = Boolean(map && Object.values(map).length && readyCount === SERVICE_COUNT);
+        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const latestShipment = latestOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+        const hasSuccessfulOrder = latestOrder && latestOrder.status === 'confirmed';
+        const hasRelation = Boolean(hasSuccessfulOrder && latestShipment && latestShipment.order_id === latestOrder.id);
+
+        const serviceText = serviceReady
+          ? `後端服務 ${readyCount}/${SERVICE_COUNT} 已就緒`
+          : `後端服務 ${readyCount}/${SERVICE_COUNT} 尚未就緒`;
+
+        valueSignalEl.innerHTML = [
+          formatValueSignalChip('服務', serviceReady, serviceText),
+          formatValueSignalChip('交易', hasSuccessfulOrder, hasSuccessfulOrder ? '已完成成功 checkout' : '尚未完成成功 checkout'),
+          formatValueSignalChip('關聯', hasRelation, hasRelation ? '訂單已關聯出貨' : '尚未完成關聯'),
+        ].join('');
+      }
+
       function setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload = latestCheckoutPayload) {
         if (!proofSummaryEl) {
           return;
@@ -901,11 +1288,103 @@ web
           ? `最後 Checkout：${checkoutPayload.code}${checkoutPayload.occurred_at ? `（${new Date(checkoutPayload.occurred_at).toLocaleTimeString()}）` : ''}`
           : '尚未發送 checkout';
 
+        let relationTitle = '關聯完整性';
+        let relationStatus = 'warn';
+        let relationDetail = '尚未有完整交易可驗證。';
+        if (latestOrder) {
+          if (latestOrder.status === 'confirmed' && relatedShipment && relatedShipment.order_id === latestOrder.id) {
+            relationStatus = 'ok';
+            relationDetail = `已關聯出貨 #${relatedShipment.id} (${relatedShipment.tracking_no})。`;
+          } else if (latestOrder.status === 'failed' || latestOrder.status === 'cancelled') {
+            relationStatus = 'error';
+            relationDetail = `訂單 ${latestOrder.id} 狀態為 ${latestOrder.status}，需先修復 checkout 流程。`;
+          } else {
+            relationStatus = 'warn';
+            relationDetail = `訂單 ${latestOrder.id} 尚未形成完整關聯，請到時間軸觀察下一步。`;
+          }
+        }
+
+        if (relationCheckEl) {
+          relationCheckEl.innerHTML = `
+            <div class="row">
+              <span class="row-label">關聯狀態：</span>
+              <span class="row-value ${relationStatus}">${relationTitle}</span>
+            </div>
+            <div class="row">
+              <span class="row-label">最近訂單：</span>
+              <span class="row-value">${latestOrder ? `#${latestOrder.id}` : '尚未建立'}</span>
+            </div>
+            <div class="row">
+              <span class="row-label">關聯結果：</span>
+              <span class="row-value ${relationStatus}">${relationDetail}</span>
+            </div>
+          `;
+        }
+
         proofSummaryEl.innerHTML = [
           `<div class="evidence-line"><span class="label">訂單：</span>${orderText}</div>`,
           `<div class="evidence-line"><span class="label">出貨：</span>${shipmentText}</div>`,
           `<div class="evidence-line"><span class="label">交易結果：</span>${checkoutText}</div>`,
         ].join('');
+      }
+
+      function buildChecklistItem(ok, text, action) {
+        const state = ok ? 'pass' : 'warn';
+        const actionButton = action
+          ? `<button
+              type="button"
+              class="small-btn inline-btn acceptance-item-action"
+              data-checklist-action="${action.type || ''}"
+              data-checklist-payload="${action.payload ? action.payload.replaceAll('"', '&quot;') : ''}"
+            >${action.label || '前往'}</button>`
+          : '';
+        return `<div class="acceptance-item ${state}">
+          <span class="acceptance-item-content"><span class="acceptance-dot"></span><span>${text}</span></span>
+          ${actionButton}
+        </div>`;
+      }
+
+      function setAcceptanceChecklist() {
+        if (!acceptanceChecklistEl) {
+          return;
+        }
+
+        const map = latestServiceMap || {};
+        const entries = Object.entries(map);
+        const serviceTotal = entries.length || 8;
+        const readyCount = entries.filter(([, payload]) => payload && payload.status === 'ok').length;
+        const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
+
+        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const relatedShipment = latestOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+        const hasSuccessfulOrder = latestOrder && latestOrder.status === 'confirmed';
+        const hasOrderShipmentRelation = hasSuccessfulOrder && relatedShipment && relatedShipment.order_id === latestOrder.id;
+        const relationErrorCode = latestCheckoutPayload?.code ? normalizeErrorCode(latestCheckoutPayload.code) : 'checkout_failed';
+        const relationSelector = latestOrder
+          ? `#flow-timeline-panel|error:${relationErrorCode}`
+          : '#goal-next';
+
+        const serviceAction = !allServiceReady
+          ? { type: 'focus', payload: '#service-overview-panel', label: acceptanceChecklistActionLabels.serviceUnready }
+          : { type: 'focus', payload: '#goal-next', label: acceptanceChecklistActionLabels.reviewGoal };
+        const checkoutAction = hasSuccessfulOrder
+          ? null
+          : (Number(customerEl.value) <= 0
+            ? { type: 'focus', payload: '#customer-panel', label: '先選客戶' }
+            : (cartHasItems ? { type: 'focus', payload: '#checkout-panel', label: '先補齊 checkout' } : { type: 'focus', payload: '#product-panel', label: '先加入商品' }));
+        const relationAction = hasOrderShipmentRelation
+          ? null
+          : (latestOrder
+            ? { type: 'focus', payload: relationSelector, label: acceptanceChecklistActionLabels.relationMissing }
+            : { type: 'focus', payload: '#goal-next', label: acceptanceChecklistActionLabels.reviewGoal });
+
+        acceptanceChecklistEl.innerHTML = ''
+          + buildChecklistItem(allServiceReady, `服務全數就緒（${readyCount}/${serviceTotal}）`, serviceAction)
+          + buildChecklistItem(hasSuccessfulOrder, '完成一筆成功 checkout', checkoutAction)
+          + buildChecklistItem(hasOrderShipmentRelation, '訂單與出貨關聯成功', relationAction);
+        setValueSignal(map);
       }
 
       function updateGoalState(state) {
@@ -928,6 +1407,19 @@ web
         if (snapshot.step < 5) {
           markGoalStepAttention(snapshot.step);
         }
+
+        if (runResultState?.kind === 'error') {
+          return;
+        }
+
+        const stepActionMap = {
+          1: { label: '重新整理服務狀態', type: 'focus', payload: '#flow-overview-panel' },
+          2: { label: '先選客戶', type: 'focus', payload: '#customer-panel' },
+          3: { label: '加 1 件商品', type: 'focus', payload: '#product-panel' },
+          4: { label: 'Checkout 成功路徑', type: 'focus', payload: '#checkout-panel' },
+          5: { label: '核對結果', type: 'focus', payload: '#flow-timeline-panel' },
+        };
+        setSingleAction(snapshot.text, stepActionMap[snapshot.step] || stepActionMap[1]);
       }
 
       function hasLatestSuccessfulOrder() {
@@ -966,6 +1458,33 @@ web
         }
       }
 
+      function highlightTimelineStep(stepSelector, parentSelector = '#flow-timeline') {
+        const step = document.querySelector(`${parentSelector} ${stepSelector}`);
+        if (step) {
+          step.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setPanelAttention(step, 2600);
+        }
+        return step;
+      }
+
+      function focusTimelineError(errorCode) {
+        const normalized = normalizeErrorCode(errorCode);
+        const selector = timelineErrorStepMap[normalized];
+        if (!selector) {
+          const fallback = '#flow-timeline';
+          const container = document.querySelector(fallback);
+          if (container) {
+            scrollToAndFocus(container);
+          }
+          return null;
+        }
+        const step = highlightTimelineStep(selector);
+        if (step) {
+          return step;
+        }
+        return null;
+      }
+
       function renderErrorPlaybook(activeCode = fallbackPattern.code) {
         if (!errorPlaybookEl) {
           return;
@@ -981,6 +1500,9 @@ web
           const actions = recoveryActionsForErrorCard(pattern.code, errorHintServiceFromCode(pattern.code));
           const card = document.createElement('div');
           card.className = `error-item${pattern.code === activeCode ? ' active' : ''}`;
+          const summaryActionText = actions.find((action) => action.primary)?.label
+            || (pattern.code === fallbackPattern.code ? '前往下一步建議' : '查看可用修復');
+
           const actionButtons = actions
             .map((action) => {
               const isPrimary = action.primary ? 'primary-action' : '';
@@ -1006,19 +1528,56 @@ web
             })
             .join('');
           card.innerHTML = `
-            <div class="title">${pattern.code}</div>
-            <div class="hint">症狀：${pattern.symptom}</div>
-            <div class="hint">建議：${pattern.step}</div>
-            <div class="cmd">快速命令：${pattern.command}</div>
-            <div class="operation-actions">
-              ${focusTarget && pattern.code === activeCode ? `<button type="button" class="small-btn inline-btn timeline-btn" data-error-focus="${focusTarget}">定位到對應區塊</button>` : ''}
-              ${actionButtons}
-            </div>
+            <details class="error-item-details" data-error-code="${pattern.code}">
+              <summary class="error-item-summary">
+                <div class="error-code">${pattern.code}</div>
+                <div class="error-symptom">症狀：${pattern.symptom}</div>
+                <div class="error-hint">建議：${pattern.step}</div>
+                <div class="operation-actions">
+                  <button type="button" class="small-btn inline-btn timeline-btn error-action" data-error-quick-action="${pattern.code}">${summaryActionText}</button>
+                </div>
+              </summary>
+              <div class="error-item-body">
+                <div class="hint">建議：${pattern.step}</div>
+                <div class="cmd">快速命令：${pattern.command}</div>
+                <div class="operation-actions">
+                  ${focusTarget && pattern.code === activeCode ? `<button type="button" class="small-btn inline-btn timeline-btn" data-error-focus="${focusTarget}">定位到對應區塊</button>` : ''}
+                  ${actionButtons}
+                </div>
+              </div>
+            </details>
           `;
           errorPlaybookEl.appendChild(card);
         });
 
+        const activeCard = errorPlaybookEl.querySelector(`[data-error-code="${activeCode}"]`);
+        const activePrimaryButton = activeCard
+          ? activeCard.querySelector('.error-action.primary-action')
+          : null;
+        if (activeCode !== lastAutoFocusedErrorCode && activePrimaryButton) {
+          lastAutoFocusedErrorCode = activeCode;
+          setTimeout(() => {
+            scrollToAndFocus(activePrimaryButton);
+            setNotice('有推薦修復動作，先按這顆黃底按鈕。', 'ok');
+          }, 120);
+        } else if (activeCode === fallbackPattern.code) {
+          lastAutoFocusedErrorCode = '';
+        }
+
+        const activePrimaryAction = recoveryActionsForErrorCard(activeCode, errorHintServiceFromCode(activeCode))
+          .find((action) => action.primary);
+        if (activePrimaryAction && activeCode !== fallbackPattern.code) {
+          setSingleAction(`失敗修復建議：${faultPatterns.find((item) => item.code === activeCode)?.symptom || activeCode}`, activePrimaryAction);
+        } else if (activeCode === fallbackPattern.code) {
+          setSingleAction('目前狀況穩定，先按「下一步操作建議」繼續流程。', { type: 'focus', payload: '#goal-next', label: '前往下一步' });
+        } else {
+          setSingleAction('目前有待處理失敗，先聚焦建議的下一步。', { type: 'focus', payload: '#goal-next', label: '看下一步' });
+        }
+
         markErrorAttention(activeCode);
+        if (activeCode !== fallbackPattern.code) {
+          focusTimelineError(activeCode);
+        }
       }
 
       function captureCheckoutPayload(payload, context = null) {
@@ -1167,10 +1726,22 @@ web
         scenarioSuccessBtn.disabled = disabledState;
         scenarioDeclineBtn.disabled = disabledState;
         scenarioStockBtn.disabled = disabledState;
+        quickSuccessBtn.disabled = disabledState;
+        quickFailPaymentBtn.disabled = disabledState;
+        quickFailStockBtn.disabled = disabledState;
         refreshProductBtn.disabled = disabledState;
         resetFlowBtn.disabled = disabledState;
         goalReplayBtn.disabled = disabledState;
         oneShotSuccessBtn.disabled = disabledState;
+        if (startDemoFlowBtn) {
+          startDemoFlowBtn.disabled = disabledState;
+        }
+        if (verifyDemoSignalBtn) {
+          verifyDemoSignalBtn.disabled = disabledState;
+        }
+        if (focusDemoChecklistBtn) {
+          focusDemoChecklistBtn.disabled = disabledState;
+        }
       }
 
       function setFlowState(allReady, customerSelected, cartReady) {
@@ -1178,7 +1749,7 @@ web
         let stage = 0;
         if (!allReady) {
           stage = 1;
-          stateText = '第 1 步：先讓所有服務就緒（目標後端服務 8/8）。';
+          stateText = `第 1 步：先讓所有服務就緒（目標後端服務 ${BACKEND_SERVICE_COUNT}/${BACKEND_SERVICE_COUNT}）。`;
         } else if (!customerSelected) {
           stage = 2;
           stateText = '第 2 步：選一位客戶。';
@@ -1352,6 +1923,9 @@ web
           scenarioSuccessBtn.disabled = true;
           scenarioDeclineBtn.disabled = true;
           scenarioStockBtn.disabled = true;
+          quickSuccessBtn.disabled = true;
+          quickFailPaymentBtn.disabled = true;
+          quickFailStockBtn.disabled = true;
           refreshProductBtn.disabled = true;
           return;
         }
@@ -1472,8 +2046,10 @@ web
 
         const map = Object.fromEntries(responses);
         serviceStatus.innerHTML = responses.map(([_, payload]) => setServiceCard('', payload)).join('');
+        latestServiceMap = map;
         updateActionState(map);
         renderFlowMap(map);
+        setAcceptanceChecklist();
         return map;
       }
 
@@ -1596,6 +2172,7 @@ web
         const latestOrder = ordersPayload?.orders?.[0] || null;
         buildFlowTimeline(latestOrder, shipmentsPayload, checkoutPayload);
         setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload);
+        setAcceptanceChecklist();
         if (latestOrder) {
           updateRunResultForOrder(latestOrder);
         } else {
@@ -1631,9 +2208,10 @@ web
           return;
         }
 
-        const buildTimelineStep = (index, title, status, body, service) => {
+        const buildTimelineStep = (index, title, status, body, service, errorTag = '') => {
           const stepClass = status === 'error' ? 'error' : status === 'warn' ? 'warn' : 'done';
-          return `<div class="timeline-item ${stepClass}">`
+          const errorAttr = errorTag ? ` data-timeline-error="${errorTag}"` : '';
+          return `<div class="timeline-item ${stepClass}" data-timeline-step="${index}"${errorAttr}>`
             + `<div><span class="timeline-step ${stepClass}">${index}</span><strong>${title}</strong></div>`
             + `<div class="hint">${body}</div>`
             + (service ? timelineLogButton(service) : '')
@@ -1644,7 +2222,7 @@ web
         const nowLabel = new Date().toLocaleTimeString();
         const relatedShipment = (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === order.id);
         steps.push(buildTimelineStep(1, `${nowLabel}｜開始 Checkout`, 'done', '讀取購物車、整理訂單明細', 'checkout-api'));
-        steps.push(buildTimelineStep(2, `${nowLabel}｜庫存保留`, 'done', `cart-api + inventory-api：商品 ${order.product_name} x${order.quantity}`, 'inventory-api'));
+        steps.push(buildTimelineStep(2, `${nowLabel}｜庫存保留`, 'done', `cart-api + inventory-api：商品 ${order.product_name} x${order.quantity}`, 'inventory-api', 'inventory_unreachable'));
 
         if (checkoutPayload?.payment) {
           const paymentStatus = checkoutPayload.payment.status || 'paid';
@@ -1653,20 +2231,24 @@ web
             ? `<div class="hint">payment-api：交易成功（${checkoutPayload.payment.method}）${paymentId}</div>`
             : `<div class="hint">payment-api：${paymentStatus}</div>`;
           const paymentClass = paymentStatus === 'paid' ? 'done' : 'error';
-          steps.push(buildTimelineStep(3, `${nowLabel}｜付款 ${paymentStatus}`, paymentClass, paymentText, 'payment-api'));
+          const paymentTag = paymentStatus === 'paid' ? '' : 'payment_failed';
+          steps.push(buildTimelineStep(3, `${nowLabel}｜付款 ${paymentStatus}`, paymentClass, paymentText, 'payment-api', paymentTag));
         } else if (checkoutPayload?.code) {
-          steps.push(`<div class="timeline-item error"><div><span class="timeline-step error">3</span><strong>${nowLabel}｜付款失敗</strong></div><div class="hint">原因：${checkoutPayload.code}</div>${timelineLogButton('payment-api')}</div>`);
+          const paymentCode = normalizeErrorCode(checkoutPayload.code);
+          const paymentErrorClass = paymentCode === 'payment_declined' ? 'payment_declined' : 'checkout_failed';
+          steps.push(`<div class="timeline-item error" data-timeline-step="3" data-timeline-error="${paymentErrorClass}"><div><span class="timeline-step error">3</span><strong>${nowLabel}｜付款失敗</strong></div><div class="hint">原因：${checkoutPayload.code}</div>${timelineLogButton('payment-api')}</div>`);
         } else {
-          steps.push(`<div class="timeline-item warn"><div><span class="timeline-step warn">3</span><strong>${nowLabel}｜付款</strong></div><div class="hint">尚未拿到付款結果（可參考執行報告）</div>${timelineLogButton('payment-api')}</div>`);
+          steps.push(`<div class="timeline-item warn" data-timeline-step="3"><div><span class="timeline-step warn">3</span><strong>${nowLabel}｜付款</strong></div><div class="hint">尚未拿到付款結果（可參考執行報告）</div>${timelineLogButton('payment-api')}</div>`);
         }
 
         const orderStatusClass = order.status === 'confirmed' ? 'done' : order.status === 'pending' ? 'warn' : 'error';
-        steps.push(`<div class="timeline-item ${orderStatusClass}"><div><span class="timeline-step ${orderStatusClass}">4</span><strong>${nowLabel}｜建立訂單</strong></div><div class="hint">order-api：訂單 #${order.id}，狀態 ${order.status}</div>${timelineLogButton('order-api')}</div>`);
+        const orderErrorClass = order.status === 'confirmed' ? '' : 'order_unreachable';
+        steps.push(`<div class="timeline-item ${orderStatusClass}" data-timeline-step="4"${orderErrorClass ? ` data-timeline-error="${orderErrorClass}"` : ''}><div><span class="timeline-step ${orderStatusClass}">4</span><strong>${nowLabel}｜建立訂單</strong></div><div class="hint">order-api：訂單 #${order.id}，狀態 ${order.status}</div>${timelineLogButton('order-api')}</div>`);
         const shippingText = relatedShipment
           ? `shipping-api：${relatedShipment.tracking_no}（${relatedShipment.status}）`
           : 'shipping-api：尚未回傳出貨紀錄';
         const shippingStatus = relatedShipment ? 'done' : 'warn';
-        steps.push(`<div class="timeline-item ${shippingStatus}"><div><span class="timeline-step ${shippingStatus}">5</span><strong>${nowLabel}｜建立出貨</strong></div><div class="hint">${shippingText}</div>${timelineLogButton('shipping-api')}</div>`);
+        steps.push(`<div class="timeline-item ${shippingStatus}" data-timeline-step="5"${relatedShipment ? '' : ' data-timeline-error=\"checkout_failed\"'}><div><span class="timeline-step ${shippingStatus}">5</span><strong>${nowLabel}｜建立出貨</strong></div><div class="hint">${shippingText}</div>${timelineLogButton('shipping-api')}</div>`);
 
         if (relatedShipment && relatedShipment.status === 'pending') {
           steps.push(`<div class="timeline-item warn"><div><span class="timeline-step warn">6</span><strong>${nowLabel}｜待處理完成</strong></div><div class="hint">shipping 仍在處理中，稍後會看到最終結果。</div></div>`);
@@ -2122,6 +2704,24 @@ web
       scenarioSuccessBtn.addEventListener('click', () => runScenario('success'));
       scenarioDeclineBtn.addEventListener('click', () => runScenario('decline'));
       scenarioStockBtn.addEventListener('click', () => runScenario('stock'));
+      if (quickSuccessBtn) {
+        quickSuccessBtn.addEventListener('click', async () => {
+          appendSummary('最短重現：成功路徑');
+          await runScenario('success');
+        });
+      }
+      if (quickFailPaymentBtn) {
+        quickFailPaymentBtn.addEventListener('click', async () => {
+          appendSummary('最短重現：付款失敗路徑');
+          await runScenario('decline');
+        });
+      }
+      if (quickFailStockBtn) {
+        quickFailStockBtn.addEventListener('click', async () => {
+          appendSummary('最短重現：庫存不足路徑');
+          await runScenario('stock');
+        });
+      }
 
       [scenarioSuccessBtn, scenarioDeclineBtn, scenarioStockBtn].forEach((button) => {
         const helper = document.createElement('div');
@@ -2136,10 +2736,29 @@ web
         button.insertAdjacentElement('afterend', helper);
       });
 
+      function setDemoSignalState() {
+        const map = latestServiceMap || {};
+        const readyCount = Object.values(map).filter((service) => service && service.status === 'ok').length;
+        const serviceReady = readyCount === SERVICE_COUNT && Object.values(map).length > 0;
+        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const latestShipment = latestOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+        const orderConfirmed = latestOrder && latestOrder.status === 'confirmed';
+        const relationOk = Boolean(orderConfirmed && latestShipment && latestShipment.order_id === latestOrder.id);
+        const allGreen = serviceReady && orderConfirmed && relationOk;
+        if (!allGreen) {
+          setNotice('請先讓「服務 / 交易 / 關聯」都變為綠，或按「開始 demo 一輪」先走一遍。', 'warn');
+        }
+        return allGreen;
+      }
+
       document.addEventListener('click', async (event) => {
         const copyButton = event.target.closest('[data-copy-cmd]');
         const operationCopyButton = event.target.closest('[data-operation-copy]');
         const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
+        const acceptanceActionButton = event.target.closest('[data-checklist-action]');
+        const errorQuickActionButton = event.target.closest('[data-error-quick-action]');
         const errorCopyCommandButton = event.target.closest('[data-error-copy-cmd]');
         const errorQtyButton = event.target.closest('[data-error-qty]');
         const errorPaymentButton = event.target.closest('[data-error-payment]');
@@ -2153,8 +2772,49 @@ web
           await runCheckoutAction(method, 'operation 快照重試');
           return;
         }
+        if (acceptanceActionButton) {
+          const type = acceptanceActionButton.dataset.checklistAction;
+          const payload = acceptanceActionButton.dataset.checklistPayload || '';
+          await executeErrorGuidanceAction({ type, payload });
+          appendSummary(`已執行清單建議：${acceptanceActionButton.textContent.trim()}`);
+          return;
+        }
         if (oneShotButton) {
           runOneShotSuccessFlow();
+          return;
+        }
+        const startDemoFlowButton = event.target.closest('#start-demo-flow');
+        if (startDemoFlowButton) {
+          appendSummary('開始一鍵 demo：執行一輪成功流程。');
+          await runOneShotSuccessFlow();
+          return;
+        }
+        const verifyDemoSignalButton = event.target.closest('#verify-demo-signal');
+        if (verifyDemoSignalButton) {
+          setNotice('已為你聚焦「快速判斷值」。三格都綠，代表可 demo。', 'ok');
+          scrollToAndFocus(document.getElementById('value-signal-card'));
+          const pass = setDemoSignalState();
+          appendSummary(pass ? '快速判斷值條件已達成' : '快速判斷值尚未全部達成');
+          return;
+        }
+        const focusDemoChecklistButton = event.target.closest('#focus-demo-checklist');
+        if (focusDemoChecklistButton) {
+          scrollToAndFocus(document.getElementById('acceptance-card'));
+          appendSummary('已前往 1.0 交付前檢核清單，可逐步點選未完成項目。');
+          return;
+        }
+        if (errorQuickActionButton) {
+          const quickCode = errorQuickActionButton.dataset.errorQuickAction;
+          const quickActions = recoveryActionsForErrorCard(quickCode, errorHintServiceFromCode(quickCode));
+          const quickPrimary = quickActions.find((action) => action.primary) || quickActions[0];
+          if (quickPrimary) {
+            await executeErrorGuidanceAction({
+              type: quickPrimary.type,
+              payload: quickPrimary.payload,
+              label: quickPrimary.label,
+            });
+            appendSummary(`已執行 ${quickPrimary.label}`);
+          }
           return;
         }
         if (errorScenarioButton) {
@@ -2270,6 +2930,17 @@ web
           setCopyFeedback('複製失敗，請手動選取複製');
         }
       });
+
+      if (singleActionBtn) {
+        singleActionBtn.addEventListener('click', runSingleAction);
+      }
+
+      if (modeBeginnerBtn) {
+        modeBeginnerBtn.addEventListener('click', () => setUiMode('beginner'));
+      }
+      if (modeAdvancedBtn) {
+        modeAdvancedBtn.addEventListener('click', () => setUiMode('advanced'));
+      }
 
       goalNextBtn.addEventListener('click', async () => {
         try {
@@ -2408,8 +3079,18 @@ web
 
       resetFlowBtn.addEventListener('click', resetFlow);
 
-      setRunResult('warn', '準備中', ['尚未開始操作', '請先確認 9 個資源就緒（含 web）']);
+      try {
+        const savedUiMode = localStorage.getItem('miniShopMiniShopUiMode');
+        if (savedUiMode === 'advanced' || savedUiMode === 'beginner') {
+          uiMode = savedUiMode;
+        }
+      } catch (_error) {
+        // no-op
+      }
+
+      setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${TOTAL_RESOURCE_COUNT} 個資源就緒（含 web）`]);
       renderErrorPlaybook(fallbackPattern.code);
+      setUiMode(uiMode);
       refresh();
       async function refreshTicker() {
         try {
