@@ -236,6 +236,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "invalid_environment" {
 		return nil
 	}
+	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {
+		return []JSONAction{StatusAction()}
+	}
 	if err.Code == "env_mismatch" {
 		return []JSONAction{{
 			Command:     err.NextCommand,

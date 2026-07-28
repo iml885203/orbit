@@ -110,6 +110,11 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 Lifecycle commands suppress decorative progress output in JSON mode so stdout
 remains parseable.
 
+Lifecycle actions are outcome-specific. A successful `up` returns one primary
+next action, `orbit open --json`. A failed start recommends status, logs for the
+root failed resource, and a targeted restart after the reported cause is fixed;
+it does not send agents through unrelated setup diagnostics.
+
 Stable `data.operation` values for converted control commands:
 
 | Command | `data.operation` |

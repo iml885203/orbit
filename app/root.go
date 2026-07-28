@@ -617,7 +617,7 @@ func runRestart(_ *cobra.Command, args []string) error {
 			Message:           resp.Message,
 			RequestedServices: []string{name},
 			FinalStatus:       finalStatus,
-		}), lifecycleRecommendedActions([]string{name}))
+		}), []cli.JSONAction{cli.StatusAction()})
 	}
 
 	if _, err := client.Restart(name); err != nil {
@@ -657,7 +657,7 @@ func runStop(_ *cobra.Command, args []string) error {
 			Message:           resp.Message,
 			RequestedServices: []string{name},
 			FinalStatus:       finalStatus,
-		}), lifecycleRecommendedActions([]string{name}))
+		}), []cli.JSONAction{cli.StatusAction()})
 	}
 
 	if _, err := client.Stop(name); err != nil {

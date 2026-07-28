@@ -109,7 +109,7 @@ func runUpJSON(args []string) error {
 		RequestedServices: names,
 		InfraOnly:         infraOnly,
 		FinalStatus:       finalStatus,
-	}), lifecycleRecommendedActions(names))
+	}), lifecycleUpSuccessActions())
 }
 
 func lifecycleNamesForUp(status *daemon.StatusResponse, args []string, infraOnly bool) []string {

@@ -114,13 +114,14 @@ func TestBuildLifecycleJSONDataEmptySlicesMarshalAsArrays(t *testing.T) {
 	}
 }
 
-func TestLifecycleRecommendedActionsIncludesLogs(t *testing.T) {
+func TestLifecycleRecommendedActionsLeadThroughRecovery(t *testing.T) {
 	got := lifecycleRecommendedActions([]string{"worker", "payments", "worker"})
 	want := []string{
 		"orbit status --json",
-		"orbit doctor --json",
 		"orbit logs worker --json",
+		"orbit restart worker --json",
 		"orbit logs payments --json",
+		"orbit restart payments --json",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("actions count = %d, want %d: %+v", len(got), len(want), got)
@@ -129,6 +130,13 @@ func TestLifecycleRecommendedActionsIncludesLogs(t *testing.T) {
 		if action.Command != want[i] {
 			t.Fatalf("actions[%d] = %q, want %q; actions = %+v", i, action.Command, want[i], got)
 		}
+	}
+}
+
+func TestLifecycleUpSuccessActionsHaveOnePrimaryNextStep(t *testing.T) {
+	got := lifecycleUpSuccessActions()
+	if len(got) != 1 || got[0].Command != "orbit open --json" {
+		t.Fatalf("actions = %+v", got)
 	}
 }
 

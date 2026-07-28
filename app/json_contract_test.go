@@ -20,20 +20,29 @@ func decodeEnvelope(t *testing.T, raw []byte) cli.JSONEnvelope {
 	return got
 }
 
-func TestWriteCLIJSONErrorMergesActionErrorRecommendations(t *testing.T) {
+func TestWriteCLIJSONServiceFailureKeepsRecoveryActionsFocused(t *testing.T) {
 	var buf bytes.Buffer
-	err := cli.WithJSONActions(errors.New("worker degraded"), lifecycleRecommendedActions([]string{"worker"}))
+	err := cli.WithJSONActions(
+		cli.NewServiceStartFailedError("worker degraded"),
+		lifecycleRecommendedActions([]string{"worker"}),
+	)
 	if err := cli.WriteJSONError(&buf, "orbit up worker --json", err); err != nil {
 		t.Fatalf("cli.WriteJSONError: %v", err)
 	}
 	got := decodeEnvelope(t, buf.Bytes())
-	want := "orbit logs worker --json"
-	for _, action := range got.RecommendedActions {
-		if action.Command == want {
-			return
+	want := []string{
+		"orbit status --json",
+		"orbit logs worker --json",
+		"orbit restart worker --json",
+	}
+	if len(got.RecommendedActions) != len(want) {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+	for i, command := range want {
+		if got.RecommendedActions[i].Command != command {
+			t.Fatalf("recommended_actions[%d] = %q, want %q", i, got.RecommendedActions[i].Command, command)
 		}
 	}
-	t.Fatalf("missing %q in %+v", want, got.RecommendedActions)
 }
 
 func TestEnvRepoAccessJSONPointsToAuthenticationAndRetry(t *testing.T) {

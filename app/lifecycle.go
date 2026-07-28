@@ -60,24 +60,39 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 }
 
 func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
-	actions := []cli.JSONAction{cli.StatusAction(), cli.DoctorAction()}
+	actions := []cli.JSONAction{cli.StatusAction()}
 	seen := map[string]bool{
 		"orbit status --json": true,
-		"orbit doctor --json": true,
 	}
 	for _, name := range serviceNames {
-		cmd := "orbit logs " + name + " --json"
-		if seen[cmd] {
-			continue
+		for _, action := range []cli.JSONAction{
+			{
+				Command:     "orbit logs " + name + " --json",
+				Reason:      "Inspect recent logs for " + name + ".",
+				Destructive: false,
+			},
+			{
+				Command:     "orbit restart " + name + " --json",
+				Reason:      "Retry " + name + " after fixing the reported cause.",
+				Destructive: false,
+			},
+		} {
+			if seen[action.Command] {
+				continue
+			}
+			actions = append(actions, action)
+			seen[action.Command] = true
 		}
-		actions = append(actions, cli.JSONAction{
-			Command:     cmd,
-			Reason:      "Inspect recent logs for " + name + ".",
-			Destructive: false,
-		})
-		seen[cmd] = true
 	}
 	return actions
+}
+
+func lifecycleUpSuccessActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     "orbit open --json",
+		Reason:      "Get the dashboard URL for the healthy environment.",
+		Destructive: false,
+	}}
 }
 
 func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {

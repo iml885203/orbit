@@ -508,6 +508,9 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 	if !upEnvelope.OK {
 		t.Fatalf("up envelope not ok: %+v\n%s", upEnvelope.Error, upOut)
 	}
+	if len(upEnvelope.RecommendedActions) != 1 || upEnvelope.RecommendedActions[0].Command != "orbit open --json" {
+		t.Fatalf("up recommended_actions = %+v", upEnvelope.RecommendedActions)
+	}
 
 	statusOut := env.run(t, "status", "--json")
 	statusEnvelope := parseE2EEnvelope(t, statusOut)
@@ -684,6 +687,28 @@ services:
 	} {
 		if !bytes.Contains(human, []byte(evidence)) {
 			t.Fatalf("human status missing %q:\n%s", evidence, human)
+		}
+	}
+
+	failedUp, err := command("up", "api-runtime", "--json").Output()
+	if err == nil {
+		t.Fatalf("JSON up unexpectedly succeeded:\n%s", failedUp)
+	}
+	failedEnvelope := parseE2EEnvelope(t, string(failedUp))
+	if failedEnvelope.Error == nil || failedEnvelope.Error.Code != "service_start_failed" {
+		t.Fatalf("JSON up error = %+v:\n%s", failedEnvelope.Error, failedUp)
+	}
+	wantRecovery := []string{
+		"orbit status --json",
+		"orbit logs api-runtime --json",
+		"orbit restart api-runtime --json",
+	}
+	if len(failedEnvelope.RecommendedActions) != len(wantRecovery) {
+		t.Fatalf("JSON up recommended_actions = %+v", failedEnvelope.RecommendedActions)
+	}
+	for i, command := range wantRecovery {
+		if failedEnvelope.RecommendedActions[i].Command != command {
+			t.Fatalf("JSON up recommended_actions[%d] = %q, want %q", i, failedEnvelope.RecommendedActions[i].Command, command)
 		}
 	}
 

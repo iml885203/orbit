@@ -103,6 +103,10 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 
 Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout 保持可解析。
 
+Lifecycle actions 會依結果提供。成功的 `up` 只回傳一個主要下一步：
+`orbit open --json`。啟動失敗時則建議查看 status、根因 resource 的 logs，
+並在修正原因後只 restart 該 resource；不會把 agent 導向無關的 setup 診斷。
+
 已轉換控制指令的穩定 `data.operation` 值：
 
 | Command | `data.operation` |
