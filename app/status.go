@@ -97,7 +97,13 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
 		}
 		fmt.Println("Orbit is not set up yet.")
-		fmt.Println("  Next: orbit init")
+		_, _ = cli.Faint.Println("  Next: orbit init")
+		_, _ = cli.Faint.Println("  Or: orbit env sync --url <git-url>   sync env repository")
+		_, _ = cli.Faint.Println("  Or: orbit up                          start the configured environment")
+		if cfgErr != nil {
+			_, _ = cli.Faint.Println("  Current config issue:")
+			_, _ = cli.Faint.Printf("    %s\n", cfgErr)
+		}
 		return nil
 	}
 

@@ -38,7 +38,35 @@ unreleased build from `main`.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+## First 5 minutes
+
+Choose an environment file and get to first signal in under a minute:
+
+```bash
+# Quickest possible path (no local env repo needed)
+orbit -c docs/examples/quickstart/dev.yaml up --infra
+orbit -c docs/examples/quickstart/dev.yaml status --json
+orbit -c docs/examples/quickstart/dev.yaml open
+```
+
+If you want the interactive setup wizard with your own workspace:
+
+```bash
 orbit init
+orbit up
+orbit status
+orbit open
+```
+
+First-time checks:
+
+```bash
+orbit status           # are services Healthy?
+orbit status --json     # machine-readable result for scripting
+orbit doctor --json     # dependency and env diagnostics
+orbit logs web -f       # stream a container log if something stalls
 ```
 
 On Windows PowerShell:

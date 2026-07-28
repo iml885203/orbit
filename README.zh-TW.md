@@ -35,7 +35,35 @@ build。
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+## 五分鐘上手
+
+直接用範例環境，驗證最短路徑：
+
+```bash
+# 最快起手（不需要事先有自己的 env repo）
+orbit -c docs/examples/quickstart/dev.yaml up --infra
+orbit -c docs/examples/quickstart/dev.yaml status --json
+orbit -c docs/examples/quickstart/dev.yaml open
+```
+
+如果你要使用互動初始化建立自己的 workspace：
+
+```bash
 orbit init
+orbit up
+orbit status
+orbit open
+```
+
+首次驗證：
+
+```bash
+orbit status           # service 狀態是否 Healthy
+orbit status --json     # 給自動化流程看的機器可讀輸出
+orbit doctor --json     # 依賴與環境診斷
+orbit logs web -f       # 若卡住先看 container log
 ```
 
 Windows PowerShell：
