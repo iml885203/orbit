@@ -33,7 +33,21 @@ func TestServiceHealthCheckTreatsStoppedAsIntentional(t *testing.T) {
 	if check.Status != CheckPass {
 		t.Fatalf("status = %q, want %q", check.Status, CheckPass)
 	}
-	if check.Message != "Daemon running; 1 healthy, 1 stopped" {
+	if check.Message != "1 healthy, 1 stopped" {
+		t.Fatalf("message = %q", check.Message)
+	}
+}
+
+func TestServiceHealthCheckPointsStoppedEnvironmentToUp(t *testing.T) {
+	check := serviceHealthCheck([]engine.ServiceInfo{
+		{Name: "cache", State: engine.StateStopped},
+		{Name: "worker", State: engine.StateStopped},
+	})
+
+	if check.Status != CheckPass || check.Hint != "run: orbit up" {
+		t.Fatalf("check = %+v", check)
+	}
+	if check.Message != "All stopped (0/2)" {
 		t.Fatalf("message = %q", check.Message)
 	}
 }

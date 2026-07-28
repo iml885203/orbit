@@ -71,6 +71,9 @@ func runDoctorWithOptions(options doctorOptions) error {
 			_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
 		}
 	}
+	if options.showDaemon && failure == nil && doctorReadyToStart(resp) {
+		fmt.Println("  Next: orbit up")
+	}
 	return failure
 }
 
@@ -168,7 +171,11 @@ func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
 	if daemonRunning {
 		daemonMessage = "running with the previous environment snapshot"
 	}
-	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage})
+	daemonCheck := daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage}
+	if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
+		daemonCheck.Hint = "run: orbit up"
+	}
+	checks = append(checks, daemonCheck)
 	// Feature-owned offline checks (the DB workflow) come from the
 	// extensions' CLIDoctor hooks; a nil cfg is reported by the Config
 	// fail check above, so features aren't asked to evaluate it.
@@ -236,6 +243,12 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 			}
 		}
 	}
+	if doctorReadyToStart(resp) {
+		return []cli.JSONAction{{
+			Command: "orbit up --json",
+			Reason:  "Start the selected environment.",
+		}}
+	}
 	actions := []cli.JSONAction{cli.StatusAction()}
 	if resp == nil {
 		return append(actions, cli.DoctorAction())
@@ -264,6 +277,22 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 		}
 	}
 	return actions
+}
+
+func doctorReadyToStart(resp *daemon.DoctorResponse) bool {
+	if resp == nil {
+		return false
+	}
+	ready := false
+	for _, check := range resp.Checks {
+		if check.Status == daemon.CheckFail {
+			return false
+		}
+		if check.Hint == "run: orbit up" {
+			ready = true
+		}
+	}
+	return ready
 }
 
 func addUpdateDoctorCheck(resp *daemon.DoctorResponse, version *daemon.VersionResponse) *daemon.DoctorResponse {

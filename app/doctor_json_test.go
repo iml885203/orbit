@@ -48,6 +48,39 @@ func TestDoctorRecommendedActionsAllPass(t *testing.T) {
 	}
 }
 
+func TestDoctorReadyEnvironmentPointsDirectlyToUp(t *testing.T) {
+	resp := &daemon.DoctorResponse{
+		Checks: []daemon.DoctorCheck{
+			{Name: "Docker", Status: daemon.CheckPass, Message: "ok"},
+			{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running", Hint: "run: orbit up"},
+		},
+	}
+	if !doctorReadyToStart(resp) {
+		t.Fatal("ready stopped environment was not recognized")
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit up --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
+func TestDoctorFailureDoesNotRecommendStarting(t *testing.T) {
+	resp := &daemon.DoctorResponse{
+		Checks: []daemon.DoctorCheck{
+			{Name: "Python", Status: daemon.CheckFail, Message: "not found"},
+			{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running", Hint: "run: orbit up"},
+		},
+	}
+	if doctorReadyToStart(resp) {
+		t.Fatal("failed prerequisites were treated as ready")
+	}
+	for _, action := range doctorRecommendedActions(resp) {
+		if action.Command == "orbit up --json" {
+			t.Fatalf("failed doctor recommended startup: %+v", action)
+		}
+	}
+}
+
 func TestDoctorRecommendedActionsRunnableHint(t *testing.T) {
 	resp := &daemon.DoctorResponse{
 		Checks: []daemon.DoctorCheck{

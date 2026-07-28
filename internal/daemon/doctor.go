@@ -545,9 +545,13 @@ func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 	if healthy == len(services) {
 		return DoctorCheck{Name: "Daemon", Status: CheckPass, Message: fmt.Sprintf("All healthy (%d/%d)", healthy, len(services))}
 	}
-	return DoctorCheck{
-		Name:    "Daemon",
-		Status:  CheckPass,
-		Message: fmt.Sprintf("Daemon running; %d healthy, %d stopped", healthy, stopped),
+	message := fmt.Sprintf("%d healthy, %d stopped", healthy, stopped)
+	if healthy == 0 && stopped == len(services) {
+		message = fmt.Sprintf("All stopped (0/%d)", len(services))
 	}
+	check := DoctorCheck{Name: "Daemon", Status: CheckPass, Message: message}
+	if healthy == 0 && stopped == len(services) {
+		check.Hint = "run: orbit up"
+	}
+	return check
 }
