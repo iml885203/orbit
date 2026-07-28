@@ -99,3 +99,28 @@ orbit -c docs/examples/mini-shop/dev.yaml down
 - [ ] 重置後可快速回到可 demo 狀態。
 
 不通過的項目，直接在 release note 記成「修正項」並回到對應卡片優先改善。
+
+## 7) 1.0 前 release 交付前固定 smoke（可選）
+
+固定每次打磨/Release 前先執行（mini 參照）：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-p1.sh mini
+```
+
+可選擇一起跑進階觀測版：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-p1.sh all
+```
+
+`all` 會先跑 mini，完成後關閉 mini-group，接著跑 advanced，避免同端口衝突。
+
+執行結果會落在：
+
+- `/tmp/mini-shop-smoke-reports/mini-summary.json`
+- `/tmp/mini-shop-smoke-reports/advanced-summary.json`（若用 `all`）
+- `/tmp/mini-shop-smoke-reports/all-summary.json`
+- 對應日誌：`/tmp/mini-shop-smoke-reports/*`
+
+如果 JSON 報告的 `suite_passed` 為 `false`，請先修完再發版。  

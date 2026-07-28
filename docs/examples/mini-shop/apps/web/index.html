@@ -245,6 +245,30 @@
         display: grid;
         gap: 6px;
       }
+      .observability-grid {
+        display: grid;
+        gap: 8px;
+      }
+      .observability-row {
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #0b1328;
+      }
+      .observability-events {
+        display: grid;
+        gap: 6px;
+        max-height: 160px;
+        overflow: auto;
+      }
+      .observability-event {
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #0b1328;
+      }
+      .observability-event .mono {
+        color: #94a3b8;
+        font-size: 12px;
+      }
       .operation-log { display: grid; gap: 8px; max-height: 250px; overflow: auto; }
       .operation-item { padding: 8px; border-radius: 8px; background: #0b1328; border-left: 4px solid #60a5fa; }
       .operation-item.ok { border-left-color: #34d399; }
@@ -260,6 +284,36 @@
       .service-status-ok { color: #86efac; }
       .service-status-warn { color: #fbbf24; }
       .service-status-bad { color: #fb7185; }
+      .coach-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+      .coach-item {
+        display: grid;
+        gap: 4px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: #0b1328;
+      }
+      .coach-item .label {
+        color: #cbd5e1;
+      }
+      .coach-item.done .label {
+        color: #86efac;
+      }
+      .coach-item.current .label {
+        color: #93c5fd;
+      }
+      .coach-item .hint-text {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+      .coach-item.done .hint-text {
+        color: #a7f3d0;
+      }
 
       .panel-attention {
         position: relative;
@@ -326,12 +380,36 @@
       </div>
     </div>
 
+    <div id="beginner-guide-card" class="card">
+      <h3>第一次 60 秒導覽</h3>
+      <p class="hint">你只要照著這 3 步走完，就能看到一筆「下單＋出貨」成立結果。</p>
+      <div id="beginner-guide-state" class="goal-state hint">計算中...</div>
+      <ul id="beginner-guide-steps" class="coach-list">
+        <li id="beginner-guide-step-1" class="coach-item">
+          <div class="label">1) 服務就緒</div>
+          <div class="hint-text">等待所有後端服務為就緒。</div>
+        </li>
+        <li id="beginner-guide-step-2" class="coach-item">
+          <div class="label">2) 加入購物車</div>
+          <div class="hint-text">選客戶並加入 1 件商品。</div>
+        </li>
+        <li id="beginner-guide-step-3" class="coach-item">
+          <div class="label">3) 完成關聯</div>
+          <div class="hint-text">用 mock_card checkout，確認訂單與出貨關聯。</div>
+        </li>
+      </ul>
+      <div class="row">
+        <button id="beginner-guide-cta" class="small-btn inline-btn">前往目前下一步</button>
+      </div>
+    </div>
+
     <div id="single-action-panel" class="card">
       <h3>現在只要做一件事</h3>
       <div id="single-action-text" class="single-action-text goal-state">系統初始化中...</div>
       <div class="single-action-area">
         <button id="single-action-btn" class="small-btn inline-btn" disabled>等待建議</button>
         <button id="single-action-copy" class="small-btn inline-btn" hidden>複製下一步命令</button>
+        <button id="quick-fix-error" class="small-btn inline-btn primary-action" hidden>一鍵修復最近錯誤</button>
         <div id="single-action-feedback" class="copy-feedback"></div>
       </div>
     </div>
@@ -355,7 +433,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card advanced-only">
       <h3>故障演練（1/2 分鐘）</h3>
       <p class="hint">這是給「真的會壞掉」的情境設計：先建立成功 baseline，再停止一個 service，接著照步驟恢復。</p>
       <ol class="step-list">
@@ -425,7 +503,18 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="session-metrics" class="session-metrics-grid"></div>
     </div>
 
-    <div class="card">
+    <div id="observability-card" class="card advanced-only">
+      <h3>關聯觀測洞察（單頁就懂）</h3>
+      <p class="hint">不看 Log，只看關聯結果：哪些訂單已關聯出貨、最近 10 筆事件是否正常。</p>
+      <div id="observability-summary" class="observability-grid">
+        <div class="observability-row">尚未載入觀測資料</div>
+      </div>
+      <div id="observability-events" class="observability-events">
+        <div class="hint">尚未載入事件</div>
+      </div>
+    </div>
+
+    <div class="card advanced-only">
       <h3>當前可驗證結果</h3>
       <div id="proof-summary" class="evidence-grid"></div>
     </div>
@@ -454,7 +543,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="flow-map" class="flow-map">載入服務中...</div>
     </div>
 
-    <div class="card">
+    <div class="card advanced-only">
       <h3>下一步（照著做）</h3>
       <ul id="next-steps" class="hint step-list">
         <li>等待服務就緒</li>
@@ -519,7 +608,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </ol>
     </div>
 
-    <div class="card">
+    <div id="error-playbook-card" class="card advanced-only">
     <h3>故障情境對照卡（先照表走）</h3>
       <p class="hint">一看到錯誤碼就對到這張卡：它會告訴你下一步該做什麼。</p>
       <div id="error-playbook" class="error-playbook"></div>
@@ -595,7 +684,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
         <div id="run-result" class="hint">尚未執行</div>
       </div>
 
-    <div class="card">
+    <div id="service-relationship-card" class="card advanced-only">
       <h3>服務關係（你可不用記）</h3>
       <div class="hint">從資料流向來看：</div>
       <pre class="mono">
@@ -628,6 +717,7 @@ web
       const checkoutApi = '{{CHECKOUT_API_URL}}';
       const shippingApi = '{{SHIPPING_API_URL}}';
       const paymentApi = '{{PAYMENT_API_URL}}';
+      const observabilityApi = '{{OBSERVABILITY_API_URL}}'.startsWith('{{') ? '' : '{{OBSERVABILITY_API_URL}}';
 
       const actionNotice = document.getElementById('action-notice');
       const status = document.getElementById('status');
@@ -692,20 +782,25 @@ web
       const runResultEl = document.getElementById('run-result');
       const flowMapEl = document.getElementById('flow-map');
       const operationLogEl = document.getElementById('operation-log');
+      const observabilitySummaryEl = document.getElementById('observability-summary');
+      const observabilityEventsEl = document.getElementById('observability-events');
       const singleActionTextEl = document.getElementById('single-action-text');
       const singleActionBtn = document.getElementById('single-action-btn');
       const singleActionCopyBtn = document.getElementById('single-action-copy');
       const singleActionFeedbackEl = document.getElementById('single-action-feedback');
+      const quickFixErrorBtn = document.getElementById('quick-fix-error');
+      const beginnerGuideCard = document.getElementById('beginner-guide-card');
+      const beginnerGuideState = document.getElementById('beginner-guide-state');
+      const beginnerGuideStepEls = {
+        1: document.getElementById('beginner-guide-step-1'),
+        2: document.getElementById('beginner-guide-step-2'),
+        3: document.getElementById('beginner-guide-step-3'),
+      };
+      const beginnerGuideCta = document.getElementById('beginner-guide-cta');
       const modeBeginnerBtn = document.getElementById('mode-beginner');
       const modeAdvancedBtn = document.getElementById('mode-advanced');
       const modeHelpEl = document.getElementById('mode-help');
       const sessionMetricsEl = document.getElementById('session-metrics');
-      const advancedModePanelSelectors = [
-        '#flow-map-card',
-        '#diagnostic-panel',
-        '#operation-log-card',
-      ];
-      let errorPlaybookCard = null;
       const BACKEND_SERVICE_COUNT = 8;
       const SERVICE_COUNT = BACKEND_SERVICE_COUNT;
       const TOTAL_RESOURCE_COUNT = 9;
@@ -714,6 +809,7 @@ web
       let latestOrdersPayload = null;
       let latestShipmentsPayload = null;
       let latestCheckoutPayload = null;
+      let latestFailureErrorCode = '';
       let latestServiceMap = null;
       let lastAutoFocusedErrorCode = '';
       const operationLog = [];
@@ -742,7 +838,6 @@ web
       const singleActionDefaultText = '依目前情況，先照「下一步（照著做）」逐步前進。';
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
-      errorPlaybookCard = errorPlaybookEl?.parentElement || null;
       const panelAttentionTimers = new Map();
       const goalPanelFocusMap = {
         1: ['#service-overview-panel', '#flow-overview-panel'],
@@ -782,6 +877,7 @@ web
         cart_unreachable: '[data-timeline-step="1"]',
         customer_unreachable: '[data-timeline-step="1"]',
       };
+
       const scenarioScripts = {
         success: `#!/usr/bin/env bash
 set -e
@@ -1159,6 +1255,25 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         }
         singleActionBtn.disabled = !normalized;
         singleActionBtn.hidden = false;
+
+        renderQuickFixAction();
+      }
+
+      function renderQuickFixAction() {
+        if (!quickFixErrorBtn) {
+          return;
+        }
+        const hasFailure = Boolean(latestFailureErrorCode);
+        quickFixErrorBtn.disabled = !hasFailure;
+        quickFixErrorBtn.hidden = false;
+        quickFixErrorBtn.textContent = hasFailure ? '一鍵修復最近錯誤' : '先完成一次錯誤場景';
+        if (hasFailure) {
+          quickFixErrorBtn.dataset.quickFixCode = latestFailureErrorCode;
+          quickFixErrorBtn.title = `根據 ${latestFailureErrorCode} 自動帶出修復建議`;
+        } else {
+          quickFixErrorBtn.dataset.quickFixCode = '';
+          quickFixErrorBtn.title = '請先執行一次失敗場景，系統才會提供修復建議';
+        }
       }
 
       function setUiMode(mode) {
@@ -1185,29 +1300,29 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             : '進階模式：保留相同主流程，但會顯示更多診斷與錯誤導向。';
         }
 
-        advancedModePanelSelectors.forEach((selector) => {
-          const panel = document.querySelector(selector);
-          if (!panel) {
-            return;
-          }
-          if (mode === 'beginner') {
-            panel.classList.add('hidden');
-          } else {
-            panel.classList.remove('hidden');
-          }
-        });
-
-        if (errorPlaybookCard) {
-          if (mode === 'beginner') {
-            errorPlaybookCard.classList.add('hidden');
-          } else {
-            errorPlaybookCard.classList.remove('hidden');
-          }
+      document.querySelectorAll('.advanced-only').forEach((panel) => {
+        if (!panel) {
+          return;
         }
-
-        if (mode === 'advanced' && runResultState?.kind !== 'error') {
-          renderErrorPlaybook(fallbackPattern.code);
+        if (mode === 'beginner') {
+          panel.classList.add('hidden');
+        } else {
+          panel.classList.remove('hidden');
         }
+      });
+
+      if (beginnerGuideCard) {
+        if (mode === 'advanced') {
+          beginnerGuideCard.classList.add('hidden');
+        } else {
+          beginnerGuideCard.classList.remove('hidden');
+        }
+      }
+
+      if (mode === 'advanced' && runResultState?.kind !== 'error') {
+        renderErrorPlaybook(fallbackPattern.code);
+      }
+
       }
 
       async function runSingleAction() {
@@ -1227,6 +1342,29 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         } catch (_error) {
           appendSummary('建議動作執行失敗，請先手動依提示處理。');
         }
+      }
+
+      async function runLatestFailureRecovery() {
+        const code = normalizeErrorCode(latestFailureErrorCode);
+        if (!code) {
+          setNotice('目前沒有可自動修復的失敗碼，先按你遇到的錯誤建立一次錯誤紀錄。', 'warn');
+          appendSummary('尚未有可自動修復錯誤，請先重現一次失敗情境。');
+          renderQuickFixAction();
+          return;
+        }
+        const actions = recoveryActionsForErrorCard(code, errorHintServiceFromCode(code));
+        const primary = actions.find((item) => item.primary) || actions[0];
+        if (!primary) {
+          setNotice('這個錯誤目前沒有可用修復按鈕，請先打開「故障情境對照卡」。', 'warn');
+          appendSummary(`缺少 ${code} 對應修復動作。`);
+          return;
+        }
+        appendSummary(`執行自動修復：${primary.label}（${code}）`);
+        await executeErrorGuidanceAction({
+          type: primary.type,
+          payload: primary.payload,
+          label: primary.label,
+        });
       }
 
       function operationRecoveryActions(errorCode, service, action) {
@@ -1839,8 +1977,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         `;
       }
 
-      function updateGoalState(state) {
+      function updateGoalState(state, context = null) {
         const snapshot = state || { step: 1, text: '尚未開始', action: '重新整理' };
+        const guideContext = context || {};
         if (goalCurrentText) {
           goalCurrentText.textContent = snapshot.text;
         }
@@ -1877,6 +2016,15 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           5: { label: '核對結果', type: 'focus', payload: '#flow-timeline-panel' },
         };
         setSingleAction(snapshot.text, stepActionMap[snapshot.step] || stepActionMap[1]);
+        setBeginnerGuide({
+          allReady: guideContext.allReady,
+          customerSelected: guideContext.customerSelected,
+          cartReady: guideContext.cartReady,
+          hasSuccessfulOrder: guideContext.hasSuccessfulOrder,
+          hasOrderRelation: guideContext.hasOrderRelation,
+          hasOrderShipmentRelation: guideContext.hasOrderShipmentRelation,
+          highlight: uiMode === 'beginner',
+        });
       }
 
       function hasLatestSuccessfulOrder() {
@@ -2040,6 +2188,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       function captureCheckoutPayload(payload, context = null) {
         if (!payload) {
           latestCheckoutPayload = { code: 'unknown', message: `${context || 'checkout'}：未回傳 payload` };
+          if (context) {
+            latestFailureErrorCode = 'unknown';
+            renderQuickFixAction();
+          }
           return;
         }
         latestCheckoutPayload = {
@@ -2385,7 +2537,19 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         setFlowState(allReady, customerSelected, cartReady);
         const hasSuccessfulOrder = hasLatestSuccessfulOrder();
         const goalState = computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder);
-        updateGoalState(goalState);
+        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const latestOrderShipment = latestOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+        const hasOrderRelation = Boolean(latestOrder && latestOrder.status === 'confirmed' && latestOrderShipment && latestOrderShipment.order_id === latestOrder.id);
+        updateGoalState(goalState, {
+          allReady,
+          customerSelected,
+          cartReady,
+          hasSuccessfulOrder,
+          hasOrderRelation,
+          hasOrderShipmentRelation: hasOrderRelation,
+        });
         setGoalSummary(allReady, customerSelected, cartReady, hasSuccessfulOrder);
         setNotice(
           allReady
@@ -2638,6 +2802,75 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         return payload;
       }
 
+      async function loadObservabilityInsights() {
+        if (!observabilitySummaryEl || !observabilityEventsEl) {
+          return null;
+        }
+        if (!observabilityApi) {
+          observabilitySummaryEl.innerHTML = '<div class="observability-row">觀測 API 未設定（僅 mini-shop-advanced）</div>';
+          observabilityEventsEl.innerHTML = '<div class="hint">切到進階模式並啟動 mini-shop-advanced 會顯示關聯事件。</div>';
+          return null;
+        }
+
+        try {
+          const payload = await safeFetch(`${observabilityApi}/insights`, {}, {
+            visible: false,
+            action: 'load observability insights',
+          });
+          renderObservabilitySummary(payload);
+          return payload;
+        } catch (_error) {
+          observabilitySummaryEl.innerHTML = '<div class="observability-row">觀測服務尚未就緒</div>';
+          observabilityEventsEl.innerHTML = '<div class="hint">先補齊 observability-api 或確認服務起來了。</div>';
+          return null;
+        }
+      }
+
+      function renderObservabilitySummary(payload) {
+        if (!observabilitySummaryEl || !observabilityEventsEl) {
+          return;
+        }
+        if (!payload) {
+          observabilitySummaryEl.innerHTML = '<div class="observability-row">尚未有觀測資料</div>';
+          observabilityEventsEl.innerHTML = '<div class="hint">尚未有可顯示事件</div>';
+          return;
+        }
+
+        const totals = payload.totals || {};
+        const correlation = payload.correlation || {};
+        const matched = Number(correlation.matched_orders || 0);
+        const requestId = payload.request_id || '';
+
+        const ratioText = correlation.correlation_ratio != null
+          ? `${(Number(correlation.correlation_ratio) * 100).toFixed(0)}%`
+          : 'n/a';
+        const latestOrder = payload.latest_order || null;
+        const latestShipment = payload.latest_shipment || null;
+
+        observabilitySummaryEl.innerHTML = `
+          <div class="observability-row">
+            <span class="label">觀測 API：</span>${payload.service || 'observability-api'}（${payload.status || 'unknown'}）
+            ${payload.status === 'ok' ? '✅' : '◯'}
+          </div>
+          <div class="observability-row">總訂單：${totals.orders || 0}，已關聯：${matched}，匹配率：${ratioText}</div>
+          <div class="observability-row">request_id：${requestId} / refresh：${payload.refresh_interval_seconds || 'n/a'}s</div>
+          <div class="observability-row">最新訂單：${latestOrder ? `#${latestOrder.id}` : '尚未建立'}</div>
+          <div class="observability-row">最新出貨：${latestShipment ? `#${latestShipment.id}` : '尚未建立'}</div>
+        `;
+
+        const events = payload.events || [];
+        if (!events.length) {
+          observabilityEventsEl.innerHTML = '<div class="hint">尚未有關聯事件</div>';
+          return;
+        }
+        observabilityEventsEl.innerHTML = events
+          .map((event) => {
+            const statusText = event.status === 'ok' ? '✅' : '◯';
+            return `<div class="observability-event"><div><span class="label">${statusText} ${event.type}</span>｜訂單 #${event.order_id || '-'}｜Shipment #${event.shipment_id || '-'}</div><div class="mono">tracking ${event.tracking_no || '-'} | ts ${event.timestamp || '-'}</div></div>`;
+          })
+          .join('');
+      }
+
       function formatStatusBadge(status) {
         if (status === 'confirmed') return '✅';
         if (status === 'pending') return '🚚';
@@ -2746,6 +2979,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (!order) {
           setRunResult('warn', '尚未完成 checkout', ['目前還沒有交易可摘要']);
           renderErrorPlaybook(fallbackPattern.code);
+          latestFailureErrorCode = '';
+          renderQuickFixAction();
           return;
         }
 
@@ -2757,8 +2992,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         ];
 
         if (order.status === 'confirmed') {
+          latestFailureErrorCode = '';
           setRunResult('ok', `✅ Checkout 成功：訂單 ${order.id}`, lines);
         } else if (order.status === 'failed' || order.status === 'cancelled') {
+          latestFailureErrorCode = order.code || latestCheckoutPayload?.code || 'checkout_failed';
           setRunResult('error', `❌ Checkout 結果：訂單 ${order.id}（已失敗）`, lines);
           const orderCode = latestCheckoutPayload?.code || 'checkout_failed';
           renderErrorPlaybook(normalizeErrorCode(orderCode));
@@ -2775,11 +3012,15 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         ];
         const parsed = payload || latestCheckoutPayload;
         const code = parsed?.code;
+        if (code) {
+          latestFailureErrorCode = code;
+        }
         const normalizedCode = normalizeErrorCode(code);
         const hints = recoveryHintsForErrorCode(code);
         lines.push(...hints);
         renderErrorPlaybook(normalizedCode);
         setRunResult('error', '❌ 操作失敗', lines);
+        renderQuickFixAction();
       }
 
       async function loadInventory() {
@@ -2806,6 +3047,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           await loadProducts();
           await loadCustomers();
           const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments()]);
+          await loadObservabilityInsights();
           await Promise.all([loadCart(), loadInventory()]);
           refreshTransactionViews(ordersPayload, shipmentsPayload);
           appendSummary('已完成頁面刷新，服務與資料已同步。');
@@ -3268,6 +3510,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
         const acceptanceActionButton = event.target.closest('[data-checklist-action]');
         const errorQuickActionButton = event.target.closest('[data-error-quick-action]');
+        const beginnerGuideCta = event.target.closest('#beginner-guide-cta');
         const errorCopyCommandButton = event.target.closest('[data-error-copy-cmd]');
         const errorQtyButton = event.target.closest('[data-error-qty]');
         const errorPaymentButton = event.target.closest('[data-error-payment]');
@@ -3275,6 +3518,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const oneShotButton = event.target.closest('[data-error-one-shot]');
         const operationFocusButton = event.target.closest('[data-operation-focus]');
         const errorFocusButton = event.target.closest('[data-error-focus]');
+        const quickFixErrorButton = event.target.closest('#quick-fix-error');
 
         if (operationRunCheckoutButton) {
           const method = operationRunCheckoutButton.dataset.operationRunCheckout || 'mock_card';
@@ -3286,6 +3530,23 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           const payload = acceptanceActionButton.dataset.checklistPayload || '';
           await executeErrorGuidanceAction({ type, payload });
           appendSummary(`已執行清單建議：${acceptanceActionButton.textContent.trim()}`);
+          return;
+        }
+        if (beginnerGuideCta) {
+          if (!beginnerGuideCta.dataset.singleActionType) {
+            if (beginnerGuideState) {
+              beginnerGuideState.textContent = '你可以直接點「新手模式」裡的下一步按鈕。';
+            }
+            return;
+          }
+          const type = beginnerGuideCta.dataset.singleActionType;
+          const payload = beginnerGuideCta.dataset.singleActionPayload || '';
+          await executeErrorGuidanceAction({
+            type,
+            payload,
+            label: beginnerGuideCta.textContent || '前往下一步',
+          });
+          appendSummary(`已執行一次新手導覽建議：${beginnerGuideCta.textContent.trim()}`);
           return;
         }
         if (oneShotButton) {
@@ -3435,6 +3696,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           }
           return;
         }
+        if (quickFixErrorButton) {
+          await runLatestFailureRecovery();
+          return;
+        }
         if (!copyButton) {
           return;
         }
@@ -3493,6 +3758,125 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             setCopyFeedback('一鍵 demo 檢核未完成，請先讓服務與資料回復可用');
           }
         });
+      }
+
+      function mapStepToGuideState(allReady, customerSelected, cartReady, hasSuccessfulOrder, hasOrderRelation) {
+        if (!allReady) {
+          return {
+            current: 1,
+            state: '服務還沒就緒，先等後端 8/8 都綠。',
+            cta: { label: '重新整理服務狀態', type: 'copy-cmd', payload: 'orbit -c docs/examples/mini-shop/dev.yaml status --json' },
+            focus: '#service-overview-panel',
+          };
+        }
+        if (!customerSelected) {
+          return {
+            current: 2,
+            state: '先選擇一位客戶。',
+            cta: { label: '前往客戶卡片', type: 'focus', payload: '#customer-panel' },
+            focus: '#customer-panel',
+          };
+        }
+        if (!cartReady) {
+          return {
+            current: 3,
+            state: '先幫客戶加 1 件商品到購物車。',
+            cta: { label: '前往商品卡片', type: 'focus', payload: '#product-panel' },
+            focus: '#product-panel',
+          };
+        }
+        if (!hasSuccessfulOrder) {
+          return {
+            current: 3,
+            state: '已接近完成：用 mock_card 執行 checkout。',
+            cta: { label: '前往 checkout', type: 'focus', payload: '#checkout-panel' },
+            focus: '#checkout-panel',
+          };
+        }
+        if (!hasOrderRelation) {
+          return {
+            current: 3,
+            state: '流程已完成訂單，請確認有對應出貨。',
+            cta: { label: '前往關聯結果', type: 'focus', payload: '#relation-check' },
+            focus: '#relation-check-card',
+          };
+        }
+        return {
+          current: 0,
+          state: '完成！你已可對外 demo：下單與關聯都完成。',
+          cta: { label: '重做一次流程', type: 'focus', payload: '#goal-replay' },
+          focus: '#goal-replay',
+        };
+      }
+
+      function setBeginnerGuide(map) {
+        if (!beginnerGuideCard || !beginnerGuideState) {
+          return;
+        }
+        const allReady = map?.allReady || false;
+        const customerSelected = map?.customerSelected || false;
+        const cartReady = map?.cartReady || false;
+        const hasSuccessfulOrder = map?.hasSuccessfulOrder || false;
+        const hasOrderRelation = map?.hasOrderRelation || false;
+        const payload = mapStepToGuideState(allReady, customerSelected, cartReady, hasSuccessfulOrder, hasOrderRelation);
+        const currentStep = Number.isFinite(payload.current) ? payload.current : 0;
+
+        Object.values(beginnerGuideStepEls).forEach((el, index) => {
+          if (!el) {
+            return;
+          }
+          if (currentStep === 0 || currentStep > index + 1) {
+            el.classList.remove('current');
+            el.classList.add('done');
+          } else {
+            el.classList.remove('done');
+            el.classList.toggle('current', currentStep === index + 1);
+          }
+        });
+
+        if (currentStep === 0) {
+          if (beginnerGuideStepEls[1]) {
+            beginnerGuideStepEls[1].classList.remove('current');
+            beginnerGuideStepEls[1].classList.add('done');
+          }
+          if (beginnerGuideStepEls[2]) {
+            beginnerGuideStepEls[2].classList.remove('current');
+            beginnerGuideStepEls[2].classList.add('done');
+          }
+          if (beginnerGuideStepEls[3]) {
+            beginnerGuideStepEls[3].classList.remove('current');
+            beginnerGuideStepEls[3].classList.add('done');
+          }
+        } else {
+          [1, 2, 3].forEach((idx) => {
+            const el = beginnerGuideStepEls[idx];
+            if (!el) {
+              return;
+            }
+            if (idx < currentStep) {
+              el.classList.remove('current');
+              el.classList.add('done');
+            } else if (idx === currentStep) {
+              el.classList.remove('done');
+              el.classList.add('current');
+            } else {
+              el.classList.remove('done');
+              el.classList.remove('current');
+            }
+          });
+        }
+
+        beginnerGuideState.textContent = payload.state;
+        if (beginnerGuideCta) {
+          beginnerGuideCta.textContent = payload.cta.label || '下一步';
+          beginnerGuideCta.dataset.singleActionType = payload.cta.type || 'focus';
+          beginnerGuideCta.dataset.singleActionPayload = payload.cta.payload || '#goal-overview';
+          beginnerGuideCta.hidden = false;
+        }
+
+        if (map?.highlight && payload.focus) {
+          setPanelAttention(payload.focus, 1600, false);
+        }
       }
 
       refreshProductBtn.addEventListener('click', loadProducts);
@@ -3644,6 +4028,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       async function resetFlow() {
         disableActionButtons(true);
         appendSummary('開始重置流程：回到可重複執行的起點。');
+        latestFailureErrorCode = '';
         try {
           if (customerEl.options.length > 0) {
             customerEl.selectedIndex = 0;
@@ -3675,6 +4060,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           appendSummary('重置流程失敗');
         } finally {
           disableActionButtons(false);
+          renderQuickFixAction();
         }
       }
 
@@ -3690,6 +4076,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       }
 
       setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${TOTAL_RESOURCE_COUNT} 個資源就緒（含 web）`]);
+      latestFailureErrorCode = '';
+      renderQuickFixAction();
       resetSessionMetrics();
       renderErrorPlaybook(fallbackPattern.code);
       setUiMode(uiMode);
@@ -3701,6 +4089,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             loadShipments(),
             checkAll(),
             loadInventory(),
+            loadObservabilityInsights(),
           ]);
           if (!scenarioRunning) {
             refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);

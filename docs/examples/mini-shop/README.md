@@ -23,6 +23,7 @@
   - `payment-api`（模擬付款）
   - `shipping-api`（模擬出貨，建立 tracking）
   - `checkout-api`（Checkout orchestration：cart->reserve->pay->order->shipment）
+  - `observability-api`（進階模式）：彙整訂單 / 出貨關聯，提供最近事件快照
   - `web`（前端）
 
 ## 快速啟動
@@ -34,6 +35,13 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 ```
 
 > 預設會啟動 9 個 resource：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
+
+
+進階版本（加入觀測服務）可改用：
+
+```bash
+orbit -c docs/examples/mini-shop/dev-advanced.yaml up -g mini-shop-advanced
+```
 
 ```bash
 orbit -c docs/examples/mini-shop/dev.yaml status
@@ -77,6 +85,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 成功後在「訂單」「出貨」區看到同一筆交易的對應資料。
 - 在「關聯流程時間軸」看到同一次 checkout 的關鍵節點，失敗時可直接看到失敗發生在哪一段（例如付款失敗）。
 - 在「關聯完整性快檢查」可直接判斷最近 checkout 是否已建立關聯出貨，不用再手動比對。
+- 在進階模式可看「關聯觀測洞察」卡片：一次看到近 10 筆「訂單→出貨」事件是否關聯成功。
 - 在「流程依賴速覽」看見上游與下游服務即時狀態，先知道該先補哪個 service。
 
 ### 用戶心理模型設計（不需要背 service）
@@ -170,6 +179,12 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 bash docs/examples/mini-shop/scripts/smoke-demo.sh
 ```
 
+發佈前固定用 1.0 前 smoke，可同時驗收 readiness 與三種情境，並輸出可讀報告：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-p1.sh all
+```
+
 只驗證成功流程可改 `success`：
 
 ```bash
@@ -254,6 +269,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 3. 回到頁面跑一次「一鍵 demo 一輪」或「失敗情境」，看故障卡是否變成可修復狀態。
 
 更完整的 demo 方向決策請看：[DEMO-STRATEGY.md](./DEMO-STRATEGY.md)。
+如要對比外部案例（例如 `dotnet/eshop`、`microservices-demo`、`example-voting-app`）並快速決定
+哪些值得 1.0 前採納，請參考：[DEMO-REFERENCE-MATRIX.md](./DEMO-REFERENCE-MATRIX.md)。
+如果你想先對齊「為什麼要保留這種複雜度」的設計原則，請閱讀：[DEMO-VALUE-PROPOSITION.md](./DEMO-VALUE-PROPOSITION.md)。
 
 ### 最短重現路徑
 
@@ -309,10 +327,35 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 6. 若只想快速重播一次成功 path，按「一鍵完成成功流程」或「重做一次成功流程」。
 7. 需要回報時可直接點「複製 demo 報告」，一次拿到可貼給同事的「服務/交易/關聯」狀態摘要。
 8. 做完故障演練後，可再按「複製故障回歸報告」，直接把基線耗時、回歸耗時與三格可 demo 狀態一起貼給團隊。
+9. 遇到失敗時，先按「現在只要做一件事」裡的「一鍵修復最近錯誤」，系統會依最近錯誤碼套用建議動作。
 
+
+
+### 進階版（觀察交易關聯）
+
+如果你想驗證「進階觀測值」是否正常，可以在 mini-shop-advanced 下加一段：
+
+```bash
+orbit -c docs/examples/mini-shop/dev-advanced.yaml up -g mini-shop-advanced
+orbit -c docs/examples/mini-shop/dev-advanced.yaml logs observability-api -f
+```
+
+再呼叫：
+
+```bash
+curl http://127.0.0.1:3010/health
+curl http://127.0.0.1:3010/insights
+curl http://127.0.0.1:3010/events
+```
+
+當完成一筆成功 checkout 後，`/insights` 的 `correlation_ratio` 會接近 `1.0`，可直接讓觀察者看到「訂單與出貨關聯」的可觀測結果。
 ### 1.0 前可交付快速檢核（建議每次 release 前）
 
 - [ ] 服務全數就緒（`checkout-api` 及 `web` 相關依賴 8/8 ready）
+
+### 近期釋出摘要（內部 review 用）
+
+- 本次可交付差異請直接看：[`RELEASE-0.5.37.md`](./RELEASE-0.5.37.md)
 - [ ] 至少完成一筆 `mock_card` 成功 checkout
 - [ ] 訂單有對應出貨，且前端顯示「關聯完整性快檢查」為綠色
 - [ ] 「故障情境對照卡」能在情境 B / C 下提供可執行建議（可複製命令或一鍵動作）

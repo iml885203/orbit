@@ -11,6 +11,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     checkout_api = os.environ.get("CHECKOUT_API_URL", "http://127.0.0.1:3006")
     payment_api = os.environ.get("PAYMENT_API_URL", "http://127.0.0.1:3007")
     shipping_api = os.environ.get("SHIPPING_API_URL", "http://127.0.0.1:3008")
+    observability_api = os.environ.get("OBSERVABILITY_API_URL", "http://127.0.0.1:3010")
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
@@ -30,6 +31,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "{{CHECKOUT_API_URL}}", self.checkout_api
         ).replace("{{PAYMENT_API_URL}}", self.payment_api).replace(
             "{{SHIPPING_API_URL}}", self.shipping_api
+        ).replace(
+            "{{OBSERVABILITY_API_URL}}", self.observability_api
         )
         body = rendered.encode("utf-8")
         self.send_response(200)
