@@ -188,8 +188,11 @@ type e2eCLIEnvelope struct {
 	Data               json.RawMessage  `json:"data"`
 	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
 	Error              *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
+		Code        string `json:"code"`
+		Message     string `json:"message"`
+		Hint        string `json:"hint,omitempty"`
+		Retryable   bool   `json:"retryable"`
+		NextCommand string `json:"next_command,omitempty"`
 	} `json:"error,omitempty"`
 }
 
@@ -333,6 +336,60 @@ func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 	}
 	if services := env.status(t).Services; len(services) != 0 {
 		t.Fatalf("new environment services = %+v, want none", services)
+	}
+}
+
+func TestE2E_SwitchRejectsInvalidTargetBeforeStoppingCurrentEnvironment(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	env.run(t, "up", "redis")
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	invalidEnv := filepath.Join(env.home, "envs", "invalid.yaml")
+	if err := os.WriteFile(invalidEnv, []byte("version: \"2\"\nservices:\n  broken: [\n"), 0o644); err != nil {
+		t.Fatalf("write invalid env: %v", err)
+	}
+
+	output, err := env.runNoFail(t, "switch", invalidEnv)
+	if err == nil {
+		t.Fatalf("invalid switch succeeded:\n%s", output)
+	}
+	for _, evidence := range []string{"validate target environment invalid.yaml", "invalid.yaml"} {
+		if !strings.Contains(output, evidence) {
+			t.Fatalf("switch error missing %q:\n%s", evidence, output)
+		}
+	}
+
+	jsonOutput, err := env.runNoFail(t, "switch", invalidEnv, "--json")
+	if err == nil {
+		t.Fatalf("invalid JSON switch succeeded:\n%s", jsonOutput)
+	}
+	envelope := parseE2EEnvelope(t, jsonOutput)
+	if envelope.OK || envelope.Error == nil {
+		t.Fatalf("invalid switch envelope = %+v", envelope)
+	}
+	if envelope.Error.Code != "invalid_environment" || !strings.Contains(envelope.Error.Hint, "Fix the reported environment file") {
+		t.Fatalf("JSON switch error = %+v", envelope.Error)
+	}
+	if !strings.Contains(envelope.Error.Message, "validate target environment invalid.yaml") {
+		t.Fatalf("JSON switch error = %+v", envelope.Error)
+	}
+	expectedRetry := "orbit switch " + invalidEnv + " --json"
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != expectedRetry {
+		t.Fatalf("recommended actions = %+v", envelope.RecommendedActions)
+	}
+
+	redisName := "orbit-" + env.namespace + "-redis"
+	if !containerRunning(t, redisName) {
+		t.Fatalf("%s stopped after the target environment was rejected", redisName)
+	}
+	if state := env.serviceState(t, "redis"); state != "healthy" {
+		t.Fatalf("current redis state = %s after rejected switch, want healthy", state)
+	}
+	if current := strings.TrimSpace(env.run(t, "env", "current")); current != env.envYaml {
+		t.Fatalf("current environment = %q after rejected switch, want %q", current, env.envYaml)
 	}
 }
 

@@ -209,6 +209,17 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	prerequisites, prerequisitesReady, err := switchPrerequisites(abs)
+	if err != nil {
+		validationErr := cli.NewInvalidEnvironmentError(
+			fmt.Sprintf("validate target environment %s: %v", filepath.Base(abs), err),
+		)
+		return cli.WithJSONActions(validationErr, []cli.JSONAction{{
+			Command:     commandString(),
+			Reason:      "Retry the switch after fixing the reported environment file.",
+			Destructive: false,
+		}})
+	}
 
 	pidBefore, alive := daemon.IsDaemonRunning()
 	daemonAction := "start"
@@ -241,10 +252,6 @@ func runSwitch(_ *cobra.Command, args []string) error {
 		fmt.Println("→ daemon restart")
 	}
 	if err := ensureDaemonStarted(abs); err != nil {
-		return err
-	}
-	prerequisites, prerequisitesReady, err := switchPrerequisites(abs)
-	if err != nil {
 		return err
 	}
 	if cli.JSONOutput {

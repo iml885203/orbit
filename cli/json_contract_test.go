@@ -93,6 +93,32 @@ func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesInvalidEnvironmentWithExactRetry(t *testing.T) {
+	var buf bytes.Buffer
+	retry := `orbit switch "/tmp/broken env.yaml" --json`
+	err := WithJSONActions(
+		NewInvalidEnvironmentError("validate target environment: invalid YAML"),
+		[]JSONAction{{
+			Command:     retry,
+			Reason:      "Retry the switch after fixing the reported environment file.",
+			Destructive: false,
+		}},
+	)
+	if writeErr := WriteJSONError(&buf, retry, err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "invalid_environment" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if !got.Error.Retryable || got.Error.NextCommand != "" {
+		t.Fatalf("error recovery = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != retry {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesUnknownService(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit restart missing --json", NewUnknownServiceError("missing"))

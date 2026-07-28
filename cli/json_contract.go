@@ -197,6 +197,13 @@ func classify(err error) JSONError {
 			Retryable:   true,
 			NextCommand: "orbit init --yes --json",
 		}
+	case errors.Is(err, ErrInvalidEnvironment):
+		return JSONError{
+			Code:      "invalid_environment",
+			Message:   msg,
+			Hint:      "Fix the reported environment file, then retry the same command.",
+			Retryable: true,
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",
@@ -225,6 +232,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 			Reason:      "Retry initialization after resolving the reported setup issue.",
 			Destructive: false,
 		}}
+	}
+	if err.Code == "invalid_environment" {
+		return nil
 	}
 	if err.Code == "env_mismatch" {
 		return []JSONAction{{
