@@ -184,3 +184,7 @@ export interface Server {
 //////////
 // source: sse.go
 
+
+//////////
+// source: version.go
+

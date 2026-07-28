@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -103,23 +105,99 @@ func sameVersion(a, b string) bool {
 	return false
 }
 
-// detectUpdate scans candidate orbit binaries for one whose version differs
-// from the daemon's running version. Returns the candidate's full version
-// string and its (un-resolved) path, or empty strings when no update found.
+var describedVersionPattern = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:-(\d+)-g[0-9a-fA-F]+)?(?:-dirty)?$`)
+
+type describedVersion struct {
+	major, minor, patch, commits int
+}
+
+func parseDescribedVersion(version string) (describedVersion, bool) {
+	match := describedVersionPattern.FindStringSubmatch(parseVersionToken(version))
+	if match == nil {
+		return describedVersion{}, false
+	}
+	values := [4]int{}
+	for i := range values {
+		if match[i+1] == "" {
+			continue
+		}
+		value, err := strconv.Atoi(match[i+1])
+		if err != nil {
+			return describedVersion{}, false
+		}
+		values[i] = value
+	}
+	return describedVersion{
+		major:   values[0],
+		minor:   values[1],
+		patch:   values[2],
+		commits: values[3],
+	}, true
+}
+
+func compareDescribedVersions(candidate, running describedVersion) int {
+	candidateParts := [...]int{candidate.major, candidate.minor, candidate.patch, candidate.commits}
+	runningParts := [...]int{running.major, running.minor, running.patch, running.commits}
+	for i := range candidateParts {
+		if candidateParts[i] > runningParts[i] {
+			return 1
+		}
+		if candidateParts[i] < runningParts[i] {
+			return -1
+		}
+	}
+	return 0
+}
+
+func parseVersionTime(version string) (time.Time, bool) {
+	open := strings.LastIndex(version, "(")
+	close := strings.LastIndex(version, ")")
+	if open < 0 || close <= open {
+		return time.Time{}, false
+	}
+	value := strings.TrimSpace(version[open+1 : close])
+	for _, layout := range []string{"2006-01-02 15:04:05 -0700", time.RFC3339} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func isNewerBuild(candidate, running string) bool {
+	candidateToken := parseVersionToken(candidate)
+	runningToken := parseVersionToken(running)
+	if candidateToken == "" || sameVersion(candidateToken, runningToken) {
+		return false
+	}
+
+	candidateVersion, candidateOK := parseDescribedVersion(candidateToken)
+	runningVersion, runningOK := parseDescribedVersion(runningToken)
+	if candidateOK && runningOK {
+		if comparison := compareDescribedVersions(candidateVersion, runningVersion); comparison != 0 {
+			return comparison > 0
+		}
+	}
+
+	candidateTime, candidateTimeOK := parseVersionTime(candidate)
+	runningTime, runningTimeOK := parseVersionTime(running)
+	return candidateTimeOK && runningTimeOK && candidateTime.After(runningTime)
+}
+
+// detectUpdate scans candidate orbit binaries for one Orbit can order after
+// the daemon. A different but older or incomparable build must not produce a
+// restart recommendation because doing so can silently downgrade the user.
 // The daemon's self-exe path is NOT skipped — a user may overwrite that very
 // file (install.sh does exactly this), and the on-disk binary's version can
 // then meaningfully differ from s.version (the daemon's in-memory build).
 func detectUpdate(running string) (onDisk, onDiskPath string) {
-	runningToken := parseVersionToken(running)
-
 	for _, path := range candidatePathsFn() {
 		out, err := probeVersion(path)
 		if err != nil {
 			slog.Debug("version probe failed", "component", "version", "path", path, "err", err)
 			continue
 		}
-		token := parseVersionToken(out)
-		if token == "" || sameVersion(token, runningToken) {
+		if !isNewerBuild(out, running) {
 			continue
 		}
 		return out, path

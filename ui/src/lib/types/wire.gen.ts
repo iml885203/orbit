@@ -228,9 +228,9 @@ export interface EnvsResponse {
   envs: EnvInfo[];
 }
 /**
- * VersionResponse reports the running daemon's build alongside the binary
- * currently on disk. When OnDisk differs from Running, the user rebuilt or
- * upgraded orbit and should restart the daemon to pick it up.
+ * VersionResponse reports the running daemon's build and a binary Orbit can
+ * order after it. Older or incomparable builds are omitted so
+ * clients never recommend a restart that could downgrade the user.
  */
 export interface VersionResponse {
   running: string;

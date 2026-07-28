@@ -52,6 +52,59 @@ func TestSameVersion(t *testing.T) {
 	}
 }
 
+func TestIsNewerBuildUnderstandsGitDescribeVersions(t *testing.T) {
+	tests := []struct {
+		name      string
+		candidate string
+		running   string
+		want      bool
+	}{
+		{
+			name:      "installed release is older than source main",
+			candidate: "v0.0.4 (2026-07-27 12:44:56 +0800)",
+			running:   "v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)",
+			want:      false,
+		},
+		{
+			name:      "source main is newer than installed release",
+			candidate: "v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)",
+			running:   "v0.0.4 (2026-07-27 12:44:56 +0800)",
+			want:      true,
+		},
+		{
+			name:      "next release is newer than source main",
+			candidate: "v0.0.5 (2026-07-29 12:00:00 +0800)",
+			running:   "v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)",
+			want:      true,
+		},
+		{
+			name:      "older described commit is not newer despite later build time",
+			candidate: "v0.0.4-10-g1111111 (2026-07-29 12:00:00 +0800)",
+			running:   "v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)",
+			want:      false,
+		},
+		{
+			name:      "unknown hashes use build time",
+			candidate: "def456 (2026-07-29 12:00:00 +0800)",
+			running:   "abc123 (2026-07-28 11:00:00 +0800)",
+			want:      true,
+		},
+		{
+			name:      "incomparable builds do not recommend restart",
+			candidate: "def456",
+			running:   "abc123",
+			want:      false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isNewerBuild(test.candidate, test.running); got != test.want {
+				t.Fatalf("isNewerBuild(%q, %q) = %v, want %v", test.candidate, test.running, got, test.want)
+			}
+		})
+	}
+}
+
 // withProbe swaps probeVersion for the duration of a test.
 func withProbe(t *testing.T, fn func(path string) (string, error)) {
 	t.Helper()
@@ -112,6 +165,29 @@ func TestDetectUpdateDirtyVsClean(t *testing.T) {
 	onDisk, _ := detectUpdate("abc-dirty (2026-04-19 19:00:00 +0800)")
 	if onDisk == "" {
 		t.Error("expected update when going from dirty to clean")
+	}
+}
+
+func TestDetectUpdateSkipsOlderReleaseBesideSourceBuild(t *testing.T) {
+	dir := t.TempDir()
+	self := makeBin(t, dir, "source-orbit")
+	installed := makeBin(t, dir, "installed-orbit")
+	withProbe(t, func(path string) (string, error) {
+		switch path {
+		case self:
+			return "v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)", nil
+		case installed:
+			return "v0.0.4 (2026-07-27 12:44:56 +0800)", nil
+		default:
+			t.Fatalf("unexpected probe path %q", path)
+			return "", nil
+		}
+	})
+	withCandidates(t, []string{self, installed})
+
+	onDisk, onDiskPath := detectUpdate("v0.0.4-18-g39fb358 (2026-07-28 11:00:00 +0800)")
+	if onDisk != "" || onDiskPath != "" {
+		t.Fatalf("older installed release reported as update: version=%q path=%q", onDisk, onDiskPath)
 	}
 }
 
