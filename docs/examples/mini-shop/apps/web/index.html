@@ -728,61 +728,55 @@ web
         customer_unreachable: '[data-timeline-step="1"]',
       };
       const scenarioScripts = {
-        success: [
-          '#!/usr/bin/env bash',
-          'set -e',
-          '',
-          'BASE="127.0.0.1"',
-          'CUSTOMER_ID=1',
-          'PRODUCT_ID=1',
-          '',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"product_id\\":$PRODUCT_ID,\\"quantity\\":1}"',
-          '',
-          'curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"method\\":\\"mock_card\\"}"',
-          '',
-          'echo "訂單/出貨結果："',
-          'curl -s "http://$BASE:3002/orders"',
-          'curl -s "http://$BASE:3008/shipments"',
-        ].join('\n'),
-        decline: [
-          '#!/usr/bin/env bash',
-          'set -e',
-          '',
-          'BASE="127.0.0.1"',
-          'CUSTOMER_ID=1',
-          'PRODUCT_ID=1',
-          '',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"product_id\\":$PRODUCT_ID,\\"quantity\\":1}"',
-          '',
-          'curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"method\\":\\"decline\\"}"',
-        ].join('\n'),
-        stock: [
-          '#!/usr/bin/env bash',
-          'set -e',
-          '',
-          'BASE="127.0.0.1"',
-          'CUSTOMER_ID=1',
-          'PRODUCT_ID=1',
-          '',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST',
-          'curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"product_id\\":$PRODUCT_ID,\\"quantity\\":999}"',
-          '',
-          'curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \\',
-          '  -H \"Content-Type: application/json\" \\',
-          '  -d "{\\"method\\":\\"mock_card\\"}"',
-        ].join('\n'),
+        success: `#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H "Content-Type: application/json" \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":1}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"mock_card"}'
+
+echo "訂單/出貨結果："
+curl -s "http://$BASE:3002/orders"
+curl -s "http://$BASE:3008/shipments"`,
+        decline: `#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H "Content-Type: application/json" \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":1}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"decline"}'`,
+        stock: `#!/usr/bin/env bash
+set -e
+
+BASE="127.0.0.1"
+CUSTOMER_ID=1
+PRODUCT_ID=1
+
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/clear" -X POST
+curl -s "http://$BASE:3005/carts/$CUSTOMER_ID/items" \
+  -H "Content-Type: application/json" \
+  -d '{"product_id":'$PRODUCT_ID',"quantity":999}'
+
+curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"mock_card"}'`,
       };
       const ATTENTION_DURATION_MS = 1600;
       let lastGoalAttentionStep = 0;
