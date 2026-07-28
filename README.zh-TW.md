@@ -34,6 +34,7 @@ build。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 orbit init
 ```
 
@@ -43,6 +44,11 @@ Windows PowerShell：
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
 orbit init
 ```
+
+Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
+立即找到新安裝的指令；把同一行加入 shell profile，之後開啟的 terminal
+也能直接使用。Windows installer 會同時更新目前 PowerShell process 與 user
+PATH。
 
 預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
 在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。Orbit

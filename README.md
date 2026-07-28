@@ -37,6 +37,7 @@ unreleased build from `main`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 orbit init
 ```
 
@@ -46,6 +47,11 @@ On Windows PowerShell:
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
 orbit init
 ```
+
+The Unix export makes the newly installed command available immediately when
+the installer uses `~/.local/bin`. Add the same line to your shell profile to
+keep it available in future terminals. The Windows installer updates both the
+current PowerShell process and the user PATH.
 
 Upgrade, rollback, uninstall, manual downloads, and testing unreleased `main`
 are documented in [Installation and development](docs/development.md).

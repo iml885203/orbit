@@ -48,9 +48,13 @@ pick_install_dir() {
   if [ -n "${ORBIT_INSTALL_DIR:-}" ]; then
     echo "$ORBIT_INSTALL_DIR"; return
   fi
-  if [ -w "/usr/local/bin" ] 2>/dev/null; then
-    echo "/usr/local/bin"; return
-  fi
+  case ":$PATH:" in
+    *":/usr/local/bin:"*)
+      if [ -w "/usr/local/bin" ] 2>/dev/null; then
+        echo "/usr/local/bin"; return
+      fi
+      ;;
+  esac
   echo "$HOME/.local/bin"
 }
 
@@ -223,13 +227,13 @@ main() {
   trap - EXIT
 
   echo "Installed: ${target}"
-  if ! command -v orbit >/dev/null 2>&1 || [ "$(command -v orbit)" != "$target" ]; then
-    case ":$PATH:" in
-      *":${dir}:"*) ;;
-      *) echo "Add ${dir} to your PATH to run 'orbit' directly." ;;
-    esac
-  fi
   "$target" --version || true
+  if command -v orbit >/dev/null 2>&1 && [ "$(command -v orbit)" = "$target" ]; then
+    echo "Next: orbit init"
+    return
+  fi
+  printf 'Next: export PATH=%q:\"$PATH\" && orbit init\n' "$dir"
+  echo "For future shells, add the same export to your shell profile."
 }
 
 main "$@"

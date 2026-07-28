@@ -93,22 +93,31 @@ function Assert-Version {
 }
 
 $savedEnvironment = @{
+    Path = $env:Path
     ORBIT_INSTALL_DIR = $env:ORBIT_INSTALL_DIR
     ORBIT_BASE_URL = $env:ORBIT_BASE_URL
     ORBIT_VERSION = $env:ORBIT_VERSION
     ORBIT_ALLOW_DOWNGRADE = $env:ORBIT_ALLOW_DOWNGRADE
     ORBIT_SKIP_PATH_UPDATE = $env:ORBIT_SKIP_PATH_UPDATE
 }
+$savedUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 try {
     $env:ORBIT_INSTALL_DIR = $installDirectory
-    $env:ORBIT_SKIP_PATH_UPDATE = "1"
     $target = Join-Path $installDirectory "orbit.exe"
 
     Write-TestRelease "0.0.1"
     $env:ORBIT_BASE_URL = Start-FixtureServer
-    Invoke-Installer "0.0.1" *> $null
+    $installOutput = @(Invoke-Installer "0.0.1" 6>&1 | ForEach-Object { "$_" })
     Assert-Version $target "0.0.1"
+    if ((Get-Command orbit -ErrorAction Stop).Source -ne $target) {
+        throw "newly installed Orbit is not available in the current PowerShell process"
+    }
+    if (-not ($installOutput -contains "Next: orbit init")) {
+        throw "installer did not provide the immediate init command: $($installOutput -join '; ')"
+    }
+
+    $env:ORBIT_SKIP_PATH_UPDATE = "1"
 
     Write-TestRelease "0.0.0"
     $downgradeBlocked = $false
@@ -152,6 +161,7 @@ try {
 }
 finally {
     Stop-FixtureServer
+    [Environment]::SetEnvironmentVariable("Path", $savedUserPath, "User")
     foreach ($name in $savedEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], "Process")
     }

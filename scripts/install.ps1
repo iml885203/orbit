@@ -151,7 +151,12 @@ function Add-OrbitToUserPath {
     if ($entries.Where({ $_.TrimEnd("\") -ieq $Directory.TrimEnd("\") }).Count -eq 0) {
         $updated = (@($entries) + $Directory) -join ";"
         [Environment]::SetEnvironmentVariable("Path", $updated, "User")
-        Write-Host "Added $Directory to your user PATH. Open a new terminal to use 'orbit'."
+        Write-Host "Added $Directory to your user PATH."
+    }
+
+    $processEntries = @($env:Path -split ";" | Where-Object { $_ })
+    if ($processEntries.Count -eq 0 -or $processEntries[0].TrimEnd("\") -ine $Directory.TrimEnd("\")) {
+        $env:Path = (@($Directory) + $processEntries) -join ";"
     }
 }
 
@@ -211,6 +216,12 @@ function Install-Orbit {
         Add-OrbitToUserPath $directory
         Write-Host "Installed: $target"
         & $target --version
+        if (Get-Command orbit -ErrorAction SilentlyContinue) {
+            Write-Host "Next: orbit init"
+        }
+        else {
+            Write-Host "Next: & '$target' init"
+        }
     }
     finally {
         Remove-Item -Force -ErrorAction SilentlyContinue $download, $checksumFile

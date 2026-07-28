@@ -75,10 +75,12 @@ install_version() {
 
 write_release "0.0.1"
 rm -f "$test_root/curl.log"
-install_version "0.0.1"
+install_output="$(install_version "0.0.1")"
 test "$(wc -l <"$test_root/curl.log" | tr -d ' ')" = "1"
 test -x "$install_dir/orbit"
 test "$("$install_dir/orbit" --version)" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+grep -F "Next: export PATH=${install_dir}:\"\$PATH\" && orbit init" <<<"$install_output" >/dev/null
+PATH="$install_dir:$mock_bin:/usr/bin:/bin" orbit --version >/dev/null
 
 write_release "0.0.0"
 if install_version "0.0.0" >/dev/null 2>&1; then
@@ -115,4 +117,4 @@ install_version "0.0.2" >/dev/null
 test "$("$install_dir/orbit" --version)" = "v0.0.2 (2026-07-27 12:44:56 +0800)"
 test "$("$install_dir/orbit.prev" --version)" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
 
-echo "installer fallback, downgrade guard, interrupted-download safety, checksum safety, and rollback backup OK"
+echo "installer immediate next step, fallback, downgrade guard, interrupted-download safety, checksum safety, and rollback backup OK"
