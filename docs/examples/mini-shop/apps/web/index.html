@@ -72,6 +72,13 @@
       .evidence-grid { display: grid; gap: 8px; }
       .evidence-line { padding: 6px 10px; border-radius: 8px; background: #0b1328; }
       .evidence-line .label { color: #93c5fd; }
+      .operation-log { display: grid; gap: 8px; max-height: 250px; overflow: auto; }
+      .operation-item { padding: 8px; border-radius: 8px; background: #0b1328; border-left: 4px solid #60a5fa; }
+      .operation-item.ok { border-left-color: #34d399; }
+      .operation-item.warn { border-left-color: #f59e0b; }
+      .operation-item.error { border-left-color: #fb7185; }
+      .operation-item .meta { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+      .operation-item .title { color: #f8fafc; }
       .scenario-note { color: #94a3b8; font-size: 12px; margin-top: 6px; }
       .flow-map { background: #0b1328; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; }
       .flow-map-line { margin: 6px 0; color: #cbd5e1; }
@@ -254,10 +261,10 @@
         <div id="run-result" class="hint">尚未執行</div>
       </div>
 
-      <div class="card">
-        <h3>服務關係（你可不用記）</h3>
-        <div class="hint">從資料流向來看：</div>
-        <pre class="mono">
+    <div class="card">
+      <h3>服務關係（你可不用記）</h3>
+      <div class="hint">從資料流向來看：</div>
+      <pre class="mono">
 web
   └─ checkout-api
        ├─ cart-api → catalog-api
@@ -267,6 +274,14 @@ web
        └─ shipping-api
         </pre>
         <p class="hint">也就是你只要追一個主流程節點 checkout-api 即可理解全域。</p>
+      </div>
+
+      <div class="card">
+        <h3>操作回應快照</h3>
+        <p class="hint">每次關鍵操作都會留下服務回應與耗時，能快速知道「是 API 還是服務本身」卡住。</p>
+        <div id="operation-log" class="operation-log">
+          <div class="hint">尚未操作</div>
+        </div>
       </div>
     </div>
 
@@ -322,12 +337,15 @@ web
       const proofSummaryEl = document.getElementById('proof-summary');
       const runResultEl = document.getElementById('run-result');
       const flowMapEl = document.getElementById('flow-map');
+      const operationLogEl = document.getElementById('operation-log');
       const SERVICE_COUNT = 8;
       let cartHasItems = false;
       let scenarioRunning = false;
       let latestOrdersPayload = null;
       let latestShipmentsPayload = null;
       let latestCheckoutPayload = null;
+      const operationLog = [];
+      const operationLogMaxItems = 12;
       const summaryMaxItems = 6;
       const summaryLines = [];
       const runResultState = {
@@ -425,6 +443,67 @@ web
           return ['建議：回到情境 A 先跑一次成功流程，確認資料鏈路完整。'];
         }
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
+      }
+
+      function formatElapsed(ms) {
+        if (ms == null) return 'n/a';
+        if (ms < 1000) return `${Math.round(ms)}ms`;
+        return `${(ms / 1000).toFixed(2)}s`;
+      }
+
+      function serviceFromUrl(url) {
+        const mapping = [
+          [catalogApi, 'catalog-api'],
+          [orderApi, 'order-api'],
+          [inventoryApi, 'inventory-api'],
+          [customerApi, 'customer-api'],
+          [cartApi, 'cart-api'],
+          [checkoutApi, 'checkout-api'],
+          [shippingApi, 'shipping-api'],
+          [paymentApi, 'payment-api'],
+        ];
+        const found = mapping.find(([base]) => url.startsWith(base));
+        return found ? found[1] : 'web';
+      }
+
+      function addOperationTrace({ service, action, status, latencyMs, httpStatus, visible = true, request, response, errorCode, note }) {
+        const item = {
+          ts: new Date().toLocaleTimeString(),
+          service,
+          action,
+          status,
+          latencyMs,
+          httpStatus,
+          request: request || '',
+          response: response || '',
+          errorCode: errorCode || '',
+          note,
+        };
+        if (visible) {
+          operationLog.unshift(item);
+          while (operationLog.length > operationLogMaxItems) {
+            operationLog.pop();
+          }
+          renderOperationLog();
+        }
+      }
+
+      function renderOperationLog() {
+        if (!operationLogEl) {
+          return;
+        }
+        if (!operationLog.length) {
+          operationLogEl.innerHTML = '<div class="hint">尚未操作</div>';
+          return;
+        }
+        operationLogEl.innerHTML = operationLog
+          .map((entry) => {
+            const state = entry.status === 'ok' ? 'ok' : (entry.status === 'error' ? 'error' : 'warn');
+            const requestText = entry.request ? ` · request: ${entry.request}` : '';
+            const responseText = entry.response ? ` · response: ${entry.response}` : '';
+            return `<div class=\"operation-item ${state}\"><div class=\"title\">${entry.ts}｜${entry.service}｜${entry.action}</div><div class=\"meta\">HTTP ${entry.httpStatus || '-'} · 耗時 ${formatElapsed(entry.latencyMs)}${requestText}${responseText}${entry.errorCode ? ` · code ${entry.errorCode}` : ''}${entry.note ? ` · ${entry.note}` : ''}</div></div>`;
+          })
+          .join('');
       }
 
       function setGoalStepState(activeIndex) {
@@ -868,18 +947,71 @@ web
         }
       }
 
-      async function safeFetch(url, options = {}) {
-        const response = await fetch(url, options);
-        if (!response.ok) {
+      async function safeFetchWithTrace(url, options = {}, context = {}) {
+        const startedAt = performance.now();
+        const method = options.method || 'GET';
+        const action = context.action || `${method} ${url}`;
+        const service = context.service || serviceFromUrl(url);
+        const visible = context.visible ?? false;
+        const request = context.requestSummary || '';
+        try {
+          const response = await fetch(url, options);
+          const tookMs = performance.now() - startedAt;
           let payload = null;
           try {
-            payload = await response.json();
+            const text = await response.text();
+            payload = text ? JSON.parse(text) : null;
           } catch (_) {
             payload = null;
           }
-          throw new Error(JSON.stringify(payload || { code: 'http_error', message: `HTTP ${response.status}` }));
+          if (!response.ok) {
+            const code = payload?.code || `http_${response.status}`;
+            addOperationTrace({
+              service,
+              action,
+              status: 'error',
+              latencyMs: tookMs,
+              httpStatus: response.status,
+              request,
+              response: code,
+              errorCode: code,
+              visible,
+            });
+            throw new Error(JSON.stringify(payload || { code, message: `HTTP ${response.status}` }));
+          }
+          const responseSummary = payload?.code || 'ok';
+          addOperationTrace({
+            service,
+            action,
+            status: 'ok',
+            latencyMs: tookMs,
+            httpStatus: response.status,
+            request,
+            response: responseSummary,
+            visible,
+          });
+          return payload;
+        } catch (error) {
+          if (error instanceof TypeError && !context.allowNetworkErrorTrace) {
+            const requestPath = url.replace(/^https?:\/\/[^/]+/, '');
+            addOperationTrace({
+              service,
+              action,
+              status: 'error',
+              latencyMs: performance.now() - startedAt,
+              httpStatus: 0,
+              request: request || requestPath,
+              response: 'network_error',
+              errorCode: 'network_error',
+              visible,
+            });
+          }
+          throw error;
         }
-        return response.json();
+      }
+
+      function safeFetch(url, options = {}, context = {}) {
+        return safeFetchWithTrace(url, options, context);
       }
 
       function parseApiError(err) {
@@ -917,7 +1049,10 @@ web
         const responses = await Promise.all(
           Object.entries(urls).map(async ([name, url]) => {
             try {
-              const payload = await safeFetch(url);
+              const payload = await safeFetch(url, {}, {
+                visible: false,
+                action: `health ${name}`,
+              });
               return [name, payload];
             } catch (_e) {
               return [name, { service: name, status: 'degraded', dependencies: {} }];
@@ -933,7 +1068,10 @@ web
       }
 
       async function loadCustomers() {
-        const payload = await safeFetch(`${customerApi}/customers`);
+        const payload = await safeFetch(`${customerApi}/customers`, {}, {
+          visible: false,
+          action: 'load customers',
+        });
         customerEl.innerHTML = '';
         payload.customers.forEach((item) => {
           const option = document.createElement('option');
@@ -947,7 +1085,10 @@ web
       }
 
       async function loadProducts() {
-        const payload = await safeFetch(`${catalogApi}/products`);
+        const payload = await safeFetch(`${catalogApi}/products`, {}, {
+          visible: false,
+          action: 'load products',
+        });
         productsEl.innerHTML = '';
         productEl.innerHTML = '';
         payload.products.forEach((item) => {
@@ -969,7 +1110,11 @@ web
           cartHasItems = false;
           return;
         }
-        const payload = await safeFetch(`${cartApi}/carts/${customerId}`);
+        const payload = await safeFetch(`${cartApi}/carts/${customerId}`, {}, {
+          visible: false,
+          action: 'load cart',
+          requestSummary: `customer=${customerId}`,
+        });
         cartEl.innerHTML = '';
         if (!payload.items.length) {
           cartEl.textContent = '尚無商品';
@@ -987,7 +1132,10 @@ web
       }
 
       async function loadOrders() {
-        const payload = await safeFetch(`${orderApi}/orders`);
+        const payload = await safeFetch(`${orderApi}/orders`, {}, {
+          visible: false,
+          action: 'load orders',
+        });
         latestOrdersPayload = payload;
         ordersEl.innerHTML = '';
         if (!payload.orders.length) {
@@ -1006,7 +1154,11 @@ web
       async function loadShipments() {
         const customerId = Number(customerEl.value);
         const suffix = customerId ? `?customer_id=${customerId}` : '';
-        const payload = await safeFetch(`${shippingApi}/shipments${suffix}`);
+        const payload = await safeFetch(`${shippingApi}/shipments${suffix}`, {}, {
+          visible: false,
+          action: 'load shipments',
+          requestSummary: suffix ? `customer=${customerId}` : 'all',
+        });
         latestShipmentsPayload = payload;
         shipmentsEl.innerHTML = '';
         if (!payload.shipments.length) {
@@ -1140,7 +1292,10 @@ web
       }
 
       async function loadInventory() {
-        const payload = await safeFetch(`${inventoryApi}/stock`);
+        const payload = await safeFetch(`${inventoryApi}/stock`, {}, {
+          visible: false,
+          action: 'load inventory',
+        });
         if (!payload.items.length) {
           inventorySummaryEl.textContent = '目前尚未有庫存資料';
           return;
@@ -1207,7 +1362,11 @@ web
           }
           customerEl.value = String(customerId);
 
-          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' }, {
+            visible: true,
+            action: 'scenario-reset cart',
+            requestSummary: `customer=${customerId}`,
+          });
           await loadProducts();
           if (!productEl.options.length) {
             setNotice('找不到商品資料，請確認 catalog-api 正常', 'error');
@@ -1230,6 +1389,10 @@ web
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ product_id: Number(productEl.value), quantity: plan.qty }),
+            }, {
+              visible: true,
+              action: `scenario-${type} add-to-cart`,
+              requestSummary: `customer=${customerId}, product=${productEl.value}, qty=${plan.qty}`,
             });
           } catch (err) {
             const parsedError = parseApiError(err);
@@ -1259,6 +1422,10 @@ web
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ method: plan.method }),
+            }, {
+              visible: true,
+              action: `scenario-${type} checkout`,
+              requestSummary: `customer=${customerId}, method=${plan.method}`,
             });
             captureCheckoutPayload(payload, `情境 ${plan.notice}`);
             setNotice(`${plan.notice}已完成：建立 ${payload.orders.length} 筆訂單`, 'ok');
@@ -1322,7 +1489,11 @@ web
           const customerId = Number(customerEl.value) || Number(customerEl.options[0].value);
           customerEl.value = String(customerId);
 
-          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' }, {
+            visible: true,
+            action: 'one-shot reset cart',
+            requestSummary: `customer=${customerId}`,
+          });
 
           if (!productEl.options.length) {
             await loadProducts();
@@ -1333,17 +1504,25 @@ web
             return;
           }
           productEl.selectedIndex = 0;
-          await safeFetch(`${cartApi}/carts/${customerId}/items`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ product_id: Number(productEl.value), quantity: 1 }),
-          });
+            await safeFetch(`${cartApi}/carts/${customerId}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_id: Number(productEl.value), quantity: 1 }),
+            }, {
+              visible: true,
+              action: 'one-shot add-to-cart',
+              requestSummary: `customer=${customerId}, product=${productEl.value}, qty=1`,
+            });
 
           paymentMethodEl.value = 'mock_card';
           const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ method: 'mock_card' }),
+          }, {
+            visible: true,
+            action: 'one-shot checkout',
+            requestSummary: `customer=${customerId}, method=mock_card`,
           });
           captureCheckoutPayload(payload, '一鍵成功流程');
 
@@ -1405,6 +1584,10 @@ web
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product_id: productId, quantity }),
+          }, {
+            visible: true,
+            action: 'manual add-to-cart',
+            requestSummary: `customer=${customerId}, product=${productId}, qty=${quantity}`,
           });
           const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments(), loadCart(), checkAll()]);
           refreshTransactionViews(ordersPayload, shipmentsPayload);
@@ -1424,7 +1607,11 @@ web
         const customerId = Number(customerEl.value);
         if (!customerId) return;
         try {
-          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' }, {
+            visible: true,
+            action: 'manual clear-cart',
+            requestSummary: `customer=${customerId}`,
+          });
           clearCheckoutPayload();
           const [ordersPayload, shipmentsPayload] = await Promise.all([
             loadOrders(),
@@ -1457,6 +1644,10 @@ web
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ method }),
+          }, {
+            visible: true,
+            action: 'manual checkout',
+            requestSummary: `customer=${customerId}, method=${method}`,
           });
           captureCheckoutPayload(payload, '手動 checkout');
           setNotice(`Checkout 成功：建立 ${payload.orders.length} 筆訂單`, 'ok');
@@ -1601,6 +1792,10 @@ web
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ product_id: Number(productEl.value), quantity: 1 }),
+            }, {
+              visible: true,
+              action: 'goal-next add-to-cart',
+              requestSummary: `customer=${firstCustomer}, product=${productEl.value}, qty=1`,
             });
             const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments(), loadCart(), checkAll()]);
             refreshTransactionViews(ordersPayload, shipmentsPayload);
@@ -1616,6 +1811,10 @@ web
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ method: 'mock_card' }),
+            }, {
+              visible: true,
+              action: 'goal-next checkout',
+              requestSummary: `customer=${customerId}, method=mock_card`,
             });
             captureCheckoutPayload(payload, '目標導覽');
             if (payload?.orders?.[0]) {
@@ -1662,7 +1861,11 @@ web
 
           const firstCustomer = Number(customerEl.value);
           if (firstCustomer > 0) {
-            await safeFetch(`${cartApi}/carts/${firstCustomer}/clear`, { method: 'POST' });
+            await safeFetch(`${cartApi}/carts/${firstCustomer}/clear`, { method: 'POST' }, {
+              visible: true,
+              action: 'reset cart',
+              requestSummary: `customer=${firstCustomer}`,
+            });
           }
           clearCheckoutPayload();
 
