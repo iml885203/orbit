@@ -148,6 +148,17 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
    - 這些情境都有「預估時間」提示，若超過時間仍未返回結果，先看「診斷命令」。
 
+### 失敗後最短回復（建議默認作法）
+
+遇到卡住時，不要先切服務或重開整個環境，先用這條路徑：
+
+1. `orbit -c docs/examples/mini-shop/dev.yaml status --json`  
+   看紅色節點和 `recommended` 修復方向（通常先修上游）。
+2. 對著對應節點看 log：`orbit -c docs/examples/mini-shop/dev.yaml logs <service> -f`  
+3. 回到頁面跑一次「一鍵 demo 一輪」或「失敗情境」，看故障卡是否變成可修復狀態。
+
+更完整的 demo 方向決策請看：[DEMO-STRATEGY.md](./DEMO-STRATEGY.md)。
+
 ### 最短重現路徑
 
 - 「最短重現路徑」提供三個一鍵入口：
