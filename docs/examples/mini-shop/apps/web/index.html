@@ -324,6 +324,10 @@
       <div class="row">
         <button id="drill-prime-success" class="small-btn inline-btn">先做一輪成功流程</button>
         <button class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml down cart-api --json">複製：停止 cart-api</button>
+        <button id="drill-script-copy" class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml down cart-api --json
+orbit -c docs/examples/mini-shop/dev.yaml status --json
+orbit -c docs/examples/mini-shop/dev.yaml restart cart-api --json
+orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳本</button>
       </div>
       <div class="row">
         <button class="small-btn inline-btn" data-copy-cmd="orbit -c docs/examples/mini-shop/dev.yaml status --json">複製：檢查服務狀態</button>
