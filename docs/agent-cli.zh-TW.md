@@ -82,13 +82,14 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、resource risks，以及建議後續指令。 |
-| `orbit status --json` | 在 `data.resources` 中回傳 setup readiness、daemon 與已設定 resource 的狀態。 |
+| `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、daemon，以及 `data.resources` 中的 resource 狀態。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
 | `orbit down <resource> --json` | 回傳指定 resource 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
+| `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇，以及可直接切換的 environment 選項。 |
 | `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
 | `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態，以及 restart 建議。 |
 | `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
@@ -123,6 +124,10 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的
 `orbit init --yes --json` action。若 environment 檔案存在但內容無效，則回傳
 `invalid_environment` error，因為 Orbit 無法安全使用它啟動。
+若原先選取的 environment 已被改名或移除，status 會改回傳
+`data.selection_required: true` 與 `selection_message`，並在
+`recommended_actions` 中提供現存 environment 的精確
+`orbit switch <env> --json` 指令；這不代表需要重新 init。
 
 當 GitHub 回覆 environment repo 不存在時，Orbit 會回傳
 `env_repo_unavailable`，且不提供 recommended actions。GitHub 對拼錯／不存在
@@ -135,6 +140,7 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 
 | Command | `data.operation` |
 |---|---|
+| `orbit env list --json` | `env_list` |
 | `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit switch <env> --json` | `switch` |
@@ -213,7 +219,7 @@ event 取代先前的。
 
 `orbit inspect --json` 是 agents 理解 Orbit 目前是否適合自動化操作的建議第一步。
 它回傳一般 `orbit.cli.v1` envelope，且 `data.schema_version` 是
-`orbit.inspect.v1`。
+`orbit.inspect.v2`。
 
 Inspect payload 包含：
 
@@ -221,9 +227,9 @@ Inspect payload 包含：
 |---|---|
 | `readiness` | 穩定的決策狀態，包含 `state`、`blocked`、`summary`。 |
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
-| `env` | 目前 config path、env 名稱、preview-only flag，以及可用時 daemon 回報的 env。 |
+| `environment` | 與 status、env list 共用 `state`、`selected_name`、`selected_path`、`environments` selection object，另包含可用時的 preview/daemon 資訊。 |
 | `resources` | 依 state 分組的 resource 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：
@@ -231,6 +237,7 @@ Inspect payload 包含：
 | State | Blocked | 意義 |
 |---|---:|---|
 | `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
+| `selection_required` | true | 先前 selection 已失效；actions 會提供精確的 `orbit switch <env> --json` 選項，沒有候選時則提供 `orbit env sync --json`。 |
 | `config_invalid` | true | 選到的 config 無法載入。 |
 | `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
 | `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |

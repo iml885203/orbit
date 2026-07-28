@@ -82,6 +82,11 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		if configFile == "" {
 			configFile = resolveConfigFile()
 		}
+		selection := readEnvironmentSelection()
+		if commandRequiresAvailableEnvironment(cmd) &&
+			environmentSelectionBlocksConfig(selection, configFile) {
+			return newEnvironmentSelectionRequiredError(selection)
+		}
 		requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
 		requiresReconcile := commandRequiresReconciledEnvironment(cmd)
 		if requiresMatch || requiresReconcile {
@@ -285,6 +290,29 @@ func commandRequiresReconciledEnvironment(cmd *cobra.Command) bool {
 		return cmd.Name() == "start"
 	default:
 		return false
+	}
+}
+
+func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
+	top := cmd
+	for top.Parent() != nil && top.Parent().Parent() != nil {
+		top = top.Parent()
+	}
+	switch top.Name() {
+	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
+		"version", "update", "uninstall", "history", "settings", "trace", "tracing":
+		return false
+	case "env":
+		return cmd.Name() == "toggle"
+	case "daemon":
+		switch cmd.Name() {
+		case "stop", "status":
+			return false
+		default:
+			return true
+		}
+	default:
+		return true
 	}
 }
 

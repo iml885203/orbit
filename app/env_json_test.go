@@ -20,7 +20,7 @@ func TestBuildEnvUseJSONData(t *testing.T) {
 	if got.SelectedEnv != envPath {
 		t.Fatalf("selected_env = %q", got.SelectedEnv)
 	}
-	if got.EnvName != "development.yaml" {
+	if got.EnvName != "development" {
 		t.Fatalf("env_name = %q", got.EnvName)
 	}
 	if !got.DaemonRunning {
@@ -113,7 +113,7 @@ func TestBuildSwitchJSONData(t *testing.T) {
 	if got.SelectedEnv != envPath {
 		t.Fatalf("selected_env = %q", got.SelectedEnv)
 	}
-	if got.EnvName != "development.yaml" {
+	if got.EnvName != "development" {
 		t.Fatalf("env_name = %q", got.EnvName)
 	}
 	if got.DaemonAction != "restart" {

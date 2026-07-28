@@ -63,13 +63,46 @@ func TestBuildInspectDataSetupRequiredPointsOnlyToInit(t *testing.T) {
 	if got.Readiness.State != inspectReadinessSetupRequired || !got.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", got.Readiness)
 	}
-	if got.Env.Name != "" || got.Env.ConfigPath != "" {
-		t.Fatalf("env = %+v, want no pretend selection before setup", got.Env)
+	if got.Environment.SelectedName != "" || got.Environment.SelectedPath != "" {
+		t.Fatalf("environment = %+v, want no pretend selection before setup", got.Environment)
 	}
 	if len(got.Risks) != 1 || got.Risks[0].Code != "setup_required" {
 		t.Fatalf("risks = %+v", got.Risks)
 	}
 	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit init --yes --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
+func TestBuildInspectDataUnavailableSelectionOffersExistingEnvironment(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		Command:       "orbit inspect --json",
+		ConfigPath:    "/tmp/original.yaml",
+		ConfigErr:     errInspectFixture("no such file or directory"),
+		ConfigEnvName: "original",
+		Selection: environmentSelection{
+			State:        environmentSelectionUnavailable,
+			SelectedName: "original",
+			SelectedPath: "/tmp/original.yaml",
+			Environments: []environmentChoice{{
+				Name: "renamed",
+				Path: "/tmp/renamed.yaml",
+			}},
+		},
+	})
+
+	if got.Readiness.State != inspectReadinessSelectionRequired || !got.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", got.Readiness)
+	}
+	if len(got.Risks) != 1 || got.Risks[0].Code != "environment_selection_required" {
+		t.Fatalf("risks = %+v", got.Risks)
+	}
+	if got.Environment.State != environmentSelectionUnavailable ||
+		len(got.Environment.Environments) != 1 {
+		t.Fatalf("environment = %+v", got.Environment)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit switch renamed --json" {
 		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
 	}
 }

@@ -88,10 +88,16 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 	if len(failed) == 0 {
 		return nil
 	}
+	if len(failed) == 1 && failed[0] == "Environment selection" {
+		return newEnvironmentSelectionRequiredError(readEnvironmentSelection())
+	}
 	return cli.NewChecksFailedError(fmt.Sprintf("doctor found %d failed check(s): %s", len(failed), strings.Join(failed, ", ")))
 }
 
 func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
+	if environmentSelectionBlocksConfig(readEnvironmentSelection(), configFile) {
+		return localDoctorResponseWithDaemon(client.Health() == nil)
+	}
 	if client.Health() == nil {
 		if status, err := client.Status(); err == nil {
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
@@ -105,9 +111,27 @@ func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
 }
 
 func localDoctorResponse() *daemon.DoctorResponse {
+	return localDoctorResponseWithDaemon(false)
+}
+
+func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
 	var checks []daemon.DoctorCheck
 	var cfg *config.Config
-	if loaded, err := config.Load(configFile); err != nil {
+	selection := readEnvironmentSelection()
+	if environmentSelectionBlocksConfig(selection, configFile) {
+		hint := "run: orbit env sync"
+		if len(selection.Environments) == 1 {
+			hint = "run: " + environmentSwitchCommand(selection.Environments[0].Name, false)
+		} else if len(selection.Environments) > 1 {
+			hint = "run: orbit env list"
+		}
+		checks = append(checks, daemon.DoctorCheck{
+			Name:    "Environment selection",
+			Status:  daemon.CheckFail,
+			Message: fmt.Sprintf("environment %q is no longer available", selection.SelectedName),
+			Hint:    hint,
+		})
+	} else if loaded, err := config.Load(configFile); err != nil {
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckFail, Message: err.Error()})
 	} else if err := config.Validate(loaded); err != nil {
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckFail, Message: err.Error()})
@@ -120,7 +144,11 @@ func localDoctorResponse() *daemon.DoctorResponse {
 		checks = append(checks, localPortChecks(cfg)...)
 		checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
 	}
-	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: "not running"})
+	daemonMessage := "not running"
+	if daemonRunning {
+		daemonMessage = "running with the previous environment snapshot"
+	}
+	checks = append(checks, daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage})
 	// Feature-owned offline checks (the DB workflow) come from the
 	// extensions' CLIDoctor hooks; a nil cfg is reported by the Config
 	// fail check above, so features aren't asked to evaluate it.
@@ -175,6 +203,13 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 }
 
 func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
+	if resp != nil {
+		for _, check := range resp.Checks {
+			if check.Name == "Environment selection" {
+				return environmentSelectionActions(readEnvironmentSelection())
+			}
+		}
+	}
 	actions := []cli.JSONAction{cli.StatusAction()}
 	if resp == nil {
 		return append(actions, cli.DoctorAction())

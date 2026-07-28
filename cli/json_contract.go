@@ -148,6 +148,18 @@ func classify(err error) JSONError {
 	var codedErr interface{ ErrorCode() string }
 	if errors.As(err, &codedErr) {
 		switch codedErr.ErrorCode() {
+		case "environment_selection_required":
+			hint := "Select one of the available environments reported by Orbit."
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				hint = hintedErr.CLIJSONHint()
+			}
+			return JSONError{
+				Code:      "environment_selection_required",
+				Message:   msg,
+				Hint:      hint,
+				Retryable: true,
+			}
 		case "unknown_group":
 			return JSONError{
 				Code:      "invalid_argument",
@@ -288,6 +300,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		return nil
 	}
 	if err.Code == "invalid_argument" {
+		return nil
+	}
+	if err.Code == "environment_selection_required" {
 		return nil
 	}
 	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {

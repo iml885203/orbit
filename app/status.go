@@ -23,6 +23,7 @@ func statusCmd() *cobra.Command {
 }
 
 func runStatus(_ *cobra.Command, _ []string) error {
+	selection := readEnvironmentSelection()
 	cfg, cfgErr := config.Load(configFile)
 
 	client := daemon.NewClient(daemon.DefaultSocketPath())
@@ -49,7 +50,21 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	setup := statusSetupState{}
+	setup := statusSetupState{Selection: selection}
+	if environmentSelectionBlocksConfig(selection, configFile) {
+		setup.SelectionRequired = true
+		setup.Message = environmentSelectionMessage(selection)
+		if cli.JSONOutput {
+			return writeStatusJSON(os.Stdout, commandString(), nil, running, dstatus, setup)
+		}
+		printEnvironmentSelectionRecovery(selection)
+		if daemonRunning {
+			fmt.Println()
+			printDaemonHeader(dstatus)
+			_, _, _ = printRunningSnapshot(running)
+		}
+		return nil
+	}
 	if cfgErr != nil && configFileExists(configFile) {
 		err := cli.NewInvalidEnvironmentError(
 			fmt.Sprintf("active environment %s is invalid: %v", filepath.Base(configFile), cfgErr),
@@ -72,8 +87,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 	if cfgErr != nil && !daemonRunning {
 		setup = statusSetupState{
-			Required: true,
-			Message:  "No usable environment is selected. Run Orbit setup first.",
+			Required:  true,
+			Message:   "No usable environment is selected. Run Orbit setup first.",
+			Selection: selection,
 		}
 		if cli.JSONOutput {
 			return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
@@ -94,7 +110,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	var stoppedServices []string
 	var openableServices []string
 
-	if dstatus.ConfigStale {
+	if dstatus.ConfigStale || setup.SelectionRequired {
 		stoppedInfra, stoppedServices, openableServices = printRunningSnapshot(running)
 	} else {
 		// Containers
@@ -353,15 +369,20 @@ func configPorts(ports map[string]config.PortDef) string {
 }
 
 type statusJSONData struct {
-	SetupRequired bool          `json:"setup_required"`
-	SetupMessage  string        `json:"setup_message,omitempty"`
-	Daemon        daemonStatus  `json:"daemon"`
-	Resources     []jsonService `json:"resources"`
+	SetupRequired     bool                 `json:"setup_required"`
+	SelectionRequired bool                 `json:"selection_required,omitempty"`
+	SetupMessage      string               `json:"setup_message,omitempty"`
+	SelectionMessage  string               `json:"selection_message,omitempty"`
+	Environment       environmentSelection `json:"environment"`
+	Daemon            daemonStatus         `json:"daemon"`
+	Resources         []jsonService        `json:"resources"`
 }
 
 type statusSetupState struct {
-	Required bool
-	Message  string
+	Required          bool
+	SelectionRequired bool
+	Message           string
+	Selection         environmentSelection
 }
 
 type jsonService struct {
@@ -395,9 +416,12 @@ func writeStatusJSON(
 	dstatus daemonStatus,
 	setup statusSetupState,
 ) error {
+	if setup.Selection.Environments == nil {
+		setup.Selection.Environments = []environmentChoice{}
+	}
 	resources := make([]jsonService, 0)
 
-	if dstatus.ConfigStale {
+	if dstatus.ConfigStale || setup.SelectionRequired {
 		for name, resource := range running {
 			svc := jsonService{
 				Name:  name,
@@ -444,7 +468,9 @@ func writeStatusJSON(
 	})
 
 	var actions []cli.JSONAction
-	if dstatus.ConfigStale {
+	if setup.SelectionRequired {
+		actions = environmentSelectionActions(setup.Selection)
+	} else if dstatus.ConfigStale {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit daemon restart --json",
 			Reason:  "Apply the selected environment changes before running resource commands.",
@@ -465,15 +491,44 @@ func writeStatusJSON(
 			Reason:  "Start the selected environment and its daemon.",
 		})
 	}
-	if !dstatus.ConfigStale && !dstatus.UpdateAvailable {
+	if !setup.SelectionRequired && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
 		actions = cli.MergeActions(actions, statusRecoveryActions(running))
 	}
+	setupMessage := ""
+	if setup.Required {
+		setupMessage = setup.Message
+	}
+	selectionMessage := ""
+	if setup.SelectionRequired {
+		selectionMessage = setup.Message
+	}
 	return cli.WriteJSONSuccess(w, command, statusJSONData{
-		SetupRequired: setup.Required,
-		SetupMessage:  setup.Message,
-		Daemon:        dstatus,
-		Resources:     resources,
+		SetupRequired:     setup.Required,
+		SelectionRequired: setup.SelectionRequired,
+		SetupMessage:      setupMessage,
+		SelectionMessage:  selectionMessage,
+		Environment:       setup.Selection,
+		Daemon:            dstatus,
+		Resources:         resources,
 	}, actions)
+}
+
+func printEnvironmentSelectionRecovery(selection environmentSelection) {
+	fmt.Printf("%s environment %q is no longer available\n",
+		cli.Yellow.Sprint("!"), selection.SelectedName)
+	if len(selection.Environments) == 0 {
+		fmt.Println("  Next: orbit env sync")
+		return
+	}
+	if len(selection.Environments) == 1 {
+		fmt.Printf("  Available environment: %s\n", selection.Environments[0].Name)
+		fmt.Printf("  Next: %s\n", environmentSwitchCommand(selection.Environments[0].Name, false))
+		return
+	}
+	fmt.Println("  Choose an available environment:")
+	for _, environment := range selection.Environments {
+		fmt.Printf("    %s\n", environmentSwitchCommand(environment.Name, false))
+	}
 }
 
 func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {

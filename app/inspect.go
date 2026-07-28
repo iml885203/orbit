@@ -14,24 +14,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const inspectJSONSchemaVersion = "orbit.inspect.v1"
+const inspectJSONSchemaVersion = "orbit.inspect.v2"
 
 const (
-	inspectReadinessSetupRequired = "setup_required"
-	inspectReadinessConfigInvalid = "config_invalid"
-	inspectReadinessNeedsDaemon   = "needs_daemon"
-	inspectReadinessStopped       = "stopped"
-	inspectReadinessDegraded      = "degraded"
-	inspectReadinessConverging    = "converging"
-	inspectReadinessPartial       = "partial"
-	inspectReadinessReady         = "ready"
+	inspectReadinessSetupRequired     = "setup_required"
+	inspectReadinessSelectionRequired = "selection_required"
+	inspectReadinessConfigInvalid     = "config_invalid"
+	inspectReadinessNeedsDaemon       = "needs_daemon"
+	inspectReadinessStopped           = "stopped"
+	inspectReadinessDegraded          = "degraded"
+	inspectReadinessConverging        = "converging"
+	inspectReadinessPartial           = "partial"
+	inspectReadinessReady             = "ready"
 )
 
 type inspectJSONData struct {
 	SchemaVersion      string                `json:"schema_version"`
 	Readiness          inspectReadiness      `json:"readiness"`
 	Daemon             inspectDaemonSummary  `json:"daemon"`
-	Env                inspectEnvSummary     `json:"env"`
+	Environment        inspectEnvSummary     `json:"environment"`
 	Resources          inspectServiceSummary `json:"resources"`
 	Risks              []inspectRisk         `json:"risks"`
 	RecommendedActions []cli.JSONAction      `json:"recommended_actions"`
@@ -54,10 +55,12 @@ type inspectDaemonSummary struct {
 }
 
 type inspectEnvSummary struct {
-	Name        string `json:"name,omitempty"`
-	ConfigPath  string `json:"config_path,omitempty"`
-	PreviewOnly bool   `json:"preview_only,omitempty"`
-	DaemonEnv   string `json:"daemon_env,omitempty"`
+	State        string              `json:"state"`
+	SelectedName string              `json:"selected_name,omitempty"`
+	SelectedPath string              `json:"selected_path,omitempty"`
+	Environments []environmentChoice `json:"environments"`
+	PreviewOnly  bool                `json:"preview_only,omitempty"`
+	DaemonEnv    string              `json:"daemon_env,omitempty"`
 }
 
 type inspectServiceSummary struct {
@@ -93,6 +96,7 @@ type inspectBuildOptions struct {
 	Status          *daemon.StatusResponse
 	StatusErr       error
 	Configured      []daemon.ResourceStatus
+	Selection       environmentSelection
 }
 
 func inspectCmd() *cobra.Command {
@@ -105,10 +109,14 @@ func inspectCmd() *cobra.Command {
 }
 
 func runInspect(_ *cobra.Command, _ []string) error {
+	selection := readEnvironmentSelection()
 	cfg, cfgErr := config.Load(configFile)
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	daemonRunning := client.Health() == nil
-	setupRequired := cfgErr != nil && !daemonRunning && !configFileExists(configFile)
+	selectionRequired := cfgErr != nil &&
+		(environmentSelectionBlocksConfig(selection, configFile) ||
+			(selection.State == environmentSelectionNone && len(selection.Environments) > 0))
+	setupRequired := cfgErr != nil && !daemonRunning && !configFileExists(configFile) && !selectionRequired
 	pid, alive := daemon.IsDaemonRunning()
 	if daemonRunning {
 		pid = alivePID(pid, alive)
@@ -123,6 +131,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		DaemonRunning: daemonRunning,
 		PID:           pid,
 		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
+		Selection:     selection,
 	}
 	if cfg != nil {
 		opts.PreviewOnly = cfg.PreviewOnly
@@ -161,6 +170,12 @@ func alivePID(pid int, alive bool) int {
 }
 
 func buildInspectData(opts inspectBuildOptions) inspectJSONData {
+	if opts.Selection.State == "" {
+		opts.Selection.State = environmentSelectionNone
+	}
+	if opts.Selection.Environments == nil {
+		opts.Selection.Environments = []environmentChoice{}
+	}
 	services := emptyInspectServiceSummary()
 	if opts.Status != nil {
 		services = buildInspectServiceSummary(opts.Status.Resources)
@@ -169,15 +184,20 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	}
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services, opts.Command, opts.ConfigEnvName)
-	env := inspectEnvSummary{
-		Name:        opts.ConfigEnvName,
-		ConfigPath:  opts.ConfigPath,
-		PreviewOnly: opts.PreviewOnly,
-		DaemonEnv:   opts.DaemonEnv,
+	actions := inspectRecommendedActions(readiness, risks, services, opts.Command, opts.ConfigEnvName, opts.Selection)
+	environment := inspectEnvSummary{
+		State:        opts.Selection.State,
+		SelectedName: opts.Selection.SelectedName,
+		SelectedPath: opts.Selection.SelectedPath,
+		Environments: opts.Selection.Environments,
+		PreviewOnly:  opts.PreviewOnly,
+		DaemonEnv:    opts.DaemonEnv,
 	}
 	if opts.SetupRequired {
-		env = inspectEnvSummary{}
+		environment = inspectEnvSummary{
+			State:        environmentSelectionNone,
+			Environments: []environmentChoice{},
+		}
 	}
 	return inspectJSONData{
 		SchemaVersion: inspectJSONSchemaVersion,
@@ -191,7 +211,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 			UpdateAvailable: opts.UpdateAvailable,
 			Dashboard:       inspectDashboard(opts),
 		},
-		Env:                env,
+		Environment:        environment,
 		Resources:          services,
 		Risks:              risks,
 		RecommendedActions: actions,
@@ -276,6 +296,18 @@ func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
 			Message:  "Orbit has not been set up in this user context",
 		}, true
 	}
+	if environmentSelectionBlocksConfig(opts.Selection, opts.ConfigPath) ||
+		(opts.Selection.State == environmentSelectionNone && len(opts.Selection.Environments) > 0 && opts.ConfigErr != nil) {
+		message := "an available environment must be selected"
+		if environmentSelectionBlocksConfig(opts.Selection, opts.ConfigPath) {
+			message = fmt.Sprintf("environment %q is no longer available", opts.Selection.SelectedName)
+		}
+		return inspectRisk{
+			Code:     "environment_selection_required",
+			Severity: "critical",
+			Message:  message,
+		}, true
+	}
 	if opts.ConfigErr != nil {
 		return inspectRisk{
 			Code:     "config_invalid",
@@ -340,6 +372,10 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 	if opts.SetupRequired {
 		return inspectReadiness{State: inspectReadinessSetupRequired, Blocked: true, Summary: "Orbit setup is required before startup"}
 	}
+	if environmentSelectionBlocksConfig(opts.Selection, opts.ConfigPath) ||
+		(opts.Selection.State == environmentSelectionNone && len(opts.Selection.Environments) > 0 && opts.ConfigErr != nil) {
+		return inspectReadiness{State: inspectReadinessSelectionRequired, Blocked: true, Summary: "an available environment must be selected"}
+	}
 	if opts.ConfigErr != nil {
 		return inspectReadiness{State: inspectReadinessConfigInvalid, Blocked: true, Summary: "selected config cannot be loaded"}
 	}
@@ -374,6 +410,7 @@ func inspectRecommendedActions(
 	services inspectServiceSummary,
 	retryCommand string,
 	selectedEnv string,
+	selection environmentSelection,
 ) []cli.JSONAction {
 	actions := []cli.JSONAction{}
 	switch readiness.State {
@@ -383,6 +420,8 @@ func inspectRecommendedActions(
 			Reason:      "Set up a workspace and select an environment before starting Orbit.",
 			Destructive: false,
 		})
+	case inspectReadinessSelectionRequired:
+		actions = append(actions, environmentSelectionActions(selection)...)
 	case inspectReadinessConfigInvalid:
 		command := "orbit inspect --json"
 		if retryCommand != "" {
@@ -463,9 +502,6 @@ func printInspectHuman(data inspectJSONData) {
 	if data.Readiness.Summary != "" {
 		fmt.Println(data.Readiness.Summary)
 	}
-	if data.Env.ConfigPath != "" {
-		fmt.Printf("Config: %s\n", data.Env.ConfigPath)
-	}
 	if data.Daemon.Running {
 		fmt.Print("Daemon: running")
 		if data.Daemon.PID != 0 {
@@ -484,6 +520,13 @@ func printInspectHuman(data inspectJSONData) {
 		}
 	}
 	if len(data.RecommendedActions) > 0 {
+		if data.Readiness.State == inspectReadinessSelectionRequired && len(data.Environment.Environments) > 0 {
+			fmt.Println("Available environments:")
+			for _, environment := range data.Environment.Environments {
+				fmt.Printf("  %s\n", environmentSwitchCommand(environment.Name, false))
+			}
+			return
+		}
 		next := strings.TrimSuffix(data.RecommendedActions[0].Command, " --json")
 		if data.Readiness.State == inspectReadinessSetupRequired {
 			next = "orbit init"

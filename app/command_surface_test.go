@@ -146,6 +146,34 @@ func TestMutationsRequireReconciledEnvironment(t *testing.T) {
 	}
 }
 
+func TestUnavailableEnvironmentBlocksMutationsButKeepsRecoveryAvailable(t *testing.T) {
+	root := &cobra.Command{Use: "orbit"}
+	up := &cobra.Command{Use: "up"}
+	status := &cobra.Command{Use: "status"}
+	down := &cobra.Command{Use: "down"}
+	switchEnv := &cobra.Command{Use: "switch"}
+	env := &cobra.Command{Use: "env"}
+	list := &cobra.Command{Use: "list"}
+	toggle := &cobra.Command{Use: "toggle"}
+	daemonCmd := &cobra.Command{Use: "daemon"}
+	daemonStart := &cobra.Command{Use: "start"}
+	daemonStop := &cobra.Command{Use: "stop"}
+	root.AddCommand(up, status, down, switchEnv, env, daemonCmd)
+	env.AddCommand(list, toggle)
+	daemonCmd.AddCommand(daemonStart, daemonStop)
+
+	for _, cmd := range []*cobra.Command{up, toggle, daemonStart} {
+		if !commandRequiresAvailableEnvironment(cmd) {
+			t.Errorf("%s did not require an available environment", cmd.CommandPath())
+		}
+	}
+	for _, cmd := range []*cobra.Command{status, down, switchEnv, list, daemonStop} {
+		if commandRequiresAvailableEnvironment(cmd) {
+			t.Errorf("%s should remain available for recovery", cmd.CommandPath())
+		}
+	}
+}
+
 func TestContextualHelpHidesCommandsWithoutASelectedEnvironment(t *testing.T) {
 	root := commandVisibilityTestRoot()
 	applyContextualCommandVisibility(root, nil, []extension.Extension{{

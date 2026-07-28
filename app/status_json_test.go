@@ -229,6 +229,66 @@ func TestStatusJSON_SetupRequiredRecommendsInitInsteadOfUp(t *testing.T) {
 	}
 }
 
+func TestStatusJSON_UnavailableSelectionOffersExistingEnvironments(t *testing.T) {
+	var buf bytes.Buffer
+	setup := statusSetupState{
+		SelectionRequired: true,
+		Message:           `Environment "original" is no longer available.`,
+		Selection: environmentSelection{
+			State:        environmentSelectionUnavailable,
+			SelectedName: "original",
+			SelectedPath: "/tmp/original.yaml",
+			Environments: []environmentChoice{{
+				Name: "renamed",
+				Path: "/tmp/renamed.yaml",
+			}},
+		},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"api": {Name: "api", Kind: daemon.ResourceKindService, State: "healthy"},
+	}
+	if err := writeStatusJSON(
+		&buf,
+		"orbit status --json",
+		nil,
+		running,
+		daemonStatus{Running: true},
+		setup,
+	); err != nil {
+		t.Fatalf("writeStatusJSON: %v", err)
+	}
+	var envelope struct {
+		Data struct {
+			SetupRequired     bool                 `json:"setup_required"`
+			SelectionRequired bool                 `json:"selection_required"`
+			SetupMessage      string               `json:"setup_message"`
+			SelectionMessage  string               `json:"selection_message"`
+			Environment       environmentSelection `json:"environment"`
+			Resources         []jsonService        `json:"resources"`
+		} `json:"data"`
+		RecommendedActions []cli.JSONAction `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if envelope.Data.SetupRequired || !envelope.Data.SelectionRequired {
+		t.Fatalf("selection flags = %+v", envelope.Data)
+	}
+	if envelope.Data.SetupMessage != "" || envelope.Data.SelectionMessage != setup.Message {
+		t.Fatalf("selection messages = %+v", envelope.Data)
+	}
+	if envelope.Data.Environment.State != environmentSelectionUnavailable {
+		t.Fatalf("environment = %+v", envelope.Data.Environment)
+	}
+	if len(envelope.Data.Resources) != 1 || envelope.Data.Resources[0].Name != "api" {
+		t.Fatalf("resources = %+v", envelope.Data.Resources)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit switch renamed --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 func TestStatusJSON_DaemonRunning(t *testing.T) {
 	d := daemonStatus{
 		Running:         true,

@@ -62,6 +62,69 @@ func TestDoctorRecommendedActionsUseJSONForOrbitHints(t *testing.T) {
 	t.Fatalf("missing machine-readable logs action: %+v", got)
 }
 
+func TestLocalDoctorResponseUnavailableSelectionOffersExactSwitch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	envs := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	available := filepath.Join(envs, "renamed.yaml")
+	if err := os.WriteFile(available, []byte("version: \"2\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(envs, "original.yaml")
+	if err := writeCurrentEnv(missing); err != nil {
+		t.Fatal(err)
+	}
+	previousConfig := configFile
+	configFile = missing
+	t.Cleanup(func() { configFile = previousConfig })
+
+	resp := localDoctorResponse()
+	if len(resp.Checks) == 0 || resp.Checks[0].Name != "Environment selection" {
+		t.Fatalf("checks = %+v", resp.Checks)
+	}
+	if resp.Checks[0].Hint != "run: orbit switch renamed" {
+		t.Fatalf("hint = %q", resp.Checks[0].Hint)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit switch renamed --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
+func TestLocalDoctorResponseUnavailableSelectionKeepsRunningDaemonTruthful(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	envs := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	available := filepath.Join(envs, "renamed.yaml")
+	if err := os.WriteFile(available, []byte("version: \"2\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(envs, "original.yaml")
+	if err := writeCurrentEnv(missing); err != nil {
+		t.Fatal(err)
+	}
+	previousConfig := configFile
+	configFile = missing
+	t.Cleanup(func() { configFile = previousConfig })
+
+	resp := localDoctorResponseWithDaemon(true)
+	for _, check := range resp.Checks {
+		if check.Name == "Daemon" {
+			if check.Message != "running with the previous environment snapshot" {
+				t.Fatalf("daemon check = %+v", check)
+			}
+			return
+		}
+	}
+	t.Fatalf("daemon check missing: %+v", resp.Checks)
+}
+
 func TestDoctorFailureIgnoresHiddenServiceCheck(t *testing.T) {
 	resp := &daemon.DoctorResponse{
 		Checks: []daemon.DoctorCheck{

@@ -124,7 +124,7 @@ func buildEnvUseJSONData(selectedEnv string, daemonRunning bool) envUseJSONData 
 	return envUseJSONData{
 		Operation:       "env_use",
 		SelectedEnv:     selectedEnv,
-		EnvName:         filepath.Base(selectedEnv),
+		EnvName:         daemonsrv.EnvShortName(selectedEnv),
 		DaemonRunning:   daemonRunning,
 		RestartRequired: daemonRunning,
 	}
@@ -165,25 +165,53 @@ func resolveEnvArg(arg string) (string, error) {
 }
 
 func runEnvList(_ *cobra.Command, _ []string) error {
-	dir := envsDestDir()
-	names := daemonsrv.ListEnvYamls(dir)
-	if names == nil {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			fmt.Printf("No envs found at %s. Run `orbit init` or `orbit env sync`.\n", dir)
-			return nil
-		}
+	selection := readEnvironmentSelection()
+	actions := environmentSelectionActions(selection)
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildEnvListJSONData(selection), actions)
 	}
 
-	current := readCurrentEnv()
-	for _, name := range names {
-		abs := filepath.Join(dir, name)
+	if selection.State == environmentSelectionUnavailable {
+		fmt.Printf("%s environment %q is no longer available\n",
+			cli.Yellow.Sprint("!"), selection.SelectedName)
+	}
+	if len(selection.Environments) == 0 {
+		fmt.Printf("No environments found at %s.\n", envsDestDir())
+		fmt.Println("  Next: orbit env sync")
+		return nil
+	}
+
+	for _, environment := range selection.Environments {
 		marker := "  "
-		if abs == current {
+		if environment.Selected {
 			marker = cli.Green.Sprint("* ")
 		}
-		fmt.Printf("%s%s\n", marker, name)
+		fmt.Printf("%s%s\n", marker, environment.Name)
+	}
+	if selection.State != environmentSelectionSelected {
+		fmt.Println()
+		if len(selection.Environments) == 1 {
+			fmt.Printf("  Next: %s\n", environmentSwitchCommand(selection.Environments[0].Name, false))
+		} else {
+			fmt.Println("  Choose an environment:")
+			for _, environment := range selection.Environments {
+				fmt.Printf("    %s\n", environmentSwitchCommand(environment.Name, false))
+			}
+		}
 	}
 	return nil
+}
+
+type envListJSONData struct {
+	Operation   string               `json:"operation"`
+	Environment environmentSelection `json:"environment"`
+}
+
+func buildEnvListJSONData(selection environmentSelection) envListJSONData {
+	return envListJSONData{
+		Operation:   "env_list",
+		Environment: selection,
+	}
 }
 
 func writeCurrentEnv(absPath string) error {
@@ -270,7 +298,7 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	}
 	printSwitchPrerequisites(prerequisites, prerequisitesReady)
 	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
-	fmt.Printf("✓ switched to %s\n", filepath.Base(abs))
+	fmt.Printf("✓ switched to %s\n", daemonsrv.EnvShortName(abs))
 	return nil
 }
 
@@ -305,7 +333,7 @@ func buildSwitchJSONData(opts switchJSONOptions) switchJSONData {
 	out := switchJSONData{
 		Operation:            "switch",
 		SelectedEnv:          opts.SelectedEnv,
-		EnvName:              filepath.Base(opts.SelectedEnv),
+		EnvName:              daemonsrv.EnvShortName(opts.SelectedEnv),
 		DaemonAction:         opts.DaemonAction,
 		DaemonRunningBefore:  opts.DaemonRunningBefore,
 		DaemonRunningAfter:   opts.DaemonRunningAfter,

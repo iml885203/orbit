@@ -88,13 +88,14 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, and recommended follow-up commands. |
-| `orbit status --json` | Returns setup readiness, daemon state, and configured resource state in `data.resources`. |
+| `orbit status --json` | Returns setup/selection readiness, the selected and available environments, daemon state, and configured resource state in `data.resources`. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
 | `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
+| `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, and exact available environment choices. |
 | `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon running state, and restart recommendation. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
@@ -131,6 +132,9 @@ Before first setup, status remains a successful state query with
 `data.setup_required: true`, a human-readable `setup_message`, and exactly one
 `orbit init --yes --json` action. A present but invalid environment file is
 instead an `invalid_environment` error, because startup cannot safely use it.
+If the previously selected environment was renamed or removed, status instead
+returns `data.selection_required: true`, a `selection_message`, and exact
+`orbit switch <env> --json` choices; this does not mean setup must be repeated.
 
 When GitHub reports that an environment repository was not found, Orbit returns
 `env_repo_unavailable` without recommended actions. GitHub deliberately uses
@@ -144,6 +148,7 @@ Stable `data.operation` values for converted control commands:
 
 | Command | `data.operation` |
 |---|---|
+| `orbit env list --json` | `env_list` |
 | `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit switch <env> --json` | `switch` |
@@ -235,7 +240,7 @@ human-readable output.
 
 `orbit inspect --json` is the recommended first command for agents that need to
 understand whether Orbit is ready for automation. It returns the normal
-`orbit.cli.v1` envelope, with `data.schema_version` set to `orbit.inspect.v1`.
+`orbit.cli.v1` envelope, with `data.schema_version` set to `orbit.inspect.v2`.
 
 The inspect payload contains:
 
@@ -243,9 +248,9 @@ The inspect payload contains:
 |---|---|
 | `readiness` | Stable decision state with `state`, `blocked`, and `summary`. |
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
-| `env` | Current config path, env name, preview-only flag, and daemon-reported env when available. |
+| `environment` | The same `state`, `selected_name`, `selected_path`, and `environments` selection object used by status and env list, plus preview/daemon details when available. |
 | `resources` | Bounded resource summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:
@@ -253,6 +258,7 @@ Stable `readiness.state` values:
 | State | Blocked | Meaning |
 |---|---:|---|
 | `setup_required` | true | No usable environment has been selected; the only next action is `orbit init --yes --json`. |
+| `selection_required` | true | The previous selection is unavailable. Actions contain exact `orbit switch <env> --json` choices, or `orbit env sync --json` when none are available. |
 | `config_invalid` | true | The selected config cannot be loaded. |
 | `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
 | `needs_daemon` | true | A running daemon is serving a different env than the selected config. |
