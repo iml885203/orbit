@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 )
 
 // writeTree creates files at paths with given content under root.
@@ -67,6 +68,61 @@ func TestSync_OverwritesExisting(t *testing.T) {
 
 	if got := readFile(t, filepath.Join(dest, "development.yaml")); got != "version: 2\n" {
 		t.Errorf("not overwritten: %q", got)
+	}
+}
+
+func TestSync_UnchangedFilesAreNotWritten(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	files := map[string]string{
+		"development.yaml":  "version: 2\n",
+		"seeds/demo/app.py": "print('ready')\n",
+	}
+	writeTree(t, src, files)
+	writeTree(t, dest, files)
+	destination := filepath.Join(dest, "development.yaml")
+	originalTime := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(destination, originalTime, originalTime); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Sync(src, dest, Options{})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(res.Written) != 0 {
+		t.Fatalf("Written = %v, want no unchanged files", res.Written)
+	}
+	info, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(originalTime) {
+		t.Fatalf("unchanged destination was rewritten: modtime = %s", info.ModTime())
+	}
+}
+
+func TestSync_DryRunReportsOnlyChangedFiles(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	writeTree(t, src, map[string]string{
+		"unchanged.yaml": "version: 2\n",
+		"changed.yaml":   "version: 2\n",
+	})
+	writeTree(t, dest, map[string]string{
+		"unchanged.yaml": "version: 2\n",
+		"changed.yaml":   "version: 1\n",
+	})
+
+	res, err := Sync(src, dest, Options{DryRun: true})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(res.Written) != 1 || res.Written[0] != "changed.yaml" {
+		t.Fatalf("Written = %v, want changed.yaml", res.Written)
+	}
+	if got := readFile(t, filepath.Join(dest, "changed.yaml")); got != "version: 1\n" {
+		t.Fatalf("dry run changed destination: %q", got)
 	}
 }
 

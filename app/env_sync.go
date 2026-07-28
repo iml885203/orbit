@@ -236,6 +236,10 @@ func offerDaemonRestart(filesChanged bool) error {
 }
 
 func printSyncResult(res envsync.Result) {
+	if len(res.Written) == 0 {
+		fmt.Println("Already up to date.")
+		return
+	}
 	verb := "wrote"
 	if envSyncDryRun {
 		verb = "would write"

@@ -6,6 +6,7 @@
 package envsync
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,8 +22,8 @@ type Options struct {
 
 // Result summarizes a Sync run.
 type Result struct {
-	// Written lists the relative paths (relative to destDir) of yaml files
-	// that were written (or would be, in DryRun mode), sorted.
+	// Written lists changed relative paths (relative to destDir) that were
+	// written, or would be written in DryRun mode, sorted.
 	Written []string
 }
 
@@ -51,11 +52,19 @@ func Sync(srcDir, destDir string, opts Options) (Result, error) {
 		if !strings.HasSuffix(info.Name(), ".yaml") && !strings.HasPrefix(relSlash, "seeds/") {
 			return nil
 		}
+		destination := filepath.Join(destDir, rel)
+		unchanged, err := sameFileContents(path, destination)
+		if err != nil {
+			return err
+		}
+		if unchanged {
+			return nil
+		}
 		written = append(written, relSlash)
 		if opts.DryRun {
 			return nil
 		}
-		return copyFile(path, filepath.Join(destDir, rel))
+		return copyFile(path, destination)
 	})
 	if walkErr != nil {
 		return Result{}, walkErr
@@ -63,6 +72,21 @@ func Sync(srcDir, destDir string, opts Options) (Result, error) {
 
 	sort.Strings(written)
 	return Result{Written: written}, nil
+}
+
+func sameFileContents(left, right string) (bool, error) {
+	leftData, err := os.ReadFile(left)
+	if err != nil {
+		return false, err
+	}
+	rightData, err := os.ReadFile(right)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(leftData, rightData), nil
 }
 
 func copyFile(src, dst string) error {
