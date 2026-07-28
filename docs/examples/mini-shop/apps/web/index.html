@@ -309,6 +309,7 @@
         <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
         <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
         <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
+        <button id="copy-demo-report" class="small-btn inline-btn quick-start-action">複製 demo 報告</button>
       </div>
     </div>
 
@@ -607,6 +608,7 @@ web
       const startDemoFlowBtn = document.getElementById('start-demo-flow');
       const verifyDemoSignalBtn = document.getElementById('verify-demo-signal');
       const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
+      const copyDemoReportBtn = document.getElementById('copy-demo-report');
       const goalCurrentText = document.getElementById('goal-current-text');
       const goalStep1 = document.getElementById('goal-step-1');
       const goalStep2 = document.getElementById('goal-step-2');
@@ -1412,6 +1414,53 @@ web
           `<div class="evidence-line"><span class="label">出貨：</span>${shipmentText}</div>`,
           `<div class="evidence-line"><span class="label">交易結果：</span>${checkoutText}</div>`,
         ].join('');
+      }
+
+      function buildDemoReport() {
+        const map = latestServiceMap || {};
+        const entries = Object.entries(map);
+        const serviceTotal = entries.length || BACKEND_SERVICE_COUNT;
+        const readyCount = entries.filter(([, payload]) => payload && payload.status === 'ok').length;
+        const servicesReady = serviceTotal > 0 ? `${readyCount}/${serviceTotal}` : '0/0';
+        const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
+
+        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const relatedShipment = latestOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
+          : null;
+        const latestCode = latestCheckoutPayload?.code || latestCheckoutPayload?.status;
+
+        const orderText = latestOrder
+          ? `#${latestOrder.id} ${latestOrder.customer_name || ''} ${latestOrder.product_name || ''} x${latestOrder.quantity} (status:${latestOrder.status})`
+          : '尚未有訂單';
+        const shipmentText = relatedShipment
+          ? `#${relatedShipment.id} tracking=${relatedShipment.tracking_no || 'N/A'} status=${relatedShipment.status}`
+          : '尚未關聯出貨';
+        const checkoutText = latestCode
+          ? `最後 checkout code=${latestCode}${latestCheckoutPayload.occurred_at ? ` 時間=${new Date(latestCheckoutPayload.occurred_at).toLocaleString()}` : ''}`
+          : '尚未執行 checkout';
+        const serviceSignal = allServiceReady ? '綠' : '未全綠';
+        const serviceReadyText = `服務信號：${serviceSignal} (${servicesReady})`;
+        const checkoutSignal = latestOrder && latestOrder.status === 'confirmed' ? '綠' : '未完成';
+        const relationSignal = relatedShipment && latestOrder && relatedShipment.order_id === latestOrder.id ? '綠' : '未關聯';
+
+        const lines = [
+          'Orbit mini-shop 心智模型簡版報告',
+          `時間：${new Date().toLocaleString()}`,
+          serviceReadyText,
+          `交易信號：${checkoutSignal}`,
+          `關聯信號：${relationSignal}`,
+          `訂單：${orderText}`,
+          `出貨：${shipmentText}`,
+          `checkout：${checkoutText}`,
+          '',
+          '建議下一步',
+          `- 服務信號：${allServiceReady ? '可 demo' : '先完成服務就緒'}`,
+          `- 交易信號：${latestOrder ? '可進行關聯驗證' : '先完成 checkout'}`,
+          `- 關聯信號：${relationSignal === '綠' ? '已可 demo' : '先重跑一次成功流程'}`,
+        ];
+
+        return lines.join('\n');
       }
 
       function buildChecklistItem(ok, text, action) {
@@ -3139,6 +3188,17 @@ web
           setCopyFeedback('無法複製，請手動選取複製');
         }
       });
+
+      if (copyDemoReportBtn) {
+        copyDemoReportBtn.addEventListener('click', async () => {
+          const report = buildDemoReport();
+          if (!report) {
+            setCopyFeedback('目前沒有可複製報告，請先刷新頁面後重試');
+            return;
+          }
+          await copyTextToClipboard(report, setCopyFeedback);
+        });
+      }
 
       refreshProductBtn.addEventListener('click', loadProducts);
       customerEl.addEventListener('change', async () => {
