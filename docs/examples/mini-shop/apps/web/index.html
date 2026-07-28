@@ -59,12 +59,39 @@
       .error-item .title { font-weight: 600; color: #f8fafc; }
       .error-item .hint { margin-top: 4px; }
       .error-item .cmd { color: #7dd3fc; font-size: 12px; word-break: break-all; margin-top: 4px; }
+      .goal-card { border: 1px solid #1f2937; background: #0f172a; border-radius: 12px; }
+      .goal-state { margin: 8px 0; padding: 8px; border-radius: 8px; background: #0b1328; }
+      .goal-state b { color: #93c5fd; }
+      .goal-action { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     </style>
   </head>
   <body>
     <h1>Orbit mini-shop</h1>
     <p>目標很簡單：<strong>選客戶 → 加入購物車 → Checkout</strong>。你不用先記 API，也不用先猜 service 邏輯。</p>
     <p class="hint">這個 demo 想證明 3 件事：主機與容器混合、跨 service 的資料關聯、以及發生問題時可以快速定位。</p>
+
+    <div class="card">
+      <h3>一頁式目標導覽</h3>
+      <div class="goal-card">
+        <div class="goal-state hint">
+          <strong>目標</strong>：完成一筆成功 checkout，並在「執行報告」看到「✅ Checkout 成功」。
+        </div>
+        <ol id="goal-steps" class="step-list">
+          <li id="goal-step-1">等待服務就緒（8/8）</li>
+          <li id="goal-step-2">選擇客戶</li>
+          <li id="goal-step-3">加 1 件商品到購物車</li>
+          <li id="goal-step-4">使用 mock_card Checkout 一筆成功訂單</li>
+          <li id="goal-step-5">在「訂單 / 出貨 / 時間軸」確認結果</li>
+        </ol>
+        <div class="goal-state">
+          <div class="hint" id="goal-current-text">尚未開始，先等待服務就緒。</div>
+        </div>
+        <div class="goal-action">
+          <button id="goal-next" class="small-btn inline-btn">下一步操作建議</button>
+          <button id="goal-replay" class="small-btn inline-btn danger">重做一次成功流程</button>
+        </div>
+      </div>
+    </div>
 
     <div class="card">
       <h3>下一步（照著做）</h3>
@@ -249,6 +276,14 @@ web
       const flowStateEl = document.getElementById('flow-state');
       const progressSteps = document.getElementById('progress-steps');
       const resetFlowBtn = document.getElementById('reset-flow');
+      const goalCurrentText = document.getElementById('goal-current-text');
+      const goalStep1 = document.getElementById('goal-step-1');
+      const goalStep2 = document.getElementById('goal-step-2');
+      const goalStep3 = document.getElementById('goal-step-3');
+      const goalStep4 = document.getElementById('goal-step-4');
+      const goalStep5 = document.getElementById('goal-step-5');
+      const goalNextBtn = document.getElementById('goal-next');
+      const goalReplayBtn = document.getElementById('goal-replay');
       const runResultEl = document.getElementById('run-result');
       const SERVICE_COUNT = 8;
       let cartHasItems = false;
@@ -263,6 +298,7 @@ web
         title: '尚未執行',
         items: [],
       };
+      const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
       const faultPatterns = [
         { code: 'cart_empty', symptom: '購物車是空的', step: '先加入 1 件商品後再 checkout。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f' },
@@ -345,6 +381,85 @@ web
           return ['建議：回到情境 A 先跑一次成功流程，確認資料鏈路完整。'];
         }
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
+      }
+
+      function setGoalStepState(activeIndex) {
+        goalStepEls.forEach((el, index) => {
+          if (!el) {
+            return;
+          }
+          if (index < activeIndex - 1) {
+            el.className = 'progress-item done';
+            return;
+          }
+          el.className = index === activeIndex - 1 ? 'progress-item current' : 'progress-item';
+        });
+      }
+
+      function computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder) {
+        if (!allReady) {
+          return {
+            step: 1,
+            text: '正在等待所有服務就緒（8/8）。建議先保持 5-10 秒，或檢查每個服務是否 ok。',
+            action: '重新檢查服務狀態',
+          };
+        }
+        if (!customerSelected) {
+          return {
+            step: 2,
+            text: '請先選一位客戶（預設已幫你挑一位，若沒看到請重新整理）。',
+            action: '選擇客戶並確認',
+          };
+        }
+        if (!cartReady) {
+          return {
+            step: 3,
+            text: '加入 1 件商品到購物車，先完成這步就可以前往 checkout。',
+            action: '新增一筆購物車項目',
+          };
+        }
+        if (!hasSuccessfulOrder) {
+          return {
+            step: 4,
+            text: '使用 `mock_card` 點一下 Checkout，完成一筆成功訂單。',
+            action: '執行 Checkout（mock_card）',
+          };
+        }
+        return {
+          step: 5,
+          text: '核對訂單、出貨、時間軸都要有結果；再按「重做」可回到最小流程。',
+          action: '核對結果並重做下一輪',
+        };
+      }
+
+      function updateGoalState(state) {
+        const snapshot = state || { step: 1, text: '尚未開始', action: '重新整理' };
+        if (goalCurrentText) {
+          goalCurrentText.textContent = snapshot.text;
+        }
+        setGoalStepState(snapshot.step);
+        if (!goalNextBtn) {
+          return;
+        }
+        if (snapshot.step >= 5) {
+          goalNextBtn.textContent = '已到達目標';
+          goalNextBtn.disabled = true;
+        } else {
+          goalNextBtn.textContent = snapshot.action;
+          goalNextBtn.disabled = false;
+        }
+      }
+
+      function hasLatestSuccessfulOrder() {
+        return Boolean(latestOrdersPayload?.orders?.some((order) => order.status === 'confirmed'));
+      }
+
+      function scrollToAndFocus(el) {
+        if (!el) {
+          return;
+        }
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus({ preventScroll: true });
       }
 
       function renderErrorPlaybook(activeCode = fallbackPattern.code) {
@@ -594,6 +709,9 @@ web
 
         status.textContent = formatActionNotice(map);
         setFlowState(allReady, customerSelected, cartReady);
+        const hasSuccessfulOrder = hasLatestSuccessfulOrder();
+        const goalState = computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder);
+        updateGoalState(goalState);
         setNotice(
           allReady
             ? (cartReady ? '購物車有資料可結帳。' : '先加入 1 件商品再 checkout。')
@@ -1194,6 +1312,96 @@ web
         } catch (_e) {
           setCopyFeedback('複製失敗，請手動選取複製');
         }
+      });
+
+      goalNextBtn.addEventListener('click', async () => {
+        try {
+          goalNextBtn.disabled = true;
+          setNotice('正在幫你前往下一步…', 'warn');
+          const map = await checkAll();
+          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          const customerSelected = Number(customerEl.value) > 0;
+          const cartReady = cartHasItems;
+          const hasSuccessfulOrder = hasLatestSuccessfulOrder();
+          const state = computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder);
+
+          if (state.step === 1) {
+            await refresh();
+            return;
+          }
+
+          if (!customerSelected) {
+            if (!customerEl.options.length) {
+              await loadCustomers();
+            }
+            if (customerEl.options.length > 0) {
+              customerEl.selectedIndex = 0;
+              await loadCart();
+              await checkAll();
+              scrollToAndFocus(customerEl);
+              appendSummary('已自動選擇第一位客戶，請繼續下一步。');
+            }
+            return;
+          }
+
+          if (!cartReady) {
+            if (!productEl.options.length) {
+              await loadProducts();
+            }
+            if (!productEl.options.length) {
+              setNotice('還沒載入到商品，請先檢查 catalog-api', 'error');
+              return;
+            }
+            productEl.selectedIndex = 0;
+            quantityEl.value = 1;
+            const firstCustomer = Number(customerEl.value);
+            await safeFetch(`${cartApi}/carts/${firstCustomer}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_id: Number(productEl.value), quantity: 1 }),
+            });
+            const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments(), loadCart(), checkAll()]);
+            refreshTransactionViews(ordersPayload, shipmentsPayload);
+            scrollToAndFocus(cartEl);
+            appendSummary('已自動幫你加入 1 件商品到購物車。');
+            return;
+          }
+
+          if (state.step === 4) {
+            paymentMethodEl.value = 'mock_card';
+            const customerId = Number(customerEl.value);
+            const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ method: 'mock_card' }),
+            });
+            captureCheckoutPayload(payload, '目標導覽');
+            if (payload?.orders?.[0]) {
+              updateRunResultForOrder(payload.orders[0]);
+            }
+            const [ordersPayload, shipmentsPayload] = await Promise.all([loadOrders(), loadShipments(), loadCart(), loadInventory(), checkAll()]);
+            refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);
+            appendSummary('已幫你完成 checkout，請在結果區核對。');
+            scrollToAndFocus(ordersEl);
+            return;
+          }
+
+          if (state.step >= 5) {
+            scrollToAndFocus(flowTraceEl);
+            appendSummary('你已完成流程，若要再測一輪可按「重做一次成功流程」。');
+          }
+        } catch (err) {
+          const parsedError = parseApiError(err);
+          setNotice(errorText(parsedError), 'error');
+          appendSummary('目標導覽操作失敗，請手動依提示繼續。');
+          updateRunResultForError(errorText(parsedError), '目標導覽', parsedError);
+        } finally {
+          goalNextBtn.disabled = false;
+        }
+      });
+
+      goalReplayBtn.addEventListener('click', () => {
+        resetFlow();
       });
 
       async function resetFlow() {
