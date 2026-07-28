@@ -24,8 +24,6 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 - **共享 environments：** 從任何 Git repository 同步有版本的 YAML。
 - **Agent automation：** 使用 `orbit.cli.v1` JSON envelope 可靠控制環境。
 - **本機診斷：** CLI 與 dashboard 都能查看 health、logs、history、traces 與設定。
-- **選用 workflows：** 不重建 image 就發布 SQL schema，或將授權的 callback
-  path 導到本機服務。
 
 設計取捨與比較請見[為什麼是 Orbit](docs/why-orbit.zh-TW.md)。
 
@@ -77,18 +75,23 @@ resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默�
 `orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的
 project packages。
 
-### Database workflow
+## 選用 workflows
+
+除非 active environment 明確啟用對應 extension，相關 dashboard 頁面與設定
+檢查不會出現，指令也不會啟用。單純管理 host processes 與 containers 完全
+不需要理解或設定這些功能。
+
+### SQL Server Database Projects
 
 ```bash
 orbit db list
-orbit db query "SELECT @@VERSION"
 orbit db diff AppDB
 orbit db publish AppDB
-orbit db reset AppDB         # 破壞性操作：丟棄本機資料
 ```
 
-`publish` 在保留資料的情況下套用 schema diff；`reset` 會恢復乾淨的開發資料庫並
-要求確認。詳情請見 [SQL workflow](docs/sql-workflow.zh-TW.md)。
+Environment 透過 `sqlserver:` section 明確啟用。`publish` 會保留資料並套用
+schema diff；`reset` 與 forced publish 等破壞性路徑都要求確認。詳情請見
+[SQL Server workflow](docs/sql-workflow.zh-TW.md)。
 
 ### Callback tunnels
 
@@ -102,7 +105,7 @@ orbit tunnel claim /callbacks/example -p 8080
 ## 搭配 AI agent
 
 Repository 內含 `plugins/orbit-agent`，可包裝成同版本的 Codex 與 Claude plugin。
-它會要求 agent 先檢查狀態、使用 `--json`，並在破壞性 database 操作前確認。
+它會要求 agent 先檢查狀態、使用 `--json`，並在破壞性操作前確認。
 
 不安裝 plugin 時，也可以讓 agent 直接閱讀
 [skill](plugins/orbit-agent/skills/orbit/SKILL.md) 與
@@ -115,21 +118,24 @@ Daemon 啟動後執行 `orbit open`。Dashboard 提供：
 - dependency graph 與 service controls；
 - environment preview 與切換；
 - logs、設定與 health diagnostics；
-- 本機 database 變更檢查與發布；
+- active environment 啟用後才出現的 SQL Server schema 檢查與發布；
 - traces 與 request playback。
 
 Dashboard 位於 <http://localhost:19800>。
 
 ## 文件
 
-使用者：
+核心使用者文件：
 
 - [設定](docs/configuration.zh-TW.md)
-- [SQL workflow](docs/sql-workflow.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)
-- [Tunnel claims](docs/tunnel-claim.zh-TW.md)
 - [疑難排解](docs/troubleshooting.zh-TW.md)
 - [版本與相容性](docs/versioning.zh-TW.md)
+
+選用 workflows：
+
+- [SQL Server Database Projects](docs/sql-workflow.zh-TW.md)
+- [Tunnel claims](docs/tunnel-claim.zh-TW.md)
 
 導入者與 contributors：
 

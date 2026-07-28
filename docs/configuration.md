@@ -13,7 +13,7 @@ Full YAML schema for an orbit env file. Files live in `~/.orbit/envs/` and are s
 - [`services`](#services)
 - [`groups`](#groups)
 - [`externals`](#externals)
-- [`sqlserver`](#sqlserver)
+- [Optional extension: `sqlserver`](#sqlserver)
 - [Extension-owned sections](#extension-owned-sections)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [Variable substitution](#variable-substitution)

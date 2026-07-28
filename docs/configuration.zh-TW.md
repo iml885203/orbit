@@ -13,7 +13,7 @@ orbit env 檔案完整的 YAML schema。檔案放在 `~/.orbit/envs/`，透過 `
 - [`services`](#services)
 - [`groups`](#groups)
 - [`externals`](#externals)
-- [`sqlserver`](#sqlserver)
+- [選用 extension：`sqlserver`](#sqlserver)
 - [Extension 擁有的 section](#extension-擁有的-section)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [變數替換](#變數替換)

@@ -27,8 +27,6 @@ in containers. Orbit gives that whole environment one control plane:
   machine control.
 - **Local diagnostics:** health, logs, history, traces, and configuration are
   visible from the CLI and dashboard.
-- **Optional workflows:** publish SQL schema changes without rebuilding an
-  image, and route an authorized callback path to a local service.
 
 See [Why Orbit](docs/why-orbit.md) for design trade-offs and comparisons.
 
@@ -83,19 +81,24 @@ For a team environment, replace `demo-api` and `quickstart` with names shown by
 version or project-package setup required before `orbit up`, using the
 project's version files when present.
 
-### Database workflow
+## Optional workflows
+
+The related dashboard pages and setup checks stay hidden, and the commands are
+inactive, unless the active environment explicitly enables the corresponding
+extension. They are not required to use Orbit for host processes and
+containers.
+
+### SQL Server Database Projects
 
 ```bash
 orbit db list
-orbit db query "SELECT @@VERSION"
 orbit db diff AppDB
 orbit db publish AppDB
-orbit db reset AppDB         # destructive: discards local data
 ```
 
-`publish` applies a schema diff while preserving data. `reset` restores a clean
-development database and requires confirmation. See
-[SQL workflow](docs/sql-workflow.md).
+An environment opts in with a `sqlserver:` section. `publish` applies a schema
+diff while preserving data; destructive `reset` and forced-publish paths
+require confirmation. See [SQL Server workflow](docs/sql-workflow.md).
 
 ### Callback tunnels
 
@@ -111,7 +114,7 @@ contain credentials or personal data. See
 
 The repository ships `plugins/orbit-agent`, a version-matched Codex and Claude
 plugin. Its operational skill teaches agents to inspect state first, use
-`--json`, and confirm destructive database operations.
+`--json`, and confirm destructive operations.
 
 Without installing the plugin, point an agent to
 [the skill](plugins/orbit-agent/skills/orbit/SKILL.md) and
@@ -129,21 +132,25 @@ Run `orbit open` after the daemon starts. The dashboard provides:
 - dependency graph and service controls;
 - environment preview and switching;
 - logs, configuration, and health diagnostics;
-- local database change inspection and publishing;
+- optional SQL Server schema inspection and publishing when enabled by the
+  active environment;
 - traces and request playback.
 
 The dashboard listens locally at <http://localhost:19800>.
 
 ## Documentation
 
-For users:
+Core user documentation:
 
 - [Configuration](docs/configuration.md)
-- [SQL workflow](docs/sql-workflow.md)
 - [Tracing](docs/tracing.md)
-- [Tunnel claims](docs/tunnel-claim.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Versioning and compatibility](docs/versioning.md)
+
+Optional workflows:
+
+- [SQL Server Database Projects](docs/sql-workflow.md)
+- [Tunnel claims](docs/tunnel-claim.md)
 
 For adopters and contributors:
 
