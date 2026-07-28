@@ -49,6 +49,9 @@ type App struct {
 	// owner can trigger graceful shutdown. Without it, deferred cleanup
 	// (socket, PID file) would be skipped by os.Exit.
 	OnFatal func(error)
+	// OnExternalContainerRestart exposes lifecycle drift to the daemon so it
+	// can persist and present the observation.
+	OnExternalContainerRestart func(ExternalContainerRestart)
 }
 
 func (a *App) signalFatal(err error) {
@@ -349,7 +352,10 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 	poller := container.NewPoller(nil, a.ContainerMgr.Namespace(), cfg.Settings.DockerPollInterval)
 	poller.OnStateUpdate = func(states map[string]container.ContainerState) {
 		for name, state := range states {
-			orch.OnContainerSeen(name, state.Running)
+			restart := orch.OnContainerObserved(name, state.Running, state.StartedAt)
+			if restart != nil && a.OnExternalContainerRestart != nil {
+				a.OnExternalContainerRestart(*restart)
+			}
 		}
 		// Containers absent from the poll no longer exist in Docker at
 		// all — reconcile those too, or a remove that outlives its stop

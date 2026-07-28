@@ -5,8 +5,9 @@ import "time"
 type Source string
 
 const (
-	SourceUI  Source = "ui"
-	SourceCLI Source = "cli"
+	SourceUI     Source = "ui"
+	SourceCLI    Source = "cli"
+	SourceSystem Source = "system"
 )
 
 type Status string

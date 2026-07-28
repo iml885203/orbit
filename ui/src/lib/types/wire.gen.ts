@@ -121,6 +121,8 @@ export interface ResourceStatus {
   port_conflict?: ResourcePortConflict;
   logs_available?: boolean;
   restart_count: number /* int */;
+  external_restart_count: number /* int */;
+  last_restart?: ResourceRestart;
   ports?: { [key: string]: number /* int */};
   url?: string;
   image?: string; // resolved container image; containers only
@@ -129,6 +131,15 @@ export interface ResourceStatus {
   sidecars?: SidecarInfo[];
   mode?: string; // "dev" or "container" (only for dual-defined services)
   health_progress?: HealthProgressInfo;
+}
+/**
+ * ResourceRestart describes the most recent restart Orbit observed but did
+ * not initiate.
+ */
+export interface ResourceRestart {
+  source: string;
+  started_at: string;
+  observed_at: string;
 }
 /**
  * ResourcePortConflict is actionable evidence for a resource that could not

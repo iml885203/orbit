@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/internal/env"
@@ -63,20 +64,31 @@ type GraphNode struct {
 	Color string `json:"color,omitempty"` // externals only; hex color tint
 	State string `json:"state"`
 	// StateReason says why the node is degraded; empty otherwise.
-	StateReason   string              `json:"stateReason,omitempty"`
-	PortConflict  *GraphPortConflict  `json:"portConflict,omitempty"`
-	LogsAvailable bool                `json:"logsAvailable,omitempty"`
-	Mode          string              `json:"mode,omitempty"` // services only
-	URL           string              `json:"url,omitempty"`
-	Ports         map[string]int      `json:"ports,omitempty"`
-	Health        *HealthProgressInfo `json:"health,omitempty"`
-	Sidecars      []SidecarInfo       `json:"sidecars,omitempty"`  // containers only — e.g. dbgate, mongo-express
-	InfraDeps     []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
+	StateReason          string              `json:"stateReason,omitempty"`
+	PortConflict         *GraphPortConflict  `json:"portConflict,omitempty"`
+	LogsAvailable        bool                `json:"logsAvailable,omitempty"`
+	Mode                 string              `json:"mode,omitempty"` // services only
+	URL                  string              `json:"url,omitempty"`
+	Ports                map[string]int      `json:"ports,omitempty"`
+	Health               *HealthProgressInfo `json:"health,omitempty"`
+	Sidecars             []SidecarInfo       `json:"sidecars,omitempty"` // containers only — e.g. dbgate, mongo-express
+	RestartCount         int                 `json:"restart_count,omitempty"`
+	ExternalRestartCount int                 `json:"external_restart_count,omitempty"`
+	LastRestart          *GraphRestart       `json:"last_restart,omitempty"`
+	StartupTime          string              `json:"startup_time,omitempty"`
+	Uptime               string              `json:"uptime,omitempty"`
+	InfraDeps            []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
 	// Kafka carries the produces/consumes declarations the node owns.
 	// Services with no declared topics get nil (omitted from JSON);
 	// externals are required by validation to declare at least one
 	// topic, so the pointer is always non-nil for them.
 	Kafka *config.KafkaIO `json:"kafka,omitempty"`
+}
+
+type GraphRestart struct {
+	Source     string    `json:"source"`
+	StartedAt  time.Time `json:"started_at"`
+	ObservedAt time.Time `json:"observed_at"`
 }
 
 type GraphPortConflict struct {
@@ -223,6 +235,11 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.URL = st.URL
 			n.Health = st.HealthProgress
 			n.Sidecars = st.Sidecars
+			n.RestartCount = st.RestartCount
+			n.ExternalRestartCount = st.ExternalRestartCount
+			n.LastRestart = graphRestart(st.LastRestart)
+			n.StartupTime = st.StartupTime
+			n.Uptime = st.Uptime
 		}
 		nodes = append(nodes, n)
 	}
@@ -247,6 +264,11 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.Ports = st.Ports
 			n.URL = st.URL
 			n.Health = st.HealthProgress
+			n.RestartCount = st.RestartCount
+			n.ExternalRestartCount = st.ExternalRestartCount
+			n.LastRestart = graphRestart(st.LastRestart)
+			n.StartupTime = st.StartupTime
+			n.Uptime = st.Uptime
 		}
 		nodes = append(nodes, n)
 	}
@@ -270,6 +292,15 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		})
 	}
 	return nodes
+}
+
+func graphRestart(restart *ResourceRestart) *GraphRestart {
+	if restart == nil {
+		return nil
+	}
+	return &GraphRestart{
+		Source: restart.Source, StartedAt: restart.StartedAt, ObservedAt: restart.ObservedAt,
+	}
 }
 
 func graphPortConflictFor(

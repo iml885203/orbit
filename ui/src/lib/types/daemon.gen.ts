@@ -103,6 +103,11 @@ export interface GraphNode {
   ports?: { [key: string]: number /* int */};
   health?: HealthProgressInfo;
   sidecars?: SidecarInfo[]; // containers only — e.g. dbgate, mongo-express
+  restart_count?: number /* int */;
+  external_restart_count?: number /* int */;
+  last_restart?: GraphRestart;
+  startup_time?: string;
+  uptime?: string;
   infraDeps?: InfraDepRef[]; // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
   /**
    * Kafka carries the produces/consumes declarations the node owns.
@@ -111,6 +116,11 @@ export interface GraphNode {
    * topic, so the pointer is always non-nil for them.
    */
   kafka?: KafkaIO;
+}
+export interface GraphRestart {
+  source: string;
+  started_at: string;
+  observed_at: string;
 }
 export interface GraphPortConflict {
   port: number /* int */;

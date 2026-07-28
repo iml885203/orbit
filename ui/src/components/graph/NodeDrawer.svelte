@@ -160,7 +160,7 @@
   // ServiceControls only consumes a strict subset of ResourceStatus. Define
   // that subset here so a future ResourceStatus field rename surfaces as a
   // type error at the adapter rather than a runtime mismatch.
-  type ServiceControlsInput = Pick<ResourceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
+  type ServiceControlsInput = Pick<ResourceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'external_restart_count' | 'last_restart' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
 
   // Adapt GraphNode → ResourceStatus shape ServiceControls expects.
   // GraphNode carries `health` where ResourceStatus has `health_progress`.
@@ -174,9 +174,11 @@
           url: node.url,
           ports: node.ports,
           health_progress: node.health,
-          restart_count: 0,
-          startup_time: '',
-          uptime: '',
+          restart_count: node.restart_count ?? 0,
+          external_restart_count: node.external_restart_count ?? 0,
+          last_restart: node.last_restart,
+          startup_time: node.startup_time,
+          uptime: node.uptime,
         }
       : null
   )

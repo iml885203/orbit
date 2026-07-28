@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // UpRequest is the body for POST /api/up.
@@ -69,19 +70,29 @@ type ResourceStatus struct {
 	PendingDependencies []string `json:"pending_dependencies,omitempty"`
 	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
-	StateReason     string                `json:"state_reason,omitempty"`
-	FailureEvidence string                `json:"failure_evidence,omitempty"`
-	PortConflict    *ResourcePortConflict `json:"port_conflict,omitempty"`
-	LogsAvailable   bool                  `json:"logs_available,omitempty"`
-	RestartCount    int                   `json:"restart_count"`
-	Ports           map[string]int        `json:"ports,omitempty"`
-	URL             string                `json:"url,omitempty"`
-	Image           string                `json:"image,omitempty"` // resolved container image; containers only
-	StartupTime     string                `json:"startup_time,omitempty"`
-	Uptime          string                `json:"uptime,omitempty"`
-	Sidecars        []SidecarInfo         `json:"sidecars,omitempty"`
-	Mode            string                `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
-	HealthProgress  *HealthProgressInfo   `json:"health_progress,omitempty"`
+	StateReason          string                `json:"state_reason,omitempty"`
+	FailureEvidence      string                `json:"failure_evidence,omitempty"`
+	PortConflict         *ResourcePortConflict `json:"port_conflict,omitempty"`
+	LogsAvailable        bool                  `json:"logs_available,omitempty"`
+	RestartCount         int                   `json:"restart_count"`
+	ExternalRestartCount int                   `json:"external_restart_count"`
+	LastRestart          *ResourceRestart      `json:"last_restart,omitempty"`
+	Ports                map[string]int        `json:"ports,omitempty"`
+	URL                  string                `json:"url,omitempty"`
+	Image                string                `json:"image,omitempty"` // resolved container image; containers only
+	StartupTime          string                `json:"startup_time,omitempty"`
+	Uptime               string                `json:"uptime,omitempty"`
+	Sidecars             []SidecarInfo         `json:"sidecars,omitempty"`
+	Mode                 string                `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
+	HealthProgress       *HealthProgressInfo   `json:"health_progress,omitempty"`
+}
+
+// ResourceRestart describes the most recent restart Orbit observed but did
+// not initiate.
+type ResourceRestart struct {
+	Source     string    `json:"source"`
+	StartedAt  time.Time `json:"started_at"`
+	ObservedAt time.Time `json:"observed_at"`
 }
 
 // ResourcePortConflict is actionable evidence for a resource that could not

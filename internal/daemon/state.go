@@ -30,8 +30,12 @@ type ProcessRecord struct {
 // ServiceStateEntry is a cached service state for quick status display.
 // State matches the string form of engine.ServiceState.
 type ServiceStateEntry struct {
-	Kind  string `json:"kind"`
-	State string `json:"state"`
+	Kind                  string    `json:"kind"`
+	State                 string    `json:"state"`
+	ContainerStartedAt    time.Time `json:"container_started_at,omitempty"`
+	ExternalRestartCount  int       `json:"external_restart_count,omitempty"`
+	LastExternalRestart   time.Time `json:"last_external_restart,omitempty"`
+	LastExternalStartedAt time.Time `json:"last_external_started_at,omitempty"`
 }
 
 // StateFile manages atomic reads/writes of DaemonState.

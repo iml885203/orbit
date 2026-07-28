@@ -47,7 +47,7 @@
   </div>
 {/if}
 
-{#if (!stopped && svc.startup_time) || (!stopped && svc.uptime) || svc.restart_count > 0}
+{#if (!stopped && svc.startup_time) || (!stopped && svc.uptime) || svc.restart_count > 0 || svc.last_restart}
   <div class="card-meta">
     {#if !stopped && svc.startup_time}
       <span class="timing">started in {svc.startup_time}</span>
@@ -57,6 +57,11 @@
     {/if}
     {#if svc.restart_count > 0}
       <span class="timing">restarts: {svc.restart_count}</span>
+    {/if}
+    {#if svc.last_restart}
+      <span class="timing" title={`Observed ${new Date(svc.last_restart.observed_at).toLocaleString()}`}>
+        restarted outside Orbit at {new Date(svc.last_restart.started_at).toLocaleTimeString()}
+      </span>
     {/if}
   </div>
 {/if}

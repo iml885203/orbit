@@ -104,6 +104,14 @@ type Event struct {
 	Generation int
 }
 
+// ExternalContainerRestart is emitted when Docker reports a new runtime
+// without a corresponding Orbit start action.
+type ExternalContainerRestart struct {
+	Name       string
+	StartedAt  time.Time
+	ObservedAt time.Time
+}
+
 // ServiceInfo holds runtime state for a single service/container.
 type ServiceInfo struct {
 	Name         string
@@ -111,6 +119,17 @@ type ServiceInfo struct {
 	State        ServiceState
 	PendingDeps  map[string]bool // deps not yet healthy
 	RestartCount int
+	// ExternalRestartCount counts container starts observed without a
+	// matching Orbit lifecycle action. ContainerStartedAt is Docker's
+	// authoritative timestamp for the current runtime; it keeps uptime
+	// honest when a user or another tool restarts the container.
+	ExternalRestartCount  int
+	ContainerStartedAt    time.Time
+	LastExternalRestart   time.Time
+	LastExternalStartedAt time.Time
+	// ExpectingContainerStart prevents an Orbit-managed start from being
+	// misclassified when Docker reports the replacement runtime.
+	ExpectingContainerStart bool
 	// Generation counts how many times the service has entered Starting.
 	// Health events are stamped with it so a stale probe goroutine from a
 	// previous start can't affect the current one. Mutation requires the

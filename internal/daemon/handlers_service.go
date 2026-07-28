@@ -61,9 +61,14 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		if !svc.StartedAt.IsZero() && !svc.HealthyAt.IsZero() {
 			startupTime = formatDuration(svc.HealthyAt.Sub(svc.StartedAt))
 		}
-		if !svc.HealthyAt.IsZero() && svc.State == engine.StateHealthy {
-			uptime = formatDuration(time.Since(svc.HealthyAt))
+		uptimeFrom := svc.HealthyAt
+		if svc.Kind == "container" && !svc.ContainerStartedAt.IsZero() {
+			uptimeFrom = svc.ContainerStartedAt
 		}
+		if !uptimeFrom.IsZero() && svc.State == engine.StateHealthy && !svc.ExpectingContainerStart {
+			uptime = formatDuration(time.Since(uptimeFrom))
+		}
+		lastRestart := resourceLastRestart(svc)
 		sidecars := getSidecarInfos(cfg, svc.Name, svc.Kind)
 		mode := ""
 		if isDualDefined(cfg, svc.Name) {
@@ -85,26 +90,38 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		}
 		sort.Strings(pendingDependencies)
 		out = append(out, ResourceStatus{
-			Name:                svc.Name,
-			Kind:                ResourceKind(svc.Kind),
-			State:               svc.State.String(),
-			PendingDependencies: pendingDependencies,
-			StateReason:         svc.StateReason,
-			FailureEvidence:     svc.FailureEvidence,
-			PortConflict:        resourcePortConflict(svc),
-			LogsAvailable:       resourceLogsAvailable(s.app.Logs, svc.Name),
-			RestartCount:        svc.RestartCount,
-			Ports:               ports,
-			URL:                 url,
-			Image:               image,
-			StartupTime:         startupTime,
-			Uptime:              uptime,
-			Sidecars:            sidecars,
-			Mode:                mode,
-			HealthProgress:      hp,
+			Name:                 svc.Name,
+			Kind:                 ResourceKind(svc.Kind),
+			State:                svc.State.String(),
+			PendingDependencies:  pendingDependencies,
+			StateReason:          svc.StateReason,
+			FailureEvidence:      svc.FailureEvidence,
+			PortConflict:         resourcePortConflict(svc),
+			LogsAvailable:        resourceLogsAvailable(s.app.Logs, svc.Name),
+			RestartCount:         svc.RestartCount,
+			ExternalRestartCount: svc.ExternalRestartCount,
+			LastRestart:          lastRestart,
+			Ports:                ports,
+			URL:                  url,
+			Image:                image,
+			StartupTime:          startupTime,
+			Uptime:               uptime,
+			Sidecars:             sidecars,
+			Mode:                 mode,
+			HealthProgress:       hp,
 		})
 	}
 	return out
+}
+
+func resourceLastRestart(svc *engine.ServiceInfo) *ResourceRestart {
+	if svc == nil || svc.LastExternalRestart.IsZero() {
+		return nil
+	}
+	return &ResourceRestart{
+		Source: "external", StartedAt: svc.LastExternalStartedAt,
+		ObservedAt: svc.LastExternalRestart,
+	}
 }
 
 func resourceLogsAvailable(logs *logging.Multiplexer, name string) bool {

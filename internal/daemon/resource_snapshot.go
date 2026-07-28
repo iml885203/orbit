@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/config"
 )
@@ -71,6 +72,13 @@ func snapshotWorkloads(deps map[string][]string, statuses []ResourceStatus) []Re
 		}
 		if st.RestartCount > 0 {
 			props["restarts"] = strconv.Itoa(st.RestartCount)
+		}
+		if st.ExternalRestartCount > 0 {
+			props["external_restarts"] = strconv.Itoa(st.ExternalRestartCount)
+		}
+		if st.LastRestart != nil {
+			props["last_restart_source"] = st.LastRestart.Source
+			props["last_restart_at"] = st.LastRestart.ObservedAt.Format(time.RFC3339)
 		}
 		for label, port := range st.Ports {
 			props["port:"+label] = strconv.Itoa(port)

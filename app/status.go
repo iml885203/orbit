@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
@@ -282,6 +283,9 @@ func statusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceS
 			return detail
 		}
 	}
+	if svc.LastRestart != nil && svc.LastRestart.Source == "external" {
+		return "restarted outside Orbit at " + svc.LastRestart.StartedAt.Local().Format(time.Kitchen)
+	}
 	return ""
 }
 
@@ -440,19 +444,22 @@ type statusSetupState struct {
 }
 
 type jsonService struct {
-	Name                string                       `json:"name"`
-	Kind                string                       `json:"kind"`
-	State               string                       `json:"state"`
-	StateReason         string                       `json:"state_reason,omitempty"`
-	FailureEvidence     string                       `json:"failure_evidence,omitempty"`
-	PortConflict        *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
-	LogsAvailable       bool                         `json:"logs_available,omitempty"`
-	PendingDependencies []string                     `json:"pending_dependencies,omitempty"`
-	BlockedBy           string                       `json:"blocked_by,omitempty"`
-	URL                 string                       `json:"url,omitempty"`
-	Ports               map[string]int               `json:"ports,omitempty"`
-	StartupTime         string                       `json:"startup_time,omitempty"`
-	Uptime              string                       `json:"uptime,omitempty"`
+	Name                 string                       `json:"name"`
+	Kind                 string                       `json:"kind"`
+	State                string                       `json:"state"`
+	StateReason          string                       `json:"state_reason,omitempty"`
+	FailureEvidence      string                       `json:"failure_evidence,omitempty"`
+	PortConflict         *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
+	LogsAvailable        bool                         `json:"logs_available,omitempty"`
+	PendingDependencies  []string                     `json:"pending_dependencies,omitempty"`
+	BlockedBy            string                       `json:"blocked_by,omitempty"`
+	URL                  string                       `json:"url,omitempty"`
+	Ports                map[string]int               `json:"ports,omitempty"`
+	StartupTime          string                       `json:"startup_time,omitempty"`
+	Uptime               string                       `json:"uptime,omitempty"`
+	RestartCount         int                          `json:"restart_count"`
+	ExternalRestartCount int                          `json:"external_restart_count"`
+	LastRestart          *daemon.ResourceRestart      `json:"last_restart,omitempty"`
 }
 
 type daemonStatus struct {
@@ -616,6 +623,9 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 	target.LogsAvailable = source.LogsAvailable
 	target.StartupTime = source.StartupTime
 	target.Uptime = source.Uptime
+	target.RestartCount = source.RestartCount
+	target.ExternalRestartCount = source.ExternalRestartCount
+	target.LastRestart = source.LastRestart
 	if blocker := statusDependencyBlocker(source, running); blocker != nil {
 		target.BlockedBy = blocker.Name
 	}

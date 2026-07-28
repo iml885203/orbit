@@ -306,6 +306,17 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	stateFile := daemonsrv.NewStateFile(daemonsrv.DefaultStatePath())
 
 	prevState, err := stateFile.Read()
+	if err == nil {
+		for name, saved := range prevState.Services {
+			app.Orchestrator.RestoreContainerRuntime(
+				name,
+				saved.ContainerStartedAt,
+				saved.ExternalRestartCount,
+				saved.LastExternalRestart,
+				saved.LastExternalStartedAt,
+			)
+		}
+	}
 	if err == nil && len(prevState.Processes) > 0 {
 		procs := make(map[string]struct{ PID, PGID int })
 		for name, rec := range prevState.Processes {
@@ -330,6 +341,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
 	server.SetConfigPath(configFile)
 	server.SetRestartLauncher(launchDashboardEnvRestart)
+	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
 	app.ProcessMgr.OnStarted = func(_ string) {
 		server.PersistState()
 	}

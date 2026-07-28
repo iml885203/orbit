@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 func (o *Orchestrator) startService(ctx context.Context, name string) error {
@@ -23,6 +24,9 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	info.cancel = cancel
 	info.Generation++
 	gen := info.Generation
+	if info.Kind == "container" && !info.ContainerStartedAt.IsZero() {
+		info.ExpectingContainerStart = true
+	}
 	info.Transition(StateStarting)
 	o.mu.Unlock()
 
@@ -102,14 +106,68 @@ func (o *Orchestrator) Start(names []string) {
 //
 // Unknown service names are silently ignored.
 func (o *Orchestrator) OnContainerSeen(name string, running bool) {
+	o.OnContainerObserved(name, running, time.Time{})
+}
+
+// RestoreContainerRuntime restores persisted Docker timing metadata before
+// polling starts, allowing a daemon replacement to distinguish an unchanged
+// runtime from a container restarted while Orbit was offline.
+func (o *Orchestrator) RestoreContainerRuntime(
+	name string,
+	startedAt time.Time,
+	externalRestartCount int,
+	lastExternalRestart time.Time,
+	lastExternalStartedAt time.Time,
+) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	info, exists := o.services[name]
+	if !exists || info.Kind != "container" {
+		return
+	}
+	info.ContainerStartedAt = startedAt
+	info.ExternalRestartCount = externalRestartCount
+	info.LastExternalRestart = lastExternalRestart
+	info.LastExternalStartedAt = lastExternalStartedAt
+}
+
+// OnContainerObserved also reconciles Docker's authoritative start time.
+func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt time.Time) *ExternalContainerRestart {
 	o.mu.Lock()
 	info, exists := o.services[name]
 	if !exists {
 		o.mu.Unlock()
-		return
+		return nil
+	}
+	var restart *ExternalContainerRestart
+	if running && !startedAt.IsZero() {
+		switch {
+		case info.ContainerStartedAt.IsZero():
+			info.ContainerStartedAt = startedAt
+		case !info.ContainerStartedAt.Equal(startedAt):
+			info.ContainerStartedAt = startedAt
+			if info.ExpectingContainerStart {
+				info.ExpectingContainerStart = false
+			} else {
+				observedAt := time.Now()
+				info.ExternalRestartCount++
+				info.LastExternalRestart = observedAt
+				info.LastExternalStartedAt = startedAt
+				info.StartedAt = startedAt
+				info.HealthyAt = observedAt
+				restart = &ExternalContainerRestart{
+					Name:       name,
+					StartedAt:  startedAt,
+					ObservedAt: observedAt,
+				}
+			}
+		}
 	}
 	prev := info.State
 	switch {
+	case restart != nil && running && prev == StateDegraded &&
+		info.StateReason == "container exited unexpectedly":
+		info.Transition(StateHealthy)
 	case running && prev == StateStopped:
 		info.Transition(StateHealthy)
 	case !running && prev == StateHealthy:
@@ -125,6 +183,7 @@ func (o *Orchestrator) OnContainerSeen(name string, running bool) {
 	if prev != newState && newState == StateHealthy {
 		o.notifyDependents(name)
 	}
+	return restart
 }
 
 // OnContainerGone reconciles a tracked container that no longer exists in

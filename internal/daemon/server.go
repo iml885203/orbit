@@ -334,8 +334,12 @@ func (s *Server) buildState() *DaemonState {
 	for i := range snapshot {
 		svc := &snapshot[i]
 		state.Services[svc.Name] = ServiceStateEntry{
-			Kind:  svc.Kind,
-			State: svc.State.String(),
+			Kind:                  svc.Kind,
+			State:                 svc.State.String(),
+			ContainerStartedAt:    svc.ContainerStartedAt,
+			ExternalRestartCount:  svc.ExternalRestartCount,
+			LastExternalRestart:   svc.LastExternalRestart,
+			LastExternalStartedAt: svc.LastExternalStartedAt,
 		}
 
 		// Record process info for services
@@ -352,6 +356,21 @@ func (s *Server) buildState() *DaemonState {
 	}
 
 	return state
+}
+
+// RecordExternalContainerRestart makes an out-of-band Docker action visible
+// in the same timeline users inspect for Orbit commands.
+func (s *Server) RecordExternalContainerRestart(restart engine.ExternalContainerRestart) {
+	s.PersistState()
+	if s.history == nil {
+		return
+	}
+	s.history.Record(history.Record{
+		Timestamp: restart.ObservedAt,
+		Source:    history.SourceSystem,
+		Summary:   fmt.Sprintf("%s restarted outside Orbit", restart.Name),
+		Status:    history.StatusOK,
+	})
 }
 
 func (s *Server) epoch() int64 {

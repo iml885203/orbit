@@ -334,3 +334,95 @@ func TestOnContainerSeen_UnknownServiceIgnored(t *testing.T) {
 		t.Error("OnContainerSeen created entry for unconfigured service")
 	}
 }
+
+func TestOnContainerObserved_ExternalRestartResetsRuntimeTruthOnce(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+	firstStart := time.Now().Add(-time.Minute)
+	secondStart := time.Now().Add(-time.Second)
+
+	if restart := o.OnContainerObserved("redis", true, firstStart); restart != nil {
+		t.Fatal("initial observation classified as a restart")
+	}
+	if restart := o.OnContainerObserved("redis", true, firstStart); restart != nil {
+		t.Fatal("unchanged runtime classified as a restart")
+	}
+	restart := o.OnContainerObserved("redis", true, secondStart)
+	if restart == nil || restart.Name != "redis" || !restart.StartedAt.Equal(secondStart) {
+		t.Fatalf("restart = %#v, want redis at second Docker start", restart)
+	}
+	if duplicate := o.OnContainerObserved("redis", true, secondStart); duplicate != nil {
+		t.Fatal("ordinary poll incremented external restart twice")
+	}
+
+	info, _ := o.GetServiceInfo("redis")
+	if info.ExternalRestartCount != 1 {
+		t.Fatalf("ExternalRestartCount = %d, want 1", info.ExternalRestartCount)
+	}
+	if !info.ContainerStartedAt.Equal(secondStart) {
+		t.Fatalf("ContainerStartedAt = %s, want %s", info.ContainerStartedAt, secondStart)
+	}
+}
+
+func TestOnContainerObserved_ManagedStartIsNotExternal(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+	firstStart := time.Now().Add(-time.Minute)
+	secondStart := time.Now()
+	o.OnContainerObserved("redis", true, firstStart)
+
+	o.mu.Lock()
+	o.services["redis"].ExpectingContainerStart = true
+	o.mu.Unlock()
+	if restart := o.OnContainerObserved("redis", true, secondStart); restart != nil {
+		t.Fatalf("managed replacement classified as external: %#v", restart)
+	}
+	info, _ := o.GetServiceInfo("redis")
+	if info.ExternalRestartCount != 0 {
+		t.Fatalf("ExternalRestartCount = %d, want 0", info.ExternalRestartCount)
+	}
+}
+
+func TestRestoreContainerRuntimeDetectsRestartWhileDaemonWasDown(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+	firstStart := time.Now().Add(-time.Minute)
+	secondStart := time.Now()
+	lastRestart := time.Now().Add(-time.Hour)
+	o.RestoreContainerRuntime("redis", firstStart, 2, lastRestart, firstStart)
+
+	restart := o.OnContainerObserved("redis", true, secondStart)
+	if restart == nil {
+		t.Fatal("container restart while daemon was down was not detected")
+	}
+	info, _ := o.GetServiceInfo("redis")
+	if info.ExternalRestartCount != 3 {
+		t.Fatalf("ExternalRestartCount = %d, want 3", info.ExternalRestartCount)
+	}
+}
+
+func TestOnContainerObserved_ManagedStartDoesNotRewriteLastExternalEvent(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+	initialStart := time.Now().Add(-time.Minute)
+	externalStart := time.Now().Add(-time.Second)
+	managedStart := time.Now()
+	o.OnContainerObserved("redis", true, initialStart)
+	o.OnContainerObserved("redis", true, externalStart)
+
+	o.mu.Lock()
+	o.services["redis"].ExpectingContainerStart = true
+	o.mu.Unlock()
+	o.OnContainerObserved("redis", true, managedStart)
+
+	info, _ := o.GetServiceInfo("redis")
+	if info.ExternalRestartCount != 1 {
+		t.Fatalf("ExternalRestartCount = %d, want 1", info.ExternalRestartCount)
+	}
+	if !info.LastExternalStartedAt.Equal(externalStart) {
+		t.Fatalf("LastExternalStartedAt = %s, want immutable %s", info.LastExternalStartedAt, externalStart)
+	}
+	if !info.ContainerStartedAt.Equal(managedStart) {
+		t.Fatalf("ContainerStartedAt = %s, want current managed runtime %s", info.ContainerStartedAt, managedStart)
+	}
+}

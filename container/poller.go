@@ -11,9 +11,10 @@ import (
 
 // ContainerState represents a snapshot of a container's Docker state.
 type ContainerState struct {
-	Name    string
-	Status  string // running, exited, etc.
-	Running bool
+	Name      string
+	Status    string // running, exited, etc.
+	Running   bool
+	StartedAt time.Time
 }
 
 // Poller periodically polls Docker for the state of orbit-managed containers
@@ -87,6 +88,19 @@ func (p *Poller) poll(ctx context.Context) {
 			Name:    name,
 			Status:  string(containers.Items[i].State),
 			Running: containers.Items[i].State == "running",
+		}
+		inspect, inspectErr := p.cli.ContainerInspect(
+			ctx,
+			containers.Items[i].ID,
+			client.ContainerInspectOptions{},
+		)
+		if inspectErr != nil {
+			slog.Warn("Docker inspect error", "component", "poller", "name", name, "err", inspectErr)
+		} else if inspect.Container.State != nil {
+			startedAt, parseErr := time.Parse(time.RFC3339Nano, inspect.Container.State.StartedAt)
+			if parseErr == nil {
+				state.StartedAt = startedAt
+			}
 		}
 		current[name] = state
 
