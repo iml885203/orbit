@@ -79,6 +79,7 @@
       .operation-item.error { border-left-color: #fb7185; }
       .operation-item .meta { color: #94a3b8; font-size: 12px; margin-top: 4px; }
       .operation-item .title { color: #f8fafc; }
+      .operation-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
       .scenario-note { color: #94a3b8; font-size: 12px; margin-top: 6px; }
       .flow-map { background: #0b1328; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; }
       .flow-map-line { margin: 6px 0; color: #cbd5e1; }
@@ -445,6 +446,59 @@ web
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
       }
 
+      function operationRecoveryActions(errorCode, service, action) {
+        const normalized = normalizeErrorCode(errorCode);
+        const actions = [];
+        const pattern = faultPatterns.find((item) => item.code === normalized) || fallbackPattern;
+
+        actions.push({
+          label: '複製診斷命令',
+          type: 'copy-cmd',
+          payload: pattern.command,
+        });
+        actions.push({
+          label: `複製 ${service} log 命令`,
+          type: 'copy-cmd',
+          payload: serviceLogCommand(service),
+        });
+
+        if (normalized === 'payment_declined' || normalized === 'payment_failed' || normalized === 'payment_unreachable') {
+          actions.push({
+            label: '改用 mock_card 重試',
+            type: 'run-checkout',
+            payload: 'mock_card',
+          });
+        }
+        if (normalized === 'cart_empty') {
+          actions.push({
+            label: '前往購物車',
+            type: 'focus',
+            payload: '#cart',
+          });
+          actions.push({
+            label: '前往商品選擇',
+            type: 'focus',
+            payload: '#products',
+          });
+        }
+        if (!normalized && action.includes('checkout')) {
+          actions.push({
+            label: '一鍵成功流程',
+            type: 'focus',
+            payload: '#one-shot-success',
+          });
+        }
+        if (!normalized || (normalized && normalized !== 'payment_declined' && normalized !== 'payment_failed' && normalized !== 'payment_unreachable' && normalized !== 'cart_empty')) {
+          actions.push({
+            label: '看目標導覽下一步',
+            type: 'focus',
+            payload: '#goal-next',
+          });
+        }
+
+        return actions.slice(0, 4);
+      }
+
       function formatElapsed(ms) {
         if (ms == null) return 'n/a';
         if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -501,7 +555,25 @@ web
             const state = entry.status === 'ok' ? 'ok' : (entry.status === 'error' ? 'error' : 'warn');
             const requestText = entry.request ? ` · request: ${entry.request}` : '';
             const responseText = entry.response ? ` · response: ${entry.response}` : '';
-            return `<div class=\"operation-item ${state}\"><div class=\"title\">${entry.ts}｜${entry.service}｜${entry.action}</div><div class=\"meta\">HTTP ${entry.httpStatus || '-'} · 耗時 ${formatElapsed(entry.latencyMs)}${requestText}${responseText}${entry.errorCode ? ` · code ${entry.errorCode}` : ''}${entry.note ? ` · ${entry.note}` : ''}</div></div>`;
+            const actions = entry.status === 'error'
+              ? operationRecoveryActions(entry.errorCode, entry.service, entry.action)
+              : [
+                { label: '查看服務 log', type: 'copy-cmd', payload: serviceLogCommand(entry.service) },
+                { label: '對齊下一步', type: 'focus', payload: '#goal-next' },
+              ];
+            const actionButtons = actions
+              .map((action) => {
+                if (action.type === 'copy-cmd') {
+                  return `<button type="button" class="small-btn inline-btn timeline-btn operation-action" data-operation-copy="${action.payload}">${action.label}</button>`;
+                }
+                if (action.type === 'run-checkout') {
+                  return `<button type="button" class="small-btn inline-btn timeline-btn operation-action" data-operation-run-checkout="${action.payload}">${action.label}</button>`;
+                }
+                return `<button type="button" class="small-btn inline-btn timeline-btn operation-action" data-operation-focus="${action.payload}">${action.label}</button>`;
+              })
+              .join('');
+
+            return `<div class=\"operation-item ${state}\"><div class=\"title\">${entry.ts}｜${entry.service}｜${entry.action}</div><div class=\"meta\">HTTP ${entry.httpStatus || '-'} · 耗時 ${formatElapsed(entry.latencyMs)}${requestText}${responseText}${entry.errorCode ? ` · code ${entry.errorCode}` : ''}${entry.note ? ` · ${entry.note}` : ''}</div><div class=\"operation-actions\">${actionButtons}</div></div>`;
           })
           .join('');
       }
@@ -741,6 +813,63 @@ web
             diagnosticFeedback.textContent = '';
           }
         }, 1500);
+      }
+
+      async function runCheckoutAction(method = 'mock_card', context = 'operation-action') {
+        const customerId = Number(customerEl.value);
+        if (!customerId) {
+          setNotice('請先選擇客戶，才能重試 checkout。', 'warn');
+          return;
+        }
+        paymentMethodEl.value = method;
+        setNotice(`用 ${method} 重試 checkout...`, 'warn');
+        try {
+          const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method }),
+          }, {
+            visible: true,
+            action: `${context} retry checkout`,
+            requestSummary: `customer=${customerId}, method=${method}`,
+          });
+          captureCheckoutPayload(payload, context);
+          if (payload?.orders?.[0]) {
+            updateRunResultForOrder(payload.orders[0]);
+          } else {
+            setRunResult('ok', '✅ Checkout 已完成', ['已提交，請到訂單區確認結果']);
+          }
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);
+          setNotice('重試已提交', 'ok');
+          appendSummary(`重試 checkout：客戶 #${customerId}，方法 ${method}`);
+          renderErrorPlaybook(fallbackPattern.code);
+        } catch (err) {
+          const parsed = parseApiError(err);
+          captureCheckoutPayload({
+            code: parsed?.code || 'checkout_failed',
+            message: parsed?.message || 'checkout failed',
+            ...parsed,
+          }, context);
+          const [ordersPayload, shipmentsPayload] = await Promise.all([
+            loadOrders(),
+            loadShipments(),
+            loadCart(),
+            loadInventory(),
+            checkAll(),
+          ]);
+          refreshTransactionViews(ordersPayload, shipmentsPayload, latestCheckoutPayload);
+          const errorTextMessage = errorText(parsed);
+          setNotice(errorTextMessage, 'error');
+          appendSummary(`重試 checkout 失敗：${errorTextMessage}`);
+          updateRunResultForError(errorTextMessage, context, parsed);
+        }
       }
 
       function timelineLogButton(service) {
@@ -1708,6 +1837,37 @@ web
 
       document.addEventListener('click', async (event) => {
         const copyButton = event.target.closest('[data-copy-cmd]');
+        const operationCopyButton = event.target.closest('[data-operation-copy]');
+        const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
+        const operationFocusButton = event.target.closest('[data-operation-focus]');
+        if (operationRunCheckoutButton) {
+          const method = operationRunCheckoutButton.dataset.operationRunCheckout || 'mock_card';
+          await runCheckoutAction(method, 'operation 快照重試');
+          return;
+        }
+        if (operationFocusButton) {
+          const selector = operationFocusButton.dataset.operationFocus;
+          const target = selector ? document.querySelector(selector) : null;
+          if (target) {
+            scrollToAndFocus(target);
+            const id = selector.startsWith('#') ? selector : '';
+            if (id && id === '#goal-next') {
+              setNotice('已帶你到「下一步操作建議」。', 'ok');
+            }
+          }
+          return;
+        }
+        if (operationCopyButton) {
+          const cmd = operationCopyButton.dataset.operationCopy;
+          if (!cmd) return;
+          try {
+            await navigator.clipboard.writeText(cmd);
+            setCopyFeedback(`已複製：${cmd}`);
+          } catch (_e) {
+            setCopyFeedback('無法複製，請手動選取複製');
+          }
+          return;
+        }
         if (!copyButton) {
           return;
         }
