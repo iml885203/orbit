@@ -73,10 +73,10 @@ func TestWriteLogJSONEvent(t *testing.T) {
 
 func TestBuildLifecycleJSONDataClassifiesResources(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
-			{Name: "redis", Kind: daemon.ServiceKindContainer, State: "healthy"},
-			{Name: "worker", Kind: daemon.ServiceKindService, State: "degraded"},
-			{Name: "payments", Kind: daemon.ServiceKindService, State: "starting"},
+		Resources: []daemon.ResourceStatus{
+			{Name: "redis", Kind: daemon.ResourceKindContainer, State: "healthy"},
+			{Name: "worker", Kind: daemon.ResourceKindService, State: "degraded"},
+			{Name: "payments", Kind: daemon.ResourceKindService, State: "starting"},
 		},
 	}
 	got := buildLifecycleJSONData(lifecycleJSONOptions{
@@ -156,7 +156,7 @@ func TestLifecycleUpSuccessActionsHaveOnePrimaryNextStep(t *testing.T) {
 
 func TestLifecycleServicesDone(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "healthy"},
 			{Name: "kafka", State: "healthy"},
 		},
@@ -171,7 +171,7 @@ func TestLifecycleServicesDone(t *testing.T) {
 
 func TestLifecycleServicesDoneStopped(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "stopped"},
 		},
 	}
@@ -182,7 +182,7 @@ func TestLifecycleServicesDoneStopped(t *testing.T) {
 
 func TestLifecycleTerminalErrorFailsOnDegraded(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "degraded"},
 		},
 	}
@@ -196,7 +196,7 @@ func TestLifecycleTerminalErrorFailsOnDegraded(t *testing.T) {
 }
 
 func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{Name: "worker", State: "degraded", StateReason: "failed to start: address already in use"},
 	}}
 	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
@@ -206,7 +206,7 @@ func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
 }
 
 func TestLifecycleTerminalErrorFailsOnTerminalDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:                "api",
 			State:               "pending",
@@ -229,7 +229,7 @@ func TestLifecycleTerminalErrorFailsOnTerminalDependency(t *testing.T) {
 }
 
 func TestLifecycleTerminalErrorFailsOnStoppedTransitiveDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:                "api",
 			State:               "pending",
@@ -250,7 +250,7 @@ func TestLifecycleTerminalErrorFailsOnStoppedTransitiveDependency(t *testing.T) 
 }
 
 func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:                "api",
 			State:               "pending",
@@ -277,7 +277,7 @@ func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
 }
 
 func TestLifecycleRecommendedActionsExcludeHealthyResources(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{Name: "mongo", State: "degraded", StateReason: "container exited unexpectedly"},
 		{Name: "redis", State: "healthy"},
 	}}
@@ -297,7 +297,7 @@ func TestLifecycleRecommendedActionsExcludeHealthyResources(t *testing.T) {
 }
 
 func TestLifecycleRecommendedActionsFollowPendingChainToRootResource(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:                "web",
 			State:               "pending",
@@ -326,7 +326,7 @@ func TestLifecycleRecommendedActionsFollowPendingChainToRootResource(t *testing.
 }
 
 func TestLifecycleRecommendedActionsPrioritizeTerminalFailureOverConvergingResource(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:                "api",
 			State:               "pending",
@@ -352,7 +352,7 @@ func TestLifecycleRecommendedActionsPrioritizeTerminalFailureOverConvergingResou
 
 func TestLifecycleTerminalErrorFailsOnStopped(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "stopped"},
 		},
 	}
@@ -364,7 +364,7 @@ func TestLifecycleTerminalErrorFailsOnStopped(t *testing.T) {
 
 func TestLifecycleTerminalErrorAllowsStoppedWhenConfigured(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "stopped"},
 		},
 	}
@@ -375,7 +375,7 @@ func TestLifecycleTerminalErrorAllowsStoppedWhenConfigured(t *testing.T) {
 
 func TestLifecycleRestartHealthyWaitUsesStoppedAsTerminal(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "stopped"},
 		},
 	}
@@ -387,7 +387,7 @@ func TestLifecycleRestartHealthyWaitUsesStoppedAsTerminal(t *testing.T) {
 
 func TestLifecycleResourceExists(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "healthy"},
 		},
 	}
@@ -403,7 +403,7 @@ func TestLifecycleServicesDoneAcceptsPostStopStates(t *testing.T) {
 	for _, state := range []string{"pending", "starting", "building", "healthy", "degraded"} {
 		t.Run(state, func(t *testing.T) {
 			status := &daemon.StatusResponse{
-				Resources: []daemon.ServiceStatus{
+				Resources: []daemon.ResourceStatus{
 					{Name: "worker", State: state},
 				},
 			}
@@ -416,7 +416,7 @@ func TestLifecycleServicesDoneAcceptsPostStopStates(t *testing.T) {
 
 func TestLifecycleServicesDoneOrPastStillRejectsMissingService(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "healthy"},
 		},
 	}
@@ -437,7 +437,7 @@ func TestDownNoDaemonErrorUsesJSONErrorPath(t *testing.T) {
 func TestLifecycleRestartObservedRejectsStaleHealthyWithUnchangedRestartCount(t *testing.T) {
 	prior := 2
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "healthy", RestartCount: 2},
 		},
 	}
@@ -449,7 +449,7 @@ func TestLifecycleRestartObservedRejectsStaleHealthyWithUnchangedRestartCount(t 
 func TestLifecycleRestartObservedAcceptsHealthyWithIncreasedRestartCount(t *testing.T) {
 	prior := 2
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "healthy", RestartCount: 3},
 		},
 	}
@@ -460,7 +460,7 @@ func TestLifecycleRestartObservedAcceptsHealthyWithIncreasedRestartCount(t *test
 
 func TestLifecycleRestartObservedAcceptsIntermediateStateWithoutPriorCount(t *testing.T) {
 	status := &daemon.StatusResponse{
-		Resources: []daemon.ServiceStatus{
+		Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "starting"},
 		},
 	}

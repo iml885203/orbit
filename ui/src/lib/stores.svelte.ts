@@ -7,7 +7,7 @@
 // rather than scrolling a 50-field bag. resetForNewDaemon scope is the
 // daemon sub-store; graph and ui survive reconnect.
 
-import type { ServiceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse } from './types.gen'
+import type { ResourceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse } from './types.gen'
 
 import { MAX_LINES } from './constants'
 
@@ -39,7 +39,7 @@ class GraphStore {
 class DaemonStore {
   connected = $state(false)
   daemonEpoch = $state<number | null>(null)
-  services = $state<Record<string, ServiceStatus>>({})
+  services = $state<Record<string, ResourceStatus>>({})
   logBuffers = $state<Record<string, string[]>>({})
   openLogs = $state<Record<string, boolean>>({})
   logModal = $state<{ target: string | null }>({ target: null })
@@ -122,8 +122,8 @@ export function toast(msg: string) {
   toastTimer = setTimeout(() => { store.ui.toastVisible = false }, 2500)
 }
 
-export function replaceServices(svcs: ServiceStatus[]) {
-  const next: Record<string, ServiceStatus> = {}
+export function replaceServices(svcs: ResourceStatus[]) {
+  const next: Record<string, ResourceStatus> = {}
   for (const svc of svcs) next[svc.name] = svc
   store.daemon.services = next
 }

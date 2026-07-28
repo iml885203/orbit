@@ -4,7 +4,7 @@
 // graph renders, so the banner needs no new endpoint — it watches service
 // states until the operation reaches a terminal shape.
 
-import type { ServiceStatus } from './types.gen'
+import type { ResourceStatus } from './types.gen'
 
 export type OpKind = 'up' | 'infra' | 'down'
 
@@ -22,10 +22,10 @@ export type OpSnapshot = {
 //   up    — done when nothing is starting/building/pending
 //   infra — same, but only containers count
 //   down  — done when nothing is running at all
-export function snapshotOp(kind: OpKind, services: ServiceStatus[]): OpSnapshot {
+export function snapshotOp(kind: OpKind, services: ResourceStatus[]): OpSnapshot {
   const scoped = kind === 'infra' ? services.filter((s) => s.kind === 'container') : services
-  const moving = (s: ServiceStatus) => ['starting', 'building', 'pending'].includes(s.state)
-  const running = (s: ServiceStatus) => !['stopped', 'pending'].includes(s.state)
+  const moving = (s: ResourceStatus) => ['starting', 'building', 'pending'].includes(s.state)
+  const running = (s: ResourceStatus) => !['stopped', 'pending'].includes(s.state)
 
   if (kind === 'down') {
     const inFlight = scoped.filter(running).map((s) => s.name)

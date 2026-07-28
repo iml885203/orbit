@@ -68,7 +68,7 @@ var heartbeatable = map[string]bool{
 // only when state actually changes, so heartbeat intervals count from the
 // current state's start; lastHeartbeat clears on state change so a fresh
 // state gets its first heartbeat after a full interval.
-func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ServiceStatus, now time.Time) map[string]progressSnapshot {
+func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ResourceStatus, now time.Time) map[string]progressSnapshot {
 	out := make(map[string]progressSnapshot, len(statuses))
 	for i := range statuses {
 		svc := &statuses[i]

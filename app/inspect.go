@@ -92,7 +92,7 @@ type inspectBuildOptions struct {
 	Dashboard       string
 	Status          *daemon.StatusResponse
 	StatusErr       error
-	Configured      []daemon.ServiceStatus
+	Configured      []daemon.ResourceStatus
 }
 
 func inspectCmd() *cobra.Command {
@@ -198,22 +198,22 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	}
 }
 
-func configuredInspectServices(cfg *config.Config) []daemon.ServiceStatus {
+func configuredInspectServices(cfg *config.Config) []daemon.ResourceStatus {
 	if cfg == nil {
 		return nil
 	}
-	services := make([]daemon.ServiceStatus, 0, len(cfg.Containers)+len(cfg.Services))
+	services := make([]daemon.ResourceStatus, 0, len(cfg.Containers)+len(cfg.Services))
 	for name := range cfg.Containers {
-		services = append(services, daemon.ServiceStatus{
+		services = append(services, daemon.ResourceStatus{
 			Name:  name,
-			Kind:  daemon.ServiceKindContainer,
+			Kind:  daemon.ResourceKindContainer,
 			State: "stopped",
 		})
 	}
 	for name := range cfg.Services {
-		services = append(services, daemon.ServiceStatus{
+		services = append(services, daemon.ResourceStatus{
 			Name:  name,
-			Kind:  daemon.ServiceKindService,
+			Kind:  daemon.ResourceKindService,
 			State: "stopped",
 		})
 	}
@@ -236,7 +236,7 @@ func emptyInspectServiceSummary() inspectServiceSummary {
 	}
 }
 
-func buildInspectServiceSummary(services []daemon.ServiceStatus) inspectServiceSummary {
+func buildInspectServiceSummary(services []daemon.ResourceStatus) inspectServiceSummary {
 	out := emptyInspectServiceSummary()
 	out.Total = len(services)
 	for i := range services {

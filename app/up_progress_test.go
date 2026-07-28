@@ -12,7 +12,7 @@ import (
 
 func TestNextSnapshots_FirstAppearanceRecordsAllTimestampsAtNow(t *testing.T) {
 	now := time.Unix(100, 0)
-	got := nextSnapshots(nil, []daemon.ServiceStatus{
+	got := nextSnapshots(nil, []daemon.ResourceStatus{
 		{Name: "worker", State: "pending"},
 	}, now)
 
@@ -27,7 +27,7 @@ func TestNextSnapshots_FirstAppearanceRecordsAllTimestampsAtNow(t *testing.T) {
 
 func TestNextSnapshots_CarriesFailureEvidence(t *testing.T) {
 	now := time.Unix(100, 0)
-	got := nextSnapshots(nil, []daemon.ServiceStatus{{
+	got := nextSnapshots(nil, []daemon.ResourceStatus{{
 		Name:        "worker",
 		State:       "degraded",
 		StateReason: "failed to start: address already in use",
@@ -42,7 +42,7 @@ func TestNextSnapshots_SameStatePreservesSinceAndFirstSeen(t *testing.T) {
 	prev := map[string]progressSnapshot{
 		"worker": {state: "building", since: time.Unix(10, 0), firstSeen: time.Unix(0, 0), lastHeartbeat: time.Unix(30, 0)},
 	}
-	got := nextSnapshots(prev, []daemon.ServiceStatus{
+	got := nextSnapshots(prev, []daemon.ResourceStatus{
 		{Name: "worker", State: "building"},
 	}, time.Unix(50, 0))
 
@@ -66,7 +66,7 @@ func TestNextSnapshots_StateChangeResetsSinceKeepsFirstSeen(t *testing.T) {
 	prev := map[string]progressSnapshot{
 		"worker": {state: "building", since: time.Unix(10, 0), firstSeen: time.Unix(0, 0), lastHeartbeat: time.Unix(40, 0)},
 	}
-	got := nextSnapshots(prev, []daemon.ServiceStatus{
+	got := nextSnapshots(prev, []daemon.ResourceStatus{
 		{Name: "worker", State: "starting"},
 	}, time.Unix(50, 0))
 
@@ -99,7 +99,7 @@ func TestNextSnapshots_FilterSelectsSubsetOfServices(t *testing.T) {
 	// services it wants to track — we don't add a filter knob inside.
 	// This documents that contract: every status entry becomes a
 	// snapshot entry.
-	got := nextSnapshots(nil, []daemon.ServiceStatus{
+	got := nextSnapshots(nil, []daemon.ResourceStatus{
 		{Name: "worker", State: "pending"},
 		{Name: "payments", State: "pending"},
 	}, time.Unix(0, 0))
@@ -312,7 +312,7 @@ func TestLastServiceLogLineSkipsOrbitNarration(t *testing.T) {
 }
 
 func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:        "redis",
 			State:       "degraded",
@@ -344,7 +344,7 @@ func TestBlockedDependencyErrorPointsAtDependency(t *testing.T) {
 }
 
 func TestBlockedDependencyErrorWaitsForRecoveringDependency(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
 			Name:  "redis",
 			State: "degraded",

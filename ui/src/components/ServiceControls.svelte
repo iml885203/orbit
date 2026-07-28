@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { ServiceStatus, EnvToggleInfo } from '../lib/types.gen'
+  import type { ResourceStatus, EnvToggleInfo } from '../lib/types.gen'
   import { store, toast } from '$lib/stores.svelte'
   import { apiPut, setEnvToggle } from '../lib/api'
   import { tooltip } from '../lib/tooltip.svelte'
 
-  let { svc, readOnly = false }: { svc: ServiceStatus; readOnly?: boolean } = $props()
+  let { svc, readOnly = false }: { svc: ResourceStatus; readOnly?: boolean } = $props()
 
   const stopped = $derived(svc.state === 'stopped')
   const toggles = $derived(store.daemon.envToggles.filter(t => t.service === svc.name))

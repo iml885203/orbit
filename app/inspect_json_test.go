@@ -11,7 +11,7 @@ import (
 )
 
 func TestBuildInspectServiceSummaryGroupsStates(t *testing.T) {
-	got := buildInspectServiceSummary([]daemon.ServiceStatus{
+	got := buildInspectServiceSummary([]daemon.ResourceStatus{
 		{Name: "payments", State: "stopped"},
 		{Name: "redis", State: "healthy"},
 		{Name: "worker", State: "degraded"},
@@ -79,9 +79,9 @@ func TestBuildInspectDataDaemonDown(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: false,
-		Configured: []daemon.ServiceStatus{
-			{Name: "redis", Kind: daemon.ServiceKindContainer, State: "stopped"},
-			{Name: "api", Kind: daemon.ServiceKindService, State: "stopped"},
+		Configured: []daemon.ResourceStatus{
+			{Name: "redis", Kind: daemon.ResourceKindContainer, State: "stopped"},
+			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
 		},
 	})
 
@@ -120,7 +120,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 		ConfigEnvName: "development",
 		DaemonRunning: true,
 		DaemonEnv:     "local",
-		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "healthy"},
 		}},
 	})
@@ -178,7 +178,7 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "degraded"},
 			{Name: "payments", State: "stopped"},
 		}},
@@ -237,7 +237,7 @@ func TestBuildInspectDataStoppingAndRestartingAreConverging(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "worker", State: "restarting"},
 			{Name: "payments", State: "stopping"},
 		}},
@@ -259,7 +259,7 @@ func TestBuildInspectDataEnvelopePayload(t *testing.T) {
 		PID:           123,
 		Version:       "dev",
 		Dashboard:     "http://localhost:7171",
-		Status: &daemon.StatusResponse{Resources: []daemon.ServiceStatus{
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "healthy"},
 		}},
 	})

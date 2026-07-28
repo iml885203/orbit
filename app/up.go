@@ -212,7 +212,7 @@ func pollLoop(
 type waitOptions struct {
 	// filter selects which services from the daemon status to track.
 	// If nil, all services are tracked.
-	filter func(*daemon.ServiceStatus) bool
+	filter func(*daemon.ResourceStatus) bool
 	// commit returns true when an event should be promoted into the
 	// renderer's permanent log above the in-place region.
 	commit func(progressEvent) bool
@@ -249,7 +249,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 	err := pollLoop(client, timeout, opts.timeoutErr,
 		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
 			frame++
-			watched := make([]daemon.ServiceStatus, 0, len(status.Resources))
+			watched := make([]daemon.ResourceStatus, 0, len(status.Resources))
 			progressByName := make(map[string]*daemon.HealthProgressInfo, len(status.Resources))
 			for i := range status.Resources {
 				s := &status.Resources[i]
@@ -490,8 +490,8 @@ func watchSet(names []string) map[string]bool {
 
 // watchFilter returns a waitOptions.filter that keeps only services
 // whose name is in watch.
-func watchFilter(watch map[string]bool) func(*daemon.ServiceStatus) bool {
-	return func(s *daemon.ServiceStatus) bool { return watch[s.Name] }
+func watchFilter(watch map[string]bool) func(*daemon.ResourceStatus) bool {
+	return func(s *daemon.ResourceStatus) bool { return watch[s.Name] }
 }
 
 // commitOnHealthyOrDegraded is the commit predicate shared by every

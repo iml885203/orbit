@@ -71,7 +71,7 @@ export interface StatusResponse {
    * nanoseconds) keeps the value safely within JS Number precision.
    */
   epoch: number /* int64 */;
-  resources: ServiceStatus[];
+  resources: ResourceStatus[];
   /**
    * ConfigPath identifies the environment loaded by the running daemon.
    * CLI clients compare it with their selected config before combining
@@ -87,11 +87,11 @@ export interface StatusResponse {
   config_stale_reason?: string;
 }
 /**
- * ServiceKind narrows the set of service kinds the wire API exposes.
+ * ResourceKind identifies how Orbit runs a resource.
  */
-export type ServiceKind = string;
-export const ServiceKindContainer: ServiceKind = "container";
-export const ServiceKindService: ServiceKind = "service";
+export type ResourceKind = string;
+export const ResourceKindContainer: ResourceKind = "container";
+export const ResourceKindService: ResourceKind = "service";
 /**
  * SidecarInfo represents a sidecar's UI link.
  */
@@ -100,20 +100,20 @@ export interface SidecarInfo {
   url: string;
 }
 /**
- * ServiceStatus represents a single service's status.
+ * ResourceStatus represents a single container or service.
  */
-export interface ServiceStatus {
+export interface ResourceStatus {
   name: string;
-  kind: ServiceKind;
+  kind: ResourceKind;
   state: string;
   /**
-   * PendingDependencies identifies exactly what keeps a pending service
+   * PendingDependencies identifies exactly what keeps a pending resource
    * from starting, so clients can distinguish useful waiting from a
    * terminal dependency failure.
    */
   pending_dependencies?: string[];
   /**
-   * StateReason says why the service is degraded (crash message, health
+   * StateReason says why the resource is degraded (crash message, health
    * failure, build failure); empty in every other state.
    */
   state_reason?: string;
@@ -128,8 +128,8 @@ export interface ServiceStatus {
   health_progress?: HealthProgressInfo;
 }
 /**
- * HealthProgressInfo reports retry state for a service that has a
- * configured health check. nil on ServiceStatus means the service either
+ * HealthProgressInfo reports retry state for a resource that has a
+ * configured health check. nil on ResourceStatus means the resource either
  * has no health check or has not yet attempted one (caller hides UI).
  */
 export interface HealthProgressInfo {

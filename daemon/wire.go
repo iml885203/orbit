@@ -31,8 +31,8 @@ type StatusResponse struct {
 	// changes on every restart, so clients can detect when their cached
 	// env-derived state belongs to a previous daemon. Milliseconds (not
 	// nanoseconds) keeps the value safely within JS Number precision.
-	Epoch     int64           `json:"epoch"`
-	Resources []ServiceStatus `json:"resources"`
+	Epoch     int64            `json:"epoch"`
+	Resources []ResourceStatus `json:"resources"`
 	// ConfigPath identifies the environment loaded by the running daemon.
 	// CLI clients compare it with their selected config before combining
 	// local config with daemon state.
@@ -44,12 +44,12 @@ type StatusResponse struct {
 	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
 }
 
-// ServiceKind narrows the set of service kinds the wire API exposes.
-type ServiceKind string
+// ResourceKind identifies how Orbit runs a resource.
+type ResourceKind string
 
 const (
-	ServiceKindContainer ServiceKind = "container"
-	ServiceKindService   ServiceKind = "service"
+	ResourceKindContainer ResourceKind = "container"
+	ResourceKindService   ResourceKind = "service"
 )
 
 // SidecarInfo represents a sidecar's UI link.
@@ -58,16 +58,16 @@ type SidecarInfo struct {
 	URL  string `json:"url"`
 }
 
-// ServiceStatus represents a single service's status.
-type ServiceStatus struct {
-	Name  string      `json:"name"`
-	Kind  ServiceKind `json:"kind"`
-	State string      `json:"state"`
-	// PendingDependencies identifies exactly what keeps a pending service
+// ResourceStatus represents a single container or service.
+type ResourceStatus struct {
+	Name  string       `json:"name"`
+	Kind  ResourceKind `json:"kind"`
+	State string       `json:"state"`
+	// PendingDependencies identifies exactly what keeps a pending resource
 	// from starting, so clients can distinguish useful waiting from a
 	// terminal dependency failure.
 	PendingDependencies []string `json:"pending_dependencies,omitempty"`
-	// StateReason says why the service is degraded (crash message, health
+	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
 	StateReason    string              `json:"state_reason,omitempty"`
 	RestartCount   int                 `json:"restart_count"`
@@ -81,8 +81,8 @@ type ServiceStatus struct {
 	HealthProgress *HealthProgressInfo `json:"health_progress,omitempty"`
 }
 
-// HealthProgressInfo reports retry state for a service that has a
-// configured health check. nil on ServiceStatus means the service either
+// HealthProgressInfo reports retry state for a resource that has a
+// configured health check. nil on ResourceStatus means the resource either
 // has no health check or has not yet attempted one (caller hides UI).
 type HealthProgressInfo struct {
 	Attempts   int    `json:"attempts"`

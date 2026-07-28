@@ -23,7 +23,7 @@ type renderedStatusEnvelope struct {
 	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
 }
 
-func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) renderedStatusEnvelope {
+func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) renderedStatusEnvelope {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d, statusSetupState{}); err != nil {
@@ -36,7 +36,7 @@ func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]d
 	return envelope
 }
 
-func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ServiceStatus, d daemonStatus) statusJSON {
+func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) statusJSON {
 	t.Helper()
 	envelope := renderStatusEnvelope(t, cfg, running, d)
 	if envelope.SchemaVersion != "orbit.cli.v1" {
@@ -79,7 +79,7 @@ func TestStatusJSONUsesResourceVocabulary(t *testing.T) {
 
 func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
-	running := map[string]daemon.ServiceStatus{
+	running := map[string]daemon.ResourceStatus{
 		"worker": {
 			Name:        "worker",
 			State:       "degraded",
@@ -107,7 +107,7 @@ func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
 		"api":   {},
 		"redis": {},
 	}}
-	running := map[string]daemon.ServiceStatus{
+	running := map[string]daemon.ResourceStatus{
 		"api": {
 			Name:                "api",
 			State:               "pending",
@@ -140,7 +140,7 @@ func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
 }
 
 func TestStatusDetail_ExplainsFailureAndDependencyBlock(t *testing.T) {
-	running := map[string]daemon.ServiceStatus{
+	running := map[string]daemon.ResourceStatus{
 		"api": {
 			Name:                "api",
 			State:               "pending",
@@ -312,7 +312,7 @@ func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
 			"worker": {URL: "https://localhost:7144"},
 		},
 	}
-	running := map[string]daemon.ServiceStatus{
+	running := map[string]daemon.ResourceStatus{
 		"redis": {Name: "redis", State: "healthy"},
 	}
 	got := renderStatusJSON(t, cfg, running, daemonStatus{Running: true})

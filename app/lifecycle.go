@@ -18,13 +18,13 @@ type lifecycleJSONOptions struct {
 }
 
 type lifecycleJSONData struct {
-	Operation          string                 `json:"operation"`
-	Message            string                 `json:"message,omitempty"`
-	RequestedResources []string               `json:"requested_resources"`
-	InfraOnly          bool                   `json:"infra_only,omitempty"`
-	Resources          []daemon.ServiceStatus `json:"resources"`
-	DegradedResources  []string               `json:"degraded_resources"`
-	TimedOutResources  []string               `json:"timed_out_resources"`
+	Operation          string                  `json:"operation"`
+	Message            string                  `json:"message,omitempty"`
+	RequestedResources []string                `json:"requested_resources"`
+	InfraOnly          bool                    `json:"infra_only,omitempty"`
+	Resources          []daemon.ResourceStatus `json:"resources"`
+	DegradedResources  []string                `json:"degraded_resources"`
+	TimedOutResources  []string                `json:"timed_out_resources"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
@@ -34,7 +34,7 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 	for _, name := range requestedResources {
 		requested[name] = true
 	}
-	resources := make([]daemon.ServiceStatus, 0, len(requested))
+	resources := make([]daemon.ResourceStatus, 0, len(requested))
 	degraded := []string{}
 	if opts.FinalStatus != nil {
 		for i := range opts.FinalStatus.Resources {
@@ -99,7 +99,7 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 	if status == nil {
 		return lifecycleRecommendedActions(serviceNames)
 	}
-	byName := make(map[string]*daemon.ServiceStatus, len(status.Resources))
+	byName := make(map[string]*daemon.ResourceStatus, len(status.Resources))
 	for i := range status.Resources {
 		service := &status.Resources[i]
 		byName[service.Name] = service
@@ -142,7 +142,7 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 	return lifecycleRecommendedActions(evidenceNames)
 }
 
-func lifecycleEvidenceResource(service *daemon.ServiceStatus, byName map[string]*daemon.ServiceStatus, visited map[string]bool) *daemon.ServiceStatus {
+func lifecycleEvidenceResource(service *daemon.ResourceStatus, byName map[string]*daemon.ResourceStatus, visited map[string]bool) *daemon.ResourceStatus {
 	if service == nil || service.State == "healthy" || visited[service.Name] {
 		return nil
 	}
@@ -318,17 +318,17 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 	return nil
 }
 
-func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencies []string) *daemon.ServiceStatus {
+func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencies []string) *daemon.ResourceStatus {
 	if status == nil {
 		return nil
 	}
-	byName := make(map[string]*daemon.ServiceStatus, len(status.Resources))
+	byName := make(map[string]*daemon.ResourceStatus, len(status.Resources))
 	for i := range status.Resources {
 		byName[status.Resources[i].Name] = &status.Resources[i]
 	}
 	visited := make(map[string]bool, len(status.Resources))
-	var find func([]string) *daemon.ServiceStatus
-	find = func(names []string) *daemon.ServiceStatus {
+	var find func([]string) *daemon.ResourceStatus
+	find = func(names []string) *daemon.ResourceStatus {
 		for _, name := range names {
 			if visited[name] {
 				continue

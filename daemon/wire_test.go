@@ -20,7 +20,7 @@ func TestLifecycleWireUsesResourceVocabulary(t *testing.T) {
 		},
 		{
 			name:       "status response",
-			value:      StatusResponse{Resources: []ServiceStatus{}},
+			value:      StatusResponse{Resources: []ResourceStatus{}},
 			want:       "resources",
 			legacyName: "services",
 		},

@@ -16,9 +16,9 @@ type (
 	UpRequest              = pub.UpRequest
 	DownRequest            = pub.DownRequest
 	StatusResponse         = pub.StatusResponse
-	ServiceKind            = pub.ServiceKind
+	ResourceKind           = pub.ResourceKind
 	SidecarInfo            = pub.SidecarInfo
-	ServiceStatus          = pub.ServiceStatus
+	ResourceStatus         = pub.ResourceStatus
 	HealthProgressInfo     = pub.HealthProgressInfo
 	LogsResponse           = pub.LogsResponse
 	DoctorCheckStatus      = pub.DoctorCheckStatus
@@ -49,8 +49,8 @@ type (
 
 const (
 	cliOriginHeader       = pub.CLIOriginHeader
-	ServiceKindContainer  = pub.ServiceKindContainer
-	ServiceKindService    = pub.ServiceKindService
+	ResourceKindContainer = pub.ResourceKindContainer
+	ResourceKindService   = pub.ResourceKindService
 	CheckPass             = pub.CheckPass
 	CheckFail             = pub.CheckFail
 	CheckWarn             = pub.CheckWarn

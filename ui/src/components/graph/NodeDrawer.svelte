@@ -1,6 +1,6 @@
 <script lang="ts">
   import { nodeDrawerPanels } from '$ext'
-  import type { GraphNode, ServiceStatus } from '../../lib/types.gen'
+  import type { GraphNode, ResourceStatus } from '../../lib/types.gen'
   import ServiceControls from '../ServiceControls.svelte'
   import NodeEnvPanel from './NodeEnvPanel.svelte'
   import NodeDepsPanel from './NodeDepsPanel.svelte'
@@ -145,18 +145,18 @@
     if (activeGraph?.nodes.find(n => n.name === depName)) store.graph.selectedNode = depName
   }
 
-  // ServiceControls only consumes a strict subset of ServiceStatus. Define
-  // that subset here so a future ServiceStatus field rename surfaces as a
+  // ServiceControls only consumes a strict subset of ResourceStatus. Define
+  // that subset here so a future ResourceStatus field rename surfaces as a
   // type error at the adapter rather than a runtime mismatch.
-  type ServiceControlsInput = Pick<ServiceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
+  type ServiceControlsInput = Pick<ResourceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
 
-  // Adapt GraphNode → ServiceStatus shape ServiceControls expects.
-  // GraphNode carries `health` where ServiceStatus has `health_progress`.
+  // Adapt GraphNode → ResourceStatus shape ServiceControls expects.
+  // GraphNode carries `health` where ResourceStatus has `health_progress`.
   const svc = $derived<ServiceControlsInput | null>(
     node
       ? {
           name: node.name,
-          kind: (node.kind === 'infra' ? 'container' : 'service') as ServiceStatus['kind'],
+          kind: (node.kind === 'infra' ? 'container' : 'service') as ResourceStatus['kind'],
           state: node.state,
           mode: node.mode,
           url: node.url,

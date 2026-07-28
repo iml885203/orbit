@@ -52,7 +52,7 @@ func dependencyMap(cfg *config.Config) map[string][]string {
 
 // snapshotWorkloads maps the status view of containers and services into
 // snapshots, enriching them with the copied dependency edges.
-func snapshotWorkloads(deps map[string][]string, statuses []ServiceStatus) []ResourceSnapshot {
+func snapshotWorkloads(deps map[string][]string, statuses []ResourceStatus) []ResourceSnapshot {
 	out := make([]ResourceSnapshot, 0, len(statuses))
 	for i := range statuses {
 		st := &statuses[i]

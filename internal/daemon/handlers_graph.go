@@ -113,9 +113,9 @@ func (s *Server) currentEnvName() string {
 	return EnvShortName(s.ConfigPath())
 }
 
-// statusesByName converts a []ServiceStatus slice into a name-keyed map.
-func statusesByName(list []ServiceStatus) map[string]ServiceStatus {
-	out := make(map[string]ServiceStatus, len(list))
+// statusesByName converts a []ResourceStatus slice into a name-keyed map.
+func statusesByName(list []ResourceStatus) map[string]ResourceStatus {
+	out := make(map[string]ResourceStatus, len(list))
 	for i := range list {
 		out[list[i].Name] = list[i]
 	}
@@ -194,7 +194,7 @@ func buildGroupInfos(cfg *config.Config) []GroupInfo {
 	return out
 }
 
-func buildGraphNodes(cfg *config.Config, statuses map[string]ServiceStatus) []GraphNode {
+func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []GraphNode {
 	nodes := make([]GraphNode, 0, len(cfg.Containers)+len(cfg.Services))
 	for _, name := range sortedKeys(cfg.Containers) {
 		c := cfg.Containers[name]

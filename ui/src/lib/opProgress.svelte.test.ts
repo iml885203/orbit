@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { snapshotOp } from './opProgress.svelte'
-import type { ServiceStatus } from './types.gen'
+import type { ResourceStatus } from './types.gen'
 
-function svc(name: string, kind: 'service' | 'container', state: string, reason?: string): ServiceStatus {
-  return { name, kind, state, state_reason: reason, restart_count: 0 } as ServiceStatus
+function svc(name: string, kind: 'service' | 'container', state: string, reason?: string): ResourceStatus {
+  return { name, kind, state, state_reason: reason, restart_count: 0 } as ResourceStatus
 }
 
 describe('snapshotOp', () => {

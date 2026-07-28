@@ -15,7 +15,7 @@ func TestSnapshotWorkloads_MapsStatusAndDependencies(t *testing.T) {
 			"api": {Name: "api", DependsOn: []string{"redis"}},
 		},
 	}
-	statuses := []ServiceStatus{
+	statuses := []ResourceStatus{
 		{Name: "redis", Kind: "container", State: "healthy", Image: "redis:7.4", Ports: map[string]int{"redis": 36379}},
 		{Name: "api", Kind: "service", State: "degraded", StateReason: "health check failed",
 			URL: "http://localhost:3000", RestartCount: 2,

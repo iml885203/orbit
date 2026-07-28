@@ -174,7 +174,7 @@ func (s *Server) fanInLogs(ctx context.Context, out chan<- Event) {
 // sendStatus helper so the events fan-in can use it without holding an
 // sseWriter.
 func (s *Server) buildStatusResponse() StatusResponse {
-	tracked := map[string]ServiceStatus{}
+	tracked := map[string]ResourceStatus{}
 	services := s.app.Orchestrator.GetAllServices()
 	// One immutable snapshot for the whole assembly.
 	cfg := s.holder.Load()
@@ -195,9 +195,9 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 		sidecars := getSidecarInfos(cfg, svc.Name, svc.Kind)
 		image := getContainerImage(cfg, svc.Name, svc.Kind)
-		tracked[svc.Name] = ServiceStatus{
+		tracked[svc.Name] = ResourceStatus{
 			Name:         svc.Name,
-			Kind:         ServiceKind(svc.Kind),
+			Kind:         ResourceKind(svc.Kind),
 			State:        svc.State.String(),
 			StateReason:  svc.StateReason,
 			RestartCount: svc.RestartCount,
@@ -210,7 +210,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 	}
 	stale, staleReason := s.configStale()
-	resp := StatusResponse{Epoch: s.epoch(), Resources: make([]ServiceStatus, 0),
+	resp := StatusResponse{Epoch: s.epoch(), Resources: make([]ResourceStatus, 0),
 		ConfigPath:  s.ConfigPath(),
 		ConfigStale: stale, ConfigStaleReason: staleReason}
 	for name, c := range cfg.Containers {
@@ -223,8 +223,8 @@ func (s *Server) buildStatusResponse() StatusResponse {
 			ports[label] = p.Host
 		}
 		sidecars := getSidecarInfos(cfg, name, "container")
-		resp.Resources = append(resp.Resources, ServiceStatus{
-			Name: name, Kind: ServiceKindContainer, State: engine.StateStopped.String(),
+		resp.Resources = append(resp.Resources, ResourceStatus{
+			Name: name, Kind: ResourceKindContainer, State: engine.StateStopped.String(),
 			Ports: ports, Image: c.Image, Sidecars: sidecars,
 		})
 	}
@@ -237,8 +237,8 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		for label, p := range svc.Ports {
 			ports[label] = p.Host
 		}
-		resp.Resources = append(resp.Resources, ServiceStatus{
-			Name: name, Kind: ServiceKindService, State: engine.StateStopped.String(),
+		resp.Resources = append(resp.Resources, ResourceStatus{
+			Name: name, Kind: ResourceKindService, State: engine.StateStopped.String(),
 			Ports: ports, URL: svc.URL,
 		})
 	}

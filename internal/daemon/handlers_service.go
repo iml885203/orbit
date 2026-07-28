@@ -39,15 +39,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// computeStatuses assembles the current ServiceStatus for every service and
+// computeStatuses assembles the current ResourceStatus for every service and
 // container tracked by the orchestrator, preserving GetAllServices order.
-// computeStatuses assembles ServiceStatus views against the caller's config
+// computeStatuses assembles ResourceStatus views against the caller's config
 // snapshot — the caller owns the one-Load-per-operation boundary, so a
 // handler that also builds other views (graph, resources) renders
 // everything from a single generation.
-func (s *Server) computeStatuses(cfg *config.Config) []ServiceStatus {
+func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 	services := s.app.Orchestrator.GetAllServices()
-	out := make([]ServiceStatus, 0, len(services))
+	out := make([]ResourceStatus, 0, len(services))
 	for i := range services {
 		svc := &services[i]
 		ports := getServicePorts(cfg, svc.Name, svc.Kind)
@@ -83,9 +83,9 @@ func (s *Server) computeStatuses(cfg *config.Config) []ServiceStatus {
 			pendingDependencies = append(pendingDependencies, dependency)
 		}
 		sort.Strings(pendingDependencies)
-		out = append(out, ServiceStatus{
+		out = append(out, ResourceStatus{
 			Name:                svc.Name,
-			Kind:                ServiceKind(svc.Kind),
+			Kind:                ResourceKind(svc.Kind),
 			State:               svc.State.String(),
 			PendingDependencies: pendingDependencies,
 			StateReason:         svc.StateReason,

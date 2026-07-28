@@ -29,7 +29,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	daemonRunning := client.Health() == nil
 
 	dstatus := daemonStatus{Running: daemonRunning}
-	running := make(map[string]daemon.ServiceStatus)
+	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
@@ -163,14 +163,14 @@ func configFileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func printContainerLine(name string, svc daemon.ServiceStatus) {
+func printContainerLine(name string, svc daemon.ResourceStatus) {
 	icon := cli.StateIcon(svc.State)
 	ports := formatPorts(svc.Ports)
 	timing := formatTiming(svc)
 	fmt.Printf("  %s %-20s  %-10s %-30s %s\n", icon, name, cli.ColorState(svc.State), ports, cli.Faint.Sprint(timing))
 }
 
-func printServiceLine(name string, _ *config.Service, svc daemon.ServiceStatus) {
+func printServiceLine(name string, _ *config.Service, svc daemon.ResourceStatus) {
 	icon := cli.StateIcon(svc.State)
 	extra := ""
 	if svc.RestartCount > 0 {
@@ -186,14 +186,14 @@ func printServiceLine(name string, _ *config.Service, svc daemon.ServiceStatus) 
 	fmt.Printf("  %s %-20s  %-10s %s%s %s\n", icon, name, cli.ColorState(svc.State), info, extra, cli.Faint.Sprint(timing))
 }
 
-func printStatusDetail(svc daemon.ServiceStatus, running map[string]daemon.ServiceStatus) {
+func printStatusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {
 	detail := statusDetail(svc, running)
 	if detail != "" {
 		fmt.Printf("    %s %s\n", cli.Faint.Sprint("↳"), detail)
 	}
 }
 
-func statusDetail(svc daemon.ServiceStatus, running map[string]daemon.ServiceStatus) string {
+func statusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceStatus) string {
 	switch svc.State {
 	case "degraded":
 		return serviceFailureReason(svc)
@@ -209,7 +209,7 @@ func statusDetail(svc daemon.ServiceStatus, running map[string]daemon.ServiceSta
 	return ""
 }
 
-func serviceFailureReason(svc daemon.ServiceStatus) string {
+func serviceFailureReason(svc daemon.ResourceStatus) string {
 	if svc.StateReason != "" {
 		return svc.StateReason
 	}
@@ -219,7 +219,7 @@ func serviceFailureReason(svc daemon.ServiceStatus) string {
 	return ""
 }
 
-func formatTiming(svc daemon.ServiceStatus) string {
+func formatTiming(svc daemon.ResourceStatus) string {
 	parts := make([]string, 0, 2)
 	if svc.StartupTime != "" {
 		parts = append(parts, "started in "+svc.StartupTime)
@@ -342,7 +342,7 @@ func writeStatusJSON(
 	w io.Writer,
 	command string,
 	cfg *config.Config,
-	running map[string]daemon.ServiceStatus,
+	running map[string]daemon.ResourceStatus,
 	dstatus daemonStatus,
 	setup statusSetupState,
 ) error {
@@ -409,7 +409,7 @@ func writeStatusJSON(
 	}, actions)
 }
 
-func applyRuntimeStatus(target *jsonService, source daemon.ServiceStatus, running map[string]daemon.ServiceStatus) {
+func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {
 	target.State = source.State
 	if source.State == "degraded" {
 		target.StateReason = serviceFailureReason(source)
@@ -422,18 +422,18 @@ func applyRuntimeStatus(target *jsonService, source daemon.ServiceStatus, runnin
 	}
 }
 
-func statusDependencyBlocker(service daemon.ServiceStatus, running map[string]daemon.ServiceStatus) *daemon.ServiceStatus {
+func statusDependencyBlocker(service daemon.ResourceStatus, running map[string]daemon.ResourceStatus) *daemon.ResourceStatus {
 	if service.State != "pending" || len(service.PendingDependencies) == 0 {
 		return nil
 	}
-	status := &daemon.StatusResponse{Resources: make([]daemon.ServiceStatus, 0, len(running))}
+	status := &daemon.StatusResponse{Resources: make([]daemon.ResourceStatus, 0, len(running))}
 	for _, candidate := range running {
 		status.Resources = append(status.Resources, candidate)
 	}
 	return terminalDependencyBlocker(status, service.PendingDependencies)
 }
 
-func statusRecoveryTargets(running map[string]daemon.ServiceStatus) []string {
+func statusRecoveryTargets(running map[string]daemon.ResourceStatus) []string {
 	targets := make(map[string]bool)
 	for _, service := range running {
 		if service.State == "degraded" && (service.HealthProgress == nil || !service.HealthProgress.Recovering) {
@@ -451,7 +451,7 @@ func statusRecoveryTargets(running map[string]daemon.ServiceStatus) []string {
 	return names
 }
 
-func statusRecoveryActions(running map[string]daemon.ServiceStatus) []cli.JSONAction {
+func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONAction {
 	var actions []cli.JSONAction
 	for _, name := range statusRecoveryTargets(running) {
 		service := running[name]

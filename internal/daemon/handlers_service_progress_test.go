@@ -35,7 +35,7 @@ func TestHandleStatus_IncludesHealthProgressWhenAvailable(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	var found *ServiceStatus
+	var found *ResourceStatus
 	for i := range resp.Resources {
 		if resp.Resources[i].Name == "worker" {
 			found = &resp.Resources[i]
