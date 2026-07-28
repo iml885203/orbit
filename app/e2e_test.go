@@ -1387,10 +1387,14 @@ services:
 		"Node.js",
 		"web requires 999 (.nvmrc)",
 		"Select the project version of Node.js",
+		"Next: orbit doctor",
 	} {
 		if !bytes.Contains(human, []byte(evidence)) {
 			t.Fatalf("human switch missing %q:\n%s", evidence, human)
 		}
+	}
+	if bytes.Contains(bytes.ToLower(human), []byte("daemon")) {
+		t.Fatalf("human switch exposed daemon lifecycle:\n%s", human)
 	}
 
 	output, err := command("switch", "versioned", "--json").Output()

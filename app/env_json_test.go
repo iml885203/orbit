@@ -133,6 +133,13 @@ func TestBuildSwitchJSONData(t *testing.T) {
 	}
 }
 
+func TestSwitchRecommendedActionsStartReadyEnvironment(t *testing.T) {
+	actions := switchRecommendedActions(nil, true)
+	if len(actions) != 1 || actions[0].Command != "orbit up --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
 func TestSwitchRecommendedActionsIncludeExactPackageInstall(t *testing.T) {
 	checks := []daemon.DoctorCheck{{
 		Name:    "Packages (web)",
@@ -140,7 +147,7 @@ func TestSwitchRecommendedActionsIncludeExactPackageInstall(t *testing.T) {
 		Message: "project packages are not installed",
 		Hint:    "run: pnpm --dir /workspace/web install",
 	}}
-	actions := switchRecommendedActions(checks)
+	actions := switchRecommendedActions(checks, false)
 	for _, action := range actions {
 		if action.Command == "pnpm --dir /workspace/web install" {
 			return

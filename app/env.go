@@ -225,8 +225,8 @@ func readCurrentEnv() string {
 func switchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "switch <env>",
-		Short: "Switch env and restart daemon",
-		Long:  "Stop the current environment, set the active env (by short name or path), and restart the daemon to apply it.",
+		Short: "Switch the active environment",
+		Long:  "Stop resources in the current environment, select another environment by short name or path, and prepare it for `orbit up`.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runSwitch,
 	}
@@ -272,12 +272,7 @@ func runSwitch(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("writing current env: %w", err)
 	}
 	if !cli.JSONOutput {
-		fmt.Printf("→ switching to %s\n", abs)
-	}
-	if !alive && !cli.JSONOutput {
-		fmt.Println("→ daemon start")
-	} else if alive && !cli.JSONOutput {
-		fmt.Println("→ daemon restart")
+		fmt.Printf("→ switching to %s\n", daemonsrv.EnvShortName(abs))
 	}
 	if err := ensureDaemonStarted(abs); err != nil {
 		return err
@@ -294,11 +289,15 @@ func runSwitch(_ *cobra.Command, args []string) error {
 			RequestedConfigApply: true,
 			Prerequisites:        prerequisites,
 			PrerequisitesReady:   prerequisitesReady,
-		}), switchRecommendedActions(prerequisites))
+		}), switchRecommendedActions(prerequisites, prerequisitesReady))
 	}
 	printSwitchPrerequisites(prerequisites, prerequisitesReady)
-	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
 	fmt.Printf("✓ switched to %s\n", daemonsrv.EnvShortName(abs))
+	if prerequisitesReady {
+		fmt.Println("  Next: orbit up")
+	} else {
+		fmt.Println("  Next: orbit doctor")
+	}
 	return nil
 }
 
@@ -370,11 +369,21 @@ func switchPrerequisites(path string) ([]daemon.DoctorCheck, bool, error) {
 }
 
 func printSwitchPrerequisites(checks []daemon.DoctorCheck, ready bool) {
-	if ready {
-		fmt.Printf("%s prerequisites ready\n", cli.Green.Sprint("✓"))
-	} else {
-		fmt.Printf("%s setup required before `orbit up`\n", cli.Yellow.Sprint("!"))
+	hasIssue := false
+	for _, check := range checks {
+		if check.Status == daemon.CheckFail || check.Status == daemon.CheckWarn {
+			hasIssue = true
+			break
+		}
 	}
+	if !hasIssue {
+		return
+	}
+	message := "review setup before `orbit up`"
+	if !ready {
+		message = "setup required before `orbit up`"
+	}
+	fmt.Printf("%s %s\n", cli.Yellow.Sprint("!"), message)
 	for _, check := range checks {
 		if check.Status != daemon.CheckFail && check.Status != daemon.CheckWarn {
 			continue
@@ -390,7 +399,14 @@ func printSwitchPrerequisites(checks []daemon.DoctorCheck, ready bool) {
 	}
 }
 
-func switchRecommendedActions(checks []daemon.DoctorCheck) []cli.JSONAction {
+func switchRecommendedActions(checks []daemon.DoctorCheck, ready bool) []cli.JSONAction {
+	if ready {
+		return []cli.JSONAction{{
+			Command:     "orbit up --json",
+			Reason:      "Start the selected environment.",
+			Destructive: false,
+		}}
+	}
 	return doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
 }
 

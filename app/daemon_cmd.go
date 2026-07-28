@@ -193,6 +193,7 @@ func runDaemonStop(_ *cobra.Command, _ []string) error {
 			StopMethod:               stopMethod,
 		}), nil)
 	}
+	printDaemonStopResult(os.Stdout, stopMethod)
 	return nil
 }
 
@@ -408,13 +409,10 @@ func waitForDaemonStop(pid int) (daemonStopMethod, error) {
 		if !platform.IsProcessAlive(pid) {
 			switch {
 			case killSent:
-				printDaemonStopResult(os.Stdout, daemonStopKilled)
 				return daemonStopKilled, nil
 			case termSent:
-				printDaemonStopResult(os.Stdout, daemonStopTerminated)
 				return daemonStopTerminated, nil
 			default:
-				printDaemonStopResult(os.Stdout, daemonStopGraceful)
 				return daemonStopGraceful, nil
 			}
 		}

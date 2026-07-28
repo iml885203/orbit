@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
@@ -103,6 +104,17 @@ func TestUpdateUsesShortPublicName(t *testing.T) {
 func TestUninstallUsesShortPublicName(t *testing.T) {
 	if got := uninstallCmd().Name(); got != "uninstall" {
 		t.Fatalf("uninstall command name = %q", got)
+	}
+}
+
+func TestSwitchHelpDescribesUserOutcome(t *testing.T) {
+	cmd := switchCmd()
+	help := strings.ToLower(cmd.Short + " " + cmd.Long)
+	if strings.Contains(help, "daemon") {
+		t.Fatalf("switch help exposes daemon lifecycle: %q", help)
+	}
+	if !strings.Contains(help, "orbit up") {
+		t.Fatalf("switch help does not explain the prepared next state: %q", help)
 	}
 }
 
