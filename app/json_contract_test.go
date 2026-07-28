@@ -109,7 +109,7 @@ func TestPrintExecutionErrorJSON(t *testing.T) {
 	os.Args = []string{"orbit", "restart", "missing", "--json"}
 
 	var buf bytes.Buffer
-	printExecutionError(&buf, cli.NewUnknownServiceError("missing"))
+	printExecutionError(&buf, cli.NewUnknownResourceError("missing"))
 
 	got := decodeEnvelope(t, buf.Bytes())
 	if got.OK {
@@ -118,7 +118,7 @@ func TestPrintExecutionErrorJSON(t *testing.T) {
 	if got.Command != "orbit restart missing --json" {
 		t.Fatalf("command = %q", got.Command)
 	}
-	if got.Error == nil || got.Error.Code != "unknown_service" {
+	if got.Error == nil || got.Error.Code != "unknown_resource" {
 		t.Fatalf("error = %+v", got.Error)
 	}
 }
@@ -129,9 +129,9 @@ func TestPrintExecutionErrorHuman(t *testing.T) {
 	cli.JSONOutput = false
 
 	var buf bytes.Buffer
-	printExecutionError(&buf, cli.NewUnknownServiceError("missing"))
+	printExecutionError(&buf, cli.NewUnknownResourceError("missing"))
 
-	if got := buf.String(); got != "Error: unknown service: missing\n" {
+	if got := buf.String(); got != "Error: unknown resource: missing\n" {
 		t.Fatalf("human error = %q", got)
 	}
 }

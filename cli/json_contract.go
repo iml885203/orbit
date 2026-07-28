@@ -132,20 +132,31 @@ func classify(err error) JSONError {
 		}
 	}
 	var codedErr interface{ ErrorCode() string }
-	if errors.As(err, &codedErr) && codedErr.ErrorCode() == "unknown_group" {
-		return JSONError{
-			Code:      "invalid_argument",
-			Message:   msg,
-			Hint:      "Choose one of the available groups reported by Orbit, then retry.",
-			Retryable: false,
+	if errors.As(err, &codedErr) {
+		switch codedErr.ErrorCode() {
+		case "unknown_group":
+			return JSONError{
+				Code:      "invalid_argument",
+				Message:   msg,
+				Hint:      "Choose one of the available groups reported by Orbit, then retry.",
+				Retryable: false,
+			}
+		case "unknown_resource":
+			return JSONError{
+				Code:        "unknown_resource",
+				Message:     msg,
+				Hint:        "Run 'orbit status --json' to list configured resources.",
+				Retryable:   false,
+				NextCommand: "orbit status --json",
+			}
 		}
 	}
 	switch {
-	case errors.Is(err, ErrUnknownService):
+	case errors.Is(err, ErrUnknownResource):
 		return JSONError{
-			Code:        "unknown_service",
+			Code:        "unknown_resource",
 			Message:     msg,
-			Hint:        "Run 'orbit status --json' to list configured services.",
+			Hint:        "Run 'orbit status --json' to list configured resources.",
 			Retryable:   false,
 			NextCommand: "orbit status --json",
 		}
@@ -266,9 +277,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		}}
 	}
 	actions := []JSONAction{
-		{Command: "orbit status --json", Reason: "Inspect the latest daemon and service state.", Destructive: false},
+		{Command: "orbit status --json", Reason: "Inspect the latest daemon and resource state.", Destructive: false},
 	}
-	if err.Code != "unknown_service" {
+	if err.Code != "unknown_resource" {
 		actions = append(actions, JSONAction{
 			Command:     "orbit doctor --json",
 			Reason:      "Run environment diagnostics and collect actionable hints.",
@@ -331,7 +342,7 @@ func MergeActions(base, extra []JSONAction) []JSONAction {
 func StatusAction() JSONAction {
 	return JSONAction{
 		Command:     "orbit status --json",
-		Reason:      "Inspect the latest daemon and service state.",
+		Reason:      "Inspect the latest daemon and resource state.",
 		Destructive: false,
 	}
 }

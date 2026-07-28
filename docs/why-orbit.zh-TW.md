@@ -22,7 +22,7 @@ model 可部署。在 inner loop 它變成稅：動到環境就得重建並重�
 | 改自己服務的程式碼 | ✅ 重啟單一資源（~36s，dotnet 重建為主） | ✅ 等價 |
 | 改環境變數／連線字串 | ❌ 改 C# → 重啟 AppHost 世界 | 改 YAML → 只重啟該服務 |
 | 加減服務 | ❌ AppHost 重啟；session containers 陪葬 | 改 YAML → daemon 重啟會 **reconnect** 運行中的服務 |
-| 臨時只起部分服務 | ❌ 須事先寫好 `WithExplicitStart` | `orbit up <service\|group>`，runtime 決定 |
+| 臨時只啟動部分資源 | ❌ 須事先寫好 `WithExplicitStart` | runtime 使用 `orbit up <resource>` 或 `orbit up --group <group>` |
 | 切換環境 | ❌ 無 env 原語——停世界＋AppHost 重建（15–25s）＋冷起 | `orbit switch`：秒級；共用 infra 不中斷 |
 | 套用 DB schema 變更 | ❌ 不在守備範圍：手動 `dotnet build` + `sqlpackage`（8 個參數） | `orbit db publish`——一個動詞 |
 

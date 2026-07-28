@@ -171,21 +171,43 @@ func (e codedTestError) ErrorCode() string {
 	return e.code
 }
 
-func TestWriteJSONErrorClassifiesUnknownService(t *testing.T) {
+func TestWriteJSONErrorClassifiesUnknownResource(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteJSONError(&buf, "orbit restart missing --json", NewUnknownServiceError("missing"))
+	err := WriteJSONError(&buf, "orbit restart missing --json", NewUnknownResourceError("missing"))
 	if err != nil {
 		t.Fatalf("WriteJSONError: %v", err)
 	}
 	got := decodeEnvelope(t, buf.Bytes())
-	if got.Error == nil || got.Error.Code != "unknown_service" {
+	if got.Error == nil || got.Error.Code != "unknown_resource" {
 		t.Fatalf("error = %+v", got.Error)
 	}
 	if got.Error.Retryable {
 		t.Fatal("retryable = true, want false")
 	}
-	if got.Error.Hint != "Run 'orbit status --json' to list configured services." {
+	if got.Error.Hint != "Run 'orbit status --json' to list configured resources." {
 		t.Fatalf("hint = %q", got.Error.Hint)
+	}
+}
+
+func TestWriteJSONErrorClassifiesCodedUnknownResource(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteJSONError(
+		&buf,
+		"orbit up missing --json",
+		fmt.Errorf("up failed: %w", codedTestError{
+			code:    "unknown_resource",
+			message: "unknown resource: missing",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "unknown_resource" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit status --json" {
+		t.Fatalf("recommended actions = %+v", got.RecommendedActions)
 	}
 }
 

@@ -9,7 +9,7 @@ Common failure modes, what they mean, and how to fix them. Start with `orbit doc
 ### `orbit up` hangs at "waiting for <service> to be healthy"
 The container started but the health check never succeeded.
 
-- **Check logs**: `orbit logs <service>`. Most startup failures surface there.
+- **Check logs**: `orbit logs <resource>`. Most startup failures surface there.
 - **Heavy first-time initialization**: containers such as a database restoring many schemas can take several minutes on an empty volume. Follow the logs before treating the wait as a hang.
 - **Rosetta emulation on Apple Silicon**: any container with `platform: linux/amd64` runs under Rosetta — expect ~2× startup time. Check `docker inspect --format '{{.Platform}}'`.
 
@@ -151,7 +151,7 @@ When stuck:
 
 1. **`orbit doctor`** — checks Docker, Orbit configuration, daemon state, ports, and required host tools. Reports each with a `CheckPass` / `CheckWarn` / `CheckFail` and a hint. Extensions may contribute additional checks, including distribution-specific registry or repository checks.
 2. **`orbit status`** — confirms which services Orbit believes are healthy and where they disagree with reality.
-3. **`orbit logs <service> -f`** — live-tail the actual output.
+3. **`orbit logs <resource> -f`** — live-tail the actual output.
 4. **`ORBIT_LOG_LEVEL=debug orbit daemon restart`** — verbose daemon logs in `~/.orbit/daemon.log`.
 5. **`docker ps -a`** / **`docker logs <container>`** — bypass orbit entirely to rule out its bookkeeping.
 

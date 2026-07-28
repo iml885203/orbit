@@ -56,16 +56,16 @@ orbit logs redis --json
   "command": "logs",
   "data": null,
   "error": {
-    "code": "unknown_service",
-    "message": "unknown service: redisx",
-    "hint": "Run orbit status --json to list known services.",
+    "code": "unknown_resource",
+    "message": "unknown resource: redisx",
+    "hint": "Run orbit status --json to list configured resources.",
     "retryable": false,
     "next_command": "orbit status --json"
   },
   "recommended_actions": [
     {
       "command": "orbit status --json",
-      "reason": "List known services and current states."
+      "reason": "List configured resources and current states."
     }
   ]
 }
@@ -83,11 +83,11 @@ Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而�
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、service risks，以及建議後續指令。 |
 | `orbit status --json` | 在 `data` 中回傳 setup readiness、daemon 與已設定 service 的狀態。 |
-| `orbit logs <service> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
-| `orbit logs <service> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
+| `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
+| `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 services，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
-| `orbit down <service> --json` | 回傳指定 service 的最終 lifecycle 結果。 |
+| `orbit down <resource> --json` | 回傳指定 resource 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
 | `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
 | `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態，以及 restart 建議。 |
@@ -249,8 +249,8 @@ orbit inspect --json
 
 ```bash
 orbit status --json
-orbit logs <service> --json
-orbit restart <service> --json  # 修正回報的原因後
+orbit logs <resource> --json
+orbit restart <resource> --json  # 修正回報的原因後
 ```
 
 如果 JSON response 帶有 `recommended_actions`，請先照著走，再退回到臨時 debug。

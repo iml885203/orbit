@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -329,39 +330,54 @@ func TestResolveExplicitServices_IncludesTransitiveDeps(t *testing.T) {
 	}
 }
 
-func TestResolveExplicitServices_UnknownService(t *testing.T) {
+func TestResolveExplicitServices_UnknownResource(t *testing.T) {
 	s := newTestServer(t, testConfig())
 	_, err := s.resolveExplicitServices([]string{"nonexistent"})
 	if err == nil {
-		t.Fatal("expected error for unknown service")
+		t.Fatal("expected error for unknown resource")
 	}
-	if !strings.Contains(err.Error(), "nonexistent") {
-		t.Errorf("error = %q, expected it to mention the bad name", err.Error())
+	if !errors.Is(err, errUnknownResource) {
+		t.Fatalf("error = %v, want errUnknownResource", err)
+	}
+	if err.Error() != "unknown resource: nonexistent" {
+		t.Errorf("error = %q", err.Error())
 	}
 }
 
-func TestHandleStop_AcksUnknownService(t *testing.T) {
-	// handleStop is fire-and-forget: it acks the request immediately and
-	// runs StopService in a goroutine. Unknown-service failures are
-	// logged, not returned over HTTP — the CLI observes them via status
-	// polling.
-	cfg := testConfig()
-	cfg.Settings.ShutdownTimeout = 0 // no wait, orchestrator rejects before any I/O
-	s := newTestServer(t, cfg)
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/stop/nonexistent", nil)
-	s.handleStop(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (handler is non-blocking)", rr.Code)
+func TestLifecycleHandlersRejectUnknownResourceSynchronously(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	tests := []struct {
+		name    string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{name: "stop", path: "/api/stop/nonexistent", handler: s.handleStop},
+		{name: "restart", path: "/api/restart/nonexistent", handler: s.handleRestart},
 	}
-	var resp APIResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			tt.handler(rr, req)
+
+			assertUnknownResourceResponse(t, rr, "nonexistent")
+		})
 	}
-	if !resp.OK {
-		t.Errorf("OK = false, want true; body = %+v", resp)
+}
+
+func TestHandleLogsRejectsUnknownResourceBeforeReadingOrStreaming(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	for _, path := range []string{
+		"/api/logs/nonexistent",
+		"/api/logs/nonexistent/stream",
+	} {
+		t.Run(path, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			s.handleLogs(rr, req)
+
+			assertUnknownResourceResponse(t, rr, "nonexistent")
+		})
 	}
 }
 
@@ -372,5 +388,29 @@ func TestHandleStop_RequiresName(t *testing.T) {
 	s.handleStop(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rr.Code)
+	}
+	var resp APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error != "resource name required" {
+		t.Errorf("error = %q", resp.Error)
+	}
+}
+
+func assertUnknownResourceResponse(t *testing.T, rr *httptest.ResponseRecorder, name string) {
+	t.Helper()
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body = %s", rr.Code, rr.Body.String())
+	}
+	var resp APIResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Code != apiCodeUnknownResource {
+		t.Errorf("code = %q, want %q", resp.Code, apiCodeUnknownResource)
+	}
+	if resp.Error != "unknown resource: "+name {
+		t.Errorf("error = %q", resp.Error)
 	}
 }

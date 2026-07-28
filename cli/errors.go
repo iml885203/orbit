@@ -5,7 +5,7 @@ import "errors"
 // Sentinel kinds for CLI error classification. Wrap them via the New*Error
 // constructors so WriteJSONError maps failures to stable machine codes.
 var (
-	ErrUnknownService     = errors.New("unknown service")
+	ErrUnknownResource    = errors.New("unknown resource")
 	ErrTimeout            = errors.New("timeout")
 	ErrNotConfigured      = errors.New("not configured")
 	ErrChecksFailed       = errors.New("checks failed")
@@ -30,8 +30,8 @@ func (e classifiedError) Unwrap() error {
 	return e.kind
 }
 
-func NewUnknownServiceError(name string) error {
-	return classifiedError{kind: ErrUnknownService, msg: "unknown service: " + name}
+func NewUnknownResourceError(name string) error {
+	return classifiedError{kind: ErrUnknownResource, msg: "unknown resource: " + name}
 }
 
 func NewTimeoutError(msg string) error {

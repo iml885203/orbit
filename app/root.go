@@ -419,17 +419,17 @@ func vcsVersion(existingTime string) (string, string) {
 
 func upCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "up [services...]",
-		Short: "Start services (or all if no args)",
+		Use:   "up [resources...]",
+		Short: "Start resources (or all if no args)",
 		Long: `Start containers and services. The daemon auto-starts if not already running.
 
 Examples:
   orbit up                    # start everything (containers + services)
   orbit up --infra            # start only containers
-  orbit up api web            # start specific services
+  orbit up api redis          # start specific resources
   orbit up --group frontend   # start one configured group
 
-Service names, --infra, and --group are separate selection modes and cannot be combined.`,
+Resource names, --infra, and --group are separate selection modes and cannot be combined.`,
 		RunE: runUp,
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")
@@ -440,9 +440,9 @@ Service names, --infra, and --group are separate selection modes and cannot be c
 
 func downCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "down [service]",
-		Short: "Stop one service, or everything if omitted",
-		Long: `Stop one service, or all containers and services when no service is given.
+		Use:   "down [resource]",
+		Short: "Stop one resource, or everything if omitted",
+		Long: `Stop one resource, or all containers and services when no resource is given.
 
 The daemon itself keeps running. Use 'orbit daemon stop' if you want to stop the daemon too.`,
 		Args: cobra.MaximumNArgs(1),
@@ -457,8 +457,8 @@ The daemon itself keeps running. Use 'orbit daemon stop' if you want to stop the
 
 func restartCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "restart <service>",
-		Short: "Restart a service",
+		Use:   "restart <resource>",
+		Short: "Restart a resource",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runRestart,
 	}
@@ -468,8 +468,8 @@ func restartCmd() *cobra.Command {
 
 func logsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "logs <service>",
-		Short: "Show or stream service logs",
+		Use:   "logs <resource>",
+		Short: "Show or stream resource logs",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runLogs,
 	}
@@ -597,8 +597,8 @@ func runRestart(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("status: %w", err)
 		}
-		if !lifecycleServiceExists(status, name) {
-			return cli.NewUnknownServiceError(name)
+		if !lifecycleResourceExists(status, name) {
+			return cli.NewUnknownResourceError(name)
 		}
 		priorRestartCount := lifecycleRestartCount(status, name)
 		resp, err := client.Restart(name)
@@ -644,8 +644,8 @@ func runStop(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("status: %w", err)
 		}
-		if !lifecycleServiceExists(status, name) {
-			return cli.NewUnknownServiceError(name)
+		if !lifecycleResourceExists(status, name) {
+			return cli.NewUnknownResourceError(name)
 		}
 		resp, err := client.Stop(name)
 		if err != nil {
@@ -689,8 +689,8 @@ func runLogs(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("status: %w", err)
 		}
-		if !lifecycleServiceExists(status, name) {
-			return cli.NewUnknownServiceError(name)
+		if !lifecycleResourceExists(status, name) {
+			return cli.NewUnknownResourceError(name)
 		}
 	}
 

@@ -9,7 +9,7 @@
 ### `orbit up` 卡在 "waiting for <service> to be healthy"
 container 已經啟動，但 health check 一直沒成功。
 
-- **看 logs**：`orbit logs <service>`。大部分啟動失敗都會在這裡出現。
+- **看 logs**：`orbit logs <resource>`。大部分啟動失敗都會在這裡出現。
 - **第一次初始化很慢**：database 還原許多 schema 之類的重型 container,在空 volume 上可能需要幾分鐘。先持續查看 log,再判斷是否真的卡住。
 - **Apple Silicon 上的 Rosetta 模擬**：任何標 `platform: linux/amd64` 的 container 都會跑在 Rosetta 上 —— 啟動時間預期會多一倍。可以用 `docker inspect --format '{{.Platform}}'` 確認。
 
@@ -148,7 +148,7 @@ Orbit 預設命名是 `orbit-<service>`。如果你設了 `ORBIT_NAMESPACE=foo`�
 
 1. **`orbit doctor`** —— 檢查 Docker、Orbit 設定、daemon 狀態、ports 與必要的 host tools。每一項會回 `CheckPass` / `CheckWarn` / `CheckFail` 加一句提示。Extension 可以加入額外檢查,包括發行版專屬的 registry 或 repository 檢查。
 2. **`orbit status`** —— 確認 Orbit 認為哪些 service 是健康的、以及哪些跟實際情況對不上。
-3. **`orbit logs <service> -f`** —— 即時看實際輸出。
+3. **`orbit logs <resource> -f`** —— 即時看實際輸出。
 4. **`ORBIT_LOG_LEVEL=debug orbit daemon restart`** —— 在 `~/.orbit/daemon.log` 打開 verbose daemon log。
 5. **`docker ps -a`** / **`docker logs <container>`** —— 完全繞過 orbit，排除是它自己記帳記錯的可能性。
 

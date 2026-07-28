@@ -26,7 +26,7 @@ rebuilding and restarting the orchestrator itself. The boundary, measured:
 | Edit your service's code | ✅ restart one resource (~36s, dominated by `dotnet` rebuild) | ✅ equivalent |
 | Change an env var / connection string | ❌ edit C# → restart the AppHost world | edit YAML → restart that one service |
 | Add/remove a service | ❌ AppHost restart; session containers die with it | edit YAML → daemon restart **reconnects** running services |
-| Start a subset of services ad hoc | ❌ requires `WithExplicitStart` written in advance | `orbit up <service\|group>` at runtime |
+| Start a subset of resources ad hoc | ❌ requires `WithExplicitStart` written in advance | `orbit up <resource>` or `orbit up --group <group>` at runtime |
 | Switch environments | ❌ no env primitive — stop world + AppHost rebuild (15–25s) + cold start | `orbit switch`: seconds; shared infra keeps running |
 | Apply a DB schema change | ❌ not covered: `dotnet build` + `sqlpackage` (8 flags) by hand | `orbit db publish` — one verb |
 

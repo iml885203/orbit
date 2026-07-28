@@ -138,6 +138,26 @@ func TestReadError_APIErrorField(t *testing.T) {
 	}
 }
 
+func TestReadError_PreservesStableCode(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body: io.NopCloser(strings.NewReader(
+			`{"error":"unknown resource: missing","code":"unknown_resource"}`,
+		)),
+	}
+	err := readError(resp)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var coded interface{ ErrorCode() string }
+	if !errors.As(err, &coded) {
+		t.Fatalf("error type = %T, want coded error", err)
+	}
+	if coded.ErrorCode() != "unknown_resource" {
+		t.Errorf("code = %q", coded.ErrorCode())
+	}
+}
+
 func TestReadError_EmptyObject_FallsBackToStatus(t *testing.T) {
 	resp := &http.Response{
 		StatusCode: http.StatusNotFound,

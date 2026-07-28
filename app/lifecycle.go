@@ -360,7 +360,7 @@ func lifecycleServicesDone(status *daemon.StatusResponse, names []string, wantSt
 	return lifecycleServicesDoneOrPast(status, names, wantState, nil)
 }
 
-func lifecycleServiceExists(status *daemon.StatusResponse, name string) bool {
+func lifecycleResourceExists(status *daemon.StatusResponse, name string) bool {
 	if status == nil {
 		return false
 	}

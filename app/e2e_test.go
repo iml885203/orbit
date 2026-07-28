@@ -609,6 +609,48 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	if !strings.Contains(unknown.Error.Message, "this environment defines no groups") {
 		t.Fatalf("unknown group message = %q", unknown.Error.Message)
 	}
+
+	unknownResourceCommands := [][]string{
+		{"up", "missing", "--json"},
+		{"down", "missing", "--json"},
+		{"restart", "missing", "--json"},
+		{"logs", "missing", "--json"},
+		{"logs", "missing", "--follow", "--json"},
+	}
+	for _, args := range unknownResourceCommands {
+		t.Run(strings.Join(args[:len(args)-1], "_"), func(t *testing.T) {
+			started := time.Now()
+			output, err := command(ctx, args...).CombinedOutput()
+			if err == nil {
+				t.Fatalf("unknown resource succeeded:\n%s", output)
+			}
+			if elapsed := time.Since(started); elapsed >= time.Second {
+				t.Fatalf("unknown resource took %s, want immediate feedback\n%s", elapsed, output)
+			}
+			envelope := parseE2EEnvelope(t, string(output))
+			if envelope.Error == nil || envelope.Error.Code != "unknown_resource" {
+				t.Fatalf("error = %+v\n%s", envelope.Error, output)
+			}
+			if !strings.Contains(envelope.Error.Message, "unknown resource: missing") {
+				t.Fatalf("message = %q", envelope.Error.Message)
+			}
+			if len(envelope.RecommendedActions) != 1 ||
+				envelope.RecommendedActions[0].Command != "orbit status --json" {
+				t.Fatalf("recommended actions = %+v", envelope.RecommendedActions)
+			}
+		})
+	}
+
+	humanUnknown, err := command(ctx, "up", "missing").CombinedOutput()
+	if err == nil {
+		t.Fatalf("human unknown resource succeeded:\n%s", humanUnknown)
+	}
+	if !bytes.Contains(humanUnknown, []byte("unknown resource: missing")) {
+		t.Fatalf("human error = %s", humanUnknown)
+	}
+	if bytes.Contains(humanUnknown, []byte("doctor")) {
+		t.Fatalf("human error misdiagnosed a name typo as environment trouble:\n%s", humanUnknown)
+	}
 }
 
 func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {

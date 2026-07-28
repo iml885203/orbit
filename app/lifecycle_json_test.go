@@ -372,16 +372,16 @@ func TestLifecycleRestartHealthyWaitUsesStoppedAsTerminal(t *testing.T) {
 	}
 }
 
-func TestLifecycleServiceExists(t *testing.T) {
+func TestLifecycleResourceExists(t *testing.T) {
 	status := &daemon.StatusResponse{
 		Services: []daemon.ServiceStatus{
 			{Name: "worker", State: "healthy"},
 		},
 	}
-	if !lifecycleServiceExists(status, "worker") {
+	if !lifecycleResourceExists(status, "worker") {
 		t.Fatal("worker should exist")
 	}
-	if lifecycleServiceExists(status, "missing") {
+	if lifecycleResourceExists(status, "missing") {
 		t.Fatal("missing service should not exist")
 	}
 }

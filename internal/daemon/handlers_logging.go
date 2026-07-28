@@ -17,18 +17,17 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	name := parts[0]
 
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
+		return
+	}
+	if !s.holder.Load().ServiceOrContainerExists(name) {
+		writeUnknownResource(w, name)
 		return
 	}
 
 	// Check for SSE stream
 	if len(parts) == 2 && parts[1] == "stream" {
 		s.handleLogStream(w, r, name)
-		return
-	}
-
-	if _, ok := s.app.Orchestrator.GetServiceInfo(name); !ok {
-		writeJSON(w, http.StatusNotFound, APIResponse{Error: fmt.Sprintf("unknown service: %s", name)})
 		return
 	}
 

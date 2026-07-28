@@ -131,10 +131,15 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 	names, err := s.resolveServicesFromRequest(req)
 	if err != nil {
 		code := ""
-		if errors.Is(err, errUnknownGroup) {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, errUnknownGroup):
 			code = "unknown_group"
+		case errors.Is(err, errUnknownResource):
+			code = apiCodeUnknownResource
+			status = http.StatusNotFound
 		}
-		writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error(), Code: code})
+		writeJSON(w, status, APIResponse{Error: err.Error(), Code: code})
 		return
 	}
 
@@ -211,7 +216,23 @@ func uniqueCount(values []string) int {
 	return len(unique)
 }
 
-var errUnknownGroup = errors.New("unknown group")
+const apiCodeUnknownResource = "unknown_resource"
+
+var (
+	errUnknownGroup    = errors.New("unknown group")
+	errUnknownResource = errors.New("unknown resource")
+)
+
+func unknownResourceError(name string) error {
+	return fmt.Errorf("%w: %s", errUnknownResource, name)
+}
+
+func writeUnknownResource(w http.ResponseWriter, name string) {
+	writeJSON(w, http.StatusNotFound, APIResponse{
+		Error: unknownResourceError(name).Error(),
+		Code:  apiCodeUnknownResource,
+	})
+}
 
 func (s *Server) resolveServicesFromRequest(req UpRequest) ([]string, error) {
 	if len(req.Services) > 0 {
@@ -247,7 +268,7 @@ func (s *Server) resolveExplicitServices(services []string) ([]string, error) {
 	cfg := s.holder.Load()
 	for _, name := range services {
 		if !cfg.ServiceOrContainerExists(name) {
-			return nil, fmt.Errorf("unknown service: %s", name)
+			return nil, unknownResourceError(name)
 		}
 	}
 
@@ -334,7 +355,11 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimPrefix(r.URL.Path, "/api/stop/")
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
+		return
+	}
+	if !s.holder.Load().ServiceOrContainerExists(name) {
+		writeUnknownResource(w, name)
 		return
 	}
 
@@ -360,7 +385,11 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimPrefix(r.URL.Path, "/api/restart/")
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
+		return
+	}
+	if !s.holder.Load().ServiceOrContainerExists(name) {
+		writeUnknownResource(w, name)
 		return
 	}
 

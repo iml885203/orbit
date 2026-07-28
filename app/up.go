@@ -569,7 +569,7 @@ func coloredEvent(e progressEvent, line string) string {
 
 // isPostStopState reports whether a state indicates the stop phase has
 // completed (or never started). Empty string is the zero value seen
-// when a status response omits an unknown service — treat as
+// when a status response omits an unknown resource — treat as
 // indeterminate, NOT past-stop, so the caller keeps polling.
 func isPostStopState(state string) bool {
 	return state != "" && state != "stopping"

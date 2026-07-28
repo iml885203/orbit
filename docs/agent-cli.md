@@ -61,16 +61,16 @@ Structured errors use this shape:
   "command": "logs",
   "data": null,
   "error": {
-    "code": "unknown_service",
-    "message": "unknown service: redisx",
-    "hint": "Run orbit status --json to list known services.",
+    "code": "unknown_resource",
+    "message": "unknown resource: redisx",
+    "hint": "Run orbit status --json to list configured resources.",
     "retryable": false,
     "next_command": "orbit status --json"
   },
   "recommended_actions": [
     {
       "command": "orbit status --json",
-      "reason": "List known services and current states."
+      "reason": "List configured resources and current states."
     }
   ]
 }
@@ -89,11 +89,11 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, service risks, and recommended follow-up commands. |
 | `orbit status --json` | Returns setup readiness, daemon state, and configured service state in `data`. |
-| `orbit logs <service> --json` | Returns recent log lines in one JSON object. |
-| `orbit logs <service> -f --json` | Streams NDJSON events, one JSON object per line. |
+| `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
+| `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out services, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
-| `orbit down <service> --json` | Returns final lifecycle result for the requested service. |
+| `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon running state, and restart recommendation. |
@@ -271,8 +271,8 @@ For a failing service:
 
 ```bash
 orbit status --json
-orbit logs <service> --json
-orbit restart <service> --json  # after fixing the reported cause
+orbit logs <resource> --json
+orbit restart <resource> --json  # after fixing the reported cause
 ```
 
 If a JSON response includes `recommended_actions`, follow those before falling

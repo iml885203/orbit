@@ -196,6 +196,9 @@ func (c *Client) StreamLogs(name string, fn func(line string)) error {
 		return fmt.Errorf("stream request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return readError(resp)
+	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -434,7 +437,10 @@ func readError(resp *http.Response) error {
 		return fmt.Errorf("HTTP %d: decode response: %w", resp.StatusCode, err)
 	}
 	if result.Error != "" {
-		return fmt.Errorf("%s", result.Error)
+		if result.Code != "" {
+			return &apiError{Code: result.Code, Message: result.Error}
+		}
+		return errors.New(result.Error)
 	}
 	return fmt.Errorf("HTTP %d", resp.StatusCode)
 }
