@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/shellquote"
 )
 
 // TestCheckHostTool_MissingCritical verifies a critical tool absent from PATH
@@ -174,7 +175,7 @@ func TestNodeProjectDependencyCheckDistinguishesMissingPackages(t *testing.T) {
 	if got.Message != "project packages are not installed" {
 		t.Fatalf("message = %q", got.Message)
 	}
-	want := "run: pnpm --dir " + project + " install"
+	want := "run: pnpm --dir " + shellquote.Quote(project) + " install"
 	if got.Hint != want {
 		t.Fatalf("hint = %q, want %q", got.Hint, want)
 	}

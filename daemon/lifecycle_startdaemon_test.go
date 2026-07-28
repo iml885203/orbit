@@ -57,7 +57,7 @@ func TestCheckConfigMatchRejectsOlderDaemonWithoutPath(t *testing.T) {
 	if !errors.As(err, &mismatch) {
 		t.Fatalf("error = %T %v, want ConfigMismatchError", err, err)
 	}
-	if mismatch.Requested != selected || mismatch.Running != "" {
+	if mismatch.Requested != normalizedConfigPath(selected) || mismatch.Running != "" {
 		t.Fatalf("mismatch = %+v, want requested config and unknown running config", mismatch)
 	}
 	if got := err.Error(); !strings.Contains(got, "older Orbit build") ||
