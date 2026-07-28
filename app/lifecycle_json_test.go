@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -259,6 +260,80 @@ func TestLifecycleRecommendedActionsIncludeFailedDependency(t *testing.T) {
 	}
 	if !foundLogs || !foundRestart {
 		t.Fatalf("actions = %+v, want dependency logs and restart", actions)
+	}
+}
+
+func TestLifecycleRecommendedActionsExcludeHealthyResources(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{Name: "mongo", State: "degraded", StateReason: "container exited unexpectedly"},
+		{Name: "redis", State: "healthy"},
+	}}
+	actions := lifecycleRecommendedActionsForStatus([]string{"mongo", "redis"}, status)
+	got := make([]string, 0, len(actions))
+	for _, action := range actions {
+		got = append(got, action.Command)
+	}
+	want := []string{
+		"orbit status --json",
+		"orbit logs mongo --json",
+		"orbit restart mongo --json",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("actions = %v, want %v", got, want)
+	}
+}
+
+func TestLifecycleRecommendedActionsFollowPendingChainToRootResource(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:                "web",
+			State:               "pending",
+			PendingDependencies: []string{"api"},
+		},
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"database"},
+		},
+		{Name: "database", State: "starting"},
+	}}
+	actions := lifecycleRecommendedActionsForStatus([]string{"api", "database", "web"}, status)
+	got := make([]string, 0, len(actions))
+	for _, action := range actions {
+		got = append(got, action.Command)
+	}
+	want := []string{
+		"orbit status --json",
+		"orbit logs database --json",
+		"orbit restart database --json",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("actions = %v, want %v", got, want)
+	}
+}
+
+func TestLifecycleRecommendedActionsPrioritizeTerminalFailureOverConvergingResource(t *testing.T) {
+	status := &daemon.StatusResponse{Services: []daemon.ServiceStatus{
+		{
+			Name:                "api",
+			State:               "pending",
+			PendingDependencies: []string{"cache", "database"},
+		},
+		{Name: "cache", State: "starting"},
+		{Name: "database", State: "degraded", StateReason: "container exited unexpectedly"},
+	}}
+	actions := lifecycleRecommendedActionsForStatus([]string{"api", "cache", "database"}, status)
+	got := make([]string, 0, len(actions))
+	for _, action := range actions {
+		got = append(got, action.Command)
+	}
+	want := []string{
+		"orbit status --json",
+		"orbit logs database --json",
+		"orbit restart database --json",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("actions = %v, want %v", got, want)
 	}
 }
 

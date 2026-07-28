@@ -99,38 +99,67 @@ func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.
 	if status == nil {
 		return lifecycleRecommendedActions(serviceNames)
 	}
-	watched := watchSet(serviceNames)
-	evidenceNames := make([]string, 0, len(serviceNames))
-	blockedBy := make(map[string]string)
+	byName := make(map[string]*daemon.ServiceStatus, len(status.Services))
 	for i := range status.Services {
 		service := &status.Services[i]
-		if !watched[service.Name] {
-			continue
-		}
-		if service.State != "pending" {
-			evidenceNames = append(evidenceNames, service.Name)
-			continue
-		}
-		dependency := terminalDependencyBlocker(status, service.PendingDependencies)
-		if dependency == nil {
-			evidenceNames = append(evidenceNames, service.Name)
-			continue
-		}
-		evidenceNames = append(evidenceNames, dependency.Name)
-		blockedBy[dependency.Name] = service.Name
+		byName[service.Name] = service
 	}
-	actions := lifecycleRecommendedActions(evidenceNames)
-	for _, dependency := range sortedKeys(blockedBy) {
-		dependent := blockedBy[dependency]
-		actions = cli.MergeActions(actions, []cli.JSONAction{
-			{
-				Command:     "orbit restart " + dependency + " --json",
-				Reason:      "Restore the dependency blocking " + dependent + ".",
-				Destructive: false,
-			},
-		})
+	terminalNames := make([]string, 0, len(serviceNames))
+	for _, name := range serviceNames {
+		service := byName[name]
+		if service == nil {
+			continue
+		}
+		switch service.State {
+		case "degraded":
+			if service.HealthProgress == nil || !service.HealthProgress.Recovering {
+				terminalNames = append(terminalNames, service.Name)
+			}
+		case "stopped":
+			terminalNames = append(terminalNames, service.Name)
+		case "pending":
+			if blocker := terminalDependencyBlocker(status, service.PendingDependencies); blocker != nil {
+				terminalNames = append(terminalNames, blocker.Name)
+			}
+		}
 	}
-	return actions
+	if len(terminalNames) > 0 {
+		return lifecycleRecommendedActions(terminalNames)
+	}
+
+	evidenceNames := make([]string, 0, len(serviceNames))
+	for _, name := range serviceNames {
+		service := byName[name]
+		if service == nil {
+			continue
+		}
+		evidence := lifecycleEvidenceResource(service, byName, make(map[string]bool, len(byName)))
+		if evidence == nil {
+			continue
+		}
+		evidenceNames = append(evidenceNames, evidence.Name)
+	}
+	return lifecycleRecommendedActions(evidenceNames)
+}
+
+func lifecycleEvidenceResource(service *daemon.ServiceStatus, byName map[string]*daemon.ServiceStatus, visited map[string]bool) *daemon.ServiceStatus {
+	if service == nil || service.State == "healthy" || visited[service.Name] {
+		return nil
+	}
+	visited[service.Name] = true
+	if service.State != "pending" {
+		return service
+	}
+	for _, dependencyName := range service.PendingDependencies {
+		dependency := byName[dependencyName]
+		if dependency == nil || dependency.State == "healthy" {
+			continue
+		}
+		if evidence := lifecycleEvidenceResource(dependency, byName, visited); evidence != nil {
+			return evidence
+		}
+	}
+	return service
 }
 
 func waitForLifecycleJSON(client *daemon.Client, names []string, wantState string) (*daemon.StatusResponse, error) {
