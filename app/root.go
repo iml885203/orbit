@@ -624,7 +624,7 @@ func runDown(_ *cobra.Command, _ []string) error {
 	}
 
 	if cli.JSONOutput {
-		resp, err := client.Down(false)
+		_, err := client.Down(false)
 		if err != nil {
 			return fmt.Errorf("down failed: %w", err)
 		}
@@ -634,7 +634,7 @@ func runDown(_ *cobra.Command, _ []string) error {
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 			Operation:          "down",
-			Message:            resp.Message,
+			Message:            downCompletionMessage,
 			RequestedResources: names,
 			FinalStatus:        finalStatus,
 		}), []cli.JSONAction{cli.StatusAction()})
@@ -643,7 +643,11 @@ func runDown(_ *cobra.Command, _ []string) error {
 	if _, err := client.Down(false); err != nil {
 		return fmt.Errorf("down failed: %w", err)
 	}
-	return waitForServicesStopped(client, names, false)
+	if err := waitForServicesStopped(client, names, false); err != nil {
+		return err
+	}
+	fmt.Println(downCompletionMessage)
+	return nil
 }
 
 func runRestart(_ *cobra.Command, args []string) error {

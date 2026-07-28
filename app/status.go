@@ -166,7 +166,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	} else if dstatus.UpdateAvailable {
 		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
 	} else {
-		tips = buildTips(cfg, daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
+		tips = buildTips(daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTargets(running), openableServices)
 	}
 	if len(tips) > 0 {
 		fmt.Println()
@@ -298,7 +298,7 @@ func formatTiming(svc daemon.ResourceStatus) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-func buildTips(cfg *config.Config, daemonRunning, stoppedInfra bool, stoppedServices, degradedNames, openableServices []string) []string {
+func buildTips(daemonRunning, stoppedInfra bool, stoppedServices, degradedNames, openableServices []string) []string {
 	var tips []string
 
 	// Scenario 1: nothing running
@@ -318,24 +318,15 @@ func buildTips(cfg *config.Config, daemonRunning, stoppedInfra bool, stoppedServ
 		return tips
 	}
 
-	// Scenario 2: infra stopped
-	if stoppedInfra {
-		tips = append(tips, "orbit up --infra          start infrastructure")
+	// A stopped environment has one normal recovery path. Partial-start flags
+	// remain discoverable in help, but status must not lead a user into a
+	// container-only intermediate state.
+	if stoppedInfra || len(stoppedServices) > 0 {
+		tips = append(tips, "orbit up                  start environment")
 		return tips
 	}
 
-	// Scenario 3: some services stopped
-	if len(stoppedServices) > 0 {
-		if cfg != nil && len(stoppedServices) == len(cfg.Services) {
-			tips = append(tips, "orbit up                  start all services")
-		} else {
-			for _, name := range stoppedServices {
-				tips = append(tips, fmt.Sprintf("orbit up %-16s  start service", name))
-			}
-		}
-	}
-
-	// Scenario 4: healthy services with URLs
+	// Healthy services with URLs.
 	for _, name := range openableServices {
 		tips = append(tips, fmt.Sprintf("orbit open %-14s  open in browser", name))
 	}
@@ -492,7 +483,15 @@ func writeStatusJSON(
 		})
 	}
 	if !setup.SelectionRequired && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
-		actions = cli.MergeActions(actions, statusRecoveryActions(running))
+		recoveryActions := statusRecoveryActions(running)
+		if len(recoveryActions) > 0 {
+			actions = cli.MergeActions(actions, recoveryActions)
+		} else if statusHasStoppedResources(resources) {
+			actions = cli.MergeActions(actions, []cli.JSONAction{{
+				Command: "orbit up --json",
+				Reason:  "Start the selected environment.",
+			}})
+		}
 	}
 	setupMessage := ""
 	if setup.Required {
@@ -511,6 +510,15 @@ func writeStatusJSON(
 		Daemon:            dstatus,
 		Resources:         resources,
 	}, actions)
+}
+
+func statusHasStoppedResources(resources []jsonService) bool {
+	for _, resource := range resources {
+		if resource.State == "stopped" || resource.State == "pending" {
+			return true
+		}
+	}
+	return false
 }
 
 func printEnvironmentSelectionRecovery(selection environmentSelection) {

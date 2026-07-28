@@ -310,6 +310,35 @@ func TestStatusJSON_DaemonRunning(t *testing.T) {
 	}
 }
 
+func TestStatusAfterDownRecommendsWholeEnvironment(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{"redis": {}},
+		Services:   map[string]*config.Service{"api": {}},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"redis": {Name: "redis", Kind: daemon.ResourceKindContainer, State: "stopped"},
+		"api":   {Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
+	}
+
+	tips := buildTips(true, true, []string{"api"}, nil, nil)
+	if len(tips) != 1 || tips[0] != "orbit up                  start environment" {
+		t.Fatalf("tips = %+v", tips)
+	}
+
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
+func TestStatusDoesNotPromoteInfrastructureOnlyStartup(t *testing.T) {
+	tips := buildTips(true, true, nil, nil, nil)
+	if len(tips) != 1 || tips[0] != "orbit up                  start environment" {
+		t.Fatalf("tips = %+v", tips)
+	}
+}
+
 func TestStatusJSON_UpdateAvailable(t *testing.T) {
 	d := daemonStatus{
 		Running:         true,

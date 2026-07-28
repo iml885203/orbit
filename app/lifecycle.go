@@ -8,6 +8,8 @@ import (
 	"github.com/iml885203/orbit/daemon"
 )
 
+const downCompletionMessage = "Environment stopped. Orbit is ready for the next 'orbit up'."
+
 type lifecycleJSONOptions struct {
 	Operation          string
 	Message            string

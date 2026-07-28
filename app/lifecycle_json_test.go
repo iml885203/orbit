@@ -128,6 +128,16 @@ func TestBuildLifecycleJSONDataEmptySlicesMarshalAsArrays(t *testing.T) {
 	}
 }
 
+func TestDownCompletionExplainsOrbitRemainsReady(t *testing.T) {
+	got := buildLifecycleJSONData(lifecycleJSONOptions{
+		Operation: "down",
+		Message:   downCompletionMessage,
+	})
+	if got.Message != "Environment stopped. Orbit is ready for the next 'orbit up'." {
+		t.Fatalf("message = %q", got.Message)
+	}
+}
+
 func TestLifecycleRecommendedActionsLeadThroughRecovery(t *testing.T) {
 	got := lifecycleRecommendedActions([]string{"worker", "payments", "worker"})
 	want := []string{
