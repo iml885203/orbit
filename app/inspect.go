@@ -10,6 +10,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ const (
 	inspectReadinessSetupRequired = "setup_required"
 	inspectReadinessConfigInvalid = "config_invalid"
 	inspectReadinessNeedsDaemon   = "needs_daemon"
+	inspectReadinessStopped       = "stopped"
 	inspectReadinessDegraded      = "degraded"
 	inspectReadinessConverging    = "converging"
 	inspectReadinessPartial       = "partial"
@@ -90,6 +92,7 @@ type inspectBuildOptions struct {
 	Dashboard       string
 	Status          *daemon.StatusResponse
 	StatusErr       error
+	Configured      []daemon.ServiceStatus
 }
 
 func inspectCmd() *cobra.Command {
@@ -123,6 +126,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	}
 	if cfg != nil {
 		opts.PreviewOnly = cfg.PreviewOnly
+		opts.Configured = configuredInspectServices(cfg)
 	}
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
@@ -160,10 +164,12 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	services := emptyInspectServiceSummary()
 	if opts.Status != nil {
 		services = buildInspectServiceSummary(opts.Status.Services)
+	} else if len(opts.Configured) > 0 {
+		services = buildInspectServiceSummary(opts.Configured)
 	}
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services, opts.Command)
+	actions := inspectRecommendedActions(readiness, risks, services, opts.Command, opts.ConfigEnvName)
 	env := inspectEnvSummary{
 		Name:        opts.ConfigEnvName,
 		ConfigPath:  opts.ConfigPath,
@@ -190,6 +196,28 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 		Risks:              risks,
 		RecommendedActions: actions,
 	}
+}
+
+func configuredInspectServices(cfg *config.Config) []daemon.ServiceStatus {
+	if cfg == nil {
+		return nil
+	}
+	services := make([]daemon.ServiceStatus, 0, len(cfg.Containers)+len(cfg.Services))
+	for name := range cfg.Containers {
+		services = append(services, daemon.ServiceStatus{
+			Name:  name,
+			Kind:  daemon.ServiceKindContainer,
+			State: "stopped",
+		})
+	}
+	for name := range cfg.Services {
+		services = append(services, daemon.ServiceStatus{
+			Name:  name,
+			Kind:  daemon.ServiceKindService,
+			State: "stopped",
+		})
+	}
+	return services
 }
 
 func inspectDashboard(opts inspectBuildOptions) string {
@@ -264,9 +292,9 @@ func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
 	}
 	if !opts.DaemonRunning {
 		return inspectRisk{
-			Code:     "daemon_unreachable",
-			Severity: "critical",
-			Message:  "daemon is not reachable",
+			Code:     "environment_stopped",
+			Severity: "low",
+			Message:  "the selected environment is not running",
 		}, true
 	}
 	if opts.StatusErr != nil {
@@ -319,7 +347,7 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is running with a different env"}
 	}
 	if !opts.DaemonRunning {
-		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is not reachable"}
+		return inspectReadiness{State: inspectReadinessStopped, Blocked: true, Summary: "the selected environment is not running"}
 	}
 	if opts.StatusErr != nil {
 		return inspectReadiness{State: inspectReadinessConverging, Summary: "daemon is running, but service status is unavailable"}
@@ -345,6 +373,7 @@ func inspectRecommendedActions(
 	risks []inspectRisk,
 	services inspectServiceSummary,
 	retryCommand string,
+	selectedEnv string,
 ) []cli.JSONAction {
 	actions := []cli.JSONAction{}
 	switch readiness.State {
@@ -366,18 +395,28 @@ func inspectRecommendedActions(
 		})
 	case inspectReadinessNeedsDaemon:
 		if inspectHasRisk(risks, "env_mismatch") {
+			command := "orbit daemon restart --json"
+			if selectedEnv != "" {
+				command = "orbit switch " + shellquote.Quote(selectedEnv) + " --json"
+			}
 			actions = append(actions, cli.JSONAction{
-				Command:     "orbit daemon restart --json",
-				Reason:      "Restart daemon to apply selected env.",
+				Command:     command,
+				Reason:      "Apply the selected environment through Orbit's safe switch workflow.",
 				Destructive: false,
 			})
 		} else {
 			actions = append(actions, cli.JSONAction{
-				Command:     "orbit daemon start --json",
-				Reason:      "Start the daemon so Orbit can inspect live service state.",
+				Command:     "orbit up --json",
+				Reason:      "Start the selected environment.",
 				Destructive: false,
 			})
 		}
+	case inspectReadinessStopped:
+		actions = append(actions, cli.JSONAction{
+			Command:     "orbit up --json",
+			Reason:      "Start the selected environment.",
+			Destructive: false,
+		})
 	case inspectReadinessDegraded:
 		for _, name := range services.Degraded {
 			actions = append(actions,
@@ -404,10 +443,7 @@ func inspectRecommendedActions(
 	default:
 		actions = append(actions, cli.StatusAction())
 	}
-	if len(risks) > 0 &&
-		readiness.State != inspectReadinessSetupRequired &&
-		readiness.State != inspectReadinessConfigInvalid &&
-		readiness.State != inspectReadinessDegraded {
+	if inspectHasRisk(risks, "status_unavailable") {
 		actions = append(actions, cli.DoctorAction())
 	}
 	return cli.MergeActions(nil, actions)
@@ -436,6 +472,8 @@ func printInspectHuman(data inspectJSONData) {
 			fmt.Printf(" (pid %d)", data.Daemon.PID)
 		}
 		fmt.Println()
+	} else if data.Readiness.State == inspectReadinessStopped {
+		fmt.Println("Environment: not running")
 	} else {
 		fmt.Println("Daemon: not running")
 	}

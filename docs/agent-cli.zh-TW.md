@@ -204,7 +204,7 @@ Inspect payload 包含：
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `env` | 目前 config path、env 名稱、preview-only flag，以及可用時 daemon 回報的 env。 |
 | `services` | 依 state 分組的 service 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`env_mismatch`、`daemon_unreachable`、`status_unavailable`、`service_degraded`、`service_converging`、`service_stopped`。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`service_degraded`、`service_converging`、`service_stopped`。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：
@@ -213,7 +213,8 @@ Inspect payload 包含：
 |---|---:|---|
 | `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
 | `config_invalid` | true | 選到的 config 無法載入。 |
-| `needs_daemon` | true | config 可載入，但 daemon 目前不可連線，或 daemon 正在以不同 env 執行。 |
+| `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
+| `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |
 | `degraded` | false | 至少一個 service 回報 `degraded`。 |
 | `converging` | false | 至少一個 service 是 `pending`、`starting`、`building`、`stopping` 或 `restarting`。 |
 | `partial` | false | 至少一個 service 停止，且沒有更高優先級的風險。 |
@@ -226,8 +227,9 @@ Agents 應把 `blocked: true` 視為需要先恢復的狀態。Agents 可以直�
 non-destructive 的 `recommended_actions`，但任何 `destructive: true` 的 action
 仍必須先取得明確 human approval。
 
-當 `needs_daemon` 是由 `env_mismatch` 造成時，agents 應先 restart 或 switch
-daemon 再依據 service state 行動，因為 daemon 回報的可能是不同 env 的狀態。
+readiness 是 `needs_daemon` 時，agents 應先執行建議的
+`orbit switch <env> --json` action，再依據 service state 行動，因為 running
+environment 與選取的 CLI config 不同。
 
 ## Recommended Agent Workflow
 

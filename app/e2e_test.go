@@ -593,6 +593,67 @@ func TestE2E_InspectBeforeInitMatchesStatusSetupGuidance(t *testing.T) {
 	}
 }
 
+func TestE2E_InspectConfiguredEnvironmentBeforeUpPointsOnlyToUp(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	workspace := t.TempDir()
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(envsDir, "ready-to-start.yaml")
+	raw := fmt.Sprintf(`version: "2"
+services:
+  demo-api:
+    type: shell
+    path: %q
+    command: python3 app.py
+`, workspace)
+	if err := os.WriteFile(envPath, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := func(args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+	if output, err := command("env", "use", envPath).CombinedOutput(); err != nil {
+		t.Fatalf("select env: %v\n%s", err, output)
+	}
+
+	human, err := command("inspect").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human inspect failed: %v\n%s", err, human)
+	}
+	for _, evidence := range []string{"Readiness: stopped", "Environment: not running", "Next: orbit up"} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human inspect missing %q:\n%s", evidence, human)
+		}
+	}
+	if bytes.Contains(human, []byte("daemon start")) || bytes.Contains(human, []byte("orbit doctor")) {
+		t.Fatalf("human inspect exposed internal or unrelated recovery:\n%s", human)
+	}
+
+	output, err := command("inspect", "--json").Output()
+	if err != nil {
+		t.Fatalf("JSON inspect failed: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	var data inspectJSONData
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("inspect data: %v\n%s", err, envelope.Data)
+	}
+	if data.Readiness.State != inspectReadinessStopped || !data.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", data.Readiness)
+	}
+	if data.Services.Total != 1 || len(data.Services.Stopped) != 1 || data.Services.Stopped[0] != "demo-api" {
+		t.Fatalf("services = %+v", data.Services)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 func TestE2E_StatusRejectsInvalidSelectedEnvironment(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home := t.TempDir()

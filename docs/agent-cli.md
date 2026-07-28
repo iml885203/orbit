@@ -225,7 +225,7 @@ The inspect payload contains:
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `env` | Current config path, env name, preview-only flag, and daemon-reported env when available. |
 | `services` | Bounded service summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `env_mismatch`, `daemon_unreachable`, `status_unavailable`, `service_degraded`, `service_converging`, and `service_stopped`. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `service_degraded`, `service_converging`, and `service_stopped`. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:
@@ -234,7 +234,8 @@ Stable `readiness.state` values:
 |---|---:|---|
 | `setup_required` | true | No usable environment has been selected; the only next action is `orbit init --yes --json`. |
 | `config_invalid` | true | The selected config cannot be loaded. |
-| `needs_daemon` | true | The config loads, but the daemon is not reachable or is running with a different env. |
+| `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
+| `needs_daemon` | true | A running daemon is serving a different env than the selected config. |
 | `degraded` | false | At least one service reports `degraded`. |
 | `converging` | false | At least one service is `pending`, `starting`, `building`, `stopping`, or `restarting`. |
 | `partial` | false | At least one service is stopped and no higher-priority risk exists. |
@@ -247,9 +248,9 @@ Agents should treat `blocked: true` as a stop-and-recover state. Agents may run
 non-destructive `recommended_actions` directly, but must still require explicit
 human approval for any action marked `destructive: true`.
 
-When `needs_daemon` is caused by `env_mismatch`, agents should restart or switch
-the daemon before acting on service state because the daemon may be reporting a
-different env than the selected CLI config.
+When readiness is `needs_daemon`, agents should run the recommended
+`orbit switch <env> --json` action before acting on service state because the
+running environment differs from the selected CLI config.
 
 ## Recommended Agent Workflow
 

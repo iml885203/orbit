@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -78,20 +79,39 @@ func TestBuildInspectDataDaemonDown(t *testing.T) {
 		ConfigPath:    "/tmp/development.yaml",
 		ConfigEnvName: "development",
 		DaemonRunning: false,
+		Configured: []daemon.ServiceStatus{
+			{Name: "redis", Kind: daemon.ServiceKindContainer, State: "stopped"},
+			{Name: "api", Kind: daemon.ServiceKindService, State: "stopped"},
+		},
 	})
 
-	if got.Readiness.State != inspectReadinessNeedsDaemon {
-		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessNeedsDaemon)
+	if got.Readiness.State != inspectReadinessStopped {
+		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessStopped)
 	}
 	if !got.Readiness.Blocked {
 		t.Fatal("blocked = false, want true")
 	}
-	if len(got.Risks) != 1 || got.Risks[0].Code != "daemon_unreachable" {
+	if len(got.Risks) != 1 || got.Risks[0].Code != "environment_stopped" {
 		t.Fatalf("risks = %+v", got.Risks)
 	}
-	if got.RecommendedActions[0].Command != "orbit daemon start --json" {
+	if got.Services.Total != 2 || len(got.Services.Stopped) != 2 {
+		t.Fatalf("services = %+v", got.Services)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions[0])
 	}
+}
+
+func TestConfiguredInspectServicesExposeStoppedResourcesWithoutDaemon(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{"redis": {}},
+		Services:   map[string]*config.Service{"api": {}},
+	}
+	got := buildInspectServiceSummary(configuredInspectServices(cfg))
+	if got.Total != 2 {
+		t.Fatalf("total = %d", got.Total)
+	}
+	assertStringSlice(t, got.Stopped, []string{"api", "redis"})
 }
 
 func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
@@ -120,10 +140,10 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	if !strings.Contains(got.Risks[0].Message, "development") || !strings.Contains(got.Risks[0].Message, "local") {
 		t.Fatalf("risk message = %q, want both env names", got.Risks[0].Message)
 	}
-	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit daemon restart --json" {
+	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit switch development --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions)
 	}
-	if got.RecommendedActions[0].Reason != "Restart daemon to apply selected env." {
+	if got.RecommendedActions[0].Reason != "Apply the selected environment through Orbit's safe switch workflow." {
 		t.Fatalf("first action reason = %q", got.RecommendedActions[0].Reason)
 	}
 	if got.RecommendedActions[0].Destructive {
