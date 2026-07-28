@@ -6,12 +6,13 @@ Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
 ## 發布順序
 
 - GitHub private 演練版從 `v0.0.1` 開始。
-- 第一個 public release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
+- Source repository 會在 1.0 產品打磨期間先行公開；所有 `0.x` release
+  都是 preview，可能包含 breaking changes。
+- 第一個 stable release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
   已有文件與測試，並已準備好提供外部使用者使用。
 - Release tag 不可修改；修正必須發布成新版本。
 
-GitHub private 階段的 `0.0.x` 版本之間可以有 breaking change。從
-`v1.0.0` 起：
+1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：
 
 - PATCH：向後相容的修正；
 - MINOR：向後相容的新功能；

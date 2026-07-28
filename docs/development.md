@@ -102,9 +102,6 @@ under your workspace are never removed.
 Download `orbit-<os>-<arch>` (or the Windows `.exe`) and `checksums.txt` from
 the matching [GitHub Release](https://github.com/iml885203/orbit/releases).
 Verify the SHA-256 checksum before moving the binary onto your `PATH`.
-During the private rehearsal, use `gh release download` from an authenticated
-GitHub CLI session; the installer automatically falls back to that mechanism
-when anonymous downloads are unavailable.
 
 ### Agent plugin
 

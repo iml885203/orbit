@@ -6,6 +6,9 @@
 [架構](docs/architecture.zh-TW.md) · [Agent CLI](docs/agent-cli.zh-TW.md) ·
 [English](README.md)
 
+> **1.0 前預覽版：** Orbit 已開放給 early adopters 與 contributors，但 1.0
+> UX 與相容性契約仍在打磨中；`v1.0.0` 前可能有 breaking changes。
+
 Orbit 會依 dependency 順序啟動服務、檢查健康狀態、串流 logs，並透過常駐
 daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CLI contract
 執行。
@@ -28,20 +31,15 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 
 ## 安裝
 
-Repo 還是 private 時，請先登入 [GitHub CLI](https://cli.github.com/)：
-
 ```bash
-gh auth login
-gh auth setup-git
-gh api -H "Accept: application/vnd.github.raw+json" \
-  repos/iml885203/orbit/contents/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init
 ```
 
-Repo 公開後可改用不需登入的指令：
+Windows PowerShell：
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+```powershell
+irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
 orbit init
 ```
 

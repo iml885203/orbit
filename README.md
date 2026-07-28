@@ -7,6 +7,10 @@ declarative environment.
 [Architecture](docs/architecture.md) · [Agent CLI](docs/agent-cli.md) ·
 [繁體中文](README.zh-TW.md)
 
+> **Pre-1.0 preview:** Orbit is open for early adopters and contributors while
+> the 1.0 UX and compatibility contracts are still being finalized. Expect
+> breaking changes before `v1.0.0`.
+
 Orbit starts services in dependency order, checks health, streams logs, keeps
 the environment alive behind a resident daemon, and exposes the same controls
 through a local dashboard and a stable JSON CLI contract.
@@ -30,32 +34,12 @@ See [Why Orbit](docs/why-orbit.md) for design trade-offs and comparisons.
 
 ## Install
 
-While the repository is private, use an authenticated
-[GitHub CLI](https://cli.github.com/) session:
-
-```bash
-gh auth login
-gh auth setup-git
-gh api -H "Accept: application/vnd.github.raw+json" \
-  repos/iml885203/orbit/contents/scripts/install.sh | bash
-orbit init
-```
-
-On Windows PowerShell:
-
-```powershell
-gh api -H "Accept: application/vnd.github.raw+json" `
-  repos/iml885203/orbit/contents/scripts/install.ps1 |
-  pwsh -NoProfile -Command -
-orbit init
-```
-
-After the repository becomes public, the authentication-free command is:
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 orbit init
 ```
+
+On Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex

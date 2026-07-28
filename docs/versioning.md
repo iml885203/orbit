@@ -5,14 +5,15 @@ Orbit and the bundled `plugins/orbit-agent` plugin use the same
 
 ## Release sequence
 
-- Private GitHub rehearsal releases begin at `v0.0.1`.
-- The first public release is `v1.0.0`. Publishing that tag means the
+- Private GitHub rehearsal releases began at `v0.0.1`.
+- The source repository became public during the pre-1.0 product-hardening
+  phase. All `0.x` releases are previews and may contain breaking changes.
+- The first stable release is `v1.0.0`. Publishing that tag means the
   compatibility contracts below are documented, tested, and ready for external
   users.
 - Release tags are immutable. Fixes are published as a new version.
 
-The GitHub-private phase may introduce breaking changes between `0.0.x`
-releases. From `v1.0.0` onward:
+Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 
 - PATCH releases contain backward-compatible fixes.
 - MINOR releases add backward-compatible functionality.
