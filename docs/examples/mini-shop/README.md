@@ -175,6 +175,11 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
 > 需要可重複的 QA 節奏，可直接看 [UX 驗收檢查單](./UX-ACCEPTANCE-CHECKLIST.md)。
 
+## 釋出前 UX smoke check
+
+- 建議每次打磨完成後跑一次： [UX smoke check](./UX-SMOKE-CHECK.md)  
+  先驗證成功路徑、再驗證兩個失敗回歸（付款失敗 / 庫存不足），確保文案與操作仍是「可猜測率低」的流程。
+
 你可把「操作摘要」當作目前這一步的進度日誌，搭配「診斷命令」快速定位。
 想重複 demo 時，直接按「重置流程」即可回到起始節點（清空購物車、回到預設付款方式）。
 
