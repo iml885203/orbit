@@ -31,6 +31,10 @@
       .small-btn { font-size: 12px; padding: 4px 8px; background: #93c5fd; }
       .copy-feedback { color: #86efac; font-size: 12px; min-height: 16px; }
       .inline-btn { background: #93c5fd; }
+      .inline-btn.primary-action {
+        background: #facc15;
+        color: #111827;
+      }
       .inline-btn.warn { background: #fdba74; }
       .inline-btn.danger { background: #fdba74; }
       .summary-list { max-height: 140px; overflow: auto; padding: 8px; background: #0b1328; border-radius: 8px; }
@@ -518,6 +522,90 @@ web
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
       }
 
+      function errorHintServiceFromCode(code) {
+        if (!code) {
+          return 'checkout-api';
+        }
+        const normalized = normalizeErrorCode(code);
+        if (normalized === 'cart_unreachable' || normalized === 'cart_empty') {
+          return 'cart-api';
+        }
+        if (normalized === 'insufficient_stock' || normalized === 'inventory_unreachable') {
+          return 'inventory-api';
+        }
+        if (normalized === 'catalog_unreachable') {
+          return 'catalog-api';
+        }
+        if (normalized === 'customer_unreachable') {
+          return 'customer-api';
+        }
+        if (normalized === 'order_unreachable') {
+          return 'order-api';
+        }
+        if (normalized === 'payment_declined' || normalized === 'payment_failed' || normalized === 'payment_unreachable') {
+          return 'payment-api';
+        }
+        if (normalized === 'checkout_failed') {
+          return 'checkout-api';
+        }
+        return 'checkout-api';
+      }
+
+      function recoveryActionsForErrorCard(errorCode, service) {
+        const normalized = normalizeErrorCode(errorCode);
+        const actions = [];
+        const targetService = service || errorHintServiceFromCode(normalized);
+        actions.push({
+          label: '複製診斷命令',
+          type: 'copy-cmd',
+          payload: (faultPatterns.find((item) => item.code === normalized) || fallbackPattern).command,
+          primary: false,
+        });
+        actions.push({
+          label: '複製服務 log 命令',
+          type: 'copy-cmd',
+          payload: serviceLogCommand(targetService),
+          primary: false,
+        });
+
+        if (normalized === 'cart_empty') {
+          actions.push({ label: '先補 1 件商品', type: 'set-quantity', payload: '1', primary: true });
+          actions.push({ label: '前往購物車區', type: 'focus', payload: '#cart-panel', primary: false });
+        }
+
+        if (normalized === 'insufficient_stock') {
+          actions.push({ label: '先降到 1 件重試', type: 'set-quantity', payload: '1', primary: true });
+          actions.push({ label: '查看庫存面板', type: 'focus', payload: '#inventory-panel', primary: false });
+        }
+
+        if (normalized === 'payment_declined' || normalized === 'payment_failed' || normalized === 'payment_unreachable') {
+          actions.push({ label: '切為 mock_card', type: 'set-payment-method', payload: 'mock_card', primary: false });
+          actions.push({ label: '改 mock_card 重試 Checkout', type: 'run-checkout', payload: 'mock_card', primary: true });
+        }
+
+        if (normalized === 'checkout_failed') {
+          actions.push({ label: '回到成功導覽', type: 'run-scenario', payload: 'success', primary: true });
+          actions.push({ label: '一鍵完成成功流程', type: 'one-shot', primary: false });
+        }
+
+        if (!actions.some((action) => action.type === 'focus') && (normalized === 'cart_unreachable' || normalized === 'catalog_unreachable' || normalized === 'inventory_unreachable' || normalized === 'order_unreachable' || normalized === 'customer_unreachable' || normalized === 'payment_unreachable')) {
+          const mapping = {
+            cart_unreachable: '#cart-panel',
+            catalog_unreachable: '#product-panel',
+            inventory_unreachable: '#inventory-panel',
+            order_unreachable: '#orders-panel',
+            customer_unreachable: '#customer-panel',
+            payment_unreachable: '#checkout-panel',
+          };
+          actions.push({ label: '前往對應服務卡', type: 'focus', payload: mapping[normalized] || '', primary: true });
+        }
+
+        if (normalized === 'default' || !actions.length) {
+          actions.push({ label: '前往下一步建議', type: 'focus', payload: '#goal-next', primary: true });
+        }
+        return actions.slice(0, 5);
+      }
+
       function clearAllPanelAttention() {
         document.querySelectorAll('.panel-attention, .panel-attention-pulse').forEach((element) => {
           element.classList.remove('panel-attention', 'panel-attention-pulse');
@@ -890,16 +978,41 @@ web
         all.forEach((pattern) => {
           const selectors = errorFocusMap[pattern.code] || [];
           const focusTarget = selectors[0] || '';
+          const actions = recoveryActionsForErrorCard(pattern.code, errorHintServiceFromCode(pattern.code));
           const card = document.createElement('div');
           card.className = `error-item${pattern.code === activeCode ? ' active' : ''}`;
+          const actionButtons = actions
+            .map((action) => {
+              const isPrimary = action.primary ? 'primary-action' : '';
+              if (action.type === 'copy-cmd') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-copy-cmd="${action.payload}">${action.label}</button>`;
+              }
+              if (action.type === 'run-checkout') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-run-checkout="${action.payload}">${action.label}</button>`;
+              }
+              if (action.type === 'set-quantity') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-qty="${action.payload}">${action.label}</button>`;
+              }
+              if (action.type === 'set-payment-method') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-payment="${action.payload}">${action.label}</button>`;
+              }
+              if (action.type === 'run-scenario') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-scenario="${action.payload}">${action.label}</button>`;
+              }
+              if (action.type === 'one-shot') {
+                return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-one-shot>${action.label}</button>`;
+              }
+              return `<button type="button" class="small-btn inline-btn timeline-btn error-action ${isPrimary}" data-error-focus="${action.payload}">${action.label}</button>`;
+            })
+            .join('');
           card.innerHTML = `
             <div class="title">${pattern.code}</div>
             <div class="hint">症狀：${pattern.symptom}</div>
             <div class="hint">建議：${pattern.step}</div>
             <div class="cmd">快速命令：${pattern.command}</div>
             <div class="operation-actions">
-              <button type="button" class="small-btn inline-btn timeline-btn" data-copy-cmd="${pattern.command}">複製命令</button>
-              ${focusTarget ? `<button type="button" class="small-btn inline-btn timeline-btn" data-error-focus="${focusTarget}">定位到對應區塊</button>` : ''}
+              ${focusTarget && pattern.code === activeCode ? `<button type="button" class="small-btn inline-btn timeline-btn" data-error-focus="${focusTarget}">定位到對應區塊</button>` : ''}
+              ${actionButtons}
             </div>
           `;
           errorPlaybookEl.appendChild(card);
@@ -2027,12 +2140,50 @@ web
         const copyButton = event.target.closest('[data-copy-cmd]');
         const operationCopyButton = event.target.closest('[data-operation-copy]');
         const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
+        const errorCopyCommandButton = event.target.closest('[data-error-copy-cmd]');
+        const errorQtyButton = event.target.closest('[data-error-qty]');
+        const errorPaymentButton = event.target.closest('[data-error-payment]');
+        const errorScenarioButton = event.target.closest('[data-error-scenario]');
+        const oneShotButton = event.target.closest('[data-error-one-shot]');
         const operationFocusButton = event.target.closest('[data-operation-focus]');
         const errorFocusButton = event.target.closest('[data-error-focus]');
 
         if (operationRunCheckoutButton) {
           const method = operationRunCheckoutButton.dataset.operationRunCheckout || 'mock_card';
           await runCheckoutAction(method, 'operation 快照重試');
+          return;
+        }
+        if (oneShotButton) {
+          runOneShotSuccessFlow();
+          return;
+        }
+        if (errorScenarioButton) {
+          const type = errorScenarioButton.dataset.errorScenario;
+          if (type === 'success') {
+            runScenario('success');
+          } else if (type === 'decline') {
+            runScenario('decline');
+          } else if (type === 'stock') {
+            runScenario('stock');
+          }
+          return;
+        }
+        if (errorPaymentButton) {
+          const method = errorPaymentButton.dataset.errorPayment;
+          if (method) {
+            paymentMethodEl.value = method;
+            setNotice(`已將付款方式切成 ${method}，可直接重試 Checkout。`, 'ok');
+            appendSummary(`已快速切換付款方式為 ${method}`);
+          }
+          return;
+        }
+        if (errorQtyButton) {
+          const qty = Number(errorQtyButton.dataset.errorQty);
+          if (Number.isFinite(qty) && qty > 0) {
+            quantityEl.value = String(qty);
+            setNotice(`已將數量調整為 ${qty}，可直接重試流程。`, 'ok');
+            appendSummary(`錯誤卡建議：已將數量設為 ${qty}`);
+          }
           return;
         }
         if (errorFocusButton) {
@@ -2044,6 +2195,17 @@ web
             appendSummary('從故障情境卡定位到對應區塊。');
           } else {
             setNotice('目前找不到對應區塊，請重整後再試。', 'warn');
+          }
+          return;
+        }
+        if (errorCopyCommandButton) {
+          const cmd = errorCopyCommandButton.dataset.errorCopyCmd;
+          if (!cmd) return;
+          try {
+            await navigator.clipboard.writeText(cmd);
+            setCopyFeedback(`已複製：${cmd}`);
+          } catch (_e) {
+            setCopyFeedback('無法複製，請手動選取複製');
           }
           return;
         }
