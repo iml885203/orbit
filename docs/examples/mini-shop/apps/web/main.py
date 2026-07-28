@@ -6,6 +6,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     catalog_api = os.environ.get("CATALOG_API_URL", "http://127.0.0.1:3001")
     order_api = os.environ.get("ORDER_API_URL", "http://127.0.0.1:3002")
     inventory_api = os.environ.get("INVENTORY_API_URL", "http://127.0.0.1:3003")
+    customer_api = os.environ.get("CUSTOMER_API_URL", "http://127.0.0.1:3004")
+    cart_api = os.environ.get("CART_API_URL", "http://127.0.0.1:3005")
+    checkout_api = os.environ.get("CHECKOUT_API_URL", "http://127.0.0.1:3006")
+    payment_api = os.environ.get("PAYMENT_API_URL", "http://127.0.0.1:3007")
+    shipping_api = os.environ.get("SHIPPING_API_URL", "http://127.0.0.1:3008")
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
@@ -19,7 +24,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             template = file.read()
         rendered = template.replace("{{CATALOG_API_URL}}", self.catalog_api).replace(
             "{{ORDER_API_URL}}", self.order_api
-        ).replace("{{INVENTORY_API_URL}}", self.inventory_api)
+        ).replace("{{INVENTORY_API_URL}}", self.inventory_api).replace(
+            "{{CUSTOMER_API_URL}}", self.customer_api
+        ).replace("{{CART_API_URL}}", self.cart_api).replace(
+            "{{CHECKOUT_API_URL}}", self.checkout_api
+        ).replace("{{PAYMENT_API_URL}}", self.payment_api).replace(
+            "{{SHIPPING_API_URL}}", self.shipping_api
+        )
         body = rendered.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")

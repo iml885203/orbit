@@ -41,10 +41,27 @@ services:
     env:
       CATALOG_API_URL: http://127.0.0.1:3001
       INVENTORY_API_URL: http://127.0.0.1:3003
+      CUSTOMER_API_URL: http://127.0.0.1:3004
       DATABASE_PATH: mini_shop_orders.db
       DATA_DIR: .
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: "26379"
+
+  customer-api:
+    type: python
+    kind: backend
+    path: ./apps/customer-api
+    command: python3 main.py
+    ports:
+      http: 3004
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /health
+      port: 3004
+    env:
+      DATABASE_PATH: mini_shop_customers.db
+      DATA_DIR: .
 
   inventory-api:
     type: python
@@ -64,6 +81,66 @@ services:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: "26379"
 
+  cart-api:
+    type: python
+    kind: backend
+    path: ./apps/cart-api
+    command: python3 main.py
+    ports:
+      http: 3005
+    depends_on: [catalog-api]
+    health_check:
+      type: http
+      path: /health
+      port: 3005
+    env:
+      DATABASE_PATH: mini_shop_cart.db
+      DATA_DIR: .
+      CATALOG_API_URL: http://127.0.0.1:3001
+
+  payment-api:
+    type: python
+    kind: backend
+    path: ./apps/payment-api
+    command: python3 main.py
+    ports:
+      http: 3007
+    health_check:
+      type: http
+      path: /health
+      port: 3007
+    env: {}
+
+  shipping-api:
+    type: python
+    kind: backend
+    path: ./apps/shipping-api
+    command: python3 main.py
+    ports:
+      http: 3008
+    depends_on: [order-api]
+    health_check:
+      type: http
+      path: /health
+      port: 3008
+    env:
+      DATABASE_PATH: mini_shop_shipping.db
+      DATA_DIR: .
+
+  checkout-api:
+    type: python
+    kind: backend
+    path: ./apps/checkout-api
+    command: python3 main.py
+    ports:
+      http: 3006
+    depends_on: [order-api, inventory-api, catalog-api, customer-api, cart-api, payment-api, shipping-api]
+    health_check:
+      type: http
+      path: /health
+      port: 3006
+    env: {}
+
   web:
     type: python
     kind: frontend
@@ -71,7 +148,7 @@ services:
     command: python3 main.py
     ports:
       http: 3000
-    depends_on: [order-api]
+    depends_on: [checkout-api]
     health_check:
       type: http
       path: /
@@ -81,8 +158,13 @@ services:
       CATALOG_API_URL: http://127.0.0.1:3001
       ORDER_API_URL: http://127.0.0.1:3002
       INVENTORY_API_URL: http://127.0.0.1:3003
+      CUSTOMER_API_URL: http://127.0.0.1:3004
+      CART_API_URL: http://127.0.0.1:3005
+      CHECKOUT_API_URL: http://127.0.0.1:3006
+      PAYMENT_API_URL: http://127.0.0.1:3007
+      SHIPPING_API_URL: http://127.0.0.1:3008
 
 groups:
   mini-shop:
     enabled: true
-    services: [catalog-api, inventory-api, order-api, web]
+    services: [catalog-api, inventory-api, customer-api, order-api, cart-api, payment-api, shipping-api, checkout-api, web]

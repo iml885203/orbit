@@ -7,64 +7,103 @@
     <style>
       body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 24px; background: #0b1020; color: #f3f4f6; }
       h1 { margin-top: 0; }
-      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
       .card { background: #111827; padding: 12px; border-radius: 12px; }
-      button { padding: 8px 12px; border-radius: 8px; background: #22d3ee; border: 0; color: #042f2e; cursor: pointer; }
-      button:disabled { opacity: .5; cursor: not-allowed; }
-      pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow: auto; }
-      .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-      input { width: 100px; }
-      .notice { padding: 8px; border-radius: 8px; background: #111827; margin: 8px 0; }
-      .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-bottom: 12px; }
       .service { border-left: 4px solid #6b7280; padding: 8px; border-radius: 8px; background: #0f172a; }
       .service.ready { border-left-color: #22c55e; }
       .service.warn { border-left-color: #f59e0b; }
       .service.bad { border-left-color: #ef4444; }
+      .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      button { padding: 8px 12px; border-radius: 8px; background: #22d3ee; border: 0; color: #042f2e; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow: auto; }
+      input, select { width: 140px; }
+      .notice { padding: 8px; border-radius: 8px; background: #111827; margin: 8px 0; }
       .notice.ok { color: #bef264; }
       .notice.warn { color: #fbbf24; }
       .notice.error { color: #fb7185; }
+      .hint { color: #94a3b8; font-size: 13px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      li { margin: 4px 0; }
     </style>
   </head>
   <body>
     <h1>Orbit mini-shop</h1>
-    <p>前後端 + 3 個 backend + Redis container，演示 Orbit 多服務關聯啟動。</p>
-    <div id="status">載入中...</div>
-    <div class="status-grid" id="service-status"></div>
-    <div class="help card" id="help">
-      <h3>第一次啟動檢查（最少心智負擔）</h3>
+    <p>目標很簡單：<strong>選客戶 → 加入購物車 → Checkout</strong>。你不用先記 API，也不用先猜 service 邏輯。</p>
+    <p class="hint">這個 demo 想證明 3 件事：主機與容器混合、跨 service 的資料關聯、以及發生問題時可以快速定位。</p>
+
+    <div class="card">
+      <h3>快速導覽（新手友善）</h3>
       <ol>
-        <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
-        <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開分頁</li>
-        <li>用「下單」下 1 個產品、1 件數量，若成功會同時更新訂單與庫存</li>
+        <li>確認服務就緒數（8/8）</li>
+        <li>選客戶與商品</li>
+        <li>按 <strong>加入購物車</strong>，再按 <strong>Checkout</strong></li>
+        <li>在「訂單」與「出貨」看到關聯結果</li>
       </ol>
-      <p>若下單失敗，先看錯誤訊息：通常是 <code>insufficient_stock</code>（庫存不足）或
-      某服務未啟動（先確認 <code>orbit status --json</code>）。</p>
     </div>
+
+    <div id="status">載入服務健康中...</div>
+    <div id="service-status" class="status-grid"></div>
+    <div id="action-notice" class="notice">載入中</div>
+
     <div class="grid">
+      <div class="card">
+        <h3>選擇客戶</h3>
+        <div class="row">
+          <select id="customer-id"></select>
+        </div>
+      </div>
+
       <div class="card">
         <h3>商品</h3>
         <div id="products"></div>
+        <div class="row"><label>產品:</label><select id="product-id"></select></div>
+        <div class="row"><label>數量:</label><input id="quantity" type="number" min="1" value="1" /></div>
+        <button id="add-to-cart">加入購物車</button>
+        <button id="refresh-products">重整商品</button>
       </div>
+
       <div class="card">
-        <h3>下單</h3>
-        <div class="row">
-          <label>商品 ID:</label>
-          <input id="product-id" type="number" value="1" min="1" />
-        </div>
-        <div class="row">
-          <label>數量:</label>
-          <input id="quantity" type="number" value="1" min="1" />
-        </div>
-        <button id="place-order">建立訂單</button>
-        <div id="action-notice" class="notice">待機中：可嘗試新增一筆訂單。</div>
+        <h3>購物車</h3>
+        <div id="cart">先選客戶</div>
+        <div class="row"><button id="clear-cart">清空購物車</button></div>
       </div>
+
       <div class="card">
-        <h3>庫存</h3>
-        <div id="stock"></div>
+        <h3>Checkout</h3>
+        <div class="row"><label>付款方式:</label>
+          <select id="payment-method">
+            <option value="mock_card">mock_card</option>
+            <option value="decline">decline</option>
+          </select>
+        </div>
+        <button id="checkout">下單 Checkout</button>
       </div>
+
       <div class="card">
         <h3>訂單</h3>
         <div id="orders"></div>
+      </div>
+
+      <div class="card">
+        <h3>出貨</h3>
+        <div id="shipments"></div>
+      </div>
+
+      <div class="card">
+        <h3>服務關係（你可不用記）</h3>
+        <div class="hint">從資料流向來看：</div>
+        <pre class="mono">
+web
+  └─ checkout-api
+       ├─ cart-api → catalog-api
+       ├─ order-api → catalog-api / inventory-api / customer-api
+       ├─ inventory-api
+       ├─ payment-api
+       └─ shipping-api
+        </pre>
+        <p class="hint">也就是你只要追一個主流程節點 checkout-api 即可理解全域。</p>
       </div>
     </div>
 
@@ -72,232 +111,301 @@
       const catalogApi = '{{CATALOG_API_URL}}';
       const orderApi = '{{ORDER_API_URL}}';
       const inventoryApi = '{{INVENTORY_API_URL}}';
+      const customerApi = '{{CUSTOMER_API_URL}}';
+      const cartApi = '{{CART_API_URL}}';
+      const checkoutApi = '{{CHECKOUT_API_URL}}';
+      const shippingApi = '{{SHIPPING_API_URL}}';
+      const paymentApi = '{{PAYMENT_API_URL}}';
 
-      const status = document.getElementById('status');
-      const products = document.getElementById('products');
-      const orders = document.getElementById('orders');
-      const stock = document.getElementById('stock');
-      const help = document.getElementById('help');
-      const serviceStatus = document.getElementById('service-status');
       const actionNotice = document.getElementById('action-notice');
-      const placeOrderButton = document.getElementById('place-order');
+      const status = document.getElementById('status');
+      const serviceStatus = document.getElementById('service-status');
+      const customerEl = document.getElementById('customer-id');
+      const productsEl = document.getElementById('products');
+      const productEl = document.getElementById('product-id');
+      const quantityEl = document.getElementById('quantity');
+      const cartEl = document.getElementById('cart');
+      const ordersEl = document.getElementById('orders');
+      const shipmentsEl = document.getElementById('shipments');
+      const addToCartBtn = document.getElementById('add-to-cart');
+      const clearCartBtn = document.getElementById('clear-cart');
+      const checkoutBtn = document.getElementById('checkout');
+      const paymentMethodEl = document.getElementById('payment-method');
+      const refreshProductBtn = document.getElementById('refresh-products');
+
+      const serviceDependencies = {
+        'catalog-api': '商品主檔',
+        'inventory-api': '庫存',
+        'customer-api': '客戶資料',
+        'cart-api': '購物車（依賴 catalog）',
+        'order-api': '訂單（依賴 catalog / inventory / customer）',
+        'payment-api': '付款模擬',
+        'shipping-api': '物流建立 tracking',
+        'checkout-api': 'Orchestrator',
+      };
 
       function setNotice(message, kind = 'ok') {
         actionNotice.textContent = message;
         actionNotice.className = `notice ${kind}`;
       }
 
-      function formatServiceError(payload) {
-        if (!payload || !payload.code) return '操作失敗，請重試';
-        if (payload.code === 'insufficient_stock') {
-          const available = typeof payload.available === 'number' ? payload.available : '?';
-          return `庫存不足：目前可用 ${available} 件，請改小一點數量`;
+      function formatActionNotice(map) {
+        const readyCount = Object.values(map).filter((s) => s && s.status === 'ok').length;
+        if (readyCount < 8) {
+          const broken = Object.entries(map).find(([, s]) => !s || s.status !== 'ok');
+          const brokenName = broken ? broken[0] : '未知';
+          return `服務就緒度 ${readyCount}/8：${brokenName} 未 ready，先等候或重啟該服務`;
         }
-        if (payload.code === 'inventory_unavailable') {
-          return '庫存服務尚未就緒：請先確認 inventory-api 是否 ready，或稍後重試';
-        }
-        if (payload.code === 'order_failed_release_failed') {
-          return '下單異常且回復庫存失敗，請先稍後再試，避免重複嘗試';
-        }
-        if (payload.code === 'order_failed') {
-          return '下單失敗，庫存已回補，請重試';
-        }
-        if (payload.code === 'product_not_found') {
-          return '商品不存在，請先確認商品 ID';
-        }
-        if (payload.code === 'catalog_unreachable') {
-          return '產品服務未就緒，請先確認 catalog-api 是否已 ready';
-        }
-        return payload.message || '建立失敗，請重試';
+        return '服務已就緒，可以開始流程：選客戶 → 加入購物車 → Checkout。';
       }
 
-      function setServiceStatusItem(label, serviceStatusPayload) {
-        const serviceName = serviceStatusPayload?.service || label;
-        const status = serviceStatusPayload?.status || 'unknown';
-        const isOk = status === 'ok';
-        const isWarn = status === 'degraded';
+      function setServiceCard(name, payload) {
+        const statusText = payload?.status || 'unknown';
+        const isOk = statusText === 'ok';
+        const isWarn = statusText === 'degraded';
+        const deps = payload?.dependencies || {};
+        const lines = Object.entries(deps)
+          .map(([k, v]) => `• ${k}: ${(v?.ready === true) ? 'ready' : 'not ready'}`)
+          .join('<br>');
 
-        const dependencies = serviceStatusPayload?.dependencies || {};
-        const dependencyLines = Object.entries(dependencies)
-          .map(([name, dep]) => `• ${name}: ${dep?.ready ? 'ready' : 'not ready'}`)
-          .join('<br/>');
-        const dependencyText = dependencyLines ? `<div style="font-size:12px;color:#94a3b8">${dependencyLines}</div>` : '';
-
-        return `<div class="service ${isOk ? 'ready' : isWarn ? 'warn' : 'bad'}">` +
-          `<div><b>${serviceName}</b> <span style="color:#94a3b8">${status}</span></div>` +
-          `${dependencyText}` +
-          `</div>`;
+        return `<div class="service ${isOk ? 'ready' : isWarn ? 'warn' : 'bad'}">`
+          + `<b>${payload?.service || name}</b> <span class="hint">${statusText}</span>`
+          + `<div class="hint">${serviceDependencies[payload?.service || name] || '服務節點'}</div>`
+          + `<div class="hint">${lines}</div>`
+          + `</div>`;
       }
 
-      function setHelpPanel(message) {
-        help.dataset.orderOk = message.orderOk ? 'true' : 'false';
-        if (message.orderOk) {
-          help.innerHTML = `<h3>第一次啟動檢查（最少心智負擔）</h3>
-            <ol>
-              <li>先確認有 5 個 resource 在跑：redis / catalog-api / inventory-api / order-api / web</li>
-              <li>等 <b>order-api</b> 顯示 <code>status=ok</code> 後再開始操作</li>
-              <li>下單 1 件最常見商品（商品 ID 1、數量 1）</li>
-            </ol>
-            <p>若下單失敗，先看上方紅字；通常是 <code>insufficient_stock</code> 或某服務未啟動（先確認 <code>orbit status --json</code>）。</p>`;
-          return;
-        }
+      function updateActionState(map) {
+        const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+        const checkoutReady = map['checkout-api']?.status === 'ok';
+        const customerSelected = Number(customerEl.value) > 0;
+        const cartReady = cartEl && cartEl.textContent.indexOf('尚無商品') === -1 && cartEl.textContent.indexOf('先選客戶') === -1;
 
-        help.innerHTML = `<h3>健康檢查（下一步）</h3>
-          <ul>
-            <li>${message.items.join('</li><li>')}</li>
-          </ul>
-          <p>你可以直接執行：<code>orbit -c docs/examples/mini-shop/dev.yaml status --json</code></p>`;
+        addToCartBtn.disabled = !allReady || !customerSelected;
+        clearCartBtn.disabled = !allReady || !customerSelected;
+        checkoutBtn.disabled = !checkoutReady || !cartReady;
+
+        status.textContent = formatActionNotice(map);
+        setNotice(
+          allReady
+            ? (cartReady ? '購物車有資料可結帳。' : '先加入 1 件商品再 checkout。')
+            : '請先把所有服務恢復為 ok 後再操作。',
+          allReady ? 'ok' : 'warn'
+        );
       }
 
-      async function safeFetch(url) {
-        const resp = await fetch(url);
-        if (!resp.ok) {
+      async function safeFetch(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
           let payload = null;
           try {
-            payload = await resp.json();
+            payload = await response.json();
           } catch (_) {
             payload = null;
           }
-          throw new Error(JSON.stringify(payload || { code: 'http_error', message: `HTTP ${resp.status}` }));
+          throw new Error(JSON.stringify(payload || { code: 'http_error', message: `HTTP ${response.status}` }));
         }
-        return resp.json();
+        return response.json();
+      }
+
+      function parseApiError(err) {
+        if (!err?.message) return null;
+        try {
+          return JSON.parse(err.message);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function errorText(payload) {
+        if (!payload) return '作業失敗，請重試。';
+        if (payload.code === 'insufficient_stock') return '庫存不足，請降低數量。';
+        if (payload.code === 'cart_empty') return '購物車是空的，先加入商品。';
+        if (payload.code === 'catalog_unreachable' || payload.code === 'order_unreachable' || payload.code === 'cart_unreachable')
+          return '某服務未就緒，先確認服務狀態。';
+        if (payload.code === 'payment_declined' || payload.code === 'forced_decline' || payload.code === 'insufficient_funds' || payload.code === 'payment_unreachable' || payload.code === 'payment_failed')
+          return '付款失敗（可改 mock_card 重試）。';
+        return payload.message || '操作失敗，請重試。';
       }
 
       async function checkAll() {
-        try {
-          const [catalogPayload, orderPayload, inventoryPayload] = await Promise.all([
-            safeFetch(`${catalogApi}/health`),
-            safeFetch(`${orderApi}/health`),
-            safeFetch(`${inventoryApi}/health`),
-          ]);
-          status.textContent = `服務健康：order=${orderPayload.status}，catalog=${catalogPayload.status}，inventory=${inventoryPayload.status}`;
+        const urls = {
+          'catalog-api': `${catalogApi}/health`,
+          'inventory-api': `${inventoryApi}/health`,
+          'customer-api': `${customerApi}/health`,
+          'order-api': `${orderApi}/health`,
+          'cart-api': `${cartApi}/health`,
+          'payment-api': `${paymentApi}/health`,
+          'shipping-api': `${shippingApi}/health`,
+          'checkout-api': `${checkoutApi}/health`,
+        };
 
-          serviceStatus.innerHTML = [
-            setServiceStatusItem('catalog', catalogPayload),
-            setServiceStatusItem('inventory', inventoryPayload),
-            setServiceStatusItem('order', orderPayload),
-          ].join('');
+        const responses = await Promise.all(
+          Object.entries(urls).map(async ([name, url]) => {
+            try {
+              const payload = await safeFetch(url);
+              return [name, payload];
+            } catch (_e) {
+              return [name, { service: name, status: 'degraded', dependencies: {} }];
+            }
+          })
+        );
 
-          const orderDeps = orderPayload.dependencies || {};
-          const inventoryDeps = inventoryPayload.dependencies || {};
-          const orderReady = orderPayload.status === 'ok';
-          placeOrderButton.disabled = !orderReady;
+        const map = Object.fromEntries(responses);
+        serviceStatus.innerHTML = responses.map(([_, payload]) => setServiceCard('', payload)).join('');
+        updateActionState(map);
+        return map;
+      }
 
-          if (orderPayload.status !== 'ok') {
-            const issues = [];
-            if (!orderDeps.catalog_api?.ready) {
-              issues.push('catalog-api 未 ready，請先確認 /products 是否可用');
-            }
-            if (!orderDeps.inventory_api?.ready) {
-              issues.push('inventory-api 未 ready，請確認 /stock 是否可用');
-            }
-            if (!orderDeps.redis?.ready) {
-              issues.push('redis 不可用，請重啟 redis container');
-            }
-            if (!inventoryDeps.sqlite?.ready) {
-              issues.push('inventory sqlite 未 ready，請再試一次');
-            }
-            setHelpPanel({ orderOk: false, items: issues });
-          } else {
-            setHelpPanel({ orderOk: true });
-            setNotice('系統已就緒，可以下單', 'ok');
-          }
-        } catch (e) {
-          status.textContent = '初始化失敗，請先確認 orbit up 已完整啟動所有服務。';
-          setNotice('後端未就緒，請稍後再試', 'error');
-          placeOrderButton.disabled = true;
-        }
+      async function loadCustomers() {
+        const payload = await safeFetch(`${customerApi}/customers`);
+        customerEl.innerHTML = '';
+        payload.customers.forEach((item) => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = `${item.name} (${item.email})`;
+          customerEl.appendChild(option);
+        });
       }
 
       async function loadProducts() {
-        try {
-          const payload = await safeFetch(`${catalogApi}/products`);
-        products.innerHTML = '';
+        const payload = await safeFetch(`${catalogApi}/products`);
+        productsEl.innerHTML = '';
+        productEl.innerHTML = '';
         payload.products.forEach((item) => {
-          const row = document.createElement('div');
-          row.className = 'row';
-          row.textContent = `${item.id}. ${item.name} — $${item.price.toFixed(2)}`;
-          products.appendChild(row);
+          const line = document.createElement('div');
+          line.textContent = `#${item.id} ${item.name} - $${item.price.toFixed(2)}`;
+          productsEl.appendChild(line);
+
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = `${item.id}. ${item.name}`;
+          productEl.appendChild(option);
         });
-        } catch (e) {
-          products.innerHTML = '<div class="notice error">商品載入失敗：先確認 catalog-api 是否 ready。</div>';
-        }
       }
 
-      async function loadStock() {
-        try {
-          const payload = await safeFetch(`${inventoryApi}/stock`);
-        stock.innerHTML = '';
+      async function loadCart() {
+        const customerId = Number(customerEl.value);
+        if (!customerId) {
+          cartEl.textContent = '先選客戶';
+          return;
+        }
+        const payload = await safeFetch(`${cartApi}/carts/${customerId}`);
+        cartEl.innerHTML = '';
+        if (!payload.items.length) {
+          cartEl.textContent = '尚無商品';
+          return;
+        }
         payload.items.forEach((item) => {
           const row = document.createElement('div');
           row.className = 'row';
-          row.textContent = `產品 ${item.product_id}：剩餘 ${item.stock}`;
-          stock.appendChild(row);
+          row.textContent = `${item.product_name} x${item.quantity} = $${item.total.toFixed(2)}`;
+          cartEl.appendChild(row);
         });
-        } catch (e) {
-          stock.innerHTML = '<div class="notice error">庫存載入失敗：先確認 inventory-api 是否 ready。</div>';
-        }
+        cartEl.innerHTML += `<div class="hint mono">items: ${payload.item_count} / subtotal: $${payload.total.toFixed(2)}</div>`;
       }
 
       async function loadOrders() {
-        try {
-          const payload = await safeFetch(`${orderApi}/orders`);
-        orders.innerHTML = '';
+        const payload = await safeFetch(`${orderApi}/orders`);
+        ordersEl.innerHTML = '';
         payload.orders.forEach((item) => {
-          const row = document.createElement('div');
-          row.className = 'row';
-          row.textContent = `#${item.id} x${item.quantity} ${item.product_name} (${item.product_price})`;
-          orders.appendChild(row);
+          const line = document.createElement('div');
+          line.className = 'row';
+          line.textContent = `#${item.id} ${item.customer_name} - ${item.product_name} x${item.quantity} (${item.status})`;
+          ordersEl.appendChild(line);
         });
-        } catch (e) {
-          orders.innerHTML = '<div class="notice warn">訂單載入失敗：先確認 order-api 是否 ready。</div>';
+      }
+
+      async function loadShipments() {
+        const customerId = Number(customerEl.value);
+        const suffix = customerId ? `?customer_id=${customerId}` : '';
+        const payload = await safeFetch(`${shippingApi}/shipments${suffix}`);
+        shipmentsEl.innerHTML = '';
+        payload.shipments.forEach((item) => {
+          const line = document.createElement('div');
+          line.className = 'row';
+          line.textContent = `#${item.id} order=${item.order_id} ${item.tracking_no} ${item.status}`;
+          shipmentsEl.appendChild(line);
+        });
+      }
+
+      async function refresh() {
+        try {
+          await checkAll();
+          await loadProducts();
+          await loadCustomers();
+          await Promise.all([loadCart(), loadOrders(), loadShipments()]);
+        } catch (err) {
+          const parsed = parseApiError(err);
+          setNotice(errorText(parsed), 'error');
         }
       }
 
-      document.getElementById('place-order').addEventListener('click', async () => {
-        if (placeOrderButton.disabled) return;
-        const productId = Number(document.getElementById('product-id').value);
-        const quantity = Number(document.getElementById('quantity').value);
-        const buttonOriginalLabel = placeOrderButton.textContent;
-        setNotice('下單中...', 'warn');
-        placeOrderButton.disabled = true;
-        placeOrderButton.textContent = '建立中...';
-        let payload = null;
+      addToCartBtn.addEventListener('click', async () => {
+        const customerId = Number(customerEl.value);
+        const productId = Number(productEl.value);
+        const quantity = Number(quantityEl.value);
+        if (!customerId) return;
+        if (quantity <= 0) {
+          setNotice('數量要大於 0', 'error');
+          return;
+        }
+        setNotice('加入中…', 'warn');
         try {
-          const resp = await fetch(`${orderApi}/orders`, {
+          await safeFetch(`${cartApi}/carts/${customerId}/items`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product_id: productId, quantity }),
           });
-          payload = await resp.json();
-          if (!resp.ok) {
-            setNotice(formatServiceError(payload), 'error');
-            await checkAll();
-            return;
-          }
-          await Promise.all([loadOrders(), loadStock()]);
-          setNotice('建立成功 ✓，可再下一筆', 'ok');
+          await Promise.all([loadCart(), checkAll()]);
+          setNotice('已加入購物車', 'ok');
         } catch (e) {
-          setNotice(formatServiceError(payload), 'error');
-        } finally {
-          placeOrderButton.textContent = buttonOriginalLabel;
-          try {
-            await checkAll();
-          } catch (_) {}
+          setNotice(errorText(parseApiError(e)), 'error');
         }
       });
 
-      async function main() {
+      clearCartBtn.addEventListener('click', async () => {
+        const customerId = Number(customerEl.value);
+        if (!customerId) return;
         try {
-          setHelpPanel({ orderOk: false, items: ['等待服務啟動…'] });
-          await Promise.all([checkAll(), loadProducts(), loadOrders(), loadStock()]);
-          setInterval(checkAll, 4000);
-        } catch (e) {
-          status.textContent = '載入錯誤，請先確認所有 services 已啟動。';
+          await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
+          await loadCart();
+          setNotice('購物車已清空', 'ok');
+        } catch (_e) {
+          setNotice('清空失敗，請稍後重試', 'error');
         }
-      }
+      });
 
-      main();
+      checkoutBtn.addEventListener('click', async () => {
+        const customerId = Number(customerEl.value);
+        if (!customerId) return;
+        const method = paymentMethodEl.value;
+        setNotice('Checkout 進行中…', 'warn');
+        checkoutBtn.disabled = true;
+        try {
+          const payload = await safeFetch(`${checkoutApi}/checkout/${customerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method }),
+          });
+          setNotice(`Checkout 成功：建立 ${payload.orders.length} 筆訂單`, 'ok');
+          await Promise.all([loadCart(), loadOrders(), loadShipments(), checkAll()]);
+        } catch (e) {
+          setNotice(errorText(parseApiError(e)), 'error');
+        } finally {
+          checkoutBtn.disabled = false;
+        }
+      });
+
+      refreshProductBtn.addEventListener('click', loadProducts);
+      customerEl.addEventListener('change', async () => {
+        await Promise.all([loadCart(), loadShipments(), checkAll()]);
+      });
+
+      refresh();
+      setInterval(() => {
+        checkAll();
+      }, 5000);
     </script>
   </body>
 </html>

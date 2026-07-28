@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 DB_PATH = os.path.join(os.path.dirname(__file__), os.environ.get("DATABASE_PATH", "orders.db"))
 CATALOG_API_URL = os.environ.get("CATALOG_API_URL", "http://127.0.0.1:3001")
 INVENTORY_API_URL = os.environ.get("INVENTORY_API_URL", "http://127.0.0.1:3003")
+CUSTOMER_API_URL = os.environ.get("CUSTOMER_API_URL", "http://127.0.0.1:3004")
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 
@@ -24,6 +25,9 @@ def ensure_db() -> None:
             product_id INTEGER NOT NULL,
             product_name TEXT NOT NULL,
             product_price REAL NOT NULL,
+            customer_id INTEGER NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_email TEXT NOT NULL,
             quantity INTEGER NOT NULL,
             status TEXT NOT NULL
         )
@@ -37,7 +41,12 @@ def list_orders() -> list[dict]:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, product_id, product_name, product_price, quantity, status FROM orders ORDER BY id DESC"
+        """
+        SELECT id, product_id, product_name, product_price,
+               customer_id, customer_name, customer_email, quantity, status
+        FROM orders
+        ORDER BY id DESC
+        """
     )
     rows = [
         dict(
@@ -45,8 +54,11 @@ def list_orders() -> list[dict]:
             product_id=row[1],
             product_name=row[2],
             product_price=row[3],
-            quantity=row[4],
-            status=row[5],
+            customer_id=row[4],
+            customer_name=row[5],
+            customer_email=row[6],
+            quantity=row[7],
+            status=row[8],
         )
         for row in cur.fetchall()
     ]
@@ -54,17 +66,27 @@ def list_orders() -> list[dict]:
     return rows
 
 
-def create_order(product_id: int, quantity: int, product: dict | None = None) -> dict:
-    if product is None:
-        product, _ = fetch_product(product_id)
-    if not product:
-        raise ValueError("product_not_found")
-
+def _create_order(product: dict, customer: dict, quantity: int) -> dict:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO orders (product_id, product_name, product_price, quantity, status) VALUES (?, ?, ?, ?, ?)",
-        (product["id"], product["name"], product["price"], quantity, "confirmed"),
+        """
+        INSERT INTO orders (
+            product_id, product_name, product_price,
+            customer_id, customer_name, customer_email,
+            quantity, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            product["id"],
+            product["name"],
+            product["price"],
+            customer["id"],
+            customer["name"],
+            customer["email"],
+            quantity,
+            "confirmed",
+        ),
     )
     row_id = cur.lastrowid
     conn.commit()
@@ -75,9 +97,26 @@ def create_order(product_id: int, quantity: int, product: dict | None = None) ->
         product_id=product["id"],
         product_name=product["name"],
         product_price=product["price"],
+        customer_id=customer["id"],
+        customer_name=customer["name"],
+        customer_email=customer["email"],
         quantity=quantity,
         status="confirmed",
     )
+
+
+def create_order(product_id: int, quantity: int) -> dict:
+    product, _ = fetch_product(product_id)
+    if not product:
+        raise ValueError("product_not_found")
+    customer, _ = fetch_customer(1)
+    if not customer:
+        raise ValueError("customer_not_found")
+    return _create_order(product, customer, quantity)
+
+
+def create_order_with_customer(product: dict, customer: dict, quantity: int) -> dict:
+    return _create_order(product, customer, quantity)
 
 
 def reserve_inventory(product_id: int, quantity: int) -> None:
@@ -127,6 +166,21 @@ def fetch_product(product_id: int) -> tuple[dict | None, str | None]:
     return payload, None
 
 
+def fetch_customer(customer_id: int) -> tuple[dict | None, str | None]:
+    try:
+        with urllib.request.urlopen(f"{CUSTOMER_API_URL}/customers/{customer_id}", timeout=1) as resp:
+            if resp.status != 200:
+                if resp.status == 404:
+                    return None, "customer_not_found"
+                return None, "customer_unreachable"
+            payload = json.load(resp)
+    except urllib.error.URLError:
+        return None, "customer_unreachable"
+    except (ValueError, json.JSONDecodeError):
+        return None, "customer_unreachable"
+    return payload, None
+
+
 def cache_ready() -> bool:
     try:
         with socket.create_connection((REDIS_HOST, REDIS_PORT), timeout=1):
@@ -155,6 +209,17 @@ def inventory_ready() -> bool:
     except (OSError, ValueError, json.JSONDecodeError):
         return False
     return payload.get("service") == "inventory-api" and payload.get("status") == "ok"
+
+
+def customer_ready() -> bool:
+    try:
+        with urllib.request.urlopen(f"{CUSTOMER_API_URL}/health", timeout=1) as response:
+            if response.status != 200:
+                return False
+            payload = json.load(response)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return payload.get("service") == "customer-api" and payload.get("status") == "ok"
 
 
 def write_json(payload, status=HTTPStatus.OK):
@@ -193,12 +258,18 @@ class Handler(BaseHTTPRequestHandler):
                     "ready": inventory_ready(),
                     "url": INVENTORY_API_URL,
                 },
+                "customer_api": {
+                    "ready": customer_ready(),
+                    "url": CUSTOMER_API_URL,
+                },
                 "redis": {
                     "ready": cache_ready(),
                 },
             }
             status = (
-                "ok" if all((cache_ready(), catalog_ready(), inventory_ready())) else "degraded"
+                "ok"
+                if all((cache_ready(), catalog_ready(), inventory_ready(), customer_ready()))
+                else "degraded"
             )
             code = HTTPStatus.OK if status == "ok" else HTTPStatus.SERVICE_UNAVAILABLE
             payload = {
@@ -233,6 +304,7 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(body_raw or b"{}")
             product_id = int(data.get("product_id", 0))
             quantity = int(data.get("quantity", 1))
+            customer_id = int(data.get("customer_id", 1))
         except (TypeError, ValueError, json.JSONDecodeError):
             payload = {"code": "bad_request", "message": "invalid payload"}
             headers, body = write_json(payload, HTTPStatus.BAD_REQUEST)
@@ -240,7 +312,18 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if product_id <= 0 or quantity <= 0:
-            payload = {"code": "bad_request", "message": "product_id and quantity must be positive integers"}
+            payload = {
+                "code": "bad_request",
+                "message": "product_id and quantity must be positive integers",
+            }
+            headers, body = write_json(payload, HTTPStatus.BAD_REQUEST)
+            json_response(self, HTTPStatus.BAD_REQUEST, headers, body)
+            return
+        if customer_id <= 0:
+            payload = {
+                "code": "bad_request",
+                "message": "customer_id must be a positive integer",
+            }
             headers, body = write_json(payload, HTTPStatus.BAD_REQUEST)
             json_response(self, HTTPStatus.BAD_REQUEST, headers, body)
             return
@@ -257,10 +340,22 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
             return
 
+        customer, customer_error = fetch_customer(customer_id)
+        if customer_error == "customer_not_found":
+            payload = {"code": "customer_not_found", "message": f"customer {customer_id} not found"}
+            headers, body = write_json(payload, HTTPStatus.NOT_FOUND)
+            json_response(self, HTTPStatus.NOT_FOUND, headers, body)
+            return
+        if customer_error:
+            payload = {"code": "customer_unreachable", "message": "customer API not reachable"}
+            headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
+            json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
+            return
+
         try:
             reserve_inventory(product_id, quantity)
             try:
-                order = create_order(product_id, quantity, product=product)
+                order = create_order_with_customer(product=product, customer=customer, quantity=quantity)
             except sqlite3.Error:
                 if not release_inventory(product_id, quantity):
                     payload = {
@@ -297,7 +392,7 @@ class Handler(BaseHTTPRequestHandler):
             json_response(self, status, headers, body)
             return
         except urllib.error.URLError:
-            payload = {"code": "inventory_unavailable", "message": "inventory API not reachable"}
+            payload = {"code": "inventory_unreachable", "message": "inventory API not reachable"}
             headers, body = write_json(payload, HTTPStatus.SERVICE_UNAVAILABLE)
             json_response(self, HTTPStatus.SERVICE_UNAVAILABLE, headers, body)
             return
