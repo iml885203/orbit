@@ -16,6 +16,11 @@ The container started but the health check never succeeded.
 ### `port already in use`
 Another process is holding the port Orbit wants.
 
+Orbit reconciles its own namespaced containers and persisted host processes
+automatically, including after an abrupt daemon exit. This message therefore
+means the current owner could not be matched to the selected Orbit
+environment; you do not need to manually clean up normal Orbit resources.
+
 Orbit names the affected resource and port and prints one read-only command to
 inspect the current owner. Stop that process through the tool that owns it, or
 change the resource's host port in the shared environment, then run

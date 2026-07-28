@@ -10,7 +10,7 @@ func StateIcon(state string) string {
 		return Green.Sprint("●")
 	case "building":
 		return Bold.Sprint("◐")
-	case "starting":
+	case "starting", "reconciling":
 		return Yellow.Sprint("◐")
 	case "degraded":
 		return Red.Sprint("◑")
@@ -31,7 +31,7 @@ func ColorState(state string) string {
 		return Green.Sprint(state)
 	case "building":
 		return Bold.Sprint(state)
-	case "starting", "pending", "stopping":
+	case "starting", "pending", "stopping", "reconciling":
 		return Yellow.Sprint(state)
 	case "degraded", "failed":
 		return Red.Sprint(state)

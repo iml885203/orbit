@@ -148,6 +148,34 @@ func TestProcessExitEvidenceSurvivesCancellationNoise(t *testing.T) {
 	}
 }
 
+func TestRestartInvalidatesExpectedExitBeforeEnteringPending(t *testing.T) {
+	o := singleServiceOrchestrator(t)
+	setServiceState(o, "api", StateHealthy, 4)
+	o.OnStopProcess = func(_ string) error { return nil }
+
+	if err := o.RestartService(context.Background(), "api"); err != nil {
+		t.Fatal(err)
+	}
+	info, _ := o.GetServiceInfo("api")
+	if info.State != StatePending {
+		t.Fatalf("state = %s, want pending", info.State)
+	}
+	if info.Generation != 5 {
+		t.Fatalf("generation = %d, want 5", info.Generation)
+	}
+
+	_ = o.handleEvent(context.Background(), Event{
+		Type:       EventProcessExited,
+		Service:    "api",
+		Message:    "exited: signal: terminated",
+		Generation: 4,
+	})
+	info, _ = o.GetServiceInfo("api")
+	if info.State != StatePending {
+		t.Fatalf("late expected exit changed state to %s", info.State)
+	}
+}
+
 // A late exit notification from a replaced process must not degrade — or
 // (worse) cancel the lifecycle of — the successor generation.
 func TestProcessExited_StaleGenerationIgnored(t *testing.T) {

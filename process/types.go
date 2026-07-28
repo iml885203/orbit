@@ -20,10 +20,23 @@ type ManagedProcess struct {
 	Done      chan struct{} // closed when process exits
 	Err       error         // exit error, if any
 	closeOnce sync.Once     // guards Done channel close
+	stopOnce  sync.Once     // the lifecycle cancel and explicit stop share one termination
+	stopErr   error
 	mu        sync.Mutex
 }
 
 // CloseDone safely closes the Done channel exactly once.
 func (mp *ManagedProcess) CloseDone() {
 	mp.closeOnce.Do(func() { close(mp.Done) })
+}
+
+// stopGroup lets cancellation and explicit lifecycle commands converge on
+// one process-group termination. Without this coordination, a restart can
+// send two signals concurrently and misclassify the resulting race as a
+// failed stop or a port conflict.
+func (mp *ManagedProcess) stopGroup(gracePeriod time.Duration) error {
+	mp.stopOnce.Do(func() {
+		mp.stopErr = KillGroup(mp.PGID, gracePeriod)
+	})
+	return mp.stopErr
 }

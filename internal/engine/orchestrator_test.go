@@ -572,7 +572,7 @@ func TestOrchestratorBroadcast_SkipsUnsubscribed(t *testing.T) {
 	o.broadcast(Event{Type: EventHealthOK, Service: "api"})
 }
 
-func TestRestartService_NarratesProgressAndStopFailure(t *testing.T) {
+func TestRestartService_StopFailureDoesNotStartAReplacement(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{
 			"sql-server": {Name: "sql-server"},
@@ -587,8 +587,9 @@ func TestRestartService_NarratesProgressAndStopFailure(t *testing.T) {
 	var narration []string
 	o.OnAction = func(_, msg string) { narration = append(narration, msg) }
 
-	if err := o.RestartService(context.Background(), "sql-server"); err != nil {
-		t.Fatalf("RestartService: %v", err)
+	err := o.RestartService(context.Background(), "sql-server")
+	if err == nil || !strings.Contains(err.Error(), "docker API exploded") {
+		t.Fatalf("RestartService error = %v", err)
 	}
 
 	joined := strings.Join(narration, "\n")
@@ -598,13 +599,25 @@ func TestRestartService_NarratesProgressAndStopFailure(t *testing.T) {
 	if !strings.Contains(joined, "stop failed: docker API exploded") {
 		t.Errorf("expected stop-failed narration, got:\n%s", joined)
 	}
+	info, _ := o.GetServiceInfo("sql-server")
+	if info.State != StateDegraded {
+		t.Fatalf("state = %s, want degraded", info.State)
+	}
+	if info.StateReason != "could not restart: failed to stop existing resource: docker API exploded" {
+		t.Fatalf("state reason = %q", info.StateReason)
+	}
+	select {
+	case evt := <-o.events:
+		t.Fatalf("replacement was queued after failed stop: %+v", evt)
+	default:
+	}
 }
 
 func TestCalcPendingDeps_SkipsDetached(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", DependsOn: []string{"api", "redis"}},
-			"api": {Name: "api"},
+			"api":      {Name: "api"},
 		},
 		Containers: map[string]*config.Container{
 			"redis": {Name: "redis"},

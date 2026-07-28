@@ -3,12 +3,16 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 )
 
 type statusJSON struct {
@@ -67,6 +71,55 @@ func TestCrashedServiceStatusLeadsOnlyToLogs(t *testing.T) {
 	tips := statusRecoveryTips(running)
 	if len(tips) != 1 || !strings.Contains(tips[0], "orbit logs api") {
 		t.Fatalf("tips = %+v", tips)
+	}
+}
+
+func TestPersistedRuntimeStatusDoesNotCallOwnedResourcesStopped(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	configPath := filepath.Join(home, "envs", "demo.yaml")
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{
+			"redis": {
+				Ports: map[string]config.PortDef{"redis": {Host: 6379}},
+			},
+		},
+		Services: map[string]*config.Service{
+			"api": {
+				URL:   "http://localhost:8080",
+				Ports: map[string]config.PortDef{"http": {Host: 8080}},
+			},
+			"old": {},
+		},
+	}
+	state := &daemonsrv.DaemonState{
+		ConfigPath: configPath,
+		StartedAt:  time.Now(),
+		Processes: map[string]daemonsrv.ProcessRecord{
+			"api": {PID: os.Getpid(), PGID: os.Getpid()},
+			"old": {PID: 999999999, PGID: 999999999},
+		},
+		Services: map[string]daemonsrv.ServiceStateEntry{
+			"redis": {Kind: "container", State: "healthy"},
+			"api":   {Kind: "service", State: "healthy"},
+			"old":   {Kind: "service", State: "healthy"},
+		},
+	}
+	if err := daemonsrv.NewStateFile(daemonsrv.DefaultStatePath()).Write(state); err != nil {
+		t.Fatal(err)
+	}
+
+	got := persistedRuntimeStatus(configPath, cfg)
+	for _, name := range []string{"redis", "api"} {
+		if got[name].State != "reconciling" {
+			t.Fatalf("%s = %+v, want reconciling", name, got[name])
+		}
+	}
+	if got["api"].URL != "http://localhost:8080" || got["api"].Ports["http"] != 8080 {
+		t.Fatalf("api metadata = %+v", got["api"])
+	}
+	if _, exists := got["old"]; exists {
+		t.Fatalf("dead persisted process surfaced as live: %+v", got["old"])
 	}
 }
 

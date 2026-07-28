@@ -113,6 +113,83 @@ func TestStart_KillsProcessTreeOnCtxCancel(t *testing.T) {
 	t.Fatalf("process tree still alive after ctx cancel (pgid=%d)", pgid)
 }
 
+func TestExplicitStopAndLifecycleCancelShareOneTermination(t *testing.T) {
+	skipOnWindows(t)
+	m := NewManager()
+	m.CancelGrace = 500 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := m.Start(ctx, "shared-stop", ".", "sleep 30", nil, nil, 0); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	cancel()
+	errs := make(chan error, 8)
+	for range 8 {
+		go func() {
+			errs <- m.Stop("shared-stop", 500*time.Millisecond)
+		}()
+	}
+	for range 8 {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent stop: %v", err)
+		}
+	}
+	if m.IsAlive("shared-stop") {
+		t.Error("process remains alive after converged stop")
+	}
+}
+
+func TestStopReturnsOnlyAfterReplacementCanBeTracked(t *testing.T) {
+	skipOnWindows(t)
+	m := NewManager()
+
+	firstCtx, cancelFirst := context.WithCancel(context.Background())
+	if err := m.Start(firstCtx, "api", ".", "sleep 30", nil, nil, 1); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	cancelFirst()
+	if err := m.Stop("api", 500*time.Millisecond); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	secondCtx, cancelSecond := context.WithCancel(context.Background())
+	defer cancelSecond()
+	if err := m.Start(secondCtx, "api", ".", "sleep 30", nil, nil, 2); err != nil {
+		t.Fatalf("replacement Start: %v", err)
+	}
+	if !m.IsAlive("api") {
+		t.Fatal("replacement is not tracked as alive")
+	}
+	if err := m.Stop("api", 500*time.Millisecond); err != nil {
+		t.Fatalf("replacement Stop: %v", err)
+	}
+}
+
+func TestStartPublishesOwnershipBeforeReturning(t *testing.T) {
+	skipOnWindows(t)
+	m := NewManager()
+	var callbackPID int
+	m.OnStarted = func(name string) {
+		pid, _, ok := m.GetProcessInfo(name)
+		if ok {
+			callbackPID = pid
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := m.Start(ctx, "api", ".", "sleep 30", nil, nil, 1); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if callbackPID <= 0 {
+		t.Fatal("OnStarted ran before process ownership was queryable")
+	}
+	if err := m.Stop("api", 500*time.Millisecond); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+}
+
 // processInfo is a small accessor wrapper around the manager's internal
 // bookkeeping. Manager.GetProcessInfo already exists for the dashboard;
 // reuse it here.

@@ -16,6 +16,11 @@ container 已經啟動，但 health check 一直沒成功。
 ### `port already in use`
 有別的 process 佔住了 Orbit 想用的 port。
 
+Orbit 會自動重新辨識自己 namespace 內的 container 與已記錄的 host
+process，包含 daemon 非預期結束後的情況。因此看到這個訊息，代表目前
+owner 無法對應到所選的 Orbit environment；正常的 Orbit resource 不需要
+使用者手動清理。
+
 Orbit 會指出受影響的 resource 與 port，並提供一條唯讀指令查看目前 owner。
 請透過管理該 process 的工具將它停止，或在 shared environment 中修改該
 resource 的 host port，再重新執行 `orbit up`。讀取 container logs 或盲目

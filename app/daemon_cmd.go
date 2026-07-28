@@ -311,7 +311,9 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 		for name, rec := range prevState.Processes {
 			procs[name] = struct{ PID, PGID int }{rec.PID, rec.PGID}
 		}
-		app.Reconnect(procs)
+		if err := app.ReconcilePersistedProcesses(procs); err != nil {
+			return fmt.Errorf("reconciling services from the previous daemon: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -328,6 +330,9 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
 	server.SetConfigPath(configFile)
 	server.SetRestartLauncher(launchDashboardEnvRestart)
+	app.ProcessMgr.OnStarted = func(_ string) {
+		server.PersistState()
+	}
 	// Point starting services at the receiver's actual bound endpoint. Reads
 	// live receiver state at start time, so a service launched after a port
 	// fallback gets the real port. Wired here (not in NewApp) because the

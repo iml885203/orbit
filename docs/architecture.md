@@ -160,6 +160,21 @@ Killing a dev process (e.g. `dotnet watch`) with SIGTERM often leaves grandchild
 
 Result: `orbit down` reliably reaps the whole process tree — shell, `dotnet watch` reloading, or `pnpm dev` Vite instance — rather than signalling only the leader and leaving grandchildren behind.
 
+Lifecycle cancellation and an explicit stop share one process-group
+termination. A restart waits until that exact process generation has exited
+and its manager record is removed before a replacement can be tracked. Late
+exit or health events from the replaced generation are ignored.
+
+Process PID/PGID ownership is persisted immediately after registration, before
+health can be reported. After an abrupt daemon exit, Orbit safely retires a
+live persisted process before normal startup creates a fresh child; adopting it
+would retain output pipes connected to the dead daemon and could report a false
+recovery. A dead persisted PID becomes an ordinary stopped service. Containers
+carry namespace, service, and config-fingerprint labels, so a new daemon can
+adopt an exact running match or safely replace a stale owned container.
+External port-conflict reporting is reserved for resources Orbit cannot prove
+it owns.
+
 ## Health check types
 
 `internal/health/checker.go` implements five probe types:

@@ -504,17 +504,26 @@ func (a *App) RestartService(ctx context.Context, name string) error {
 	return a.Orchestrator.RestartService(ctx, name)
 }
 
-// Reconnect restores process monitoring from persisted state.
-func (a *App) Reconnect(processes map[string]struct{ PID, PGID int }) {
+// ReconcilePersistedProcesses safely retires host processes left by an abrupt
+// daemon exit. Unlike containers, a host process still owns stdout/stderr
+// pipes connected to the dead daemon and can exit later on a broken pipe;
+// treating it as healthy would make `orbit up` report a false recovery.
+// Persisted PID/PGID proves ownership, so Orbit can stop it without asking the
+// user to inspect or kill anything, then normal startup creates a fresh child.
+func (a *App) ReconcilePersistedProcesses(processes map[string]struct{ PID, PGID int }) error {
 	for name, p := range processes {
 		if err := a.ProcessMgr.Reconnect(name, p.PID, p.PGID); err != nil {
-			slog.Warn("reconnect failed, removing from orchestrator", "component", "orbit", "name", name, "err", err)
-			a.Orchestrator.RemoveService(name)
+			slog.Warn("reconnect failed, marking service stopped", "component", "orbit", "name", name, "err", err)
+			a.Orchestrator.MarkServiceStopped(name)
 			continue
 		}
-		a.Orchestrator.MarkServiceHealthy(name)
-		slog.Info("reconnected", "component", "orbit", "name", name, "pid", p.PID)
+		if err := a.ProcessMgr.Stop(name, a.Holder.Load().Settings.ShutdownTimeout); err != nil {
+			return fmt.Errorf("stopping persisted process %s: %w", name, err)
+		}
+		a.Orchestrator.MarkServiceStopped(name)
+		slog.Info("retired persisted process", "component", "orbit", "name", name, "pid", p.PID)
 	}
+	return nil
 }
 
 // ShutdownTimeout returns the configured shutdown timeout.

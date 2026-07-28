@@ -100,6 +100,10 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	if !daemonRunning {
+		running = persistedRuntimeStatus(configFile, cfg)
+	}
+
 	if cli.JSONOutput {
 		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
 	}
@@ -267,6 +271,8 @@ func statusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceS
 	switch svc.State {
 	case "degraded":
 		return serviceFailureReason(svc)
+	case "reconciling":
+		return "last seen running; orbit up will reconcile it"
 	case "pending":
 		if blocker := statusDependencyBlocker(svc, running); blocker != nil {
 			detail := "blocked by " + blocker.Name
@@ -277,6 +283,57 @@ func statusDetail(svc daemon.ResourceStatus, running map[string]daemon.ResourceS
 		}
 	}
 	return ""
+}
+
+func persistedRuntimeStatus(configPath string, cfg *config.Config) map[string]daemon.ResourceStatus {
+	resources := make(map[string]daemon.ResourceStatus)
+	if cfg == nil {
+		return resources
+	}
+	state, err := daemonsrv.NewStateFile(daemonsrv.DefaultStatePath()).Read()
+	if err != nil || !sameFilePath(state.ConfigPath, configPath) {
+		return resources
+	}
+	for name, entry := range state.Services {
+		if entry.State == "stopped" {
+			continue
+		}
+		kind := daemon.ResourceKind(entry.Kind)
+		if kind == daemon.ResourceKindService {
+			record, exists := state.Processes[name]
+			if !exists || !daemon.IsProcessAlive(record.PID) {
+				continue
+			}
+		}
+		resource := daemon.ResourceStatus{
+			Name:  name,
+			Kind:  kind,
+			State: "reconciling",
+		}
+		switch kind {
+		case daemon.ResourceKindContainer:
+			if definition := cfg.Containers[name]; definition != nil {
+				resource.Ports = configPortNumbers(definition.Ports)
+			}
+		case daemon.ResourceKindService:
+			if definition := cfg.Services[name]; definition != nil {
+				resource.Ports = configPortNumbers(definition.Ports)
+				resource.URL = definition.URL
+			}
+		default:
+			continue
+		}
+		resources[name] = resource
+	}
+	return resources
+}
+
+func configPortNumbers(ports map[string]config.PortDef) map[string]int {
+	numbers := make(map[string]int, len(ports))
+	for name, definition := range ports {
+		numbers[name] = definition.Host
+	}
+	return numbers
 }
 
 func serviceFailureReason(svc daemon.ResourceStatus) string {

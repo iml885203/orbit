@@ -233,6 +233,10 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	// healthy-drift ("removed outside orbit"). Transition(StateStopping)
 	// also cancels the lifecycle ctx.
 	o.services[name].Transition(StateStopping)
+	// Invalidate exit/health events from the process being replaced before
+	// Stop can unblock. Restart moves through Pending rather than Stopped, so
+	// state alone cannot distinguish a late expected exit from a new crash.
+	o.services[name].Generation++
 	o.mu.Unlock()
 
 	// Stop
@@ -248,6 +252,18 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	}
 	if stopErr != nil {
 		o.narrate(name, "stop failed: "+stopErr.Error())
+		o.mu.Lock()
+		info = o.services[name]
+		info.Transition(StateDegraded)
+		info.StateReason = fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr)
+		info.AwaitingContainerRemoval = kind == "container"
+		o.mu.Unlock()
+		o.broadcast(Event{
+			Type:    EventHealthFail,
+			Service: name,
+			Message: fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr),
+		})
+		return stopErr
 	}
 
 	o.mu.Lock()
@@ -277,15 +293,6 @@ func (o *Orchestrator) MarkServiceHealthy(name string) {
 	if exists {
 		o.notifyDependents(name)
 	}
-}
-
-// RemoveService removes a service from the orchestrator entirely.
-// Used when reconnect fails — prevents the orchestrator from trying to auto-start it.
-func (o *Orchestrator) RemoveService(name string) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.services[name].cancelLifecycle()
-	delete(o.services, name)
 }
 
 // SetServiceKind updates the Kind of a service (used for dev/container mode toggle).

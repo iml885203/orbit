@@ -33,6 +33,33 @@ func TestContainerPortConflictHidesContainerRuntimeError(t *testing.T) {
 	}
 }
 
+func TestContainerConfigFingerprintIsStableAndCoversRuntimeIntent(t *testing.T) {
+	base := &config.Container{
+		Image:       "redis:7",
+		Command:     []string{"redis-server"},
+		Environment: map[string]string{"MODE": "dev", "CACHE": "on"},
+		Ports:       map[string]config.PortDef{"redis": {Host: 6379, Target: 6379}},
+	}
+	same := &config.Container{
+		Image:       "redis:7",
+		Command:     []string{"redis-server"},
+		Environment: map[string]string{"CACHE": "on", "MODE": "dev"},
+		Ports:       map[string]config.PortDef{"redis": {Host: 6379, Target: 6379}},
+	}
+	if got, want := containerConfigFingerprint(base, ""), containerConfigFingerprint(same, ""); got != want {
+		t.Fatalf("equivalent configs differ: %s != %s", got, want)
+	}
+
+	changed := *base
+	changed.Image = "redis:8"
+	if containerConfigFingerprint(base, "") == containerConfigFingerprint(&changed, "") {
+		t.Fatal("image change did not change fingerprint")
+	}
+	if containerConfigFingerprint(base, "") == containerConfigFingerprint(base, "api") {
+		t.Fatal("sidecar ownership did not change fingerprint")
+	}
+}
+
 // frame builds a Docker multiplexed log frame (stream=1 stdout, 2 stderr).
 func frame(stream byte, payload string) []byte {
 	out := make([]byte, 8, 8+len(payload))

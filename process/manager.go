@@ -33,6 +33,10 @@ type Manager struct {
 	// replaced process can't be attributed to its successor (0 for
 	// reconnected processes, which predate any epoch).
 	OnExit func(name string, epoch int, err error)
+	// OnStarted runs after ownership is registered. The daemon uses it to
+	// persist PID/PGID before health can be reported, closing the crash
+	// window where a live child could otherwise become anonymous.
+	OnStarted func(name string)
 	// OnAction narrates lifecycle actions (start/stop/exit) for the dashboard.
 	OnAction func(name string, msg string)
 }
@@ -145,6 +149,9 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	m.mu.Lock()
 	m.processes[name] = mp
 	m.mu.Unlock()
+	if m.OnStarted != nil {
+		m.OnStarted(name)
+	}
 
 	grace := m.CancelGrace
 	if grace <= 0 {
@@ -156,7 +163,7 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = KillGroup(pgid, grace)
+			_ = mp.stopGroup(grace)
 		case <-mp.Done:
 		}
 	}()
@@ -177,7 +184,6 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		mp.mu.Lock()
 		mp.Err = cmd.Wait()
 		mp.mu.Unlock()
-		mp.CloseDone()
 
 		if mp.Err != nil {
 			slog.Warn("exited", "component", "process", "name", name, "err", mp.Err)
@@ -192,8 +198,14 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		platform.CleanupJobObject(cmd.Process.Pid)
 
 		m.mu.Lock()
-		delete(m.processes, name)
+		if m.processes[name] == mp {
+			delete(m.processes, name)
+		}
 		m.mu.Unlock()
+		// Stop waits on Done before allowing a replacement to start. Close it
+		// only after removing this exact generation from the manager so a
+		// restart cannot collide with stale bookkeeping.
+		mp.CloseDone()
 
 		if m.OnExit != nil {
 			m.OnExit(name, mp.Epoch, mp.Err)
@@ -289,9 +301,21 @@ func (m *Manager) Stop(name string, gracePeriod time.Duration) error {
 	}
 
 	m.narrate(name, fmt.Sprintf("stopping process (pgid=%d, grace=%s)", mp.PGID, gracePeriod))
-	if err := KillGroup(mp.PGID, gracePeriod); err != nil {
+	if err := mp.stopGroup(gracePeriod); err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
 		return err
+	}
+	if mp.Cmd == nil {
+		// Reconnected processes are poll-monitored because this daemon is not
+		// their parent. KillGroup already confirmed the group is gone, so
+		// waiting for the next one-second poll would add pure recovery latency.
+		m.mu.Lock()
+		if m.processes[name] == mp {
+			delete(m.processes, name)
+		}
+		m.mu.Unlock()
+		mp.CloseDone()
+		return nil
 	}
 
 	// Wait for the process to finish
@@ -409,11 +433,12 @@ func (m *Manager) monitorReconnected(name string, pid int, mp *ManagedProcess) {
 		case <-ticker.C:
 			if !platform.IsProcessAlive(pid) {
 				// Process is dead
-				mp.CloseDone()
-
 				m.mu.Lock()
-				delete(m.processes, name)
+				if m.processes[name] == mp {
+					delete(m.processes, name)
+				}
 				m.mu.Unlock()
+				mp.CloseDone()
 
 				slog.Info("reconnected process exited", "component", "process", "name", name, "pid", pid)
 

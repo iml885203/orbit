@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 const (
 	labelManaged = "orbit.managed"
 	labelService = "orbit.service"
+	labelConfig  = "orbit.config"
 	networkName  = "orbit"
 )
 
@@ -97,6 +99,14 @@ func (m *Manager) Start(ctx context.Context, name string, cfg *config.Container)
 // the parent.
 func (m *Manager) start(ctx context.Context, name string, cfg *config.Container, parentName string) error {
 	m.narrate(name, fmt.Sprintf("start requested (image=%s)", cfg.Image))
+	adopted, err := m.reconcileExisting(ctx, name, cfg, parentName)
+	if err != nil {
+		m.narrate(name, "ERROR: "+err.Error())
+		return err
+	}
+	if adopted {
+		return nil
+	}
 	if err := m.ensureImageAvailable(ctx, name, cfg); err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
 		return err
@@ -126,6 +136,7 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	labels := map[string]string{
 		labelManaged: "true",
 		labelService: name,
+		labelConfig:  containerConfigFingerprint(cfg, parentName),
 	}
 	if m.namespace != "" {
 		labels[labelNamespace] = m.namespace
@@ -135,9 +146,6 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	}
 
 	containerName := m.ContainerName(name)
-
-	// Remove existing container if any
-	_, _ = m.cli.ContainerRemove(ctx, containerName, client.ContainerRemoveOptions{Force: true})
 
 	// Container config
 	containerConfig := &container.Config{
@@ -205,6 +213,75 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	go m.streamLogs(ctx, name, resp.ID)
 
 	return nil
+}
+
+func (m *Manager) reconcileExisting(
+	ctx context.Context,
+	name string,
+	cfg *config.Container,
+	parentName string,
+) (bool, error) {
+	containerName := m.ContainerName(name)
+	inspect, err := m.cli.ContainerInspect(ctx, containerName, client.ContainerInspectOptions{})
+	if err != nil {
+		if cerrdefs.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspecting existing container %s: %w", containerName, err)
+	}
+	labels := inspect.Container.Config.Labels
+	if labels[labelManaged] != "true" ||
+		labels[labelService] != name ||
+		!m.matchesNamespace(labels) {
+		return false, fmt.Errorf(
+			"container %s already exists but is not owned by this Orbit environment",
+			containerName,
+		)
+	}
+
+	fingerprint := containerConfigFingerprint(cfg, parentName)
+	if inspect.Container.State.Running && labels[labelConfig] == fingerprint {
+		m.narrate(name, "adopted existing managed container "+containerName)
+		go m.streamLogs(ctx, name, inspect.Container.ID)
+		return true, nil
+	}
+
+	// The container is ours, but it is stopped, from an older Orbit version,
+	// or no longer matches the selected environment. Remove that known
+	// ownership before checking ports so our own stale resource can never be
+	// reported as an unrelated external conflict.
+	m.narrate(name, "replacing stale managed container "+containerName)
+	if _, err := m.cli.ContainerRemove(ctx, containerName, client.ContainerRemoveOptions{Force: true}); err != nil &&
+		!cerrdefs.IsNotFound(err) {
+		return false, fmt.Errorf("removing stale managed container %s: %w", containerName, err)
+	}
+	return false, nil
+}
+
+func containerConfigFingerprint(cfg *config.Container, parentName string) string {
+	spec := struct {
+		Image       string
+		Command     []string
+		Entrypoint  []string
+		User        string
+		Platform    string
+		Ports       map[string]config.PortDef
+		Environment map[string]string
+		Volumes     []string
+		Parent      string
+	}{
+		Image:       cfg.Image,
+		Command:     cfg.Command,
+		Entrypoint:  cfg.Entrypoint,
+		User:        cfg.User,
+		Platform:    cfg.Platform,
+		Ports:       cfg.Ports,
+		Environment: cfg.Environment,
+		Volumes:     cfg.Volumes,
+		Parent:      parentName,
+	}
+	encoded, _ := json.Marshal(spec)
+	return fmt.Sprintf("%x", sha256.Sum256(encoded))
 }
 
 func containerPortConflict(name string, cfg *config.Container) *orbitport.ConflictError {
