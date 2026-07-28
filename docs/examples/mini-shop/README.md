@@ -113,6 +113,10 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - payment method 切成 `decline` 再 checkout，看到明確「付款失敗」提示
    - 下超出庫存的數量，看到 `insufficient_stock`
 
+6. 卡住時也不用猜：
+   - 看頁面「診斷命令（可複製）」的建議指令
+   - 直接複製貼上到終端執行 `orbit status --json` 與對應 `orbit logs`
+
 ### 常見錯誤對照
 
 | 錯誤代碼 | 可能原因 | 建議操作 |

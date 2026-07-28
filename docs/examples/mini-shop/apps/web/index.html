@@ -19,6 +19,7 @@
       button:disabled { opacity: .5; cursor: not-allowed; }
       pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow: auto; }
       input, select { width: 140px; }
+      textarea { width: 100%; min-height: 84px; border-radius: 8px; border: 1px solid #374151; background: #0b1328; color: #e5e7eb; padding: 8px; font-size: 12px; resize: none; }
       .notice { padding: 8px; border-radius: 8px; background: #111827; margin: 8px 0; }
       .notice.ok { color: #bef264; }
       .notice.warn { color: #fbbf24; }
@@ -26,12 +27,37 @@
       .hint { color: #94a3b8; font-size: 13px; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       li { margin: 4px 0; }
+      .step-list { margin: 0; padding-left: 20px; }
+      .small-btn { font-size: 12px; padding: 4px 8px; background: #93c5fd; }
+      .copy-feedback { color: #86efac; font-size: 12px; min-height: 16px; }
     </style>
   </head>
   <body>
     <h1>Orbit mini-shop</h1>
     <p>目標很簡單：<strong>選客戶 → 加入購物車 → Checkout</strong>。你不用先記 API，也不用先猜 service 邏輯。</p>
     <p class="hint">這個 demo 想證明 3 件事：主機與容器混合、跨 service 的資料關聯、以及發生問題時可以快速定位。</p>
+
+    <div class="card">
+      <h3>下一步（照著做）</h3>
+      <ul id="next-steps" class="hint step-list">
+        <li>等待服務就緒</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>診斷命令（可複製）</h3>
+      <p class="hint">當卡住時，先貼到 terminal 執行，就能快速定位是哪個 service 導致流程停住。</p>
+      <textarea id="diagnostic-cmd" readonly spellcheck="false"></textarea>
+      <div class="row">
+        <button id="copy-diagnostic" class="small-btn">複製命令</button>
+      </div>
+      <div id="diagnostic-feedback" class="copy-feedback"></div>
+    </div>
+
+    <div class="card">
+      <h3>操作摘要（你現在做了什麼）</h3>
+      <div id="run-summary" class="hint">尚未開始</div>
+    </div>
 
     <div class="card">
       <h3>快速導覽（新手友善）</h3>
@@ -120,6 +146,7 @@ web
       const actionNotice = document.getElementById('action-notice');
       const status = document.getElementById('status');
       const serviceStatus = document.getElementById('service-status');
+      const nextStepList = document.getElementById('next-steps');
       const customerEl = document.getElementById('customer-id');
       const productsEl = document.getElementById('products');
       const productEl = document.getElementById('product-id');
@@ -132,6 +159,12 @@ web
       const checkoutBtn = document.getElementById('checkout');
       const paymentMethodEl = document.getElementById('payment-method');
       const refreshProductBtn = document.getElementById('refresh-products');
+      const diagnosticCmd = document.getElementById('diagnostic-cmd');
+      const diagnosticFeedback = document.getElementById('diagnostic-feedback');
+      const copyDiagnosticBtn = document.getElementById('copy-diagnostic');
+      const runSummary = document.getElementById('run-summary');
+      const SERVICE_COUNT = 8;
+      let cartHasItems = false;
 
       const serviceDependencies = {
         'catalog-api': '商品主檔',
@@ -149,12 +182,29 @@ web
         actionNotice.className = `notice ${kind}`;
       }
 
+      function setDiagnostic(lines) {
+        diagnosticCmd.value = lines.join('\n');
+      }
+
+      function appendSummary(message) {
+        runSummary.textContent = `${new Date().toLocaleTimeString()} ${message}`;
+      }
+
+      function setCopyFeedback(text) {
+        diagnosticFeedback.textContent = text;
+        window.setTimeout(() => {
+          if (diagnosticFeedback.textContent === text) {
+            diagnosticFeedback.textContent = '';
+          }
+        }, 1500);
+      }
+
       function formatActionNotice(map) {
         const readyCount = Object.values(map).filter((s) => s && s.status === 'ok').length;
-        if (readyCount < 8) {
+        if (readyCount < SERVICE_COUNT) {
           const broken = Object.entries(map).find(([, s]) => !s || s.status !== 'ok');
           const brokenName = broken ? broken[0] : '未知';
-          return `服務就緒度 ${readyCount}/8：${brokenName} 未 ready，先等候或重啟該服務`;
+          return `服務就緒度 ${readyCount}/${SERVICE_COUNT}：${brokenName} 未 ready，先等候或重啟該服務`;
         }
         return '服務已就緒，可以開始流程：選客戶 → 加入購物車 → Checkout。';
       }
@@ -179,11 +229,55 @@ web
         const allReady = Object.values(map).every((s) => s && s.status === 'ok');
         const checkoutReady = map['checkout-api']?.status === 'ok';
         const customerSelected = Number(customerEl.value) > 0;
-        const cartReady = cartEl && cartEl.textContent.indexOf('尚無商品') === -1 && cartEl.textContent.indexOf('先選客戶') === -1;
+        const cartReady = cartHasItems;
 
         addToCartBtn.disabled = !allReady || !customerSelected;
         clearCartBtn.disabled = !allReady || !customerSelected;
         checkoutBtn.disabled = !checkoutReady || !cartReady;
+        const steps = [];
+        if (!allReady) {
+          const first = Object.entries(map).find(([, payload]) => !payload || payload.status !== 'ok');
+          const serviceName = first ? first[0] : 'unknown';
+          steps.push(`等待服務 ready：${serviceName}`);
+          steps.push('先回到終端機執行 orbit status --json 確認');
+          setDiagnostic([
+            `cd <orbit-repo-root>`,
+            `orbit -c docs/examples/mini-shop/dev.yaml status --json`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs ${serviceName}`,
+          ]);
+        } else if (!customerSelected) {
+          steps.push('到「選擇客戶」先挑一個客戶');
+          steps.push('再去「商品」選擇想要的產品');
+          setDiagnostic([
+            `cd <orbit-repo-root>`,
+            `orbit -c docs/examples/mini-shop/dev.yaml status --json`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs web`,
+          ]);
+        } else if (!cartReady) {
+          steps.push('到「商品」加入至少一件，建議數量 = 1');
+          steps.push('確認「購物車」顯示 items 與 subtotal');
+          setDiagnostic([
+            `cd <orbit-repo-root>`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs catalog-api -f`,
+          ]);
+        } else {
+          steps.push('按下「Checkout」，選 mock_card 走一筆成功流程');
+          steps.push('查看「訂單」與「出貨」是否都有對應結果');
+          setDiagnostic([
+            `cd <orbit-repo-root>`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs checkout-api -f`,
+            `orbit -c docs/examples/mini-shop/dev.yaml logs order-api -f`,
+          ]);
+        }
+        if (!steps.length) {
+          steps.push('流程已就緒，重新整理頁面可繼續');
+          setDiagnostic([
+            `cd <orbit-repo-root>`,
+            `orbit -c docs/examples/mini-shop/dev.yaml status --json`,
+          ]);
+        }
+        nextStepList.innerHTML = steps.map((item) => `<li>${item}</li>`).join('');
 
         status.textContent = formatActionNotice(map);
         setNotice(
@@ -221,7 +315,7 @@ web
         if (!payload) return '作業失敗，請重試。';
         if (payload.code === 'insufficient_stock') return '庫存不足，請降低數量。';
         if (payload.code === 'cart_empty') return '購物車是空的，先加入商品。';
-        if (payload.code === 'catalog_unreachable' || payload.code === 'order_unreachable' || payload.code === 'cart_unreachable')
+        if (payload.code === 'catalog_unreachable' || payload.code === 'order_unreachable' || payload.code === 'cart_unreachable' || payload.code === 'inventory_unreachable' || payload.code === 'customer_unreachable')
           return '某服務未就緒，先確認服務狀態。';
         if (payload.code === 'payment_declined' || payload.code === 'forced_decline' || payload.code === 'insufficient_funds' || payload.code === 'payment_unreachable' || payload.code === 'payment_failed')
           return '付款失敗（可改 mock_card 重試）。';
@@ -266,6 +360,9 @@ web
           option.textContent = `${item.name} (${item.email})`;
           customerEl.appendChild(option);
         });
+        if (customerEl.options.length > 0) {
+          customerEl.selectedIndex = 0;
+        }
       }
 
       async function loadProducts() {
@@ -288,14 +385,17 @@ web
         const customerId = Number(customerEl.value);
         if (!customerId) {
           cartEl.textContent = '先選客戶';
+          cartHasItems = false;
           return;
         }
         const payload = await safeFetch(`${cartApi}/carts/${customerId}`);
         cartEl.innerHTML = '';
         if (!payload.items.length) {
           cartEl.textContent = '尚無商品';
+          cartHasItems = false;
           return;
         }
+        cartHasItems = true;
         payload.items.forEach((item) => {
           const row = document.createElement('div');
           row.className = 'row';
@@ -308,6 +408,10 @@ web
       async function loadOrders() {
         const payload = await safeFetch(`${orderApi}/orders`);
         ordersEl.innerHTML = '';
+        if (!payload.orders.length) {
+          ordersEl.textContent = '尚未有訂單';
+          return;
+        }
         payload.orders.forEach((item) => {
           const line = document.createElement('div');
           line.className = 'row';
@@ -321,6 +425,10 @@ web
         const suffix = customerId ? `?customer_id=${customerId}` : '';
         const payload = await safeFetch(`${shippingApi}/shipments${suffix}`);
         shipmentsEl.innerHTML = '';
+        if (!payload.shipments.length) {
+          shipmentsEl.textContent = customerId ? '尚未出貨' : '先選客戶可看該客戶出貨';
+          return;
+        }
         payload.shipments.forEach((item) => {
           const line = document.createElement('div');
           line.className = 'row';
@@ -335,9 +443,11 @@ web
           await loadProducts();
           await loadCustomers();
           await Promise.all([loadCart(), loadOrders(), loadShipments()]);
+          appendSummary('已完成頁面刷新，服務與資料已同步。');
         } catch (err) {
           const parsed = parseApiError(err);
           setNotice(errorText(parsed), 'error');
+          appendSummary('刷新失敗，請檢查服務可用性。');
         }
       }
 
@@ -348,6 +458,7 @@ web
         if (!customerId) return;
         if (quantity <= 0) {
           setNotice('數量要大於 0', 'error');
+          appendSummary('加入失敗：數量必須大於 0');
           return;
         }
         setNotice('加入中…', 'warn');
@@ -359,8 +470,10 @@ web
           });
           await Promise.all([loadCart(), checkAll()]);
           setNotice('已加入購物車', 'ok');
+          appendSummary(`加入成功：客戶 #${customerId} 的購物車加了產品 #${productId} x${quantity}`);
         } catch (e) {
           setNotice(errorText(parseApiError(e)), 'error');
+          appendSummary('加入購物車失敗，請確認服務與商品參數。');
         }
       });
 
@@ -370,9 +483,12 @@ web
         try {
           await safeFetch(`${cartApi}/carts/${customerId}/clear`, { method: 'POST' });
           await loadCart();
+          await checkAll();
           setNotice('購物車已清空', 'ok');
+          appendSummary(`已清空客戶 #${customerId} 的購物車`);
         } catch (_e) {
           setNotice('清空失敗，請稍後重試', 'error');
+          appendSummary('清空購物車失敗');
         }
       });
 
@@ -390,8 +506,10 @@ web
           });
           setNotice(`Checkout 成功：建立 ${payload.orders.length} 筆訂單`, 'ok');
           await Promise.all([loadCart(), loadOrders(), loadShipments(), checkAll()]);
+          appendSummary(`Checkout 成功：客戶 #${customerId} 建立 ${payload.orders.length} 筆訂單`);
         } catch (e) {
           setNotice(errorText(parseApiError(e)), 'error');
+          appendSummary(`Checkout 失敗：客戶 #${customerId}，可改 mock_card 重試`);
         } finally {
           checkoutBtn.disabled = false;
         }
@@ -399,7 +517,21 @@ web
 
       refreshProductBtn.addEventListener('click', loadProducts);
       customerEl.addEventListener('change', async () => {
-        await Promise.all([loadCart(), loadShipments(), checkAll()]);
+        await loadCart();
+        await Promise.all([loadShipments(), checkAll()]);
+      });
+
+      copyDiagnosticBtn.addEventListener('click', async () => {
+        if (!diagnosticCmd.value) {
+          setCopyFeedback('目前沒有可複製命令');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(diagnosticCmd.value);
+          setCopyFeedback('命令已複製到剪貼簿');
+        } catch (_e) {
+          setCopyFeedback('複製失敗，請手動選取複製');
+        }
       });
 
       refresh();
