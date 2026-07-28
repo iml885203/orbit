@@ -227,6 +227,25 @@ func noLogsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
 	}}
 }
 
+func logsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
+	if resource == nil || resource.State != "degraded" {
+		return []cli.JSONAction{cli.StatusAction()}
+	}
+	if resource.PortConflict != nil {
+		if actions := resourcePortConflictActions(resource.PortConflict); len(actions) > 0 {
+			return actions
+		}
+	}
+	if resource.HealthProgress != nil && resource.HealthProgress.Recovering {
+		return []cli.JSONAction{cli.StatusAction()}
+	}
+	return []cli.JSONAction{{
+		Command:     "orbit restart " + resource.Name + " --json",
+		Reason:      "Retry " + resource.Name + " after reviewing its exit output.",
+		Destructive: false,
+	}}
+}
+
 func lifecycleEvidenceResource(service *daemon.ResourceStatus, byName map[string]*daemon.ResourceStatus, visited map[string]bool) *daemon.ResourceStatus {
 	if service == nil || service.State == "healthy" || visited[service.Name] {
 		return nil

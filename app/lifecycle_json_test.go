@@ -215,6 +215,37 @@ func TestNoLogsRecoveryActionsRevalidateResolvedPortConflict(t *testing.T) {
 	}
 }
 
+func TestLogsRecoveryActionsLeadFromCrashOutputToTargetedRestart(t *testing.T) {
+	resource := &daemon.ResourceStatus{
+		Name:          "api",
+		State:         "degraded",
+		StateReason:   "exited: signal: killed",
+		LogsAvailable: true,
+	}
+	actions := logsRecoveryActions(resource)
+	if len(actions) != 1 || actions[0].Command != "orbit restart api --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+	if !strings.Contains(actions[0].Reason, "after reviewing its exit output") {
+		t.Fatalf("reason = %q", actions[0].Reason)
+	}
+}
+
+func TestLogsRecoveryActionsKeepRecoveringServiceOnStatus(t *testing.T) {
+	resource := &daemon.ResourceStatus{
+		Name:          "api",
+		State:         "degraded",
+		LogsAvailable: true,
+		HealthProgress: &daemon.HealthProgressInfo{
+			Recovering: true,
+		},
+	}
+	actions := logsRecoveryActions(resource)
+	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
 func TestLifecycleServicesDone(t *testing.T) {
 	status := &daemon.StatusResponse{
 		Resources: []daemon.ResourceStatus{

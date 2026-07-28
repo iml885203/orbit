@@ -111,12 +111,9 @@ func TestDoctorRecommendedActionsUseJSONForOrbitHints(t *testing.T) {
 		},
 	}
 	got := doctorRecommendedActions(resp)
-	for _, action := range got {
-		if action.Command == "orbit logs api --json" {
-			return
-		}
+	if len(got) != 1 || got[0].Command != "orbit logs api --json" {
+		t.Fatalf("actions = %+v", got)
 	}
-	t.Fatalf("missing machine-readable logs action: %+v", got)
 }
 
 func TestLocalPortChecksDetectIPv4LoopbackOwner(t *testing.T) {
@@ -268,7 +265,7 @@ func TestDoctorFailureIncludesAllFailedCheckNames(t *testing.T) {
 	if err == nil {
 		t.Fatal("doctorFailure returned nil")
 	}
-	if got := err.Error(); got != "doctor found 2 failed check(s): Daemon, Docker" {
+	if got := err.Error(); got != "doctor found 2 failed check(s): Environment, Docker" {
 		t.Fatalf("error = %q", got)
 	}
 }

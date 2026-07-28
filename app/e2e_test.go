@@ -1102,6 +1102,208 @@ services:
 	}
 }
 
+func TestE2E_CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency(t *testing.T) {
+	binary := findOrbitBinary(t)
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+
+	serviceListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	servicePort := serviceListener.Addr().(*net.TCPAddr).Port
+	_ = serviceListener.Close()
+	redisListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	redisPort := redisListener.Addr().(*net.TCPAddr).Port
+	_ = redisListener.Close()
+	dashboardListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
+	_ = dashboardListener.Close()
+
+	home, err := os.MkdirTemp("/tmp", "orb-crash-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	pidPath := filepath.Join(workspace, "api.pid")
+	appPath := filepath.Join(workspace, "app.py")
+	appSource := fmt.Sprintf(`import http.server
+import os
+
+with open(%q, "w", encoding="utf-8") as pid_file:
+    pid_file.write(str(os.getpid()))
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), http.server.SimpleHTTPRequestHandler)
+print("api ready", flush=True)
+server.serve_forever()
+`, pidPath, servicePort)
+	if err := os.WriteFile(appPath, []byte(appSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(envsDir, "crash-recovery.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+settings:
+  health_check_interval: 1s
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "%d:6379"
+    health_check:
+      type: tcp
+      port: %d
+services:
+  api:
+    type: python
+    path: %q
+    command: python3 app.py
+    ports:
+      http: %d
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /
+      port: %d
+`, redisPort, redisPort, workspace, servicePort, servicePort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	namespace := "e2e-crash-" + randHex(4)
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() {
+		_ = command("down").Run()
+		_ = command("daemon", "stop").Run()
+	})
+
+	if output, err := command("up", "--json").Output(); err != nil {
+		t.Fatalf("initial up: %v\n%s", err, output)
+	}
+	containerName := "orbit-" + namespace + "-redis"
+	containerEvidence := func() string {
+		t.Helper()
+		output, err := exec.Command(
+			"docker", "inspect", "--format",
+			"{{.Id}}|{{.State.StartedAt}}|{{.RestartCount}}",
+			containerName,
+		).Output()
+		if err != nil {
+			t.Fatalf("inspect %s: %v", containerName, err)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	redisBefore := containerEvidence()
+
+	pidBytes, err := os.ReadFile(pidPath)
+	if err != nil {
+		t.Fatalf("read api pid: %v", err)
+	}
+	apiPID, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if err != nil {
+		t.Fatalf("parse api pid: %v", err)
+	}
+	apiProcess, err := os.FindProcess(apiPID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := apiProcess.Kill(); err != nil {
+		t.Fatalf("kill api: %v", err)
+	}
+
+	var statusEnvelope e2eCLIEnvelope
+	deadline := time.Now().Add(e2eBootTimeout)
+	for time.Now().Before(deadline) {
+		output, outputErr := command("status", "--json").Output()
+		if outputErr == nil {
+			statusEnvelope = parseE2EEnvelope(t, string(output))
+			if len(statusEnvelope.RecommendedActions) == 1 &&
+				statusEnvelope.RecommendedActions[0].Command == "orbit logs api --json" {
+				break
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if len(statusEnvelope.RecommendedActions) != 1 ||
+		statusEnvelope.RecommendedActions[0].Command != "orbit logs api --json" {
+		t.Fatalf("status recovery = %+v", statusEnvelope.RecommendedActions)
+	}
+
+	doctorOutput, err := command("doctor", "--json").Output()
+	if err == nil {
+		t.Fatalf("doctor unexpectedly reported a crashed service as healthy:\n%s", doctorOutput)
+	}
+	doctorEnvelope := parseE2EEnvelope(t, string(doctorOutput))
+	if doctorEnvelope.Error == nil ||
+		len(doctorEnvelope.RecommendedActions) != 1 ||
+		doctorEnvelope.RecommendedActions[0].Command != "orbit logs api --json" ||
+		doctorEnvelope.Error.NextCommand != doctorEnvelope.RecommendedActions[0].Command {
+		t.Fatalf("doctor recovery = %+v\n%s", doctorEnvelope, doctorOutput)
+	}
+
+	logsOutput, err := command("logs", "api", "--json").Output()
+	if err != nil {
+		t.Fatalf("logs: %v\n%s", err, logsOutput)
+	}
+	logsEnvelope := parseE2EEnvelope(t, string(logsOutput))
+	if len(logsEnvelope.RecommendedActions) != 1 ||
+		logsEnvelope.RecommendedActions[0].Command != "orbit restart api --json" ||
+		!bytes.Contains(logsEnvelope.Data, []byte("signal: killed")) {
+		t.Fatalf("logs recovery = %+v\n%s", logsEnvelope, logsOutput)
+	}
+
+	restartOutput, err := command("restart", "api", "--json").Output()
+	if err != nil {
+		t.Fatalf("restart: %v\n%s", err, restartOutput)
+	}
+	restartEnvelope := parseE2EEnvelope(t, string(restartOutput))
+	var restartData lifecycleJSONData
+	if err := json.Unmarshal(restartEnvelope.Data, &restartData); err != nil {
+		t.Fatalf("restart data: %v\n%s", err, restartEnvelope.Data)
+	}
+	if len(restartData.Resources) != 1 ||
+		restartData.Resources[0].Name != "api" ||
+		restartData.Resources[0].State != "healthy" ||
+		restartData.Resources[0].RestartCount != 1 {
+		t.Fatalf("restart data = %+v", restartData)
+	}
+	if redisAfter := containerEvidence(); redisAfter != redisBefore {
+		t.Fatalf("healthy redis changed during targeted recovery:\nbefore %s\nafter  %s", redisBefore, redisAfter)
+	}
+
+	finalOutput, err := command("status", "--json").Output()
+	if err != nil {
+		t.Fatalf("final status: %v\n%s", err, finalOutput)
+	}
+	finalEnvelope := parseE2EEnvelope(t, string(finalOutput))
+	for _, action := range finalEnvelope.RecommendedActions {
+		if strings.Contains(action.Command, "logs api") || strings.Contains(action.Command, "restart api") {
+			t.Fatalf("healthy status retained recovery action: %+v", finalEnvelope.RecommendedActions)
+		}
+	}
+}
+
 func TestE2E_StatusExplainsRootFailureAndBlockedDependent(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home, err := os.MkdirTemp("/tmp", "orb-recovery-")
@@ -1163,7 +1365,6 @@ services:
 		`exec: "orbit-e2e-missing-executable": executable file not found`,
 		"blocked by api-runtime",
 		"orbit logs api-runtime",
-		"orbit restart api-runtime",
 	} {
 		if !bytes.Contains(human, []byte(evidence)) {
 			t.Fatalf("human status missing %q:\n%s", evidence, human)
@@ -1220,13 +1421,8 @@ services:
 	for _, action := range envelope.RecommendedActions {
 		commands[action.Command] = true
 	}
-	for _, wanted := range []string{
-		"orbit logs api-runtime --json",
-		"orbit restart api-runtime --json",
-	} {
-		if !commands[wanted] {
-			t.Fatalf("recommended_actions missing %q: %+v", wanted, envelope.RecommendedActions)
-		}
+	if len(envelope.RecommendedActions) != 1 || !commands["orbit logs api-runtime --json"] {
+		t.Fatalf("status recovery is not one logs action: %+v", envelope.RecommendedActions)
 	}
 	if commands["orbit logs web-app --json"] {
 		t.Fatalf("recommended_actions points to dependent without logs: %+v", envelope.RecommendedActions)
@@ -1244,8 +1440,8 @@ services:
 	if inspectData.Readiness.State != inspectReadinessDegraded {
 		t.Fatalf("inspect readiness = %+v", inspectData.Readiness)
 	}
-	if !hasInspectAction(inspectEnvelope.RecommendedActions, "orbit logs api-runtime --json") ||
-		!hasInspectAction(inspectEnvelope.RecommendedActions, "orbit restart api-runtime --json") {
+	if len(inspectEnvelope.RecommendedActions) != 1 ||
+		!hasInspectAction(inspectEnvelope.RecommendedActions, "orbit logs api-runtime --json") {
 		t.Fatalf("inspect recommended_actions = %+v", inspectEnvelope.RecommendedActions)
 	}
 	if hasInspectAction(inspectEnvelope.RecommendedActions, "orbit doctor --json") {

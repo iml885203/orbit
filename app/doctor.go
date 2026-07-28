@@ -45,9 +45,7 @@ func runDoctorWithOptions(options doctorOptions) error {
 	if cli.JSONOutput {
 		if failure != nil {
 			actions := doctorRecommendedActions(resp)
-			if _, onlyPortConflicts := doctorPortConflictActions(resp); onlyPortConflicts {
-				failure = cli.WithJSONReplacementActions(failure, actions)
-			}
+			failure = cli.WithJSONReplacementActions(failure, actions)
 			if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, actions); err != nil {
 				return err
 			}
@@ -101,7 +99,8 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 				continue
 			}
 			if check.Status == daemon.CheckFail {
-				failed = append(failed, check.Name)
+				name, _ := humanDoctorCheck(check, showDaemon)
+				failed = append(failed, name)
 			}
 		}
 	}
@@ -257,17 +256,13 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	if actions, onlyPortConflicts := doctorPortConflictActions(resp); onlyPortConflicts {
 		return actions
 	}
-	actions := []cli.JSONAction{cli.StatusAction()}
 	if resp == nil {
-		return append(actions, cli.DoctorAction())
+		return []cli.JSONAction{cli.StatusAction()}
 	}
-	added := map[string]bool{"orbit status --json": true}
+	var actions []cli.JSONAction
+	added := make(map[string]bool)
 	for _, check := range resp.Checks {
 		if check.Status == daemon.CheckFail || check.Status == daemon.CheckWarn {
-			if !added["orbit doctor --json"] {
-				actions = append(actions, cli.DoctorAction())
-				added["orbit doctor --json"] = true
-			}
 			if cmd, ok := strings.CutPrefix(check.Hint, "run: "); ok {
 				cmd = strings.TrimSpace(cmd)
 				if strings.HasPrefix(cmd, "orbit ") && !strings.Contains(cmd, " --json") {
@@ -284,7 +279,10 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 			}
 		}
 	}
-	return actions
+	if len(actions) > 0 {
+		return actions
+	}
+	return []cli.JSONAction{cli.StatusAction()}
 }
 
 func doctorReadyToStart(resp *daemon.DoctorResponse) bool {

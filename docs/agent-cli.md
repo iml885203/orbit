@@ -285,6 +285,13 @@ Stable `readiness.state` values:
 | `partial` | false | At least one resource is stopped and no higher-priority risk exists. |
 | `ready` | false | No inspect risk was detected. |
 
+For a terminal degraded resource with buffered output, `inspect`, `status`, and
+`doctor` lead only to `orbit logs <resource> --json`. After returning the exit
+output, `logs` rechecks live state and leads only to
+`orbit restart <resource> --json`. Follow that sequence instead of skipping
+ahead: a newly observed port, dependency, or runtime cause can replace the
+restart with its safer cause-specific action.
+
 `converging` may also be returned when daemon resource status is temporarily
 unavailable. In that case, a `status_unavailable` risk explains the condition.
 

@@ -262,6 +262,13 @@ Inspect payload 包含：
 | `partial` | false | 至少一個 resource 停止，且沒有更高優先級的風險。 |
 | `ready` | false | inspect 沒有偵測到風險。 |
 
+對於有 buffered output 的 terminal degraded resource，`inspect`、`status`
+與 `doctor` 只會引導至 `orbit logs <resource> --json`。`logs` 回傳 exit
+output 後會重新檢查即時狀態，並只引導至
+`orbit restart <resource> --json`。Agent 應依序執行，不要直接跳過 log；
+若期間出現新的 port、dependency 或 runtime 原因，Orbit 會改用更安全的
+cause-specific action 取代 restart。
+
 當 daemon resource status 暫時不可用時，也可能回傳 `converging`。這種情況會用
 `status_unavailable` risk 說明原因。
 

@@ -475,18 +475,11 @@ func inspectRecommendedActions(
 		})
 	case inspectReadinessDegraded:
 		for _, name := range services.Degraded {
-			actions = append(actions,
-				cli.JSONAction{
-					Command:     "orbit logs " + name + " --json",
-					Reason:      "Inspect logs for degraded service " + name + ".",
-					Destructive: false,
-				},
-				cli.JSONAction{
-					Command:     "orbit restart " + name + " --json",
-					Reason:      "Retry " + name + " after fixing the reported cause.",
-					Destructive: false,
-				},
-			)
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit logs " + name + " --json",
+				Reason:      "Review the exit output for " + name + " before retrying it.",
+				Destructive: false,
+			})
 		}
 	case inspectReadinessConverging:
 		actions = append(actions, cli.StatusAction())

@@ -266,8 +266,8 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 	if got.RecommendedActions[0].Command != "orbit logs worker --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions[0])
 	}
-	if !hasInspectAction(got.RecommendedActions, "orbit restart worker --json") {
-		t.Fatalf("recommended actions missing targeted restart: %+v", got.RecommendedActions)
+	if len(got.RecommendedActions) != 1 {
+		t.Fatalf("recommended actions = %+v, want one linear recovery step", got.RecommendedActions)
 	}
 	if hasInspectAction(got.RecommendedActions, "orbit doctor --json") {
 		t.Fatalf("recommended actions include unrelated setup diagnostics: %+v", got.RecommendedActions)

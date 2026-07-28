@@ -805,11 +805,20 @@ func runLogs(_ *cobra.Command, args []string) error {
 		err := cli.NewLogsUnavailableError("no logs for " + name + ": the resource did not start")
 		return cli.WithJSONActions(err, noLogsRecoveryActions(resource))
 	}
+	if latest, statusErr := client.Status(); statusErr == nil {
+		if current := lifecycleResourceStatus(latest, name); current != nil {
+			resource = current
+		}
+	}
+	actions := logsRecoveryActions(resource)
 	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLogsJSONData(name, logLines, resp), []cli.JSONAction{cli.StatusAction()})
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLogsJSONData(name, logLines, resp), actions)
 	}
 	for _, line := range resp.Lines {
 		fmt.Println(line)
+	}
+	if len(actions) == 1 && strings.HasPrefix(actions[0].Command, "orbit restart ") {
+		fmt.Println("Next: " + strings.TrimSuffix(actions[0].Command, " --json"))
 	}
 	return nil
 }

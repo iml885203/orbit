@@ -599,16 +599,17 @@ func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONA
 			})
 			continue
 		}
-		actions = append(actions,
-			cli.JSONAction{
+		if service.LogsAvailable {
+			actions = append(actions, cli.JSONAction{
 				Command: "orbit logs " + name + " --json",
-				Reason:  "Inspect recent logs for " + name + ".",
-			},
-			cli.JSONAction{
-				Command: "orbit restart " + name + " --json",
-				Reason:  "Retry " + name + " after fixing the reported cause.",
-			},
-		)
+				Reason:  "Review the exit output for " + name + " before retrying it.",
+			})
+			continue
+		}
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit restart " + name + " --json",
+			Reason:  "Retry " + name + "; no process output is available to review.",
+		})
 	}
 	return actions
 }
@@ -623,10 +624,11 @@ func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
 			}
 			continue
 		}
-		tips = append(tips,
-			fmt.Sprintf("orbit logs %-14s  check logs", name),
-			fmt.Sprintf("orbit restart %-11s  restart service", name),
-		)
+		if service.LogsAvailable {
+			tips = append(tips, fmt.Sprintf("orbit logs %-14s  review exit output", name))
+			continue
+		}
+		tips = append(tips, fmt.Sprintf("orbit restart %-11s  retry service", name))
 	}
 	return tips
 }

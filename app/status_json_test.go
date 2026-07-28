@@ -44,6 +44,32 @@ func TestEnvironmentHeaderShowsUserContextNotDaemonState(t *testing.T) {
 	}
 }
 
+func TestCrashedServiceStatusLeadsOnlyToLogs(t *testing.T) {
+	running := map[string]daemon.ResourceStatus{
+		"redis": {
+			Name:          "redis",
+			Kind:          daemon.ResourceKindContainer,
+			State:         "healthy",
+			LogsAvailable: true,
+		},
+		"api": {
+			Name:          "api",
+			Kind:          daemon.ResourceKindService,
+			State:         "degraded",
+			StateReason:   "exited: signal: killed",
+			LogsAvailable: true,
+		},
+	}
+	actions := statusRecoveryActions(running)
+	if len(actions) != 1 || actions[0].Command != "orbit logs api --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+	tips := statusRecoveryTips(running)
+	if len(tips) != 1 || !strings.Contains(tips[0], "orbit logs api") {
+		t.Fatalf("tips = %+v", tips)
+	}
+}
+
 func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) renderedStatusEnvelope {
 	t.Helper()
 	var buf bytes.Buffer
@@ -102,9 +128,10 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{"worker": {}}}
 	running := map[string]daemon.ResourceStatus{
 		"worker": {
-			Name:        "worker",
-			State:       "degraded",
-			StateReason: "exited: exit status 17",
+			Name:          "worker",
+			State:         "degraded",
+			StateReason:   "exited: exit status 17",
+			LogsAvailable: true,
 		},
 	}
 	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
@@ -112,7 +139,7 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	if service.StateReason != "exited: exit status 17" {
 		t.Fatalf("state_reason = %q", service.StateReason)
 	}
-	want := []string{"orbit logs worker --json", "orbit restart worker --json"}
+	want := []string{"orbit logs worker --json"}
 	if len(envelope.RecommendedActions) != len(want) {
 		t.Fatalf("recommended_actions = %+v, want %v", envelope.RecommendedActions, want)
 	}
