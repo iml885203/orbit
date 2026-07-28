@@ -225,13 +225,14 @@ The inspect payload contains:
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `env` | Current config path, env name, preview-only flag, and daemon-reported env when available. |
 | `services` | Bounded service summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `config_invalid`, `env_mismatch`, `daemon_unreachable`, `status_unavailable`, `service_degraded`, `service_converging`, and `service_stopped`. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `config_invalid`, `env_mismatch`, `daemon_unreachable`, `status_unavailable`, `service_degraded`, `service_converging`, and `service_stopped`. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:
 
 | State | Blocked | Meaning |
 |---|---:|---|
+| `setup_required` | true | No usable environment has been selected; the only next action is `orbit init --yes --json`. |
 | `config_invalid` | true | The selected config cannot be loaded. |
 | `needs_daemon` | true | The config loads, but the daemon is not reachable or is running with a different env. |
 | `degraded` | false | At least one service reports `degraded`. |
@@ -256,9 +257,8 @@ Start with inspect, act, then inspect again:
 
 ```bash
 orbit inspect --json
-orbit up --infra --json
+# run the response's first non-destructive recommended action
 orbit inspect --json
-orbit logs redis --json
 ```
 
 For a failing service:
@@ -266,7 +266,7 @@ For a failing service:
 ```bash
 orbit status --json
 orbit logs <service> --json
-orbit doctor --json
+orbit restart <service> --json  # after fixing the reported cause
 ```
 
 If a JSON response includes `recommended_actions`, follow those before falling

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
@@ -15,6 +16,7 @@ import (
 const inspectJSONSchemaVersion = "orbit.inspect.v1"
 
 const (
+	inspectReadinessSetupRequired = "setup_required"
 	inspectReadinessConfigInvalid = "config_invalid"
 	inspectReadinessNeedsDaemon   = "needs_daemon"
 	inspectReadinessDegraded      = "degraded"
@@ -72,8 +74,10 @@ type inspectRisk struct {
 }
 
 type inspectBuildOptions struct {
+	Command         string
 	ConfigPath      string
 	ConfigErr       error
+	SetupRequired   bool
 	ConfigEnvName   string
 	PreviewOnly     bool
 	DaemonEnv       string
@@ -101,14 +105,17 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	cfg, cfgErr := config.Load(configFile)
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	daemonRunning := client.Health() == nil
+	setupRequired := cfgErr != nil && !daemonRunning && !configFileExists(configFile)
 	pid, alive := daemon.IsDaemonRunning()
 	if daemonRunning {
 		pid = alivePID(pid, alive)
 	}
 
 	opts := inspectBuildOptions{
+		Command:       commandString(),
 		ConfigPath:    configFile,
 		ConfigErr:     cfgErr,
+		SetupRequired: setupRequired,
 		ConfigEnvName: daemonsrv.EnvShortName(configFile),
 		DaemonRunning: daemonRunning,
 		PID:           pid,
@@ -156,7 +163,16 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	}
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services)
+	actions := inspectRecommendedActions(readiness, risks, services, opts.Command)
+	env := inspectEnvSummary{
+		Name:        opts.ConfigEnvName,
+		ConfigPath:  opts.ConfigPath,
+		PreviewOnly: opts.PreviewOnly,
+		DaemonEnv:   opts.DaemonEnv,
+	}
+	if opts.SetupRequired {
+		env = inspectEnvSummary{}
+	}
 	return inspectJSONData{
 		SchemaVersion: inspectJSONSchemaVersion,
 		Readiness:     readiness,
@@ -169,12 +185,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 			UpdateAvailable: opts.UpdateAvailable,
 			Dashboard:       inspectDashboard(opts),
 		},
-		Env: inspectEnvSummary{
-			Name:        opts.ConfigEnvName,
-			ConfigPath:  opts.ConfigPath,
-			PreviewOnly: opts.PreviewOnly,
-			DaemonEnv:   opts.DaemonEnv,
-		},
+		Env:                env,
 		Services:           services,
 		Risks:              risks,
 		RecommendedActions: actions,
@@ -230,6 +241,13 @@ func buildInspectRisks(opts inspectBuildOptions, services inspectServiceSummary)
 }
 
 func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
+	if opts.SetupRequired {
+		return inspectRisk{
+			Code:     "setup_required",
+			Severity: "critical",
+			Message:  "Orbit has not been set up in this user context",
+		}, true
+	}
 	if opts.ConfigErr != nil {
 		return inspectRisk{
 			Code:     "config_invalid",
@@ -291,6 +309,9 @@ func inspectServiceRisks(services inspectServiceSummary) []inspectRisk {
 }
 
 func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSummary) inspectReadiness {
+	if opts.SetupRequired {
+		return inspectReadiness{State: inspectReadinessSetupRequired, Blocked: true, Summary: "Orbit setup is required before startup"}
+	}
 	if opts.ConfigErr != nil {
 		return inspectReadiness{State: inspectReadinessConfigInvalid, Blocked: true, Summary: "selected config cannot be loaded"}
 	}
@@ -319,11 +340,30 @@ func inspectEnvMismatch(opts inspectBuildOptions) bool {
 	return opts.DaemonRunning && opts.ConfigEnvName != "" && opts.DaemonEnv != "" && opts.ConfigEnvName != opts.DaemonEnv
 }
 
-func inspectRecommendedActions(readiness inspectReadiness, risks []inspectRisk, services inspectServiceSummary) []cli.JSONAction {
+func inspectRecommendedActions(
+	readiness inspectReadiness,
+	risks []inspectRisk,
+	services inspectServiceSummary,
+	retryCommand string,
+) []cli.JSONAction {
 	actions := []cli.JSONAction{}
 	switch readiness.State {
+	case inspectReadinessSetupRequired:
+		actions = append(actions, cli.JSONAction{
+			Command:     "orbit init --yes --json",
+			Reason:      "Set up a workspace and select an environment before starting Orbit.",
+			Destructive: false,
+		})
 	case inspectReadinessConfigInvalid:
-		actions = append(actions, cli.DoctorAction())
+		command := "orbit inspect --json"
+		if retryCommand != "" {
+			command = retryCommand
+		}
+		actions = append(actions, cli.JSONAction{
+			Command:     command,
+			Reason:      "Retry inspection after fixing the reported environment file.",
+			Destructive: false,
+		})
 	case inspectReadinessNeedsDaemon:
 		if inspectHasRisk(risks, "env_mismatch") {
 			actions = append(actions, cli.JSONAction{
@@ -340,13 +380,19 @@ func inspectRecommendedActions(readiness inspectReadiness, risks []inspectRisk, 
 		}
 	case inspectReadinessDegraded:
 		for _, name := range services.Degraded {
-			actions = append(actions, cli.JSONAction{
-				Command:     "orbit logs " + name + " --json",
-				Reason:      "Inspect logs for degraded service " + name + ".",
-				Destructive: false,
-			})
+			actions = append(actions,
+				cli.JSONAction{
+					Command:     "orbit logs " + name + " --json",
+					Reason:      "Inspect logs for degraded service " + name + ".",
+					Destructive: false,
+				},
+				cli.JSONAction{
+					Command:     "orbit restart " + name + " --json",
+					Reason:      "Retry " + name + " after fixing the reported cause.",
+					Destructive: false,
+				},
+			)
 		}
-		actions = append(actions, cli.DoctorAction())
 	case inspectReadinessConverging:
 		actions = append(actions, cli.StatusAction())
 	case inspectReadinessPartial:
@@ -358,7 +404,10 @@ func inspectRecommendedActions(readiness inspectReadiness, risks []inspectRisk, 
 	default:
 		actions = append(actions, cli.StatusAction())
 	}
-	if len(risks) > 0 && readiness.State != inspectReadinessConfigInvalid && readiness.State != inspectReadinessDegraded {
+	if len(risks) > 0 &&
+		readiness.State != inspectReadinessSetupRequired &&
+		readiness.State != inspectReadinessConfigInvalid &&
+		readiness.State != inspectReadinessDegraded {
 		actions = append(actions, cli.DoctorAction())
 	}
 	return cli.MergeActions(nil, actions)
@@ -395,5 +444,12 @@ func printInspectHuman(data inspectJSONData) {
 		for _, risk := range data.Risks {
 			fmt.Printf("  %s: %s\n", risk.Severity, risk.Message)
 		}
+	}
+	if len(data.RecommendedActions) > 0 {
+		next := strings.TrimSuffix(data.RecommendedActions[0].Command, " --json")
+		if data.Readiness.State == inspectReadinessSetupRequired {
+			next = "orbit init"
+		}
+		fmt.Printf("Next: %s\n", next)
 	}
 }

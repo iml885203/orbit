@@ -545,6 +545,54 @@ func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {
 	}
 }
 
+func TestE2E_InspectBeforeInitMatchesStatusSetupGuidance(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	command := func(args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+
+	human, err := command("inspect").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human inspect failed: %v\n%s", err, human)
+	}
+	for _, evidence := range []string{"Readiness: setup_required", "Next: orbit init"} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human inspect missing %q:\n%s", evidence, human)
+		}
+	}
+	if bytes.Contains(human, []byte("quickstart.yaml")) || bytes.Contains(human, []byte("orbit doctor")) {
+		t.Fatalf("human inspect invented a selected config or irrelevant diagnosis:\n%s", human)
+	}
+
+	output, err := command("inspect", "--json").Output()
+	if err != nil {
+		t.Fatalf("JSON inspect failed: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if !envelope.OK {
+		t.Fatalf("inspect envelope = %+v:\n%s", envelope, output)
+	}
+	var data struct {
+		Readiness inspectReadiness  `json:"readiness"`
+		Env       inspectEnvSummary `json:"env"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("inspect data: %v\n%s", err, envelope.Data)
+	}
+	if data.Readiness.State != inspectReadinessSetupRequired || !data.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", data.Readiness)
+	}
+	if data.Env.Name != "" || data.Env.ConfigPath != "" {
+		t.Fatalf("env = %+v", data.Env)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit init --yes --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 func TestE2E_StatusRejectsInvalidSelectedEnvironment(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home := t.TempDir()
@@ -830,6 +878,26 @@ services:
 	}
 	if commands["orbit logs web-app --json"] {
 		t.Fatalf("recommended_actions points to dependent without logs: %+v", envelope.RecommendedActions)
+	}
+
+	inspectOutput, err := command("inspect", "--json").Output()
+	if err != nil {
+		t.Fatalf("inspect: %v\n%s", err, inspectOutput)
+	}
+	inspectEnvelope := parseE2EEnvelope(t, string(inspectOutput))
+	var inspectData inspectJSONData
+	if err := json.Unmarshal(inspectEnvelope.Data, &inspectData); err != nil {
+		t.Fatalf("inspect data: %v\n%s", err, inspectEnvelope.Data)
+	}
+	if inspectData.Readiness.State != inspectReadinessDegraded {
+		t.Fatalf("inspect readiness = %+v", inspectData.Readiness)
+	}
+	if !hasInspectAction(inspectEnvelope.RecommendedActions, "orbit logs api-runtime --json") ||
+		!hasInspectAction(inspectEnvelope.RecommendedActions, "orbit restart api-runtime --json") {
+		t.Fatalf("inspect recommended_actions = %+v", inspectEnvelope.RecommendedActions)
+	}
+	if hasInspectAction(inspectEnvelope.RecommendedActions, "orbit doctor --json") {
+		t.Fatalf("inspect recommended unrelated setup diagnostics: %+v", inspectEnvelope.RecommendedActions)
 	}
 }
 

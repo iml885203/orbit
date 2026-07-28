@@ -44,8 +44,32 @@ func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 	if len(got.Risks) != 1 || got.Risks[0].Code != "config_invalid" {
 		t.Fatalf("risks = %+v", got.Risks)
 	}
-	if got.RecommendedActions[0].Command != "orbit doctor --json" {
+	if got.RecommendedActions[0].Command != "orbit inspect --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions[0])
+	}
+}
+
+func TestBuildInspectDataSetupRequiredPointsOnlyToInit(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		Command:       "orbit inspect --json",
+		ConfigPath:    "/tmp/missing.yaml",
+		ConfigErr:     errInspectFixture("no such file or directory"),
+		SetupRequired: true,
+		ConfigEnvName: "quickstart",
+		DaemonRunning: false,
+	})
+
+	if got.Readiness.State != inspectReadinessSetupRequired || !got.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", got.Readiness)
+	}
+	if got.Env.Name != "" || got.Env.ConfigPath != "" {
+		t.Fatalf("env = %+v, want no pretend selection before setup", got.Env)
+	}
+	if len(got.Risks) != 1 || got.Risks[0].Code != "setup_required" {
+		t.Fatalf("risks = %+v", got.Risks)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit init --yes --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
 	}
 }
 
@@ -154,6 +178,12 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 	}
 	if got.RecommendedActions[0].Command != "orbit logs worker --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions[0])
+	}
+	if !hasInspectAction(got.RecommendedActions, "orbit restart worker --json") {
+		t.Fatalf("recommended actions missing targeted restart: %+v", got.RecommendedActions)
+	}
+	if hasInspectAction(got.RecommendedActions, "orbit doctor --json") {
+		t.Fatalf("recommended actions include unrelated setup diagnostics: %+v", got.RecommendedActions)
 	}
 }
 

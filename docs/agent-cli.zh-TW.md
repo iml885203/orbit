@@ -204,13 +204,14 @@ Inspect payload 包含：
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `env` | 目前 config path、env 名稱、preview-only flag，以及可用時 daemon 回報的 env。 |
 | `services` | 依 state 分組的 service 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `config_invalid`、`env_mismatch`、`daemon_unreachable`、`status_unavailable`、`service_degraded`、`service_converging`、`service_stopped`。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`config_invalid`、`env_mismatch`、`daemon_unreachable`、`status_unavailable`、`service_degraded`、`service_converging`、`service_stopped`。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：
 
 | State | Blocked | 意義 |
 |---|---:|---|
+| `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
 | `config_invalid` | true | 選到的 config 無法載入。 |
 | `needs_daemon` | true | config 可載入，但 daemon 目前不可連線，或 daemon 正在以不同 env 執行。 |
 | `degraded` | false | 至少一個 service 回報 `degraded`。 |
@@ -234,9 +235,8 @@ daemon 再依據 service state 行動，因為 daemon 回報的可能是不同 e
 
 ```bash
 orbit inspect --json
-orbit up --infra --json
+# 執行 response 的第一個 non-destructive recommended action
 orbit inspect --json
-orbit logs redis --json
 ```
 
 對於失敗中的 service：
@@ -244,7 +244,7 @@ orbit logs redis --json
 ```bash
 orbit status --json
 orbit logs <service> --json
-orbit doctor --json
+orbit restart <service> --json  # 修正回報的原因後
 ```
 
 如果 JSON response 帶有 `recommended_actions`，請先照著走，再退回到臨時 debug。
