@@ -319,7 +319,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 		"version", "update", "uninstall", "history", "settings", "trace", "tracing":
 		return false
 	case "env":
-		return cmd.Name() == "toggle"
+		return cmd.Name() == "toggle" || cmd.Name() == "apply"
 	case "daemon":
 		switch cmd.Name() {
 		case "stop", "status":

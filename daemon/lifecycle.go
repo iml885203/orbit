@@ -64,7 +64,7 @@ func (e *UpdateRequiredError) Error() string {
 }
 
 func (e *ConfigStaleError) Error() string {
-	return "environment changes are pending — run 'orbit daemon restart' before continuing"
+	return "environment changes are pending — run 'orbit env apply' before continuing"
 }
 
 func (e *ConfigMismatchError) Error() string {

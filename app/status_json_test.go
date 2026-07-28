@@ -435,7 +435,7 @@ func TestStatusJSON_UpdateAvailable(t *testing.T) {
 	}
 }
 
-func TestStatusJSON_ConfigStaleShowsRunningSnapshotAndOnlyRestart(t *testing.T) {
+func TestStatusJSON_ConfigStaleShowsRunningSnapshotAndOnlyApply(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{
 		"desired-new-name": {},
 	}}
@@ -458,7 +458,7 @@ func TestStatusJSON_ConfigStaleShowsRunningSnapshotAndOnlyRestart(t *testing.T) 
 		t.Fatalf("resources = %+v, want running daemon snapshot", envelope.Data.Resources)
 	}
 	if len(envelope.RecommendedActions) != 1 ||
-		envelope.RecommendedActions[0].Command != "orbit daemon restart --json" {
+		envelope.RecommendedActions[0].Command != "orbit env apply --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }

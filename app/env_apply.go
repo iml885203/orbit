@@ -1,0 +1,239 @@
+package app
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+
+	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/daemon"
+	"github.com/spf13/cobra"
+)
+
+type environmentApplyResult struct {
+	Applied              bool
+	DaemonRunning        bool
+	ChangesPending       bool
+	PreviousPID          int
+	PID                  int
+	PreviouslyRunning    []string
+	RestoredResources    []string
+	UnavailableResources []string
+	FinalStatus          *daemon.StatusResponse
+}
+
+type environmentApplyJSONData struct {
+	Operation            string                  `json:"operation"`
+	Applied              bool                    `json:"applied"`
+	DaemonRunning        bool                    `json:"daemon_running"`
+	ChangesPending       bool                    `json:"changes_pending"`
+	PreviousPID          int                     `json:"previous_pid,omitempty"`
+	PID                  int                     `json:"pid,omitempty"`
+	PreviouslyRunning    []string                `json:"previously_running"`
+	RestoredResources    []string                `json:"restored_resources"`
+	UnavailableResources []string                `json:"unavailable_resources"`
+	Resources            []daemon.ResourceStatus `json:"resources"`
+}
+
+func envApplyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "apply",
+		Short: "Apply environment changes without losing running resources",
+		RunE:  runEnvApply,
+	}
+}
+
+func runEnvApply(_ *cobra.Command, _ []string) error {
+	result, err := applyEnvironmentChanges(environmentApplyProgress())
+	if err != nil {
+		return err
+	}
+	if cli.JSONOutput {
+		return cli.WriteJSONSuccess(
+			os.Stdout,
+			commandString(),
+			buildEnvironmentApplyJSONData(result),
+			environmentApplyRecommendedActions(result),
+		)
+	}
+	printEnvironmentApplyResult(result)
+	return nil
+}
+
+func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error) {
+	result := emptyEnvironmentApplyResult()
+	previousPID, alive := daemon.IsDaemonRunning()
+	result.DaemonRunning = alive
+	result.PreviousPID = previousPID
+	if !alive {
+		return result, nil
+	}
+
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	status, err := client.Status()
+	if err != nil {
+		return result, fmt.Errorf("checking environment changes: %w", err)
+	}
+	result.ChangesPending = status.ConfigStale
+	if !status.ConfigStale {
+		result.PID = previousPID
+		result.FinalStatus = status
+		return result, nil
+	}
+
+	if _, err := config.Load(configFile); err != nil {
+		return result, fmt.Errorf("cannot apply environment changes: %w", err)
+	}
+
+	result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
+	if report != nil {
+		if len(result.PreviouslyRunning) == 0 {
+			report("Applying environment updates...")
+		} else {
+			report(fmt.Sprintf(
+				"Applying environment updates; %d running resource(s) will be restored...",
+				len(result.PreviouslyRunning),
+			))
+		}
+	}
+	if _, err := client.DownAndWait(); err != nil {
+		return result, fmt.Errorf("preparing running resources for environment update: %w", err)
+	}
+	_, pid, running, err := restartDaemon(configFile, previousPID, true)
+	if err != nil {
+		return result, fmt.Errorf("applying environment changes: %w", err)
+	}
+	result.DaemonRunning = running
+	result.PID = pid
+	result.Applied = true
+
+	client = daemon.NewClient(daemon.DefaultSocketPath())
+	freshStatus, err := client.Status()
+	if err != nil {
+		return result, fmt.Errorf("checking applied environment: %w", err)
+	}
+	result.RestoredResources, result.UnavailableResources = restorableEnvironmentResources(
+		result.PreviouslyRunning,
+		freshStatus.Resources,
+	)
+	if len(result.RestoredResources) == 0 {
+		result.FinalStatus = freshStatus
+		return result, nil
+	}
+
+	if report != nil {
+		report(fmt.Sprintf("Restoring %d running resource(s)...", len(result.RestoredResources)))
+	}
+	response, err := client.Up(daemon.UpRequest{Resources: result.RestoredResources})
+	if err != nil {
+		return result, fmt.Errorf("restoring running resources: %w", err)
+	}
+	result.RestoredResources = response.AffectedResources
+	sort.Strings(result.RestoredResources)
+	finalStatus, err := waitForLifecycleJSON(client, result.RestoredResources, "healthy")
+	result.FinalStatus = finalStatus
+	if err != nil {
+		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)
+	}
+	return result, nil
+}
+
+func environmentApplyProgress() func(string) {
+	if cli.JSONOutput {
+		return nil
+	}
+	return func(message string) {
+		fmt.Println(message)
+	}
+}
+
+func emptyEnvironmentApplyResult() environmentApplyResult {
+	return environmentApplyResult{
+		PreviouslyRunning:    []string{},
+		RestoredResources:    []string{},
+		UnavailableResources: []string{},
+	}
+}
+
+func runningEnvironmentResources(resources []daemon.ResourceStatus) []string {
+	names := make([]string, 0, len(resources))
+	for i := range resources {
+		switch resources[i].State {
+		case "stopped", "stopping":
+			continue
+		default:
+			names = append(names, resources[i].Name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func restorableEnvironmentResources(previouslyRunning []string, available []daemon.ResourceStatus) ([]string, []string) {
+	exists := make(map[string]bool, len(available))
+	for i := range available {
+		exists[available[i].Name] = true
+	}
+	restored := make([]string, 0, len(previouslyRunning))
+	unavailable := make([]string, 0)
+	for _, name := range previouslyRunning {
+		if exists[name] {
+			restored = append(restored, name)
+		} else {
+			unavailable = append(unavailable, name)
+		}
+	}
+	return restored, unavailable
+}
+
+func buildEnvironmentApplyJSONData(result environmentApplyResult) environmentApplyJSONData {
+	resources := []daemon.ResourceStatus{}
+	if result.FinalStatus != nil && result.FinalStatus.Resources != nil {
+		resources = result.FinalStatus.Resources
+	}
+	return environmentApplyJSONData{
+		Operation:            "env_apply",
+		Applied:              result.Applied,
+		DaemonRunning:        result.DaemonRunning,
+		ChangesPending:       result.ChangesPending && !result.Applied,
+		PreviousPID:          result.PreviousPID,
+		PID:                  result.PID,
+		PreviouslyRunning:    result.PreviouslyRunning,
+		RestoredResources:    result.RestoredResources,
+		UnavailableResources: result.UnavailableResources,
+		Resources:            resources,
+	}
+}
+
+func environmentApplyRecommendedActions(result environmentApplyResult) []cli.JSONAction {
+	if !result.DaemonRunning {
+		return []cli.JSONAction{{
+			Command:     "orbit up --json",
+			Reason:      "Start the environment with the latest configuration.",
+			Destructive: false,
+		}}
+	}
+	return []cli.JSONAction{cli.StatusAction()}
+}
+
+func printEnvironmentApplyResult(result environmentApplyResult) {
+	switch {
+	case !result.DaemonRunning:
+		fmt.Println("No running environment. Updates will be used on the next orbit up.")
+	case !result.ChangesPending:
+		fmt.Println("Environment is already up to date.")
+	case len(result.RestoredResources) == 0:
+		fmt.Println("Environment updates applied.")
+	default:
+		fmt.Printf("Environment updates applied. Restored %d running resource(s).\n", len(result.RestoredResources))
+	}
+	if len(result.UnavailableResources) > 0 {
+		fmt.Printf(
+			"  %s no longer configured: %s\n",
+			cli.Yellow.Sprint("!"),
+			strings.Join(result.UnavailableResources, ", "),
+		)
+	}
+}

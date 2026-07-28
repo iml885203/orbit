@@ -39,6 +39,15 @@ orbit env sync --url https://git.example.com/your-env-repo.git
 orbit switch example
 ```
 
+### Environment changes are waiting to be applied
+
+Run `orbit env apply`. Orbit validates the updated environment before stopping
+anything, remembers which resources are running, applies the update, and
+restores those resources. Resources that were already stopped remain stopped.
+
+If you want to download a team update without interrupting the current
+environment, use `orbit env sync --no-apply`, then apply it when ready.
+
 ## SQL Server
 
 ### After `orbit db publish`, DbGate doesn't show the new object

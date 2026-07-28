@@ -1,7 +1,7 @@
 // Config staleness detection: the daemon runs on the config it loaded at
 // startup (or the last API env switch), while the user keeps editing env
 // files and switching selections. This file answers "does what I loaded
-// still match reality?" so status can say `run 'orbit daemon restart'`
+// still match reality?" so status can offer a safe environment apply
 // instead of silently serving stale state (the Elastiflix pilot's M4).
 
 package daemon
@@ -102,7 +102,7 @@ func (s *Server) configStale() (bool, string) {
 	s.pathMu.RUnlock()
 	if path == "" || base.hash == "" {
 		if s.engineStale.Load() {
-			return true, "env switched — restart to rebuild the service graph"
+			return true, "environment graph needs refresh"
 		}
 		return false, ""
 	}
@@ -116,7 +116,7 @@ func (s *Server) configStale() (bool, string) {
 		return true, "env file edited"
 	}
 	if s.engineStale.Load() {
-		return true, "env switched — restart to rebuild the service graph"
+		return true, "environment graph needs refresh"
 	}
 	return false, ""
 }

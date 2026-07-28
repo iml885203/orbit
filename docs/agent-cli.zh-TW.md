@@ -101,7 +101,8 @@ retry 或讀取 logs。
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
 | `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇，以及可直接切換的 environment 選項。 |
 | `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
-| `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態，以及 restart 建議。 |
+| `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態、套用動作，以及恢復運行的資源。 |
+| `orbit env apply --json` | 套用待處理的環境變更，並回傳原先運行、成功恢復或已從新設定移除的資源。 |
 | `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
 | `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |
 | `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
@@ -153,6 +154,7 @@ host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 | `orbit env list --json` | `env_list` |
 | `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
+| `orbit env apply --json` | `env_apply` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |

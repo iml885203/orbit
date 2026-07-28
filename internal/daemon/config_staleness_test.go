@@ -102,7 +102,7 @@ func TestConfigStale_EngineStaleSticky(t *testing.T) {
 
 	s.engineStale.Store(true)
 	stale, reason := s.configStale()
-	if !stale || reason != "env switched — restart to rebuild the service graph" {
+	if !stale || reason != "environment graph needs refresh" {
 		t.Fatalf("engine staleness not reported: stale=%v reason=%q", stale, reason)
 	}
 }

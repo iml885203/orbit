@@ -81,7 +81,7 @@ export interface StatusResponse {
   /**
    * ConfigStale means the loaded config has fallen behind reality (env
    * file edited, selection changed, or an API env switch left the
-   * orchestrator on the previous env) — `orbit daemon restart` applies.
+   * orchestrator on the previous env) — `orbit env apply` applies.
    */
   config_stale?: boolean;
   config_stale_reason?: string;

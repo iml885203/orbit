@@ -38,6 +38,14 @@ orbit env sync --url https://git.example.com/your-env-repo.git
 orbit switch example
 ```
 
+### 環境變更正在等待套用
+
+執行 `orbit env apply`。Orbit 會先驗證更新後的環境，再記住目前運行中的
+資源、套用更新並恢復這些資源；原本已停止的資源仍會保持停止。
+
+若想先下載團隊更新、暫時不中斷目前環境，可使用
+`orbit env sync --no-apply`，準備好後再套用。
+
 ## SQL Server
 
 ### `orbit db publish` 之後，DbGate 沒看到新的物件

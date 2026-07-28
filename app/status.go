@@ -167,7 +167,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	// Context-aware tips
 	var tips []string
 	if dstatus.ConfigStale {
-		tips = []string{"orbit daemon restart      apply environment changes"}
+		tips = []string{"orbit env apply           apply changes and restore running resources"}
 	} else if dstatus.UpdateAvailable {
 		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
 	} else {
@@ -464,8 +464,8 @@ func writeStatusJSON(
 		actions = environmentSelectionActions(setup.Selection)
 	} else if dstatus.ConfigStale {
 		actions = append(actions, cli.JSONAction{
-			Command: "orbit daemon restart --json",
-			Reason:  "Apply the selected environment changes before running resource commands.",
+			Command: "orbit env apply --json",
+			Reason:  "Apply the selected environment changes and restore running resources.",
 		})
 	} else if dstatus.UpdateAvailable {
 		actions = append(actions, cli.JSONAction{
@@ -642,7 +642,7 @@ func printEnvironmentHeader(w io.Writer, name string, s daemonStatus) {
 			cli.Faint.Sprint("⚠"), orbitRestartCommand(false))
 	}
 	if s.ConfigStale {
-		_, _ = fmt.Fprintf(w, "  %s environment changes pending — orbit daemon restart to apply\n",
+		_, _ = fmt.Fprintf(w, "  %s environment changes pending — orbit env apply\n",
 			cli.Faint.Sprint("⚠"))
 	}
 	_, _ = fmt.Fprintln(w)

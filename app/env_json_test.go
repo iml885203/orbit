@@ -38,7 +38,7 @@ func TestBuildEnvSyncJSONData(t *testing.T) {
 		DryRun:        true,
 		Result:        envsync.Result{Written: []string{"a.yaml", "b.yaml"}},
 		DaemonRunning: true,
-		RestartAction: "recommended",
+		ApplyAction:   "recommended",
 	})
 
 	if got.Operation != "env_sync" {
@@ -59,31 +59,39 @@ func TestBuildEnvSyncJSONData(t *testing.T) {
 	if !got.DaemonRunning {
 		t.Fatal("daemon_running = false, want true")
 	}
-	if got.RestartAction != "recommended" {
-		t.Fatalf("restart_action = %q", got.RestartAction)
+	if got.ApplyAction != "recommended" {
+		t.Fatalf("apply_action = %q", got.ApplyAction)
 	}
 }
 
-func TestEnvSyncRestartActionIsPure(t *testing.T) {
+func TestEnvSyncApplyActionIsPure(t *testing.T) {
 	tests := []struct {
-		name          string
-		filesChanged  bool
-		daemonRunning bool
-		dryRun        bool
-		noRestart     bool
-		want          string
+		name           string
+		changesPending bool
+		daemonRunning  bool
+		dryRun         bool
+		noApply        bool
+		applied        bool
+		want           string
 	}{
-		{"changed daemon running", true, true, false, false, "recommended"},
-		{"dry run", true, true, true, false, "none"},
-		{"no restart", true, true, false, true, "none"},
-		{"no changes", false, true, false, false, "none"},
-		{"daemon stopped", true, false, false, false, "none"},
+		{"pending daemon running", true, true, false, false, false, "recommended"},
+		{"applied", true, true, false, false, true, "applied"},
+		{"dry run", true, true, true, false, false, "none"},
+		{"no apply", true, true, false, true, false, "deferred"},
+		{"already current", false, true, false, false, false, "none"},
+		{"daemon stopped", true, false, false, false, false, "none"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := envSyncRestartAction(tt.filesChanged, tt.daemonRunning, tt.dryRun, tt.noRestart)
+			got := envSyncApplyAction(
+				tt.changesPending,
+				tt.daemonRunning,
+				tt.dryRun,
+				tt.noApply,
+				tt.applied,
+			)
 			if got != tt.want {
-				t.Fatalf("envSyncRestartAction() = %q, want %q", got, tt.want)
+				t.Fatalf("envSyncApplyAction() = %q, want %q", got, tt.want)
 			}
 		})
 	}

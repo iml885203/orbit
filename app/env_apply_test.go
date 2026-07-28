@@ -1,0 +1,55 @@
+package app
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/iml885203/orbit/daemon"
+)
+
+func TestRunningEnvironmentResourcesPreservesActiveIntent(t *testing.T) {
+	resources := []daemon.ResourceStatus{
+		{Name: "stopped", State: "stopped"},
+		{Name: "stopping", State: "stopping"},
+		{Name: "healthy", State: "healthy"},
+		{Name: "degraded", State: "degraded"},
+		{Name: "starting", State: "starting"},
+		{Name: "pending", State: "pending"},
+		{Name: "building", State: "building"},
+		{Name: "restarting", State: "restarting"},
+	}
+
+	got := runningEnvironmentResources(resources)
+	want := []string{"building", "degraded", "healthy", "pending", "restarting", "starting"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("runningEnvironmentResources() = %v, want %v", got, want)
+	}
+}
+
+func TestRestorableEnvironmentResourcesSeparatesRemovedConfig(t *testing.T) {
+	previouslyRunning := []string{"api", "database", "removed"}
+	available := []daemon.ResourceStatus{
+		{Name: "database", State: "stopped"},
+		{Name: "api", State: "stopped"},
+		{Name: "new", State: "stopped"},
+	}
+
+	restored, unavailable := restorableEnvironmentResources(previouslyRunning, available)
+	if !reflect.DeepEqual(restored, []string{"api", "database"}) {
+		t.Fatalf("restored = %v", restored)
+	}
+	if !reflect.DeepEqual(unavailable, []string{"removed"}) {
+		t.Fatalf("unavailable = %v", unavailable)
+	}
+}
+
+func TestBuildEnvironmentApplyJSONDataUsesEmptyArrays(t *testing.T) {
+	got := buildEnvironmentApplyJSONData(emptyEnvironmentApplyResult())
+	if got.Operation != "env_apply" {
+		t.Fatalf("operation = %q", got.Operation)
+	}
+	if got.PreviouslyRunning == nil || got.RestoredResources == nil ||
+		got.UnavailableResources == nil || got.Resources == nil {
+		t.Fatalf("array fields must not be null: %+v", got)
+	}
+}

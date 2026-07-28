@@ -65,7 +65,8 @@ macOS and Linux are supported. Windows builds are Beta; see
 orbit up                     # start services and their dependencies
 orbit status --json          # inspect stable machine-readable state
 orbit logs demo-api -f       # stream the default demo service
-orbit env sync --json        # refresh shared environment files
+orbit env sync               # refresh and apply shared environment files
+orbit env apply              # apply a previously deferred update
 orbit switch quickstart      # select the default demo environment
 orbit doctor --json          # diagnose the local setup
 orbit down                   # stop the environment
@@ -80,6 +81,11 @@ For a team environment, replace `demo-api` and `quickstart` with names shown by
 `orbit status` and `orbit env list`. After a switch, Orbit reports any runtime
 version or project-package setup required before `orbit up`, using the
 project's version files when present.
+
+When the active environment changes during `orbit env sync`, Orbit offers to
+apply it and restores the resources that were running beforehand. Use
+`--no-apply` to download now and run `orbit env apply` later. Resources that
+were already stopped stay stopped.
 
 For configured infrastructure containers, `orbit query redis`,
 `orbit query mongo`, and `orbit query postgres` open the container's native

@@ -108,7 +108,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, and exact available environment choices. |
 | `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
-| `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon running state, and restart recommendation. |
+| `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
+| `orbit env apply --json` | Applies pending environment changes, then returns the resources that were running, restored, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
@@ -162,6 +163,7 @@ Stable `data.operation` values for converted control commands:
 | `orbit env list --json` | `env_list` |
 | `orbit env use <env> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
+| `orbit env apply --json` | `env_apply` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |

@@ -39,7 +39,7 @@ type StatusResponse struct {
 	ConfigPath string `json:"config_path"`
 	// ConfigStale means the loaded config has fallen behind reality (env
 	// file edited, selection changed, or an API env switch left the
-	// orchestrator on the previous env) — `orbit daemon restart` applies.
+	// orchestrator on the previous env) — `orbit env apply` applies.
 	ConfigStale       bool   `json:"config_stale,omitempty"`
 	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
 }

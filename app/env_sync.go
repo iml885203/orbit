@@ -18,11 +18,11 @@ import (
 const settingKeyEnvRepoURL = "env_repo_url"
 
 var (
-	envSyncURL       string
-	envSyncPath      string
-	envSyncDryRun    bool
-	envSyncYes       bool
-	envSyncNoRestart bool
+	envSyncURL     string
+	envSyncPath    string
+	envSyncDryRun  bool
+	envSyncYes     bool
+	envSyncNoApply bool
 )
 
 func envSyncCmd() *cobra.Command {
@@ -48,8 +48,10 @@ This bypasses git entirely and copies files directly from disk.`,
 	cmd.Flags().StringVar(&envSyncURL, "url", "", "git URL of the env repo (overrides and persists)")
 	cmd.Flags().StringVar(&envSyncPath, "path", "", "local directory containing envs/ (bypasses git; not persisted)")
 	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview without writing")
-	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "skip restart confirmation prompt")
-	cmd.Flags().BoolVar(&envSyncNoRestart, "no-restart", false, "do not offer or perform daemon restart")
+	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "apply updates without prompting")
+	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download updates without applying them")
+	cmd.Flags().BoolVar(&envSyncNoApply, "no-restart", false, "deprecated alias for --no-apply")
+	_ = cmd.Flags().MarkHidden("no-restart")
 	return cmd
 }
 
@@ -70,18 +72,10 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("sync: %w", err)
 		}
 		if cli.JSONOutput {
-			_, alive := daemon.IsDaemonRunning()
-			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildEnvSyncJSONData(envSyncJSONOptions{
-				Source:        envSyncPath,
-				Destination:   dest,
-				DryRun:        envSyncDryRun,
-				Result:        res,
-				DaemonRunning: alive,
-				RestartAction: envSyncRestartAction(len(res.Written) > 0, alive, envSyncDryRun, envSyncNoRestart),
-			}), envSyncRecommendedActions(len(res.Written) > 0, alive, envSyncDryRun, envSyncNoRestart))
+			return finishEnvSync(envSyncPath, dest, res)
 		}
 		printSyncResult(res)
-		return offerDaemonRestart(len(res.Written) > 0)
+		return offerEnvironmentApply()
 	}
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
@@ -111,17 +105,9 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 		}
 	}
 	if cli.JSONOutput {
-		_, alive := daemon.IsDaemonRunning()
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildEnvSyncJSONData(envSyncJSONOptions{
-			Source:        url,
-			Destination:   dest,
-			DryRun:        envSyncDryRun,
-			Result:        res,
-			DaemonRunning: alive,
-			RestartAction: envSyncRestartAction(len(res.Written) > 0, alive, envSyncDryRun, envSyncNoRestart),
-		}), envSyncRecommendedActions(len(res.Written) > 0, alive, envSyncDryRun, envSyncNoRestart))
+		return finishEnvSync(url, dest, res)
 	}
-	return offerDaemonRestart(len(res.Written) > 0)
+	return offerEnvironmentApply()
 }
 
 func envRepoSyncError(err error) error {
@@ -157,7 +143,8 @@ type envSyncJSONOptions struct {
 	DryRun        bool
 	Result        envsync.Result
 	DaemonRunning bool
-	RestartAction string
+	ApplyAction   string
+	ApplyResult   *environmentApplyResult
 }
 
 type envSyncJSONData struct {
@@ -167,13 +154,18 @@ type envSyncJSONData struct {
 	DryRun        bool     `json:"dry_run"`
 	Written       []string `json:"written"`
 	DaemonRunning bool     `json:"daemon_running"`
-	RestartAction string   `json:"restart_action"`
+	ApplyAction   string   `json:"apply_action"`
+	Restored      []string `json:"restored_resources"`
 }
 
 func buildEnvSyncJSONData(opts envSyncJSONOptions) envSyncJSONData {
 	written := []string{}
 	if opts.Result.Written != nil {
 		written = opts.Result.Written
+	}
+	restored := []string{}
+	if opts.ApplyResult != nil {
+		restored = opts.ApplyResult.RestoredResources
 	}
 	return envSyncJSONData{
 		Operation:     "env_sync",
@@ -182,57 +174,121 @@ func buildEnvSyncJSONData(opts envSyncJSONOptions) envSyncJSONData {
 		DryRun:        opts.DryRun,
 		Written:       written,
 		DaemonRunning: opts.DaemonRunning,
-		RestartAction: opts.RestartAction,
+		ApplyAction:   opts.ApplyAction,
+		Restored:      restored,
 	}
 }
 
-func envSyncRestartAction(filesChanged, daemonRunning, dryRun, noRestart bool) string {
-	if dryRun || noRestart || !filesChanged || !daemonRunning {
+func envSyncApplyAction(changesPending, daemonRunning, dryRun, noApply, applied bool) string {
+	if applied {
+		return "applied"
+	}
+	if dryRun || !changesPending || !daemonRunning {
 		return "none"
+	}
+	if noApply {
+		return "deferred"
 	}
 	return "recommended"
 }
 
-func envSyncRecommendedActions(filesChanged, daemonRunning, dryRun, noRestart bool) []cli.JSONAction {
-	if envSyncRestartAction(filesChanged, daemonRunning, dryRun, noRestart) != "recommended" {
+func envSyncRecommendedActions(applyAction string) []cli.JSONAction {
+	if applyAction != "recommended" {
 		return nil
 	}
 	return []cli.JSONAction{{
-		Command:     "orbit daemon restart --json",
-		Reason:      "Apply synced environment files to the running daemon.",
+		Command:     "orbit env apply --json",
+		Reason:      "Apply downloaded environment updates and restore running resources.",
 		Destructive: false,
 	}}
 }
 
-// offerDaemonRestart prompts the user to restart the daemon when env files
-// changed and a daemon is currently running. The prompt is skipped (and
-// restart performed) when --yes is set; skipped entirely when --no-restart
-// is set, when no files changed, or when no daemon is running. Dry runs
-// always skip — nothing was actually written.
-func offerDaemonRestart(filesChanged bool) error {
-	if envSyncDryRun || envSyncNoRestart || !filesChanged {
+func finishEnvSync(source, destination string, syncResult envsync.Result) error {
+	applyResult, err := inspectEnvironmentApply()
+	if err != nil {
+		return err
+	}
+	if envSyncYes && !envSyncDryRun && !envSyncNoApply && applyResult.ChangesPending {
+		applied, applyErr := applyEnvironmentChanges(nil)
+		if applyErr != nil {
+			return applyErr
+		}
+		applyResult = applied
+	}
+	action := envSyncApplyAction(
+		applyResult.ChangesPending,
+		applyResult.DaemonRunning,
+		envSyncDryRun,
+		envSyncNoApply,
+		applyResult.Applied,
+	)
+	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildEnvSyncJSONData(envSyncJSONOptions{
+		Source:        source,
+		Destination:   destination,
+		DryRun:        envSyncDryRun,
+		Result:        syncResult,
+		DaemonRunning: applyResult.DaemonRunning,
+		ApplyAction:   action,
+		ApplyResult:   &applyResult,
+	}), envSyncRecommendedActions(action))
+}
+
+func inspectEnvironmentApply() (environmentApplyResult, error) {
+	result := emptyEnvironmentApplyResult()
+	pid, alive := daemon.IsDaemonRunning()
+	result.DaemonRunning = alive
+	result.PreviousPID = pid
+	result.PID = pid
+	if !alive {
+		return result, nil
+	}
+	status, err := daemon.NewClient(daemon.DefaultSocketPath()).Status()
+	if err != nil {
+		return result, fmt.Errorf("checking environment changes: %w", err)
+	}
+	result.ChangesPending = status.ConfigStale
+	result.FinalStatus = status
+	return result, nil
+}
+
+func offerEnvironmentApply() error {
+	if envSyncDryRun {
 		return nil
 	}
-	if _, alive := daemon.IsDaemonRunning(); !alive {
+	pending, err := inspectEnvironmentApply()
+	if err != nil {
+		return err
+	}
+	if !pending.DaemonRunning || !pending.ChangesPending {
+		return nil
+	}
+	if envSyncNoApply {
+		fmt.Println("\nUpdates downloaded. Apply later with: orbit env apply")
 		return nil
 	}
 
 	if !envSyncYes {
-		// No TTY → no chance of asking; print the same hint as `orbit switch`
-		// gives and let the operator decide. Avoids blocking CI / scripted
-		// runs while still nagging interactive users.
 		if !isatty.IsTerminal(os.Stdin.Fd()) {
-			fmt.Println("\n⚠ Daemon is running with the previous env. Apply with: orbit daemon restart")
+			fmt.Println("\nEnvironment updates downloaded. Apply when ready with: orbit env apply")
 			return nil
 		}
-		if !cli.Confirm("\nDaemon is running with the previous env. Restart now?") {
-			fmt.Println("Skipped. Apply later with: orbit daemon restart")
+		message := "\nApply environment updates now?"
+		running := runningEnvironmentResources(pending.FinalStatus.Resources)
+		if len(running) > 0 {
+			message = fmt.Sprintf("\nApply environment updates and restore %d running resource(s)?", len(running))
+		}
+		if !cli.Confirm(message) {
+			fmt.Println("Updates downloaded. Apply later with: orbit env apply")
 			return nil
 		}
 	}
 
-	fmt.Println("→ orbit daemon restart")
-	return runDaemonRestart(nil, nil)
+	result, err := applyEnvironmentChanges(environmentApplyProgress())
+	if err != nil {
+		return err
+	}
+	printEnvironmentApplyResult(result)
+	return nil
 }
 
 func printSyncResult(res envsync.Result) {

@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -400,6 +401,79 @@ func TestE2E_SwitchRejectsInvalidTargetBeforeStoppingCurrentEnvironment(t *testi
 	if current := strings.TrimSpace(env.run(t, "env", "current")); current != env.envYaml {
 		t.Fatalf("current environment = %q after rejected switch, want %q", current, env.envYaml)
 	}
+}
+
+func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	env.run(t, "up", "redis")
+
+	original, err := os.ReadFile(env.envYaml)
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	updated := bytes.Replace(original, []byte("shutdown_timeout: 10s"), []byte("shutdown_timeout: 11s"), 1)
+	if bytes.Equal(updated, original) {
+		t.Fatal("test fixture no longer contains the expected shutdown timeout")
+	}
+	if err := os.WriteFile(env.envYaml, updated, 0o644); err != nil {
+		t.Fatalf("update env: %v", err)
+	}
+
+	previousPID := readE2EDaemonPID(t, env.home)
+	output := env.run(t, "env", "apply", "--json")
+	envelope := parseE2EEnvelope(t, output)
+	if !envelope.OK {
+		t.Fatalf("env apply failed: %+v\n%s", envelope.Error, output)
+	}
+	var applied environmentApplyJSONData
+	if err := json.Unmarshal(envelope.Data, &applied); err != nil {
+		t.Fatalf("parse env apply data: %v\n%s", err, output)
+	}
+	if !applied.Applied || !slices.Equal(applied.PreviouslyRunning, []string{"redis"}) ||
+		!slices.Equal(applied.RestoredResources, []string{"redis"}) {
+		t.Fatalf("env apply data = %+v", applied)
+	}
+	if currentPID := readE2EDaemonPID(t, env.home); currentPID == previousPID {
+		t.Fatalf("daemon pid remained %d after applying a changed config", currentPID)
+	}
+	if state := env.serviceState(t, "redis"); state != "healthy" {
+		t.Fatalf("redis state = %s after apply, want healthy", state)
+	}
+
+	invalid := bytes.Replace(updated, []byte(`version: "2"`), []byte(`version: "999"`), 1)
+	if err := os.WriteFile(env.envYaml, invalid, 0o644); err != nil {
+		t.Fatalf("write invalid env: %v", err)
+	}
+	previousPID = readE2EDaemonPID(t, env.home)
+	output, err = env.runNoFail(t, "env", "apply", "--json")
+	if err == nil {
+		t.Fatalf("invalid environment was applied:\n%s", output)
+	}
+	envelope = parseE2EEnvelope(t, output)
+	if envelope.OK || envelope.Error == nil ||
+		!strings.Contains(envelope.Error.Message, "cannot apply environment changes") {
+		t.Fatalf("invalid apply envelope = %+v", envelope)
+	}
+	if currentPID := readE2EDaemonPID(t, env.home); currentPID != previousPID {
+		t.Fatalf("daemon pid changed from %d to %d after invalid apply", previousPID, currentPID)
+	}
+	if !containerRunning(t, "orbit-"+env.namespace+"-redis") {
+		t.Fatal("redis stopped after invalid environment was rejected")
+	}
+}
+
+func readE2EDaemonPID(t *testing.T, home string) int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, "orbit.pid"))
+	if err != nil {
+		t.Fatalf("read daemon pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatalf("parse daemon pid %q: %v", data, err)
+	}
+	return pid
 }
 
 // Covers: `orbit env sync --url file://<local-repo>` clones a local git repo

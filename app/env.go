@@ -58,6 +58,7 @@ func envCmd() *cobra.Command {
 		RunE:  runEnvList,
 	})
 	cmd.AddCommand(envSyncCmd())
+	cmd.AddCommand(envApplyCmd())
 	toggleCmd := &cobra.Command{
 		Use:    "toggle <service> <var> <on|off>",
 		Short:  "Flip a pre-declared env-var toggle on a service",
@@ -107,7 +108,7 @@ func runEnvUse(_ *cobra.Command, args []string) error {
 
 	fmt.Printf("Environment set to: %s\n", abs)
 	if alive {
-		fmt.Println("⚠ daemon still using previous env. Apply with: orbit daemon restart")
+		fmt.Println("Environment change ready. Apply with: orbit env apply")
 	}
 	return nil
 }
@@ -135,8 +136,8 @@ func envUseRecommendedActions(daemonRunning bool) []cli.JSONAction {
 		return nil
 	}
 	return []cli.JSONAction{{
-		Command:     "orbit daemon restart --json",
-		Reason:      "Apply the selected environment to the running daemon.",
+		Command:     "orbit env apply --json",
+		Reason:      "Apply the selected environment and restore running resources.",
 		Destructive: false,
 	}}
 }

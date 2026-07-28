@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestEnvironmentHelpOnlyShowsListAndSync(t *testing.T) {
+func TestEnvironmentHelpShowsDailyWorkflow(t *testing.T) {
 	cmd := envCmd()
 	var visible []string
 	for _, child := range cmd.Commands() {
@@ -19,7 +19,7 @@ func TestEnvironmentHelpOnlyShowsListAndSync(t *testing.T) {
 			visible = append(visible, child.Name())
 		}
 	}
-	if want := []string{"list", "sync"}; !slices.Equal(visible, want) {
+	if want := []string{"apply", "list", "sync"}; !slices.Equal(visible, want) {
 		t.Fatalf("visible env commands = %v, want %v", visible, want)
 	}
 }
@@ -142,16 +142,17 @@ func TestMutationsRequireReconciledDaemon(t *testing.T) {
 	down := &cobra.Command{Use: "down"}
 	env := &cobra.Command{Use: "env"}
 	toggle := &cobra.Command{Use: "toggle"}
+	apply := &cobra.Command{Use: "apply"}
 	list := &cobra.Command{Use: "list"}
 	root.AddCommand(up, restart, status, down, env)
-	env.AddCommand(toggle, list)
+	env.AddCommand(toggle, apply, list)
 
 	for _, cmd := range []*cobra.Command{up, restart, toggle} {
 		if !commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s did not require a reconciled daemon", cmd.CommandPath())
 		}
 	}
-	for _, cmd := range []*cobra.Command{status, down, list} {
+	for _, cmd := range []*cobra.Command{status, down, apply, list} {
 		if commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s should remain available during reconciliation", cmd.CommandPath())
 		}
@@ -167,14 +168,15 @@ func TestUnavailableEnvironmentBlocksMutationsButKeepsRecoveryAvailable(t *testi
 	env := &cobra.Command{Use: "env"}
 	list := &cobra.Command{Use: "list"}
 	toggle := &cobra.Command{Use: "toggle"}
+	apply := &cobra.Command{Use: "apply"}
 	daemonCmd := &cobra.Command{Use: "daemon"}
 	daemonStart := &cobra.Command{Use: "start"}
 	daemonStop := &cobra.Command{Use: "stop"}
 	root.AddCommand(up, status, down, switchEnv, env, daemonCmd)
-	env.AddCommand(list, toggle)
+	env.AddCommand(list, toggle, apply)
 	daemonCmd.AddCommand(daemonStart, daemonStop)
 
-	for _, cmd := range []*cobra.Command{up, toggle, daemonStart} {
+	for _, cmd := range []*cobra.Command{up, toggle, apply, daemonStart} {
 		if !commandRequiresAvailableEnvironment(cmd) {
 			t.Errorf("%s did not require an available environment", cmd.CommandPath())
 		}

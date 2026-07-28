@@ -122,7 +122,7 @@ func TestWriteJSONErrorClassifiesPendingEnvironmentChanges(t *testing.T) {
 	if got.Error == nil || got.Error.Code != "environment_changed" {
 		t.Fatalf("error = %+v", got.Error)
 	}
-	if !got.Error.Retryable || got.Error.NextCommand != "orbit daemon restart --json" {
+	if !got.Error.Retryable || got.Error.NextCommand != "orbit env apply --json" {
 		t.Fatalf("error recovery = %+v", got.Error)
 	}
 }

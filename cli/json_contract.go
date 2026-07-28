@@ -150,9 +150,9 @@ func classify(err error) JSONError {
 		return JSONError{
 			Code:        "environment_changed",
 			Message:     msg,
-			Hint:        "Restart Orbit once to apply the selected environment changes before running this command.",
+			Hint:        "Apply the selected environment changes; Orbit will restore the resources that were running.",
 			Retryable:   true,
-			NextCommand: "orbit daemon restart --json",
+			NextCommand: "orbit env apply --json",
 		}
 	}
 	var updateRequired *daemon.UpdateRequiredError
