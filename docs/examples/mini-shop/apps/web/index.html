@@ -103,6 +103,36 @@
       .service-status-ok { color: #86efac; }
       .service-status-warn { color: #fbbf24; }
       .service-status-bad { color: #fb7185; }
+
+      .panel-attention {
+        position: relative;
+        border: 1px solid #60a5fa;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25), 0 10px 24px rgba(37, 99, 235, 0.2);
+      }
+
+      .panel-attention-pulse {
+        animation: panel-attention-pulse 1.6s ease-in-out infinite;
+      }
+
+      @keyframes panel-attention-pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.25);
+        }
+
+        70% {
+          box-shadow: 0 0 0 8px rgba(96, 165, 250, 0);
+        }
+
+        100% {
+          box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .panel-attention-pulse {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -110,7 +140,7 @@
     <p>目標很簡單：<strong>選客戶 → 加入購物車 → Checkout</strong>。你不用先記 API，也不用先猜 service 邏輯。</p>
     <p class="hint">這個 demo 想證明 3 件事：主機與容器混合、跨 service 的資料關聯、以及發生問題時可以快速定位。</p>
 
-    <div class="card">
+    <div id="flow-overview-panel" class="card">
       <h3>一頁式目標導覽</h3>
       <div class="goal-card">
         <div class="goal-state hint">
@@ -210,9 +240,11 @@
       <div id="error-playbook" class="error-playbook"></div>
     </div>
 
-    <div id="status">載入服務健康中...</div>
-    <div id="service-status" class="status-grid"></div>
-    <div id="action-notice" class="notice">載入中</div>
+    <div id="service-overview-panel" class="card">
+      <div id="status">載入服務健康中...</div>
+      <div id="service-status" class="status-grid"></div>
+      <div id="action-notice" class="notice">載入中</div>
+    </div>
 
     <div class="grid">
       <div class="card" id="customer-panel">
@@ -372,6 +404,30 @@ web
       };
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
+      const panelAttentionTimers = new Map();
+      const goalPanelFocusMap = {
+        1: ['#service-overview-panel', '#flow-overview-panel'],
+        2: ['#customer-panel'],
+        3: ['#product-panel', '#cart-panel'],
+        4: ['#checkout-panel', '#orders-panel', '#flow-timeline-panel', '#result-panel'],
+        5: ['#orders-panel', '#shipments-panel', '#flow-timeline-panel', '#result-panel'],
+      };
+      const errorFocusMap = {
+        cart_empty: ['#product-panel', '#cart-panel'],
+        insufficient_stock: ['#product-panel', '#inventory-panel', '#checkout-panel'],
+        payment_declined: ['#checkout-panel'],
+        cart_unreachable: ['#cart-panel', '#customer-panel'],
+        catalog_unreachable: ['#product-panel', '#inventory-panel'],
+        inventory_unreachable: ['#inventory-panel'],
+        order_unreachable: ['#orders-panel'],
+        payment_unreachable: ['#checkout-panel', '#payment-method'],
+        checkout_failed: ['#flow-timeline-panel', '#result-panel', '#trace-panel'],
+        customer_unreachable: ['#customer-panel'],
+        payment_failed: ['#checkout-panel', '#result-panel'],
+      };
+      const ATTENTION_DURATION_MS = 1600;
+      let lastGoalAttentionStep = 0;
+
       const faultPatterns = [
         { code: 'cart_empty', symptom: '購物車是空的', step: '先加入 1 件商品後再 checkout。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f' },
         { code: 'insufficient_stock', symptom: '庫存不足', step: '降低 quantity 後重試，或先確認 inventory 目前 stock。', command: 'orbit -c docs/examples/mini-shop/dev.yaml logs inventory-api -f' },
@@ -460,6 +516,67 @@ web
           return ['建議：回到情境 A 先跑一次成功流程，確認資料鏈路完整。'];
         }
         return ['建議：先查看診斷命令；必要時重跑一次情境 A。'];
+      }
+
+      function clearAllPanelAttention() {
+        document.querySelectorAll('.panel-attention, .panel-attention-pulse').forEach((element) => {
+          element.classList.remove('panel-attention', 'panel-attention-pulse');
+        });
+        panelAttentionTimers.forEach((timerId) => {
+          window.clearTimeout(timerId);
+        });
+        panelAttentionTimers.clear();
+      }
+
+      function setPanelAttention(selector, keepMs = ATTENTION_DURATION_MS) {
+        const element = typeof selector === 'string' ? document.querySelector(selector) : selector;
+        if (!element) {
+          return;
+        }
+        element.classList.add('panel-attention', 'panel-attention-pulse');
+
+        if (panelAttentionTimers.has(element)) {
+          window.clearTimeout(panelAttentionTimers.get(element));
+          panelAttentionTimers.delete(element);
+        }
+
+        if (keepMs > 0) {
+          const timer = window.setTimeout(() => {
+            element.classList.remove('panel-attention-pulse', 'panel-attention');
+            panelAttentionTimers.delete(element);
+          }, keepMs);
+          panelAttentionTimers.set(element, timer);
+        }
+      }
+
+      function markPanelsBySelectors(selectors, keepMs = ATTENTION_DURATION_MS, clearNow = true) {
+        if (!selectors || !selectors.length) {
+          return;
+        }
+        if (clearNow) {
+          clearAllPanelAttention();
+        }
+        selectors.forEach((selector) => setPanelAttention(selector, keepMs));
+      }
+
+      function markGoalStepAttention(step) {
+        if (!step || step < 1) {
+          return;
+        }
+        if (step !== lastGoalAttentionStep) {
+          markPanelsBySelectors(goalPanelFocusMap[step] || [], ATTENTION_DURATION_MS, true);
+          lastGoalAttentionStep = step;
+        }
+      }
+
+      function markErrorAttention(code) {
+        const normalized = normalizeErrorCode(code);
+        const selectors = errorFocusMap[normalized] || [];
+        if (!selectors.length) {
+          clearAllPanelAttention();
+          return;
+        }
+        markPanelsBySelectors(selectors, 2600, true);
       }
 
       function operationRecoveryActions(errorCode, service, action) {
@@ -719,6 +836,10 @@ web
           goalNextBtn.textContent = snapshot.action;
           goalNextBtn.disabled = false;
         }
+
+        if (snapshot.step < 5) {
+          markGoalStepAttention(snapshot.step);
+        }
       }
 
       function hasLatestSuccessfulOrder() {
@@ -730,6 +851,9 @@ web
           return;
         }
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof el.scrollIntoView === 'function' && el.classList) {
+          markPanelsBySelectors([`#${el.id}`], 1900, false);
+        }
         const hadTabIndex = el.hasAttribute('tabindex');
         let shouldCleanupTabIndex = false;
         if (!hadTabIndex && !['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A'].includes(el.tagName)) {
@@ -775,6 +899,8 @@ web
           `;
           errorPlaybookEl.appendChild(card);
         });
+
+        markErrorAttention(activeCode);
       }
 
       function captureCheckoutPayload(payload, context = null) {
