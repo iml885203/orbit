@@ -42,3 +42,25 @@ func TestRestorableEnvironmentResourcesSeparatesRemovedConfig(t *testing.T) {
 		t.Fatalf("unavailable = %v", unavailable)
 	}
 }
+
+func TestEnvironmentApplySeparatesRestoredIntentFromNewDependencies(t *testing.T) {
+	restored := []string{"api", "web"}
+	affected := []string{"redis", "web", "api"}
+
+	startedDependencies := additionalAffectedResources(restored, affected)
+	if !reflect.DeepEqual(startedDependencies, []string{"redis"}) {
+		t.Fatalf("started dependencies = %v", startedDependencies)
+	}
+
+	data := buildEnvironmentApplyJSONData(environmentApplyResult{
+		Applied:             true,
+		DaemonRunning:       true,
+		PreviouslyRunning:   restored,
+		RestoredResources:   restored,
+		StartedDependencies: startedDependencies,
+	})
+	if !reflect.DeepEqual(data.RestoredResources, restored) ||
+		!reflect.DeepEqual(data.StartedDependencies, []string{"redis"}) {
+		t.Fatalf("apply data = %+v", data)
+	}
+}

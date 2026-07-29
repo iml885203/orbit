@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -68,6 +69,42 @@ func TestEnvironmentSelectionActionsSyncWhenNoChoicesExist(t *testing.T) {
 	})
 	if len(actions) != 1 || actions[0].Command != "orbit env sync --json" {
 		t.Fatalf("actions = %+v", actions)
+	}
+}
+
+func TestInvalidSwitchListsAvailableNamesWithoutChangingSelection(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	envs := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"alpha.yaml", "beta.yaml"} {
+		if err := os.WriteFile(filepath.Join(envs, name), []byte(`version: "3"`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := runSwitch(nil, []string{"alhpa"})
+	if err == nil || !strings.Contains(err.Error(), "Available: alpha, beta") {
+		t.Fatalf("switch error = %v", err)
+	}
+	var output bytes.Buffer
+	if writeErr := cli.WriteJSONError(&output, "orbit switch alhpa --json", err); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	var envelope struct {
+		RecommendedActions []cli.JSONAction `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit env list --json" {
+		t.Fatalf("actions = %+v", envelope.RecommendedActions)
+	}
+	if _, err := os.Stat(daemonsrv.CurrentEnvPath()); !os.IsNotExist(err) {
+		t.Fatalf("invalid switch changed environment selection: %v", err)
 	}
 }
 

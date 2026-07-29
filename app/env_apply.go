@@ -20,6 +20,7 @@ type environmentApplyResult struct {
 	PID                  int
 	PreviouslyRunning    []string
 	RestoredResources    []string
+	StartedDependencies  []string
 	UnavailableResources []string
 	FinalStatus          *daemon.StatusResponse
 }
@@ -33,6 +34,7 @@ type environmentApplyJSONData struct {
 	PID                  int                     `json:"pid,omitempty"`
 	PreviouslyRunning    []string                `json:"previously_running"`
 	RestoredResources    []string                `json:"restored_resources"`
+	StartedDependencies  []string                `json:"started_dependencies"`
 	UnavailableResources []string                `json:"unavailable_resources"`
 	Resources            []daemon.ResourceStatus `json:"resources"`
 }
@@ -127,13 +129,14 @@ func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error
 	if report != nil {
 		report(fmt.Sprintf("Restoring %d running resource(s)...", len(result.RestoredResources)))
 	}
-	response, err := client.Up(daemon.UpRequest{Resources: result.RestoredResources})
+	requestedRestores := append([]string(nil), result.RestoredResources...)
+	response, err := client.Up(daemon.UpRequest{Resources: requestedRestores})
 	if err != nil {
 		return result, fmt.Errorf("restoring running resources: %w", err)
 	}
-	result.RestoredResources = response.AffectedResources
+	result.StartedDependencies = additionalAffectedResources(requestedRestores, response.AffectedResources)
 	sort.Strings(result.RestoredResources)
-	finalStatus, err := waitForLifecycleJSON(client, result.RestoredResources, "healthy")
+	finalStatus, err := waitForLifecycleJSON(client, response.AffectedResources, "healthy")
 	result.FinalStatus = finalStatus
 	if err != nil {
 		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)
@@ -154,6 +157,7 @@ func emptyEnvironmentApplyResult() environmentApplyResult {
 	return environmentApplyResult{
 		PreviouslyRunning:    []string{},
 		RestoredResources:    []string{},
+		StartedDependencies:  []string{},
 		UnavailableResources: []string{},
 	}
 }
@@ -189,6 +193,21 @@ func restorableEnvironmentResources(previouslyRunning []string, available []daem
 	return restored, unavailable
 }
 
+func additionalAffectedResources(requested, affected []string) []string {
+	requestedSet := make(map[string]bool, len(requested))
+	for _, name := range requested {
+		requestedSet[name] = true
+	}
+	additional := make([]string, 0)
+	for _, name := range affected {
+		if !requestedSet[name] {
+			additional = append(additional, name)
+		}
+	}
+	sort.Strings(additional)
+	return additional
+}
+
 func buildEnvironmentApplyJSONData(result environmentApplyResult) environmentApplyJSONData {
 	resources := []daemon.ResourceStatus{}
 	if result.FinalStatus != nil && result.FinalStatus.Resources != nil {
@@ -203,6 +222,7 @@ func buildEnvironmentApplyJSONData(result environmentApplyResult) environmentApp
 		PID:                  result.PID,
 		PreviouslyRunning:    result.PreviouslyRunning,
 		RestoredResources:    result.RestoredResources,
+		StartedDependencies:  result.StartedDependencies,
 		UnavailableResources: result.UnavailableResources,
 		Resources:            resources,
 	}
@@ -228,7 +248,19 @@ func printEnvironmentApplyResult(result environmentApplyResult) {
 	case len(result.RestoredResources) == 0:
 		fmt.Println("Environment updates applied.")
 	default:
-		fmt.Printf("Environment updates applied. Restored %d running resource(s).\n", len(result.RestoredResources))
+		fmt.Printf("Environment updates applied. Restored %d running resource(s)", len(result.RestoredResources))
+		if len(result.StartedDependencies) > 0 {
+			noun := "dependencies"
+			if len(result.StartedDependencies) == 1 {
+				noun = "dependency"
+			}
+			fmt.Printf(
+				"; started %d newly required %s",
+				len(result.StartedDependencies),
+				noun,
+			)
+		}
+		fmt.Println(".")
 	}
 	if len(result.UnavailableResources) > 0 {
 		fmt.Printf(

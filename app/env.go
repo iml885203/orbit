@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -259,7 +260,20 @@ func switchCmd() *cobra.Command {
 func runSwitch(_ *cobra.Command, args []string) error {
 	abs, err := resolveEnvArg(args[0])
 	if err != nil {
-		return err
+		selection := readEnvironmentSelection()
+		message := err.Error()
+		if len(selection.Environments) > 0 {
+			names := make([]string, 0, len(selection.Environments))
+			for _, environment := range selection.Environments {
+				names = append(names, environment.Name)
+			}
+			message += "\nAvailable: " + strings.Join(names, ", ")
+		}
+		return cli.WithJSONReplacementActions(errors.New(message), []cli.JSONAction{{
+			Command:     "orbit env list --json",
+			Reason:      "List the available environment names before retrying the switch.",
+			Destructive: false,
+		}})
 	}
 	prerequisites, prerequisitesReady, err := switchPrerequisites(abs)
 	if err != nil {
