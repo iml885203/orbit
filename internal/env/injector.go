@@ -8,10 +8,7 @@ import (
 	"github.com/iml885203/orbit/config"
 )
 
-// BuildEnv assembles environment variables for a service, including
-// connection strings derived from container configs.
-// toggleStates maps "service/VAR_NAME" to on/off. Nil means use config defaults.
-func BuildEnv(svc *config.Service, containers map[string]*config.Container, toggleStates map[string]bool) map[string]string {
+func BuildEnv(svc *config.Service, cfg *config.Config, toggleStates map[string]bool) map[string]string {
 	env := make(map[string]string)
 
 	// Copy explicit env vars from service config, respecting toggles
@@ -29,15 +26,8 @@ func BuildEnv(svc *config.Service, containers map[string]*config.Container, togg
 		env[k] = v
 	}
 
-	// Auto-inject connection strings for dependencies
 	for _, dep := range svc.DependsOn {
-		c, ok := containers[dep]
-		if !ok {
-			continue
-		}
-		connStrings := buildConnectionStrings(dep, c)
-		for k, v := range connStrings {
-			// Don't override explicit env vars
+		for k, v := range dependencyEnvironment(dep, cfg) {
 			if _, exists := env[k]; !exists {
 				env[k] = v
 			}
@@ -45,6 +35,27 @@ func BuildEnv(svc *config.Service, containers map[string]*config.Container, togg
 	}
 
 	return env
+}
+
+func dependencyEnvironment(name string, cfg *config.Config) map[string]string {
+	if cfg == nil {
+		return nil
+	}
+	if container := cfg.Containers[name]; container != nil {
+		return buildConnectionStrings(name, container)
+	}
+	if service := cfg.Services[name]; service != nil {
+		return buildServiceEndpoint(name, service)
+	}
+	return nil
+}
+
+func buildServiceEndpoint(name string, service *config.Service) map[string]string {
+	if service.URL == "" {
+		return nil
+	}
+	key := strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_URL"
+	return map[string]string{key: service.URL}
 }
 
 // InjectServicePorts exposes runtime-selected ports to host services that
@@ -132,17 +143,10 @@ func getPort(ports map[string]config.PortDef, preferred string, fallback int) in
 	return fallback
 }
 
-// EnvVarsForDependency returns the env var names that would be injected for
-// a service depending on container c (no values, no service context).
-// Returns empty for nil containers or service-to-service dependencies (the
-// injector currently only auto-injects for container dependencies).
-func EnvVarsForDependency(depName string, c *config.Container) []string {
-	if c == nil {
-		return nil
-	}
-	connStrings := buildConnectionStrings(depName, c)
-	keys := make([]string, 0, len(connStrings))
-	for k := range connStrings {
+func EnvVarsForDependency(name string, cfg *config.Config) []string {
+	dependencyEnv := dependencyEnvironment(name, cfg)
+	keys := make([]string, 0, len(dependencyEnv))
+	for k := range dependencyEnv {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -155,7 +159,7 @@ type EnvEntry struct {
 	Value string `json:"value"`
 	// Source is "explicit", "toggle", or "dependency".
 	Source string `json:"source"`
-	// Dependency is the container name this var came from when Source == "dependency".
+	// Dependency is the resource name this var came from when Source == "dependency".
 	// Empty otherwise.
 	Dependency string `json:"dependency,omitempty"`
 }
@@ -167,19 +171,15 @@ type EnvEntry struct {
 //
 // Priority: explicit env wins over dependency injection, matching BuildEnv.
 // If two deps would inject the same key the first dep listed wins.
-func AnnotatedEnv(svc *config.Service, containers map[string]*config.Container, toggleStates map[string]bool) []EnvEntry {
+func AnnotatedEnv(svc *config.Service, cfg *config.Config, toggleStates map[string]bool) []EnvEntry {
 	// Build the resolved env map (handles toggle filtering and dep injection).
-	envMap := BuildEnv(svc, containers, toggleStates)
+	envMap := BuildEnv(svc, cfg, toggleStates)
 
 	// Build a key→dep attribution map for dependency-injected keys.
 	// First dep listed for a key wins, matching BuildEnv's "don't override" policy.
 	keyToDep := make(map[string]string, len(svc.DependsOn)*4)
 	for _, dep := range svc.DependsOn {
-		c, ok := containers[dep]
-		if !ok {
-			continue
-		}
-		for _, k := range EnvVarsForDependency(dep, c) {
+		for _, k := range EnvVarsForDependency(dep, cfg) {
 			if _, claimed := keyToDep[k]; !claimed {
 				keyToDep[k] = dep
 			}
@@ -191,6 +191,8 @@ func AnnotatedEnv(svc *config.Service, containers map[string]*config.Container, 
 		e := EnvEntry{Key: k, Value: v, Source: "explicit"}
 		if _, isToggle := svc.EnvToggles[k]; isToggle {
 			e.Source = "toggle"
+		} else if _, isExplicit := svc.Env[k]; isExplicit {
+			e.Source = "explicit"
 		} else if dep, ok := keyToDep[k]; ok {
 			e.Source = "dependency"
 			e.Dependency = dep

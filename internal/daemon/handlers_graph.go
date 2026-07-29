@@ -375,9 +375,7 @@ func buildGraphEdges(cfg *config.Config, settings *Settings, envName string) []G
 				Detached:   settings.IsEdgeDetached(envName, from, dep),
 				Detachable: fromKind == "frontend",
 			}
-			if c, ok := cfg.Containers[dep]; ok {
-				edge.EnvVars = env.EnvVarsForDependency(dep, c)
-			}
+			edge.EnvVars = env.EnvVarsForDependency(dep, cfg)
 			edges = append(edges, edge)
 		}
 	}

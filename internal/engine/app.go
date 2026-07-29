@@ -190,7 +190,7 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 		if a.GetToggleStates != nil {
 			toggleStates = a.GetToggleStates()
 		}
-		envVars := env.BuildEnv(svc, cfg.Containers, toggleStates)
+		envVars := env.BuildEnv(svc, cfg, toggleStates)
 		env.InjectServicePorts(envVars, svc.Ports)
 		// Hybrid OTEL injection (Aspire-aligned): point services with no OTLP
 		// endpoint of their own at Orbit's receiver, but stand aside for a

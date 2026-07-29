@@ -329,6 +329,34 @@ services:
 | `depends_on` | list | no | Names that must be `Healthy` before this starts |
 | `kafka` | object | no | `produces` / `consumes` topic lists — drawn as async edges on the graph |
 
+### Service dependency URLs
+
+When a service in `depends_on` declares `url`, Orbit injects that endpoint into
+the dependent process as `<DEPENDENCY_NAME>_URL`:
+
+```yaml
+services:
+  catalog-api:
+    type: python
+    path: ./catalog
+    command: python3 main.py
+    url: http://localhost:${ORBIT_AUTO_PORT_CATALOG:-3001}
+    ports:
+      http: "${ORBIT_AUTO_PORT_CATALOG:-3001}"
+
+  checkout-api:
+    type: python
+    path: ./checkout
+    command: python3 main.py
+    depends_on: [catalog-api]
+```
+
+`checkout-api` receives `CATALOG_API_URL`. If Orbit moves the upstream port,
+the injected URL contains the selected runtime port. The environment declares
+the endpoint once; downstream services do not duplicate it. An explicit
+`env.CATALOG_API_URL` remains an intentional override and wins over injection.
+The dashboard attributes injected values to their dependency.
+
 ### `env_toggles`
 
 Lets the dashboard flip a single env var on or off without editing the YAML.

@@ -324,6 +324,33 @@ services:
 | `depends_on` | list | no | 必須先 `Healthy` 才能啟動的名稱 |
 | `kafka` | object | no | `produces` / `consumes` topic 清單 — 在 graph 上畫成 async edge |
 
+### Service dependency URL
+
+當 `depends_on` 中的 service 宣告了 `url`，Orbit 會把 endpoint 以
+`<DEPENDENCY_NAME>_URL` 注入下游 process：
+
+```yaml
+services:
+  catalog-api:
+    type: python
+    path: ./catalog
+    command: python3 main.py
+    url: http://localhost:${ORBIT_AUTO_PORT_CATALOG:-3001}
+    ports:
+      http: "${ORBIT_AUTO_PORT_CATALOG:-3001}"
+
+  checkout-api:
+    type: python
+    path: ./checkout
+    command: python3 main.py
+    depends_on: [catalog-api]
+```
+
+`checkout-api` 會收到 `CATALOG_API_URL`。若 Orbit 調整 upstream port，
+注入值會使用實際選定的 runtime port。Environment 只需宣告一次 endpoint，
+不必在每個下游 service 重複。明確設定的 `env.CATALOG_API_URL` 仍視為刻意
+override，優先於自動注入；dashboard 也會標示該值來自哪個 dependency。
+
 ### `env_toggles`
 
 讓 dashboard 不用改 YAML 就能把單一 env var 開或關。

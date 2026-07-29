@@ -181,7 +181,7 @@ export interface EnvVarEntry {
   value: string;
   source: string; // "explicit" | "toggle" | "dependency"
   /**
-   * Dependency is the container name this var came from, when Source == "dependency".
+   * Dependency is the resource name this var came from when Source == "dependency".
    * Empty otherwise.
    */
   dependency?: string;

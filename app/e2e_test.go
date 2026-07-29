@@ -9,7 +9,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -510,6 +512,179 @@ services:
 	}
 	if platform.IsProcessAlive(apiPIDBefore) {
 		t.Fatalf("old host service pid %d survived daemon restart", apiPIDBefore)
+	}
+}
+
+func TestE2E_ServiceDependencyReceivesSelectedRuntimeURL(t *testing.T) {
+	binary := findOrbitBinary(t)
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+
+	upstreamPreference := occupyLocalPort(t)
+	downstreamPreference := occupyLocalPort(t)
+	dashboardPort := reserveLocalPort(t)
+	home, err := os.MkdirTemp("/tmp", "orb-service-url-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	upstreamSource := `import http.server
+import json
+import os
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({"ok": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_):
+        pass
+
+http.server.ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Handler).serve_forever()
+`
+	downstreamSource := `import http.server
+import json
+import os
+import urllib.request
+
+upstream_url = os.environ["UPSTREAM_URL"]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        with urllib.request.urlopen(upstream_url + "/health", timeout=2) as response:
+            upstream = json.load(response)
+        body = json.dumps({"ok": upstream["ok"], "upstream_url": upstream_url}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_):
+        pass
+
+http.server.ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Handler).serve_forever()
+`
+	if err := os.WriteFile(filepath.Join(workspace, "upstream.py"), []byte(upstreamSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "downstream.py"), []byte(downstreamSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(envsDir, "service-url.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+settings:
+  health_check_interval: 1s
+services:
+  upstream:
+    type: python
+    path: %q
+    command: python3 upstream.py
+    url: http://localhost:%d
+    ports:
+      http: "${ORBIT_AUTO_PORT_E2E_UPSTREAM:-%d}"
+    health_check:
+      type: http
+      path: /health
+      port: ${ORBIT_AUTO_PORT_E2E_UPSTREAM:-%d}
+  downstream:
+    type: python
+    path: %q
+    command: python3 downstream.py
+    url: http://localhost:%d
+    ports:
+      http: "${ORBIT_AUTO_PORT_E2E_DOWNSTREAM:-%d}"
+    depends_on: [upstream]
+    health_check:
+      type: http
+      path: /health
+      port: ${ORBIT_AUTO_PORT_E2E_DOWNSTREAM:-%d}
+`, workspace, upstreamPreference, upstreamPreference, upstreamPreference,
+		workspace, downstreamPreference, downstreamPreference, downstreamPreference)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	namespace := "e2e-service-url-" + randHex(4)
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() {
+		_ = command("down").Run()
+		_ = command("daemon", "stop").Run()
+	})
+
+	upOutput, err := command("up", "--json").Output()
+	if err != nil {
+		t.Fatalf("up: %v\n%s", err, upOutput)
+	}
+	envelope := parseE2EEnvelope(t, string(upOutput))
+	if !envelope.OK {
+		t.Fatalf("up envelope = %+v\n%s", envelope, upOutput)
+	}
+	var upData struct {
+		Resources []struct {
+			Name  string         `json:"name"`
+			URL   string         `json:"url"`
+			Ports map[string]int `json:"ports"`
+		} `json:"resources"`
+	}
+	if err := json.Unmarshal(envelope.Data, &upData); err != nil {
+		t.Fatalf("parse up data: %v\n%s", err, upOutput)
+	}
+	resources := make(map[string]struct {
+		URL  string
+		Port int
+	})
+	for _, resource := range upData.Resources {
+		resources[resource.Name] = struct {
+			URL  string
+			Port int
+		}{URL: resource.URL, Port: resource.Ports["http"]}
+	}
+	upstream := resources["upstream"]
+	downstream := resources["downstream"]
+	if upstream.Port == upstreamPreference || downstream.Port == downstreamPreference {
+		t.Fatalf("occupied preferences were not moved: %+v", resources)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get(downstream.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var health struct {
+		OK          bool   `json:"ok"`
+		UpstreamURL string `json:"upstream_url"`
+	}
+	if err := json.Unmarshal(body, &health); err != nil {
+		t.Fatalf("parse downstream health: %v\n%s", err, body)
+	}
+	if !health.OK || health.UpstreamURL != upstream.URL {
+		t.Fatalf("downstream health = %+v, upstream runtime URL = %q", health, upstream.URL)
 	}
 }
 

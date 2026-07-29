@@ -19,8 +19,12 @@ func TestHandleServiceEnv_ReturnsEnvVars(t *testing.T) {
 		Services: map[string]*config.Service{
 			"api": {
 				Name:      "api",
-				DependsOn: []string{"redis"},
+				DependsOn: []string{"redis", "catalog-api"},
 				Env:       map[string]string{"APP_PORT": "3000"},
+			},
+			"catalog-api": {
+				Name: "catalog-api",
+				URL:  "http://localhost:3011",
 			},
 		},
 	}
@@ -67,6 +71,16 @@ func TestHandleServiceEnv_ReturnsEnvVars(t *testing.T) {
 	}
 	if connStr.Source != "dependency" {
 		t.Errorf("ConnectionStrings__redis source = %q, want %q", connStr.Source, "dependency")
+	}
+
+	catalogURL, ok := byKey["CATALOG_API_URL"]
+	if !ok {
+		t.Fatal("CATALOG_API_URL missing from env response")
+	}
+	if catalogURL.Value != "http://localhost:3011" ||
+		catalogURL.Source != "dependency" ||
+		catalogURL.Dependency != "catalog-api" {
+		t.Errorf("CATALOG_API_URL = %+v", catalogURL)
 	}
 }
 

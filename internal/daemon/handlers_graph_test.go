@@ -426,7 +426,7 @@ func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api":      {Name: "api", Kind: "backend"},
+			"api":      {Name: "api", Kind: "backend", URL: "http://localhost:3011"},
 		},
 	}
 	s := newTestServer(t, cfg)
@@ -440,6 +440,9 @@ func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
 	}
 	if edges[0].Topic != "" {
 		t.Errorf("Topic = %q, want empty for sync edge", edges[0].Topic)
+	}
+	if len(edges[0].EnvVars) != 1 || edges[0].EnvVars[0] != "API_URL" {
+		t.Errorf("EnvVars = %v, want API_URL", edges[0].EnvVars)
 	}
 }
 
