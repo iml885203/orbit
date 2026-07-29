@@ -39,31 +39,27 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 五分鐘上手
 
-直接用範例環境，驗證最短路徑：
+從任何目錄都能開始。Orbit 會下載並選取公開 demo environment；不需要先 clone
+這個 repository，也不需要自己建立 config：
 
 ```bash
-# 最快起手（不需要事先有自己的 env repo）
-orbit -c docs/examples/quickstart/dev.yaml up --infra
-orbit -c docs/examples/quickstart/dev.yaml status --json
-orbit -c docs/examples/quickstart/dev.yaml open
-```
-
-如果你要使用互動初始化建立自己的 workspace：
-
-```bash
-orbit init
+orbit init --yes
 orbit up
 orbit status
 orbit open
 ```
 
-首次驗證：
+`orbit init --yes` 會使用公開的
+[Orbit demo environment](https://github.com/iml885203/orbit-demo)：在 host 上執行
+Python 標準函式庫 service，搭配 container 內的 Redis。若缺少必要工具或 port
+無法使用，setup 會在啟動前停止，並直接顯示修復方式。
+
+需要更多細節時：
 
 ```bash
-orbit status           # service 狀態是否 Healthy
-orbit status --json     # 給自動化流程看的機器可讀輸出
-orbit doctor --json     # 依賴與環境診斷
-orbit logs web -f       # 若卡住先看 container log
+orbit doctor             # 說明尚未滿足的 setup 條件
+orbit logs demo-api -f   # 追蹤 demo application log
+orbit status --json      # 穩定的 machine-readable 狀態
 ```
 
 Windows PowerShell：
@@ -78,11 +74,12 @@ Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
 也能直接使用。Windows installer 會同時更新目前 PowerShell process 與 user
 PATH。
 
-預設設定會使用 [Orbit demo 環境](https://github.com/iml885203/orbit-demo)：
-在本機執行的 Python 標準函式庫 service，搭配 container 內的 Redis。
 `orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
-environment repository 或 project workspace。`mini-shop` 範例（`docs/examples/mini-shop/README.md`）
-提供 front-end + 多 backend + db/cache 的關聯示意。
+environment repository 或 project workspace。從 Orbit source checkout
+可以執行 [mini-shop demo](docs/examples/mini-shop/README.md)，查看
+`front-end + 多 backend + database/cache` 的完整範例。`docs/examples/`
+底下使用 repository-relative path 的命令是 contributor 範例，不屬於上方的
+安裝使用者路徑。
 Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
 environment 需要的工具，並在啟動前偵測未滿足的 Python
 `requirements.txt`。

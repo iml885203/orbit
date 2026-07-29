@@ -42,31 +42,28 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## First 5 minutes
 
-Choose an environment file and get to first signal in under a minute:
+Start from any directory. Orbit downloads and selects the public demo
+environment; you do not need to clone this repository or create a config file:
 
 ```bash
-# Quickest possible path (no local env repo needed)
-orbit -c docs/examples/quickstart/dev.yaml up --infra
-orbit -c docs/examples/quickstart/dev.yaml status --json
-orbit -c docs/examples/quickstart/dev.yaml open
-```
-
-If you want the interactive setup wizard with your own workspace:
-
-```bash
-orbit init
+orbit init --yes
 orbit up
 orbit status
 orbit open
 ```
 
-First-time checks:
+`orbit init --yes` uses the public
+[Orbit demo environment](https://github.com/iml885203/orbit-demo): a
+standard-library Python service on the host with Redis in a container. If a
+required tool or port is unavailable, setup stops before startup and prints
+the specific remedy.
+
+When you need more detail:
 
 ```bash
-orbit status           # are services Healthy?
-orbit status --json     # machine-readable result for scripting
-orbit doctor --json     # dependency and env diagnostics
-orbit logs web -f       # stream a container log if something stalls
+orbit doctor             # explain unmet setup requirements
+orbit logs demo-api -f   # stream the demo application log
+orbit status --json      # stable machine-readable state
 ```
 
 On Windows PowerShell:
@@ -84,12 +81,11 @@ current PowerShell process and the user PATH.
 Upgrade, rollback, uninstall, manual downloads, and testing unreleased `main`
 are documented in [Installation and development](docs/development.md).
 
-The default setup uses the
-[Orbit demo environment](https://github.com/iml885203/orbit-demo): a
-standard-library Python service running on the host with Redis in a container.
-
-For a more complete relation example (`frontend + multiple backend services + db/cache`), try
-[mini-shop demo](docs/examples/mini-shop/README.md): `docs/examples/mini-shop/dev.yaml`.
+From an Orbit source checkout, the
+[mini-shop demo](docs/examples/mini-shop/README.md) provides a larger
+`frontend + multiple backends + database/cache` example. Repository-relative
+commands under `docs/examples/` are contributor examples; they are not part of
+the installed-user path above.
 
 `orbit init` accepts those distribution defaults without asking about an
 environment repository or project workspace the demo does not use.

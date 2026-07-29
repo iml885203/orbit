@@ -31,3 +31,16 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         run: test -n "$ORBIT_PRIVATE_IDENTIFIERS_PATTERN"
       - run: make preflight
+
+  first-five-minutes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build installed-user binary
+        run: go build -o bin/orbit ./cmd/orbit
+      - name: Run README journey from an empty directory
+        run: ./scripts/test-first-five-minutes.sh

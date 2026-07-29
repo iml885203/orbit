@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-ui test-e2e test-install lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-ui test-e2e test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -58,6 +58,9 @@ test-install:
 	@./scripts/test-install.sh
 	@./scripts/test-uninstall.sh
 
+test-docs:
+	@ORBIT_DOCS_ONLY=1 ./scripts/test-first-five-minutes.sh
+
 lint: lint-filenames
 	golangci-lint run ./...
 
@@ -102,6 +105,7 @@ preflight:
 	go build ./...
 	go vet ./...
 	$(MAKE) test-install
+	$(MAKE) test-docs
 	$(MAKE) verify-types
 	$(MAKE) check-neutral
 	@echo "preflight OK - matches the CI gate"
