@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+
+	"github.com/iml885203/orbit/daemon"
 )
 
 // Sentinel kinds for CLI error classification. Wrap them via the New*Error
@@ -106,4 +108,11 @@ func NewInvalidEnvironmentError(msg string) error {
 
 func NewInvalidArgumentError(msg string) error {
 	return classifiedError{kind: ErrInvalidArgument, msg: msg}
+}
+
+func NewOrbitNotRunningError() error {
+	return classifiedError{
+		kind: daemon.ErrDaemonUnreachable,
+		msg:  "Orbit is not running. Run 'orbit up' to start the selected environment.",
+	}
 }

@@ -155,7 +155,7 @@ func (r *appendRenderer) commit(line string) {
 }
 
 func (r *appendRenderer) detach() {
-	_, _ = fmt.Fprintln(r.out, "Detached. Daemon is still running — use 'orbit status' to check progress.")
+	_, _ = fmt.Fprintln(r.out, "Startup continues in the background — use 'orbit status' to check progress.")
 }
 
 func (r *appendRenderer) finalize(success bool) {
@@ -210,7 +210,7 @@ func (r *liveRenderer) commit(line string) {
 func (r *liveRenderer) detach() {
 	// Leave the in-place region as-is; print goodbye on the next line.
 	_, _ = fmt.Fprintln(r.out)
-	_, _ = fmt.Fprintln(r.out, "Detached. Daemon is still running — use 'orbit status' to check progress.")
+	_, _ = fmt.Fprintln(r.out, "Startup continues in the background — use 'orbit status' to check progress.")
 }
 
 func (r *liveRenderer) finalize(success bool) {

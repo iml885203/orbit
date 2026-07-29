@@ -488,15 +488,6 @@ func TestLifecycleServicesDoneOrPastStillRejectsMissingService(t *testing.T) {
 	}
 }
 
-func TestDownNoDaemonErrorUsesJSONErrorPath(t *testing.T) {
-	if err := downNoDaemonError(true); !errors.Is(err, daemon.ErrDaemonUnreachable) {
-		t.Fatalf("downNoDaemonError(true) = %v, want daemon unreachable", err)
-	}
-	if err := downNoDaemonError(false); err != nil {
-		t.Fatalf("downNoDaemonError(false) = %v, want nil", err)
-	}
-}
-
 func TestLifecycleRestartObservedRejectsStaleHealthyWithUnchangedRestartCount(t *testing.T) {
 	prior := 2
 	status := &daemon.StatusResponse{

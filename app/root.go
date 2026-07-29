@@ -510,7 +510,7 @@ func upCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "up [resources...]",
 		Short: "Start resources (or all if no args)",
-		Long: `Start containers and services. The daemon auto-starts if not already running.
+		Long: `Start containers and host services. Orbit starts everything it needs automatically.
 
 Examples:
   orbit up                    # start everything (containers + services)
@@ -531,9 +531,9 @@ func downCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "down [resource]",
 		Short: "Stop one resource, or everything if omitted",
-		Long: `Stop one resource, or all containers and services when no resource is given.
+		Long: `Stop one resource, or all containers and host services when no resource is given.
 
-The daemon itself keeps running. Use 'orbit daemon stop' if you want to stop the daemon too.`,
+Orbit remains ready for the next 'orbit up'.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 {
@@ -634,10 +634,13 @@ func daemonCmd() *cobra.Command {
 func runDown(_ *cobra.Command, _ []string) error {
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if err := client.Health(); err != nil {
-		if err := downNoDaemonError(cli.JSONOutput); err != nil {
-			return err
+		if cli.JSONOutput {
+			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
+				Operation: "down",
+				Message:   downAlreadyStoppedMessage,
+			}), lifecycleDownSuccessActions())
 		}
-		fmt.Println("No daemon running.")
+		fmt.Println(downAlreadyStoppedMessage)
 		return nil
 	}
 
@@ -667,7 +670,7 @@ func runDown(_ *cobra.Command, _ []string) error {
 			Message:            downCompletionMessage,
 			RequestedResources: names,
 			FinalStatus:        finalStatus,
-		}), []cli.JSONAction{cli.StatusAction()})
+		}), lifecycleDownSuccessActions())
 	}
 
 	if _, err := client.Down(false); err != nil {
@@ -683,7 +686,7 @@ func runDown(_ *cobra.Command, _ []string) error {
 func runRestart(_ *cobra.Command, args []string) error {
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
-		return err
+		return cli.NewOrbitNotRunningError()
 	}
 
 	name := args[0]
@@ -730,7 +733,7 @@ func runRestart(_ *cobra.Command, args []string) error {
 func runStop(_ *cobra.Command, args []string) error {
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
-		return err
+		return cli.NewOrbitNotRunningError()
 	}
 
 	name := args[0]
@@ -764,17 +767,10 @@ func runStop(_ *cobra.Command, args []string) error {
 	return waitForServicesStopped(client, []string{name}, false)
 }
 
-func downNoDaemonError(json bool) error {
-	if json {
-		return daemon.ErrDaemonUnreachable
-	}
-	return nil
-}
-
 func runLogs(_ *cobra.Command, args []string) error {
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
-		return err
+		return cli.NewOrbitNotRunningError()
 	}
 
 	name := args[0]
@@ -909,7 +905,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
-		return err
+		return cli.NewOrbitNotRunningError()
 	}
 
 	name := args[0]

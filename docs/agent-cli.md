@@ -112,7 +112,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
-| `orbit down --json` | Returns final lifecycle result after stopping services. |
+| `orbit down --json` | Returns final lifecycle result after stopping resources. It is a successful no-op with empty arrays when Orbit is already stopped, and recommends only the next normal `orbit up`. |
 | `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |

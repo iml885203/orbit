@@ -11,6 +11,7 @@ import (
 )
 
 const downCompletionMessage = "Environment stopped. Orbit is ready for the next 'orbit up'."
+const downAlreadyStoppedMessage = "Environment is already stopped. Orbit is ready for the next 'orbit up'."
 
 type lifecycleJSONOptions struct {
 	Operation          string
@@ -92,6 +93,14 @@ func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
 		}
 	}
 	return actions
+}
+
+func lifecycleDownSuccessActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     "orbit up --json",
+		Reason:      "Start the environment when you are ready.",
+		Destructive: false,
+	}}
 }
 
 func lifecycleUpSuccessActions(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {

@@ -65,7 +65,10 @@ trap cleanup EXIT
 "$orbit_bin" version --json >"$test_root/version.json"
 "$orbit_bin" env --help >"$test_root/env-help.txt"
 "$orbit_bin" logs --help >"$test_root/logs-help.txt"
+"$orbit_bin" open --help >"$test_root/open-help.txt"
 "$orbit_bin" switch --help >"$test_root/switch-help.txt"
+"$orbit_bin" up --help >"$test_root/up-help.txt"
+"$orbit_bin" down --help >"$test_root/down-help.txt"
 for command in doctor down env init logs open restart status switch uninstall up update version; do
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
 done
@@ -80,10 +83,12 @@ for command in list sync; do
 done
 grep -F -- "--tail" "$test_root/logs-help.txt" >/dev/null
 grep -F "orbit up" "$test_root/switch-help.txt" >/dev/null
-if grep -i "daemon" "$test_root/switch-help.txt" >/dev/null; then
-  echo "switch help exposes daemon implementation details." >&2
-  exit 1
-fi
+for help_file in open switch up down; do
+  if grep -i "daemon" "$test_root/$help_file-help.txt" >/dev/null; then
+    echo "$help_file help exposes daemon implementation details." >&2
+    exit 1
+  fi
+done
 
 missing_runtime_root="$test_root/missing-runtime"
 mkdir -p "$missing_runtime_root/bin" "$missing_runtime_root/project/envs"
@@ -356,6 +361,32 @@ import sys
 
 resources = json.load(open(sys.argv[1], encoding="utf-8"))["data"]["resources"]
 assert all(resource["state"] == "healthy" for resource in resources)
+PY
+
+"$orbit_bin" down --json >"$test_root/down.json"
+"$orbit_bin" daemon stop --json >"$test_root/control-stop.json"
+"$orbit_bin" down --json >"$test_root/down-again.json"
+python3 - "$test_root/down.json" "$test_root/down-again.json" <<'PY'
+import json
+import sys
+
+down = json.load(open(sys.argv[1], encoding="utf-8"))
+again = json.load(open(sys.argv[2], encoding="utf-8"))
+assert down["ok"] is True
+assert again["ok"] is True
+assert again["data"] == {
+    "operation": "down",
+    "message": "Environment is already stopped. Orbit is ready for the next 'orbit up'.",
+    "requested_resources": [],
+    "resources": [],
+    "degraded_resources": [],
+    "timed_out_resources": [],
+}
+assert again["recommended_actions"] == [{
+    "command": "orbit up --json",
+    "reason": "Start the environment when you are ready.",
+    "destructive": False,
+}]
 PY
 
 echo "README first five minutes completes a linked checkout and reports runtime dependency failures truthfully"

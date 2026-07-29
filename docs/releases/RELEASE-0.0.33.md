@@ -28,6 +28,10 @@ than a moving default branch.
   invoked, reconnect a running environment, and restore its running resources
   automatically; the normal path no longer asks users to understand daemon
   lifecycle or run `orbit up` again.
+- Daily `up`, `down`, `open`, and background-start messages no longer expose
+  the internal control process. Repeating `down` after Orbit has already
+  stopped is a successful human/JSON no-op that points only to the next normal
+  `orbit up`.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.

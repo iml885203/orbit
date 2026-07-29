@@ -105,10 +105,10 @@ func classify(err error) JSONError {
 	if errors.Is(err, daemon.ErrDaemonUnreachable) {
 		return JSONError{
 			Code:        "daemon_unreachable",
-			Message:     msg,
-			Hint:        "Start Orbit with 'orbit up' or inspect daemon state with 'orbit daemon status --json'.",
+			Message:     "Orbit is not running.",
+			Hint:        "Run 'orbit up' to start the selected environment.",
 			Retryable:   true,
-			NextCommand: "orbit status --json",
+			NextCommand: "orbit up --json",
 		}
 	}
 	var portConflict *daemon.PortConflictError

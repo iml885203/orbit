@@ -13,7 +13,7 @@ import (
 func runDashboard() error {
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if err := client.Health(); err != nil {
-		return fmt.Errorf("no daemon running — start with 'orbit up' or 'orbit daemon start'")
+		return cli.NewOrbitNotRunningError()
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", daemon.DashboardPort())

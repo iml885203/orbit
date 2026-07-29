@@ -64,7 +64,13 @@ func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 	if !got.Error.Retryable {
 		t.Fatal("retryable = false, want true")
 	}
-	if got.Error.NextCommand != "orbit status --json" {
+	if got.Error.Message != "Orbit is not running." {
+		t.Fatalf("message = %q", got.Error.Message)
+	}
+	if got.Error.Hint != "Run 'orbit up' to start the selected environment." {
+		t.Fatalf("hint = %q", got.Error.Hint)
+	}
+	if got.Error.NextCommand != "orbit up --json" {
 		t.Fatalf("next_command = %q", got.Error.NextCommand)
 	}
 }
