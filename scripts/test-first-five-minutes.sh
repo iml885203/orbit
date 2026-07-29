@@ -6,6 +6,15 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 
 for readme in README.md README.zh-TW.md; do
+  install_line="$(grep -n '^curl -fsSL .*scripts/install.sh' "$repo_root/$readme" | cut -d: -f1)"
+  for requirement in Git Docker "Python 3"; do
+    requirement_line="$(grep -n -m1 "\\[$requirement\\]" "$repo_root/$readme" | cut -d: -f1)"
+    if [ -z "$requirement_line" ] || [ "$requirement_line" -ge "$install_line" ]; then
+      echo "$readme must name $requirement before the install command." >&2
+      exit 1
+    fi
+  done
+
   first_run_section="$(
     awk '
       /^## (First 5 minutes|五分鐘上手)$/ { capture = 1; next }
@@ -51,6 +60,42 @@ cleanup() {
   rm -rf "$test_root"
 }
 trap cleanup EXIT
+
+missing_runtime_root="$test_root/missing-runtime"
+mkdir -p "$missing_runtime_root/bin" "$missing_runtime_root/project/envs"
+ln -s "$(command -v git)" "$missing_runtime_root/bin/git"
+ln -s "$(command -v docker)" "$missing_runtime_root/bin/docker"
+cat >"$missing_runtime_root/project/envs/quickstart.yaml" <<'YAML'
+version: "2"
+services:
+  demo:
+    type: python
+    path: .
+    command: python3 -m http.server 28080
+YAML
+set +e
+(
+  cd "$missing_runtime_root/project"
+  PATH="$missing_runtime_root/bin" \
+    ORBIT_HOME="$missing_runtime_root/home" \
+    "$orbit_bin" init --yes
+) >"$missing_runtime_root/init.out" 2>&1
+missing_runtime_status=$?
+set -e
+if [ "$missing_runtime_status" -eq 0 ]; then
+  echo "orbit init accepted an environment whose required Python runtime was missing." >&2
+  exit 1
+fi
+for expected in \
+  "Setup saved — one prerequisite remains" \
+  "Next: Install Python 3:" \
+  "Then: orbit up"; do
+  if ! grep -F "$expected" "$missing_runtime_root/init.out" >/dev/null; then
+    echo "missing-runtime init did not explain the next useful step: $expected" >&2
+    cat "$missing_runtime_root/init.out" >&2
+    exit 1
+  fi
+done
 
 mkdir -p "$test_root/empty-directory"
 cd "$test_root/empty-directory"

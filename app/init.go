@@ -44,6 +44,7 @@ type initCompletion struct {
 	Heading      string
 	Detail       string
 	HumanCommand string
+	FollowUp     string
 	JSONCommand  string
 	Reason       string
 	Ready        bool
@@ -375,7 +376,14 @@ func finishInit(output initPrinter, result initResult, syncFailure error) error 
 		output.faintln("  " + completion.Detail)
 	}
 	if completion.HumanCommand != "" {
-		output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
+		if completion.Reason == "" || completion.FollowUp != "" {
+			output.faintln("  Next: " + completion.HumanCommand)
+		} else {
+			output.faintln(fmt.Sprintf("  Next: %-16s %s", completion.HumanCommand, completion.Reason))
+		}
+	}
+	if completion.FollowUp != "" {
+		output.faintln("  Then: " + completion.FollowUp)
 	}
 
 	if cli.JSONOutput {
@@ -466,6 +474,16 @@ func buildInitCompletion(result initResult, syncFailure error) initCompletion {
 				Detail:  "Set the path variable or update the service path shown above.",
 			}
 		}
+		if check, ok := initExternalPrerequisite(result); ok {
+			return initCompletion{
+				Heading:      "Setup saved — one prerequisite remains",
+				Detail:       check.Message,
+				HumanCommand: check.Hint,
+				FollowUp:     "orbit up",
+				JSONCommand:  "orbit doctor --json",
+				Reason:       "Verify the selected environment after installing the missing prerequisite.",
+			}
+		}
 		return initCompletion{
 			Heading:      "Setup saved, but prerequisites are missing",
 			Detail:       "Resolve the failed checks above before starting the environment.",
@@ -501,6 +519,19 @@ func initHasWorkingDirectoryFailure(result initResult) bool {
 		}
 	}
 	return false
+}
+
+func initExternalPrerequisite(result initResult) (daemon.DoctorCheck, bool) {
+	var failed []daemon.DoctorCheck
+	for _, check := range result.Checks {
+		if check.Status == daemon.CheckFail && check.Name != "Daemon" {
+			failed = append(failed, check)
+		}
+	}
+	if len(failed) != 1 || failed[0].Hint == "" || strings.HasPrefix(failed[0].Hint, "run: ") {
+		return daemon.DoctorCheck{}, false
+	}
+	return failed[0], true
 }
 
 // detectWorkspaceRoot tries to find the workspace root automatically.

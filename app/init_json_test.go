@@ -289,10 +289,18 @@ func TestInitCompletionNeverClaimsIncompleteSetupSucceeded(t *testing.T) {
 			wantCommand: "orbit init",
 		},
 		{
-			name:        "required tool missing",
-			result:      initResult{ActiveEnv: "dev.yaml"},
-			wantHeading: "Setup saved, but prerequisites are missing",
-			wantCommand: "orbit doctor",
+			name: "required tool missing",
+			result: initResult{
+				ActiveEnv: "dev.yaml",
+				Checks: []daemon.DoctorCheck{{
+					Name:    "Python",
+					Status:  daemon.CheckFail,
+					Message: "python3 not found on PATH (required by api)",
+					Hint:    "Install Python 3: https://www.python.org/downloads/",
+				}},
+			},
+			wantHeading: "Setup saved — one prerequisite remains",
+			wantCommand: "Install Python 3: https://www.python.org/downloads/",
 		},
 		{
 			name:        "ready",
@@ -314,6 +322,41 @@ func TestInitCompletionNeverClaimsIncompleteSetupSucceeded(t *testing.T) {
 			if got.Ready != test.wantReady {
 				t.Errorf("ready = %v, want %v", got.Ready, test.wantReady)
 			}
+			if test.name == "required tool missing" && got.FollowUp != "orbit up" {
+				t.Errorf("follow-up = %q, want orbit up", got.FollowUp)
+			}
 		})
+	}
+}
+
+func TestInitCompletionDoesNotHideMultiplePrerequisitesBehindOneHint(t *testing.T) {
+	result := initResult{
+		ActiveEnv: "dev.yaml",
+		Checks: []daemon.DoctorCheck{
+			{Name: "Python", Status: daemon.CheckFail, Hint: "Install Python 3"},
+			{Name: "Docker", Status: daemon.CheckFail, Hint: "Start Docker"},
+		},
+	}
+	got := buildInitCompletion(result, nil)
+	if got.Heading != "Setup saved, but prerequisites are missing" {
+		t.Fatalf("heading = %q", got.Heading)
+	}
+	if got.HumanCommand != "orbit doctor" || got.FollowUp != "" {
+		t.Fatalf("completion = %+v, want doctor without an assumptive follow-up", got)
+	}
+}
+
+func TestInitMissingExternalPrerequisiteKeepsJSONRecoveryExecutable(t *testing.T) {
+	result := initResult{
+		ActiveEnv: "dev.yaml",
+		Checks: []daemon.DoctorCheck{{
+			Name:   "Python",
+			Status: daemon.CheckFail,
+			Hint:   "Install Python 3: https://www.python.org/downloads/",
+		}},
+	}
+	actions := initRecommendedActions(result)
+	if len(actions) != 1 || actions[0].Command != "orbit doctor --json" {
+		t.Fatalf("actions = %+v", actions)
 	}
 }

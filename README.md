@@ -35,6 +35,16 @@ See [Why Orbit](docs/why-orbit.md) for design trade-offs and comparisons.
 The installer below installs the latest published preview release, not an
 unreleased build from `main`.
 
+The public demo requires:
+
+- [Git](https://git-scm.com/downloads) to sync its environment;
+- [Docker](https://docs.docker.com/get-docker/) for Redis; and
+- [Python 3](https://www.python.org/downloads/) for its host-side services.
+
+Orbit installs only its own CLI. It detects project runtimes from the selected
+environment and gives the specific remedy before starting anything; it never
+installs or changes a project's toolchain implicitly.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"

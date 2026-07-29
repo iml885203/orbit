@@ -32,6 +32,15 @@ daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CL
 以下 installer 會安裝最新發布的 preview release，不是尚未發布的 `main`
 build。
 
+公開 demo 需要：
+
+- [Git](https://git-scm.com/downloads) 同步 environment；
+- [Docker](https://docs.docker.com/get-docker/) 執行 Redis；以及
+- [Python 3](https://www.python.org/downloads/) 執行 host-side services。
+
+Orbit 只安裝自己的 CLI。它會從選定的 environment 偵測 project runtimes，
+並在啟動任何東西前提供明確修復方式；不會暗中安裝或更換 project toolchain。
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
