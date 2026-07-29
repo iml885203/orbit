@@ -12,6 +12,25 @@ Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
   已有文件與測試，並已準備好提供外部使用者使用。
 - Release tag 不可修改；修正必須發布成新版本。
 
+## Preview 批次原則
+
+`main` 上的 commit 都是尚未發布的工作，可以累積多個彼此相關的修正。只有當
+整個批次交付一個完整、能以 installed-user journey 描述並驗證的使用者成果時，
+才切出 preview。單一 commit 通過測試或只修好一個 edge case，本身不構成發布
+邊界。
+
+Preview batch 依照下列順序 freeze：
+
+1. 完成相關 implementation，以及實務上最強的 journey 驗證。
+2. 一次 review 相較於前一版的完整使用者差異。
+3. 決定下一個版本，並一起更新 Orbit、兩份 plugin manifest、release notes
+   與配對的 demo tag。
+4. 執行 candidate 與 platform gates，再手動 approve 發布。
+
+這讓每個 release 都有足夠內容可供 review，同時避免每個 implementation commit
+都變成一個版本。Release notes 先描述整個 batch 的使用者成果，個別修正則作為
+支援細節。
+
 1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：
 
 - PATCH：向後相容的修正；

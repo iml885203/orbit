@@ -13,6 +13,25 @@ Orbit and the bundled `plugins/orbit-agent` plugin use the same
   users.
 - Release tags are immutable. Fixes are published as a new version.
 
+## Preview batching
+
+Commits on `main` are unreleased work and may accumulate across several related
+fixes. A preview is cut only when the batch delivers one coherent user outcome
+that can be stated and verified as an installed-user journey. A passing commit
+or one corrected edge case is not, by itself, a release boundary.
+
+Freeze a preview batch in this order:
+
+1. Complete the related implementation and its strongest practical journey.
+2. Review the combined user-visible difference from the previous release.
+3. Choose the next version and update Orbit, both plugin manifests, release
+   notes, and the paired demo tag together.
+4. Run the candidate and platform gates, then manually approve publication.
+
+This keeps releases useful for review without turning every implementation
+commit into a version. Release notes describe the batch's user outcome first;
+individual fixes are supporting details.
+
 Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 
 - PATCH releases contain backward-compatible fixes.
