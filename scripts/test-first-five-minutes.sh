@@ -14,7 +14,7 @@ for readme in README.md README.zh-TW.md; do
     ' "$repo_root/$readme"
   )"
 
-  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-api"; do
+  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-shop"; do
     if ! grep -Fx "$command" <<<"$first_run_section" >/dev/null; then
       echo "$readme first-run section is missing: $command" >&2
       exit 1
@@ -60,7 +60,7 @@ import socket
 import time
 
 listeners = []
-for port in (26379, 28080):
+for port in (26379, 28080, 28101, 28102, 28103):
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", port))
@@ -95,7 +95,7 @@ mkdir -p "$browser_stub_dir"
 printf '#!/bin/sh\nexit 0\n' >"$browser_stub_dir/open"
 cp "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
 chmod +x "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
-PATH="$browser_stub_dir:$PATH" "$orbit_bin" open demo-api --json >"$test_root/open-service.json"
+PATH="$browser_stub_dir:$PATH" "$orbit_bin" open demo-shop --json >"$test_root/open-service.json"
 PATH="$browser_stub_dir:$PATH" "$orbit_bin" open --json >"$test_root/open-dashboard.json"
 demo_url="$(
   python3 -c '
@@ -104,17 +104,28 @@ import sys
 
 payload = json.load(open(sys.argv[1], encoding="utf-8"))["data"]
 resources = {resource["name"]: resource for resource in payload["resources"]}
+assert set(resources) == {
+    "demo-shop",
+    "shop-catalog-api",
+    "shop-inventory-api",
+    "shop-order-api",
+    "redis",
+}
 assert resources["redis"]["ports"]["redis"] != 26379
-assert resources["demo-api"]["ports"]["http"] != 28080
-print(resources["demo-api"]["url"])
+assert resources["demo-shop"]["ports"]["http"] != 28080
+assert resources["shop-catalog-api"]["ports"]["http"] != 28101
+assert resources["shop-inventory-api"]["ports"]["http"] != 28102
+assert resources["shop-order-api"]["ports"]["http"] != 28103
+assert all(resource["state"] == "healthy" for resource in resources.values())
+print(resources["demo-shop"]["url"])
 ' "$test_root/status.json"
 )"
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
-curl --fail --silent --show-error \
-  "${demo_url%/}/api/visits" >"$test_root/visits-first.json"
-curl --fail --silent --show-error \
-  "${demo_url%/}/api/visits" >"$test_root/visits-second.json"
+
+PATH="$(dirname "$orbit_bin"):$PATH" \
+  python3 "$ORBIT_HOME/envs/seeds/mini-shop/smoke.py" \
+  >"$test_root/mini-shop-smoke.txt"
 
 python3 - "$test_root" "$demo_url" <<'PY'
 import json
@@ -132,27 +143,25 @@ status = read("status.json")
 health = read("health.json")
 service = read("open-service.json")
 dashboard = read("open-dashboard.json")
-first = read("visits-first.json")
-second = read("visits-second.json")
 
 assert up["ok"] is True
 assert status["ok"] is True
 assert health["ok"] is True
 assert up["recommended_actions"] == [{
-    "command": "orbit open demo-api --json",
-    "reason": f"Open demo-api at {demo_url}.",
+    "command": "orbit open demo-shop --json",
+    "reason": f"Open demo-shop at {demo_url}.",
     "destructive": False,
 }]
-assert status["recommended_actions"][0]["command"] == "orbit open demo-api --json"
+assert status["recommended_actions"][0]["command"] == "orbit open demo-shop --json"
 assert service["data"] == {
     "url": demo_url,
     "target": "service",
-    "service": "demo-api",
+    "service": "demo-shop",
     "opened": True,
 }
 assert dashboard["data"]["target"] == "dashboard"
 assert dashboard["data"]["url"] != demo_url
-assert second["visits"] == first["visits"] + 1
 PY
 
-echo "README first five minutes reaches the service value before the dashboard"
+grep -F "failure and compensation preserved stock" "$test_root/mini-shop-smoke.txt"
+echo "README first five minutes completes a linked checkout before the dashboard"

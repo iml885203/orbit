@@ -46,24 +46,27 @@ export PATH="$HOME/.local/bin:$PATH"
 orbit init --yes
 orbit up
 orbit status
-orbit open demo-api
+orbit open demo-shop
 ```
 
 `orbit init --yes` 會使用公開的
-[Orbit demo environment](https://github.com/iml885203/orbit-demo)：在 host 上執行
-Python 標準函式庫 service，搭配 container 內的 Redis。若缺少必要工具或 port
-無法使用，setup 會在啟動前停止，並直接顯示修復方式。
+[Orbit demo environment](https://github.com/iml885203/orbit-demo)：包含 storefront、
+三個使用 Python 標準函式庫的 API 與各自的 SQLite database，以及 container 內
+的 Redis。若缺少必要工具，setup 會在啟動前停止並直接顯示修復方式；若預設
+port 已被占用，Orbit 會為整張 dependency graph 自動選擇可用 port。
 
-重新整理 demo 頁面，Redis 保存的瀏覽次數會繼續增加。這是第一個直接證據：
-Orbit 已協調 host process 與 container infrastructure，並注入實際 runtime
-連線資訊。看完這個結果後，再執行 `orbit open`，即可從 dashboard 檢視與控制
-同一套環境。
+選擇 **Run checkout**，頁面會顯示同一個 request 如何穿過 catalog、
+inventory、Redis 與 orders，並保留 product、reservation、order 的關聯。
+**Try 99 items** 則證明失敗時不會建立 order，也不會改變庫存。這不只是證明
+五個 processes 能啟動，而是直接展示 Orbit 協調一套有用的混合 runtime
+application。完成後再執行 `orbit open`，即可從 dashboard 檢視與控制同一套
+環境。
 
 需要更多細節時：
 
 ```bash
 orbit doctor             # 說明尚未滿足的 setup 條件
-orbit logs demo-api -f   # 追蹤 demo application log
+orbit logs shop-order-api -f # 追蹤 checkout path
 orbit status --json      # 穩定的 machine-readable 狀態
 ```
 
@@ -74,7 +77,7 @@ irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 |
 orbit init --yes
 orbit up
 orbit status
-orbit open demo-api
+orbit open demo-shop
 ```
 
 Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
@@ -84,10 +87,9 @@ PATH。
 
 `orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
 environment repository 或 project workspace。從 Orbit source checkout
-可以執行 [mini-shop demo](docs/examples/mini-shop/README.md)，查看
-`front-end + 多 backend + database/cache` 的完整範例。`docs/examples/`
-底下使用 repository-relative path 的命令是 contributor 範例，不屬於上方的
-安裝使用者路徑。
+還可以執行[擴充版 mini-shop](docs/examples/mini-shop/README.md)，查看供
+contributors 使用的八 API 版本。`docs/examples/` 底下使用
+repository-relative path 的命令不屬於上方的安裝使用者路徑。
 Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
 environment 需要的工具，並在啟動前偵測未滿足的 Python
 `requirements.txt`。
@@ -105,7 +107,7 @@ macOS 與 Linux 為正式支援平台；Windows build 為 Beta。詳情請見
 ```bash
 orbit up                     # 啟動 services 與 dependencies
 orbit status --json          # 取得穩定的 machine-readable 狀態
-orbit logs demo-api -f       # 追蹤預設 demo service
+orbit logs shop-order-api -f # 追蹤預設 checkout path
 orbit env sync --json        # 更新共享 environment files
 orbit switch quickstart      # 選擇預設 demo environment
 orbit doctor --json          # 診斷本機設定
@@ -116,7 +118,7 @@ orbit down                   # 停止環境
 services 時，才使用 `orbit up --infra`。需要縮小啟動範圍時，請選擇指定
 resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
 
-使用團隊自己的 environment 時，請把 `demo-api` 與 `quickstart` 換成
+使用團隊自己的 environment 時，請把 `demo-shop` 與 `quickstart` 換成
 `orbit status` 和 `orbit env list` 顯示的名稱。切換後，Orbit 會在
 `orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的
 project packages。

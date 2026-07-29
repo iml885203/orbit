@@ -49,25 +49,28 @@ environment; you do not need to clone this repository or create a config file:
 orbit init --yes
 orbit up
 orbit status
-orbit open demo-api
+orbit open demo-shop
 ```
 
 `orbit init --yes` uses the public
-[Orbit demo environment](https://github.com/iml885203/orbit-demo): a
-standard-library Python service on the host with Redis in a container. If a
-required tool or port is unavailable, setup stops before startup and prints
-the specific remedy.
+[Orbit demo environment](https://github.com/iml885203/orbit-demo): a storefront,
+three standard-library Python APIs and their SQLite databases on the host, plus
+Redis in a container. If a required tool is unavailable, setup stops before
+startup and prints the specific remedy. Occupied preferred ports are replaced
+automatically across the dependency graph.
 
-Refresh the demo page to see its Redis-backed visit count increase. That is the
-first proof that Orbit coordinated a host process with container
-infrastructure and injected the runtime connection details. Afterward, run
+Choose **Run checkout**. The page shows one request cross catalog, inventory,
+Redis, and orders while preserving the links between product, reservation, and
+order. **Try 99 items** proves the failure path commits no order and leaves
+stock unchanged. This is direct evidence that Orbit coordinated a useful mixed
+runtime application—not only that five processes started. Afterward, run
 `orbit open` to inspect and control the same environment in the dashboard.
 
 When you need more detail:
 
 ```bash
 orbit doctor             # explain unmet setup requirements
-orbit logs demo-api -f   # stream the demo application log
+orbit logs shop-order-api -f # stream the checkout path
 orbit status --json      # stable machine-readable state
 ```
 
@@ -78,7 +81,7 @@ irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 |
 orbit init --yes
 orbit up
 orbit status
-orbit open demo-api
+orbit open demo-shop
 ```
 
 The Unix export makes the newly installed command available immediately when
@@ -89,11 +92,10 @@ current PowerShell process and the user PATH.
 Upgrade, rollback, uninstall, manual downloads, and testing unreleased `main`
 are documented in [Installation and development](docs/development.md).
 
-From an Orbit source checkout, the
-[mini-shop demo](docs/examples/mini-shop/README.md) provides a larger
-`frontend + multiple backends + database/cache` example. Repository-relative
-commands under `docs/examples/` are contributor examples; they are not part of
-the installed-user path above.
+From an Orbit source checkout,
+[the extended mini-shop](docs/examples/mini-shop/README.md) provides a larger
+eight-API variant for contributors. Repository-relative commands under
+`docs/examples/` are not part of the installed-user path above.
 
 `orbit init` accepts those distribution defaults without asking about an
 environment repository or project workspace the demo does not use.
@@ -111,7 +113,7 @@ macOS and Linux are supported. Windows builds are Beta; see
 ```bash
 orbit up                     # start services and their dependencies
 orbit status --json          # inspect stable machine-readable state
-orbit logs demo-api -f       # stream the default demo service
+orbit logs shop-order-api -f # stream the default checkout path
 orbit env sync               # refresh and apply shared environment files
 orbit switch quickstart      # select the default demo environment
 orbit doctor --json          # diagnose the local setup
@@ -123,7 +125,7 @@ intentionally want containers without host services. To narrow startup, choose
 either resource names or one or more `--group` flags; Orbit rejects combinations
 instead of silently ignoring part of the command.
 
-For a team environment, replace `demo-api` and `quickstart` with names shown by
+For a team environment, replace `demo-shop` and `quickstart` with names shown by
 `orbit status` and `orbit env list`. After a switch, Orbit reports any runtime
 version or project-package setup required before `orbit up`, using the
 project's version files when present.
