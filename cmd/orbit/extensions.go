@@ -34,7 +34,7 @@ func Extensions() []extension.Extension {
 		},
 		Distribution: &extension.Distribution{
 			EnvRepoURL: "https://github.com/iml885203/orbit-demo.git",
-			EnvRepoRef: "v0.0.41",
+			EnvRepoRef: "v0.0.42",
 			InstallURL: "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
 			DefaultEnv: "quickstart.yaml",
 		},
