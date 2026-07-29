@@ -235,8 +235,17 @@ up_env() {
     group_name="mini-shop-advanced"
   fi
 
-  (cd "$ROOT_DIR" && orbit -c "docs/examples/mini-shop/$config_file" up -g "$group_name") >/tmp/mini-shop-p1-orbit-up.log 2>&1 || {
-    fail "orbit up 失敗，請查看 /tmp/mini-shop-p1-orbit-up.log"
+  local up_cmd=(orbit -c "docs/examples/mini-shop/$config_file" up --group "$group_name")
+  (cd "$ROOT_DIR" && "${up_cmd[@]}") >/tmp/mini-shop-p1-orbit-up.log 2>&1 || {
+    echo "[mini-shop-p1-smoke][FAIL] orbit up 失敗，command:"
+    printf '  %q ' "${up_cmd[@]}"
+    printf '\n'
+    echo "[mini-shop-p1-smoke][FAIL] 詳細錯誤輸出："
+    cat /tmp/mini-shop-p1-orbit-up.log
+    echo "[mini-shop-p1-smoke] 建議下一步："
+    echo "  1) 檢查衝突服務：orbit -c docs/examples/mini-shop/$config_file status --json --group $group_name"
+    echo "  2) 需要清空環境時：orbit -c docs/examples/mini-shop/$config_file down --group $group_name"
+    fail "請先用上述命令排查，修正後再重跑。"
   }
 }
 
@@ -245,7 +254,7 @@ down_env() {
   local group_name="$2"
 
   log "關閉 $config_file 群組：$group_name（避免與下一個套件端口衝突）"
-  (cd "$ROOT_DIR" && orbit -c "docs/examples/mini-shop/$config_file" down -g "$group_name") >/tmp/mini-shop-p1-orbit-down.log 2>&1 || {
+  (cd "$ROOT_DIR" && orbit -c "docs/examples/mini-shop/$config_file" down --group "$group_name") >/tmp/mini-shop-p1-orbit-down.log 2>&1 || {
     log "orbit down 失敗（略過），請手動檢查 /tmp/mini-shop-p1-orbit-down.log"
   }
 }

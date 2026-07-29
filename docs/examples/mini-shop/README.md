@@ -40,7 +40,7 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 進階版本（加入觀測服務）可改用：
 
 ```bash
-orbit -c docs/examples/mini-shop/dev-advanced.yaml up -g mini-shop-advanced
+orbit -c docs/examples/mini-shop/dev-advanced.yaml up --group mini-shop-advanced
 ```
 
 ```bash
@@ -336,7 +336,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 如果你想驗證「進階觀測值」是否正常，可以在 mini-shop-advanced 下加一段：
 
 ```bash
-orbit -c docs/examples/mini-shop/dev-advanced.yaml up -g mini-shop-advanced
+orbit -c docs/examples/mini-shop/dev-advanced.yaml up --group mini-shop-advanced
 orbit -c docs/examples/mini-shop/dev-advanced.yaml logs observability-api -f
 ```
 
@@ -355,7 +355,7 @@ curl http://127.0.0.1:3010/events
 
 ### 近期釋出摘要（內部 review 用）
 
-- 本次可交付差異請直接看：[`RELEASE-0.5.37.md`](./RELEASE-0.5.37.md)
+- 本次可交付差異請直接看：[`RELEASE-0.5.38.md`](./RELEASE-0.5.38.md)
 - [ ] 至少完成一筆 `mock_card` 成功 checkout
 - [ ] 訂單有對應出貨，且前端顯示「關聯完整性快檢查」為綠色
 - [ ] 「故障情境對照卡」能在情境 B / C 下提供可執行建議（可複製命令或一鍵動作）
