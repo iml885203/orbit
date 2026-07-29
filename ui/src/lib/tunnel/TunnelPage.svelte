@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { fetchTunnels, type TunnelView } from './api'
+  import { devStore, tunnelHidden } from '$lib/devdb/stores.svelte'
   import TunnelClaimForm from './TunnelClaimForm.svelte'
   import TunnelPipeline from './TunnelPipeline.svelte'
   import GlobalClaims from './GlobalClaims.svelte'
@@ -8,6 +8,9 @@
   let tunnels = $state<TunnelView[]>([])
   let gateway = $state('')
   let loaded = $state(false)
+  const availability = $derived(
+    devStore.devMeta === null ? 'loading' : tunnelHidden() ? 'unavailable' : 'available',
+  )
 
   const healthy = $derived(tunnels.filter(t => t.status === 'healthy').length)
   const pending = $derived(
@@ -26,8 +29,9 @@
     loaded = true
   }
 
-  onMount(() => {
-    refresh()
+  $effect(() => {
+    if (availability !== 'available') return
+    void refresh()
     // No SSE topic for tunnels; poll. Tunnels are few and the page is desktop-only,
     // so a 2s cadence is cheap and keeps the status/proxyPort fresh through reconnects.
     const id = setInterval(refresh, 2000)
@@ -35,6 +39,14 @@
   })
 </script>
 
+{#if availability === 'unavailable'}
+  <div class="page-notice" role="status">
+    <strong>Tunnel workflow is not available.</strong>
+    <p>The active environment has no callback tunnel configuration.</p>
+  </div>
+{:else if availability === 'loading'}
+  <div class="page-notice" role="status" aria-busy="true">Loading…</div>
+{:else}
 <div class="tunnel-page">
   <header class="head">
     <h2 class="page-title">Tunnels</h2>
@@ -78,8 +90,19 @@
     <GlobalClaims />
   {/if}
 </div>
+{/if}
 
 <style>
+  .page-notice {
+    margin: var(--space-6) auto;
+    max-width: 480px;
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  .page-notice p { margin-bottom: 0; }
   .tunnel-page {
     /* Plain content flow — the app shell's <main> owns scrolling/sizing
        (mirrors HealthCheckPage). Don't set flex/height/overflow here or the

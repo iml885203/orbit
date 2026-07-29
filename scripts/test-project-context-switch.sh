@@ -96,6 +96,13 @@ grep -F "project-b" "$test_root/page-b.html" >/dev/null
 "$orbit_bin" doctor --json >"$test_root/doctor-b-after.json"
 "$orbit_bin" logs app-b --json >"$test_root/logs-b-after.json"
 "$orbit_bin" logs app-b >"$test_root/logs-b-after.txt"
+"$orbit_bin" restart app-b --json >"$test_root/restart-b-after.json"
+"$orbit_bin" down app-b --json >"$test_root/stop-b-after.json"
+if "$orbit_bin" open app-b --json >"$test_root/open-stopped-b.json"; then
+  echo "orbit open unexpectedly opened a stopped resource." >&2
+  exit 1
+fi
+"$orbit_bin" up app-b --json >"$test_root/restore-b-after.json"
 
 python3 - "$test_root" <<'PY'
 import json
@@ -116,6 +123,10 @@ after = read("status-b-after.json")
 inspect_after = read("inspect-b-after.json")
 doctor_after = read("doctor-b-after.json")
 logs_after = read("logs-b-after.json")
+restart_after = read("restart-b-after.json")
+stop_after = read("stop-b-after.json")
+open_stopped = read("open-stopped-b.json")
+restore_after = read("restore-b-after.json")
 
 assert before["ok"] is True
 environment = before["data"]["environment"]
@@ -177,6 +188,24 @@ assert doctor_after.get("recommended_actions", []) == []
 assert logs_after["ok"] is True
 assert logs_after.get("recommended_actions", []) == []
 assert "Next:" not in (root / "logs-b-after.txt").read_text(encoding="utf-8")
+
+assert restart_after["ok"] is True
+assert restart_after["data"]["resources"][0]["name"] == "app-b"
+assert restart_after["data"]["resources"][0]["state"] == "healthy"
+assert restart_after.get("recommended_actions", []) == []
+
+assert stop_after["ok"] is True
+assert stop_after["data"]["resources"][0]["state"] == "stopped"
+assert stop_after.get("recommended_actions", []) == []
+
+assert open_stopped["ok"] is False
+assert "app-b is stopped" in open_stopped["error"]["message"]
+assert [action["command"] for action in open_stopped["recommended_actions"]] == [
+    "orbit up app-b --json"
+]
+
+assert restore_after["ok"] is True
+assert restore_after["data"]["resources"][0]["state"] == "healthy"
 PY
 
 "$orbit_bin" down --json >/dev/null

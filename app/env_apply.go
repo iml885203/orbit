@@ -236,7 +236,7 @@ func environmentApplyRecommendedActions(result environmentApplyResult) []cli.JSO
 			Destructive: false,
 		}}
 	}
-	return []cli.JSONAction{cli.StatusAction()}
+	return nil
 }
 
 func printEnvironmentApplyResult(result environmentApplyResult) {

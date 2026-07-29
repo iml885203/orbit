@@ -188,10 +188,6 @@ func emptyDaemonRestartResult() daemonRestartResult {
 }
 
 func writeSelfUpdateJSON(operation, binaryPath, previousBinaryPath string, result daemonRestartResult) error {
-	actions := []cli.JSONAction{}
-	if result.WasRunning {
-		actions = append(actions, cli.StatusAction())
-	}
 	return cli.WriteJSONSuccess(os.Stdout, commandString(), selfUpdateJSONData{
 		Operation:                     operation,
 		BinaryPath:                    binaryPath,
@@ -199,7 +195,7 @@ func writeSelfUpdateJSON(operation, binaryPath, previousBinaryPath string, resul
 		RunningEnvironmentReconnected: result.WasRunning && result.Running,
 		PreviouslyRunning:             result.PreviouslyRunning,
 		RestoredResources:             result.RestoredResources,
-	}, actions)
+	}, nil)
 }
 
 func updateHandoffContext() (string, bool, error) {

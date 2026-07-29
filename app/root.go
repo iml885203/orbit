@@ -722,7 +722,7 @@ func runRestart(_ *cobra.Command, args []string) error {
 			Message:            resp.Message,
 			RequestedResources: []string{name},
 			FinalStatus:        finalStatus,
-		}), []cli.JSONAction{cli.StatusAction()})
+		}), nil)
 	}
 
 	if _, err := client.Restart(name); err != nil {
@@ -762,7 +762,7 @@ func runStop(_ *cobra.Command, args []string) error {
 			Message:            resp.Message,
 			RequestedResources: []string{name},
 			FinalStatus:        finalStatus,
-		}), []cli.JSONAction{cli.StatusAction()})
+		}), nil)
 	}
 
 	if _, err := client.Stop(name); err != nil {
@@ -925,7 +925,24 @@ func runOpen(_ *cobra.Command, args []string) error {
 				return fmt.Errorf("no url configured for %s — add 'url' to config", name)
 			}
 			if svc.State != "healthy" {
-				return fmt.Errorf("%s is %s, not healthy", name, svc.State)
+				command := "orbit status"
+				reason := "Inspect the current state before opening " + name + "."
+				switch svc.State {
+				case "stopped", "pending":
+					command = "orbit up " + name
+					reason = "Start " + name + " before opening it."
+				case "degraded":
+					command = "orbit logs " + name
+					reason = "Review " + name + "'s failure evidence before retrying it."
+				}
+				return cli.WithJSONReplacementActions(
+					fmt.Errorf("%s is %s, not healthy — run '%s'", name, svc.State, command),
+					[]cli.JSONAction{{
+						Command:     command + " --json",
+						Reason:      reason,
+						Destructive: false,
+					}},
+				)
 			}
 			return openURL(svc.URL, "service", name)
 		}

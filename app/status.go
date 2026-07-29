@@ -492,6 +492,7 @@ type jsonService struct {
 	Role                 string                       `json:"role,omitempty"`
 	State                string                       `json:"state"`
 	StateReason          string                       `json:"state_reason,omitempty"`
+	FailureKind          string                       `json:"failure_kind,omitempty"`
 	FailureEvidence      string                       `json:"failure_evidence,omitempty"`
 	PortConflict         *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
 	LogsAvailable        bool                         `json:"logs_available,omitempty"`
@@ -726,6 +727,7 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 	}
 	if source.State == "degraded" {
 		target.StateReason = source.StateReason
+		target.FailureKind = source.FailureKind
 		target.FailureEvidence = source.FailureEvidence
 		target.PortConflict = source.PortConflict
 	}

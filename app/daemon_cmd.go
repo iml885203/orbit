@@ -40,7 +40,7 @@ func runDaemonStart(_ *cobra.Command, _ []string) error {
 			PID:        pid,
 			ConfigPath: configFile,
 			Dashboard:  fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
-		}), []cli.JSONAction{cli.StatusAction()})
+		}), nil)
 	}
 	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
 	return nil
@@ -66,7 +66,7 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 			StopMethod:               result.StopMethod,
 			PreviouslyRunning:        result.PreviouslyRunning,
 			RestoredResources:        result.RestoredResources,
-		}), []cli.JSONAction{cli.StatusAction()})
+		}), nil)
 	}
 	switch len(result.RestoredResources) {
 	case 0:

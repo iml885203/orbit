@@ -506,6 +506,9 @@ services:
 	if !restartEnvelope.OK {
 		t.Fatalf("daemon restart envelope = %+v\n%s", restartEnvelope, restartOutput)
 	}
+	if len(restartEnvelope.RecommendedActions) != 0 {
+		t.Fatalf("completed daemon restart invented follow-up work: %+v", restartEnvelope.RecommendedActions)
+	}
 	var restartData struct {
 		RequestedServiceShutdown bool     `json:"requested_service_shutdown"`
 		PreviouslyRunning        []string `json:"previously_running"`
@@ -678,6 +681,9 @@ printf 'Installed: %s\n' "$target"
 		!slices.Equal(updateData.PreviouslyRunning, []string{"api"}) ||
 		!slices.Equal(updateData.RestoredResources, []string{"api"}) {
 		t.Fatalf("update data = %+v, want one reconnected api", updateData)
+	}
+	if len(updateEnvelope.RecommendedActions) != 0 {
+		t.Fatalf("completed update invented follow-up work: %+v", updateEnvelope.RecommendedActions)
 	}
 	if strings.Contains(strings.ToLower(updateStderr.String()), "daemon restart") {
 		t.Fatalf("normal update exposed daemon recovery instructions:\n%s", updateStderr.String())
@@ -1111,6 +1117,9 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 		!slices.Equal(applied.RestoredResources, []string{"redis"}) {
 		t.Fatalf("env apply data = %+v", applied)
 	}
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("completed env apply invented follow-up work: %+v", envelope.RecommendedActions)
+	}
 	if currentPID := readE2EDaemonPID(t, env.home); currentPID == previousPID {
 		t.Fatalf("daemon pid remained %d after applying a changed config", currentPID)
 	}
@@ -1129,7 +1138,9 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 	}
 	envelope = parseE2EEnvelope(t, output)
 	if envelope.OK || envelope.Error == nil ||
-		!strings.Contains(envelope.Error.Message, "cannot apply environment changes") {
+		envelope.Error.Code != "environment_schema_newer" ||
+		len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit update --json" {
 		t.Fatalf("invalid apply envelope = %+v", envelope)
 	}
 	if currentPID := readE2EDaemonPID(t, env.home); currentPID != previousPID {
@@ -1954,6 +1965,7 @@ func TestE2E_CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency(t *test
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	workspace := t.TempDir()
 	pidPath := filepath.Join(workspace, "api.pid")
+	healthFailurePath := filepath.Join(workspace, "health-failure")
 	appPath := filepath.Join(workspace, "app.py")
 	appSource := fmt.Sprintf(`import http.server
 import os
@@ -1961,10 +1973,18 @@ import os
 with open(%q, "w", encoding="utf-8") as pid_file:
     pid_file.write(str(os.getpid()))
 
-server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), http.server.SimpleHTTPRequestHandler)
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(500 if os.path.exists(%q) else 200)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        pass
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), Handler)
 print("api ready", flush=True)
 server.serve_forever()
-`, pidPath, servicePort)
+`, pidPath, healthFailurePath, servicePort)
 	if err := os.WriteFile(appPath, []byte(appSource), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -2123,6 +2143,70 @@ services:
 		t.Fatalf("healthy redis changed during targeted recovery:\nbefore %s\nafter  %s", redisBefore, redisAfter)
 	}
 
+	if err := os.WriteFile(healthFailurePath, nil, 0o600); err != nil {
+		t.Fatalf("enable health failure: %v", err)
+	}
+	var healthStatus statusJSONData
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		output, outputErr := command("status", "--json").Output()
+		if outputErr == nil {
+			envelope := parseE2EEnvelope(t, string(output))
+			if json.Unmarshal(envelope.Data, &healthStatus) == nil {
+				for _, resource := range healthStatus.Resources {
+					if resource.Name == "api" &&
+						resource.State == "degraded" &&
+						resource.FailureKind == "health" {
+						goto healthFailureObserved
+					}
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("health failure never became a structured degraded state: %+v", healthStatus.Resources)
+
+healthFailureObserved:
+	humanHealthStatus, err := command("status").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human status during health failure: %v\n%s", err, humanHealthStatus)
+	}
+	if !bytes.Contains(humanHealthStatus, []byte("diagnose failed health probe")) ||
+		bytes.Contains(humanHealthStatus, []byte("review exit output")) {
+		t.Fatalf("human health recovery was not truthful:\n%s", humanHealthStatus)
+	}
+	healthLogsOutput, err := command("logs", "api", "--json").Output()
+	if err != nil {
+		t.Fatalf("health failure logs: %v\n%s", err, healthLogsOutput)
+	}
+	healthLogsEnvelope := parseE2EEnvelope(t, string(healthLogsOutput))
+	if len(healthLogsEnvelope.RecommendedActions) != 1 ||
+		healthLogsEnvelope.RecommendedActions[0].Command != "orbit restart api --json" ||
+		!strings.Contains(healthLogsEnvelope.RecommendedActions[0].Reason, "does not repair") {
+		t.Fatalf("health recovery action = %+v", healthLogsEnvelope.RecommendedActions)
+	}
+	if err := os.Remove(healthFailurePath); err != nil {
+		t.Fatalf("clear health failure: %v", err)
+	}
+	deadline = time.Now().Add(e2eBootTimeout)
+	for time.Now().Before(deadline) {
+		output, outputErr := command("status", "--json").Output()
+		if outputErr == nil {
+			envelope := parseE2EEnvelope(t, string(output))
+			var recovered statusJSONData
+			if json.Unmarshal(envelope.Data, &recovered) == nil {
+				for _, resource := range recovered.Resources {
+					if resource.Name == "api" && resource.State == "healthy" {
+						goto healthRecovered
+					}
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatal("service did not recover after its health endpoint recovered")
+
+healthRecovered:
 	finalOutput, err := command("status", "--json").Output()
 	if err != nil {
 		t.Fatalf("final status: %v\n%s", err, finalOutput)
