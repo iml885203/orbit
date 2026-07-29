@@ -17,7 +17,7 @@ func TestSnapshotWorkloads_MapsStatusAndDependencies(t *testing.T) {
 	}
 	statuses := []ResourceStatus{
 		{Name: "redis", Kind: "container", State: "healthy", Image: "redis:7.4", Ports: map[string]int{"redis": 36379}},
-		{Name: "api", Kind: "service", State: "degraded", StateReason: "health check failed",
+		{Name: "api", Kind: "service", State: "degraded", StateReason: "health check failed", FailureKind: "health",
 			URL: "http://localhost:3000", RestartCount: 2,
 			HealthProgress: &HealthProgressInfo{Attempts: 12, MaxRetries: 12, Recovering: true}},
 	}
@@ -36,7 +36,7 @@ func TestSnapshotWorkloads_MapsStatusAndDependencies(t *testing.T) {
 	}
 
 	api := out[1]
-	if api.Type != "service" || api.StateReason != "health check failed" {
+	if api.Type != "service" || api.StateReason != "health check failed" || api.FailureKind != "health" {
 		t.Errorf("api snapshot wrong: %+v", api)
 	}
 	if len(api.DependsOn) != 1 || api.DependsOn[0] != "redis" {

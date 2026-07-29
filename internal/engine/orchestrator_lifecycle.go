@@ -51,11 +51,12 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 
 		if err != nil {
 			o.events <- Event{
-				Type:       EventHealthFail,
-				Service:    name,
-				Message:    fmt.Sprintf("failed to start: %v", err),
-				Err:        err,
-				Generation: gen,
+				Type:        EventHealthFail,
+				Service:     name,
+				Message:     fmt.Sprintf("failed to start: %v", err),
+				Err:         err,
+				FailureKind: FailureKindRuntime,
+				Generation:  gen,
 			}
 			return
 		}
@@ -178,12 +179,14 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		info.Transition(StateHealthy)
 	case !running && prev == StateDegraded && observationWasUnavailable:
 		info.StateReason = "container exited unexpectedly"
+		info.FailureKind = FailureKindRuntime
 	case !running && prev == StateHealthy:
 		// Docker reports the container as existing but not running while we
 		// believe it healthy — it died outside orbit's control (crash, OOM
 		// kill, manual docker stop).
 		info.Transition(StateDegraded)
 		info.StateReason = "container exited unexpectedly"
+		info.FailureKind = FailureKindRuntime
 	}
 	newState := info.State
 	o.mu.Unlock()
@@ -229,6 +232,7 @@ func (o *Orchestrator) OnContainerObservationUnavailable() {
 		}
 		info.Transition(StateDegraded)
 		info.StateReason = DockerObservationUnavailableReason
+		info.FailureKind = FailureKindRuntime
 	}
 }
 
@@ -264,10 +268,12 @@ func (o *Orchestrator) OnContainerGone(name string) {
 			info.Transition(StateStopped)
 		} else if info.StateReason == DockerObservationUnavailableReason {
 			info.StateReason = "container removed outside orbit"
+			info.FailureKind = FailureKindRuntime
 		}
 	case StateHealthy:
 		info.Transition(StateDegraded)
 		info.StateReason = "container removed outside orbit"
+		info.FailureKind = FailureKindRuntime
 	}
 	newState := info.State
 	o.mu.Unlock()
@@ -308,6 +314,7 @@ func (o *Orchestrator) StopService(ctx context.Context, name string) error {
 	if err != nil {
 		info.Transition(StateDegraded)
 		info.StateReason = fmt.Sprintf("stop failed: %v", err)
+		info.FailureKind = FailureKindRuntime
 		info.AwaitingContainerRemoval = info.Kind == "container"
 	} else {
 		info.Transition(StateStopped)
@@ -315,7 +322,10 @@ func (o *Orchestrator) StopService(ctx context.Context, name string) error {
 	o.mu.Unlock()
 
 	if err != nil {
-		o.broadcast(Event{Type: EventHealthFail, Service: name, Message: fmt.Sprintf("stop failed: %v", err)})
+		o.broadcast(Event{
+			Type: EventHealthFail, Service: name,
+			Message: fmt.Sprintf("stop failed: %v", err), FailureKind: FailureKindRuntime,
+		})
 		return err
 	}
 	o.broadcast(Event{Type: EventProcessExited, Service: name, Message: "stopped"})
@@ -364,12 +374,14 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 		info = o.services[name]
 		info.Transition(StateDegraded)
 		info.StateReason = fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr)
+		info.FailureKind = FailureKindRuntime
 		info.AwaitingContainerRemoval = kind == "container"
 		o.mu.Unlock()
 		o.broadcast(Event{
-			Type:    EventHealthFail,
-			Service: name,
-			Message: fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr),
+			Type:        EventHealthFail,
+			Service:     name,
+			Message:     fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr),
+			FailureKind: FailureKindRuntime,
 		})
 		return stopErr
 	}

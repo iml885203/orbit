@@ -88,7 +88,7 @@ func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthC
 	return Result{
 		Service: name,
 		Healthy: healthy,
-		Message: fmt.Sprintf("HTTP %d", resp.StatusCode),
+		Message: fmt.Sprintf("HTTP %d from %s", resp.StatusCode, url),
 		Latency: time.Since(start),
 	}
 }

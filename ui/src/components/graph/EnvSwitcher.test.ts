@@ -17,7 +17,9 @@ describe('EnvSwitcher', () => {
   beforeEach(() => {
     store.graph.data = liveGraph
     store.graph.preview = null
+    store.graph.selectedNode = null
     store.daemon.services = {}
+    store.daemon.logModal = { target: null, loading: false }
     store.daemon.envs = {
       running: 0,
       envs: [
@@ -74,6 +76,26 @@ describe('EnvSwitcher', () => {
     const action = screen.getByRole('button', { name: 'View redis logs' })
     await fireEvent.click(action)
     expect(store.daemon.logModal.target).toBe('redis')
+  })
+
+  it('opens health details instead of treating a live process like a crash', async () => {
+    store.graph.data = {
+      ...liveGraph,
+      nodes: [{
+        ...stoppedNode,
+        name: 'api',
+        kind: 'backend',
+        state: 'degraded',
+        stateReason: 'HTTP 500 from http://localhost:3000/health',
+        failureKind: 'health',
+        logsAvailable: true,
+      }],
+    }
+    render(EnvSwitcher)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect api health' }))
+    expect(store.graph.selectedNode).toBe('api')
+    expect(store.daemon.logModal.target).toBeNull()
   })
 
   it('shows explicit activation controls only while previewing', () => {

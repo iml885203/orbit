@@ -206,6 +206,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 			Role:                 getResourceRole(cfg, svc.Name, svc.Kind),
 			State:                svc.State.String(),
 			StateReason:          svc.StateReason,
+			FailureKind:          string(svc.FailureKind),
 			FailureEvidence:      svc.FailureEvidence,
 			PortConflict:         resourcePortConflict(svc),
 			LogsAvailable:        resourceLogsAvailable(s.app.Logs, svc.Name),

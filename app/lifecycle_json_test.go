@@ -11,6 +11,7 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
 func TestWriteLogJSONEvent(t *testing.T) {
@@ -147,6 +148,24 @@ func TestLogsRecoveryActionsLeadFromCrashOutputToTargetedRestart(t *testing.T) {
 		t.Fatalf("actions = %+v", actions)
 	}
 	if !strings.Contains(actions[0].Reason, "after reviewing its exit output") {
+		t.Fatalf("reason = %q", actions[0].Reason)
+	}
+}
+
+func TestLogsRecoveryActionsDescribeHealthRestartAsRetry(t *testing.T) {
+	resource := &daemon.ResourceStatus{
+		Name:          "api",
+		State:         "degraded",
+		StateReason:   "HTTP 500 from http://localhost:8080/health",
+		FailureKind:   string(engine.FailureKindHealth),
+		LogsAvailable: true,
+	}
+	actions := logsRecoveryActions(resource, "")
+	if len(actions) != 1 || actions[0].Command != "orbit restart api --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+	if !strings.Contains(actions[0].Reason, "does not repair") ||
+		strings.Contains(actions[0].Reason, "exit output") {
 		t.Fatalf("reason = %q", actions[0].Reason)
 	}
 }

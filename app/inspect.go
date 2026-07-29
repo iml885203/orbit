@@ -11,6 +11,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
@@ -69,11 +70,12 @@ type inspectEnvSummary struct {
 }
 
 type inspectServiceSummary struct {
-	Total    int                 `json:"total"`
-	ByState  map[string][]string `json:"by_state"`
-	Degraded []string            `json:"degraded"`
-	Starting []string            `json:"starting"`
-	Stopped  []string            `json:"stopped"`
+	Total        int                 `json:"total"`
+	ByState      map[string][]string `json:"by_state"`
+	Degraded     []string            `json:"degraded"`
+	Starting     []string            `json:"starting"`
+	Stopped      []string            `json:"stopped"`
+	failureKinds map[string]string
 }
 
 type inspectRisk struct {
@@ -271,10 +273,11 @@ func inspectDashboard(opts inspectBuildOptions) string {
 
 func emptyInspectServiceSummary() inspectServiceSummary {
 	return inspectServiceSummary{
-		ByState:  map[string][]string{},
-		Degraded: []string{},
-		Starting: []string{},
-		Stopped:  []string{},
+		ByState:      map[string][]string{},
+		Degraded:     []string{},
+		Starting:     []string{},
+		Stopped:      []string{},
+		failureKinds: map[string]string{},
 	}
 }
 
@@ -288,6 +291,7 @@ func buildInspectServiceSummary(services []daemon.ResourceStatus) inspectService
 		switch state {
 		case "degraded":
 			out.Degraded = append(out.Degraded, name)
+			out.failureKinds[name] = services[i].FailureKind
 		case "pending", "starting", "building", "stopping", "restarting":
 			out.Starting = append(out.Starting, name)
 		case "stopped":
@@ -525,9 +529,13 @@ func inspectRecommendedActions(
 		})
 	case inspectReadinessDegraded:
 		for _, name := range services.Degraded {
+			reason := "Review the exit output for " + name + " before retrying it."
+			if services.failureKinds[name] == string(engine.FailureKindHealth) {
+				reason = "Review application output that may explain the failed health probe; the process is still running."
+			}
 			actions = append(actions, cli.JSONAction{
 				Command:     "orbit logs " + name + " --json",
-				Reason:      "Review the exit output for " + name + " before retrying it.",
+				Reason:      reason,
 				Destructive: false,
 			})
 		}

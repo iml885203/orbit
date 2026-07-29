@@ -400,6 +400,12 @@ func NewTunnelFeature(tm *TunnelManager) *TunnelFeature {
 
 // HandleTunnel serves GET/POST /api/tunnel and /api/tunnel/{claim,release}.
 func (f *TunnelFeature) HandleTunnel(w http.ResponseWriter, r *http.Request) {
+	if ClaimFrom(f.tm.host.Config()) == nil {
+		daemon.WriteJSON(w, http.StatusNotFound, daemon.APIResponse{
+			Error: "tunnel workflow is not configured for the active environment; add a claim section to orbit.yaml",
+		})
+		return
+	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Query().Get("all") == "true":
 		f.tunnelListAll(w, r, nil)

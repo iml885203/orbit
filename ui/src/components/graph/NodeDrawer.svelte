@@ -326,6 +326,12 @@
           </button>
         </section>
       {/if}
+      {#if node.failureKind === 'health'}
+        <section class="health-failure" role="status" aria-label="Health check failure">
+          <strong>The process is still running</strong>
+          <p>Orbit keeps checking it and will recover automatically after the health endpoint is fixed. Logs may explain the failure; restart only retries the process.</p>
+        </section>
+      {/if}
       <div class="secondary-actions">
         {#if canRestart}
           <button class="secondary-btn" type="button" disabled={busy || readOnly} onclick={doRestart}>
@@ -605,6 +611,23 @@
   }
   .port-conflict .secondary-btn {
     width: fit-content;
+  }
+  .health-failure {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--yellow) 8%, transparent);
+  }
+  .health-failure strong {
+    color: var(--yellow);
+    font-size: var(--text-md);
+  }
+  .health-failure p {
+    margin: var(--space-1) 0 0;
+    color: var(--dim);
+    font-size: var(--text-sm);
+    line-height: 1.5;
   }
   .secondary-btn {
     display: inline-flex;

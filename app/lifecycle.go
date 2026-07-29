@@ -7,6 +7,7 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/port"
 )
 
@@ -296,6 +297,13 @@ func logsRecoveryActions(resource *daemon.ResourceStatus, dependencySetup string
 		return []cli.JSONAction{{
 			Command:     dependencySetup + " && orbit restart " + resource.Name + " --json",
 			Reason:      "Install the declared project dependencies, then retry only " + resource.Name + ".",
+			Destructive: false,
+		}}
+	}
+	if resource.FailureKind == string(engine.FailureKindHealth) {
+		return []cli.JSONAction{{
+			Command:     "orbit restart " + resource.Name + " --json",
+			Reason:      "Retry the health probe after addressing its cause; restarting does not repair a persistent health failure.",
 			Destructive: false,
 		}}
 	}

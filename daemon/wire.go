@@ -79,6 +79,7 @@ type ResourceStatus struct {
 	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
 	StateReason          string                `json:"state_reason,omitempty"`
+	FailureKind          string                `json:"failure_kind,omitempty"`
 	FailureEvidence      string                `json:"failure_evidence,omitempty"`
 	PortConflict         *ResourcePortConflict `json:"port_conflict,omitempty"`
 	LogsAvailable        bool                  `json:"logs_available,omitempty"`

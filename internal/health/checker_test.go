@@ -44,8 +44,9 @@ func TestCheck_HTTP_Success(t *testing.T) {
 	if !result.Healthy {
 		t.Fatalf("expected healthy, got unhealthy: %s", result.Message)
 	}
-	if result.Message != "HTTP 200" {
-		t.Fatalf("expected message %q, got %q", "HTTP 200", result.Message)
+	wantMessage := "HTTP 200 from http://localhost:" + strconv.Itoa(port) + "/"
+	if result.Message != wantMessage {
+		t.Fatalf("expected message %q, got %q", wantMessage, result.Message)
 	}
 	if result.Latency <= 0 {
 		t.Fatal("expected positive latency")
@@ -70,8 +71,9 @@ func TestCheck_HTTP_Failure(t *testing.T) {
 	if result.Healthy {
 		t.Fatal("expected unhealthy, got healthy")
 	}
-	if result.Message != "HTTP 500" {
-		t.Fatalf("expected message %q, got %q", "HTTP 500", result.Message)
+	wantMessage := "HTTP 500 from http://localhost:" + strconv.Itoa(port) + "/"
+	if result.Message != wantMessage {
+		t.Fatalf("expected message %q, got %q", wantMessage, result.Message)
 	}
 }
 

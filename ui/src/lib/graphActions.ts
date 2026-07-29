@@ -51,7 +51,9 @@ export function environmentActionState(nodes: GraphNode[]): EnvironmentActionSta
     return { summary, primary: { kind: 'busy', label: 'Environment changing…' } }
   }
   if (issue?.state === 'degraded') {
-    const primary: EnvironmentPrimaryAction = issue.logsAvailable
+    const primary: EnvironmentPrimaryAction = issue.failureKind === 'health'
+      ? { kind: 'inspect', label: `Inspect ${issue.name} health`, resource: issue.name }
+      : issue.logsAvailable
       ? { kind: 'logs', label: `View ${issue.name} logs`, resource: issue.name }
       : { kind: 'inspect', label: `Inspect ${issue.name}`, resource: issue.name }
     return { summary, primary }

@@ -76,6 +76,25 @@ describe('NodeDrawer', () => {
     expect(queryByText('Logs')).toBeNull()
   })
 
+  it('explains that a health failure is live and self-recovers after the fix', () => {
+    const node = {
+      name: 'api',
+      kind: 'backend' as const,
+      state: 'degraded',
+      stateReason: 'HTTP 500 from http://localhost:3000/health',
+      failureKind: 'health',
+      logsAvailable: true,
+    }
+    const { getByRole, getByText } = render(NodeDrawer, {
+      props: { node, onClose: () => {} },
+    })
+
+    expect(getByRole('status', { name: 'Health check failure' })).toBeTruthy()
+    expect(getByText('The process is still running')).toBeTruthy()
+    expect(getByText(/recover automatically after the health endpoint is fixed/)).toBeTruthy()
+    expect(getByText(/restart only retries the process/)).toBeTruthy()
+  })
+
   it('names the dependency whose port must change', () => {
     const node = {
       name: 'api',

@@ -16,7 +16,8 @@ func TunnelCmd() *cobra.Command {
 		Use:   "tunnel",
 		Short: "Route staging 3rd-party callbacks to your local machine",
 		Long: "Open a Tunlease tunnel and claim 3rd-party callback " +
-			"paths so they reach a service on your laptop. Not tied to `orbit up`.",
+			"paths so they reach a service on your laptop. The active environment " +
+			"must configure `claim`; switching environments or stopping the daemon releases local claims.",
 	}
 	cmd.AddCommand(tunnelClaimCmd(), tunnelReleaseCmd(), tunnelListCmd())
 	return cmd

@@ -113,6 +113,33 @@ func TestCrashedServiceStatusLeadsOnlyToLogs(t *testing.T) {
 	}
 }
 
+func TestLiveServiceHealthFailureLeadsToDiagnosisInsteadOfExitOutput(t *testing.T) {
+	running := map[string]daemon.ResourceStatus{
+		"api": {
+			Name:          "api",
+			Kind:          daemon.ResourceKindService,
+			State:         "degraded",
+			StateReason:   "HTTP 500 from http://localhost:8080/health",
+			FailureKind:   string(engine.FailureKindHealth),
+			LogsAvailable: true,
+		},
+	}
+
+	actions := statusRecoveryActions(running)
+	if len(actions) != 1 || actions[0].Command != "orbit logs api --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+	if strings.Contains(actions[0].Reason, "exit") ||
+		!strings.Contains(actions[0].Reason, "process is still running") {
+		t.Fatalf("health diagnosis reason = %q", actions[0].Reason)
+	}
+	tips := statusRecoveryTips(running)
+	if len(tips) != 1 || !strings.Contains(tips[0], "failed health probe") ||
+		strings.Contains(tips[0], "exit") {
+		t.Fatalf("tips = %+v", tips)
+	}
+}
+
 func TestDockerOutageStatusLeadsToOneDiagnosticInsteadOfResourceRestarts(t *testing.T) {
 	running := map[string]daemon.ResourceStatus{
 		"redis": {

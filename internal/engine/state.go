@@ -45,6 +45,17 @@ func (s ServiceState) String() string {
 	}
 }
 
+// FailureKind identifies the subsystem that produced a degraded state so
+// clients can offer diagnosis appropriate to what actually failed.
+type FailureKind string
+
+const (
+	FailureKindHealth  FailureKind = "health"
+	FailureKindProcess FailureKind = "process"
+	FailureKindBuild   FailureKind = "build"
+	FailureKindRuntime FailureKind = "runtime"
+)
+
 // EventType represents orchestrator events.
 type EventType int
 
@@ -95,6 +106,10 @@ type Event struct {
 	Message  string
 	Evidence string
 	Err      error
+	// FailureKind identifies the source of EventHealthFail. That legacy event
+	// name also carries startup and lifecycle failures, so consumers must not
+	// infer that every sender represents a health probe.
+	FailureKind FailureKind
 	// Generation identifies which start of the service produced a health
 	// event. handleEvent drops health events whose generation doesn't match
 	// the service's current one: a probe goroutine from a previous start —
@@ -144,6 +159,10 @@ type ServiceInfo struct {
 	// Transition clears it on every other target so a stale reason never
 	// survives a restart. Mutation requires the owning Orchestrator's mu.
 	StateReason string
+	// FailureKind distinguishes a live process failing its health probe from
+	// a process exit, build failure, or container-runtime drift. Mutation
+	// requires the owning Orchestrator's mu.
+	FailureKind FailureKind
 	// FailureEvidence preserves the last meaningful stderr line captured from
 	// the process generation associated with the current degradation. It is
 	// cleared with StateReason so evidence from an earlier generation never
@@ -217,6 +236,7 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		// invalidates them. Callers set StateReason right after a
 		// Transition(StateDegraded).
 		i.StateReason = ""
+		i.FailureKind = ""
 		i.FailureEvidence = ""
 		i.PortConflict = nil
 		i.AwaitingContainerRemoval = false

@@ -1,6 +1,9 @@
 package tunnel
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
@@ -28,6 +31,42 @@ func TestViewsExposeGatewayAndSessions(t *testing.T) {
 	got := tm.Views()
 	if got.Gateway != "https://tunlease.example" || len(got.Tunnels) != 1 || got.Tunnels[0].ProxyPort != 4567 {
 		t.Fatalf("views = %#v", got)
+	}
+}
+
+func TestTunnelFeatureFollowsActiveEnvironmentGate(t *testing.T) {
+	tests := []struct {
+		name   string
+		cfg    *config.Config
+		status int
+		body   string
+	}{
+		{
+			name:   "not configured",
+			cfg:    &config.Config{},
+			status: http.StatusNotFound,
+			body:   "tunnel workflow is not configured for the active environment",
+		},
+		{
+			name: "configured",
+			cfg: (&config.Config{}).WithExtension(
+				"claim",
+				&ClaimConfig{Gateway: "https://tunlease.example"},
+			),
+			status: http.StatusOK,
+			body:   `"tunnels":[]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			feature := NewTunnelFeature(NewTunnelManager(newTestHost(test.cfg), NewAccessLogHub(10)))
+			response := httptest.NewRecorder()
+			feature.HandleTunnel(response, httptest.NewRequest(http.MethodGet, "/api/tunnel", nil))
+
+			if response.Code != test.status || !strings.Contains(response.Body.String(), test.body) {
+				t.Fatalf("response = %d %s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 

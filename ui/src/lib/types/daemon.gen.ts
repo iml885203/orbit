@@ -96,6 +96,7 @@ export interface GraphNode {
    * StateReason says why the node is degraded; empty otherwise.
    */
   stateReason?: string;
+  failureKind?: string;
   blockedBy?: string;
   portConflict?: GraphPortConflict;
   logsAvailable?: boolean;

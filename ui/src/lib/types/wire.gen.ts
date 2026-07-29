@@ -135,6 +135,7 @@ export interface ResourceStatus {
    * failure, build failure); empty in every other state.
    */
   state_reason?: string;
+  failure_kind?: string;
   failure_evidence?: string;
   port_conflict?: ResourcePortConflict;
   logs_available?: boolean;
@@ -342,6 +343,7 @@ export interface ResourceSnapshot {
   type: string;
   state?: string;
   state_reason?: string;
+  failure_kind?: string;
   blocked_by?: string;
   /**
    * Parent groups a resource under another (database → sql-server,

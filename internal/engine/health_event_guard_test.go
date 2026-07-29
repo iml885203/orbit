@@ -115,8 +115,9 @@ func TestProcessExited_CancelsLifecycleCtx(t *testing.T) {
 		t.Fatal("expected lifecycle ctx cancelled after process exit")
 	}
 	got, _ := o.GetServiceInfo("api")
-	if got.State != StateDegraded || got.StateReason != "exited: boom" {
-		t.Fatalf("got %s/%q, want degraded/exited: boom", got.State, got.StateReason)
+	if got.State != StateDegraded || got.StateReason != "exited: boom" ||
+		got.FailureKind != FailureKindProcess {
+		t.Fatalf("got %s/%q/%q, want degraded/exited: boom/process", got.State, got.StateReason, got.FailureKind)
 	}
 }
 
@@ -213,15 +214,23 @@ func TestHealthFail_GenerationAndReasonSemantics(t *testing.T) {
 		t.Fatalf("stale HealthFail degraded the new generation: %s", info.State)
 	}
 
-	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "api", Message: "budget spent", Generation: 2})
+	_ = o.handleEvent(context.Background(), Event{
+		Type: EventHealthFail, Service: "api", Message: "budget spent",
+		FailureKind: FailureKindHealth, Generation: 2,
+	})
 	info, _ = o.GetServiceInfo("api")
-	if info.State != StateDegraded || info.StateReason != "budget spent" {
-		t.Fatalf("got %s/%q, want degraded/budget spent", info.State, info.StateReason)
+	if info.State != StateDegraded || info.StateReason != "budget spent" ||
+		info.FailureKind != FailureKindHealth {
+		t.Fatalf("got %s/%q/%q, want degraded/budget spent/health", info.State, info.StateReason, info.FailureKind)
 	}
 
-	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "api", Message: "zombie detected", Generation: 2})
+	_ = o.handleEvent(context.Background(), Event{
+		Type: EventHealthFail, Service: "api", Message: "zombie detected",
+		FailureKind: FailureKindProcess, Generation: 2,
+	})
 	info, _ = o.GetServiceInfo("api")
-	if info.State != StateDegraded || info.StateReason != "zombie detected" {
-		t.Fatalf("got %s/%q, want degraded with refreshed reason", info.State, info.StateReason)
+	if info.State != StateDegraded || info.StateReason != "zombie detected" ||
+		info.FailureKind != FailureKindProcess {
+		t.Fatalf("got %s/%q/%q, want degraded zombie/process", info.State, info.StateReason, info.FailureKind)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
 func TestBuildInspectServiceSummaryGroupsStates(t *testing.T) {
@@ -343,6 +344,29 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 	}
 	if hasInspectAction(got.RecommendedActions, "orbit doctor --json") {
 		t.Fatalf("recommended actions include unrelated setup diagnostics: %+v", got.RecommendedActions)
+	}
+}
+
+func TestBuildInspectDataDoesNotDescribeHealthFailureAsProcessExit(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:    "/tmp/development.yaml",
+		ConfigEnvName: "development",
+		DaemonRunning: true,
+		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
+			Name:        "api",
+			State:       "degraded",
+			StateReason: "HTTP 500 from http://localhost:8080/health",
+			FailureKind: string(engine.FailureKindHealth),
+		}}},
+	})
+
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit logs api --json" {
+		t.Fatalf("actions = %+v", got.RecommendedActions)
+	}
+	if strings.Contains(got.RecommendedActions[0].Reason, "exit") ||
+		!strings.Contains(got.RecommendedActions[0].Reason, "still running") {
+		t.Fatalf("reason = %q", got.RecommendedActions[0].Reason)
 	}
 }
 

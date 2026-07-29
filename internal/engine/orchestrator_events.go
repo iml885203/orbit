@@ -55,6 +55,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 			case StateStarting, StateHealthy:
 				info.Transition(StateDegraded)
 				info.StateReason = evt.Message
+				info.FailureKind = evt.FailureKind
 				var conflict *port.ConflictError
 				if errors.As(evt.Err, &conflict) {
 					info.PortConflict = conflict
@@ -71,6 +72,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 				// not better evidence than the exit already recorded.
 				if evt.Message != "" && !(errors.Is(evt.Err, context.Canceled) && info.StateReason != "") {
 					info.StateReason = evt.Message
+					info.FailureKind = evt.FailureKind
 				}
 			}
 		}
@@ -95,6 +97,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 		if info, exists := o.services[evt.Service]; exists {
 			info.Transition(StateDegraded)
 			info.StateReason = "build failed"
+			info.FailureKind = FailureKindBuild
 		}
 		o.mu.Unlock()
 
@@ -113,6 +116,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 				reason = "process exited unexpectedly"
 			}
 			info.StateReason = reason
+			info.FailureKind = FailureKindProcess
 			info.FailureEvidence = evt.Evidence
 			// The process is gone: any startup poll or recovery probing for
 			// this generation is now pointless (nothing will start answering
@@ -137,6 +141,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 		} else {
 			info.StateReason = "container state drifted"
 		}
+		info.FailureKind = FailureKindRuntime
 		o.mu.Unlock()
 
 		// Re-check health — container may have recovered. NB: this runs on

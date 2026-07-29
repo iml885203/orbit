@@ -95,6 +95,7 @@ func snapshotWorkloads(deps map[string][]string, statuses []ResourceStatus) []Re
 			Type:        string(st.Kind),
 			State:       st.State,
 			StateReason: resourceFailureSummary(*st),
+			FailureKind: st.FailureKind,
 			BlockedBy:   st.BlockedBy,
 			DependsOn:   deps[st.Name],
 			URLs:        urls,

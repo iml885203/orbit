@@ -325,10 +325,11 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 				if !a.ProcessMgr.IsAlive(name) {
 					slog.Warn("port responds but process is dead — zombie detected", "component", "health", "name", name)
 					orch.Events() <- Event{
-						Type:       EventHealthFail,
-						Service:    name,
-						Message:    "port responds but managed process is dead (zombie)",
-						Generation: generation,
+						Type:        EventHealthFail,
+						Service:     name,
+						Message:     "port responds but managed process is dead (zombie)",
+						FailureKind: FailureKindProcess,
+						Generation:  generation,
 					}
 					return
 				}
@@ -341,10 +342,11 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 				return
 			}
 			orch.Events() <- Event{
-				Type:       EventHealthFail,
-				Service:    name,
-				Message:    r.Message,
-				Generation: generation,
+				Type:        EventHealthFail,
+				Service:     name,
+				Message:     r.Message,
+				FailureKind: FailureKindHealth,
+				Generation:  generation,
 			}
 		}
 		go func() {
@@ -364,11 +366,12 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 				checker.MarkRecovering(name, generation)
 			}
 			orch.Events() <- Event{
-				Type:       EventHealthFail,
-				Service:    name,
-				Message:    err.Error(),
-				Err:        err,
-				Generation: generation,
+				Type:        EventHealthFail,
+				Service:     name,
+				Message:     err.Error(),
+				Err:         err,
+				FailureKind: FailureKindHealth,
+				Generation:  generation,
 			}
 			if !willRecover {
 				return

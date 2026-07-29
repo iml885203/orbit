@@ -65,6 +65,7 @@ type GraphNode struct {
 	State string `json:"state"`
 	// StateReason says why the node is degraded; empty otherwise.
 	StateReason          string              `json:"stateReason,omitempty"`
+	FailureKind          string              `json:"failureKind,omitempty"`
 	BlockedBy            string              `json:"blockedBy,omitempty"`
 	PortConflict         *GraphPortConflict  `json:"portConflict,omitempty"`
 	LogsAvailable        bool                `json:"logsAvailable,omitempty"`
@@ -230,6 +231,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
 			n.StateReason = resourceFailureSummary(st)
+			n.FailureKind = st.FailureKind
 			n.BlockedBy = st.BlockedBy
 			n.PortConflict = graphPortConflict(st.PortConflict)
 			n.LogsAvailable = st.LogsAvailable
@@ -260,6 +262,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 		if st, ok := statuses[name]; ok {
 			n.State = st.State
 			n.StateReason = resourceFailureSummary(st)
+			n.FailureKind = st.FailureKind
 			n.BlockedBy = st.BlockedBy
 			n.PortConflict = graphPortConflictFor(name, statuses, nil)
 			n.LogsAvailable = st.LogsAvailable

@@ -137,6 +137,7 @@ type ResourceSnapshot struct {
 	Type        string `json:"type"`
 	State       string `json:"state,omitempty"`
 	StateReason string `json:"state_reason,omitempty"`
+	FailureKind string `json:"failure_kind,omitempty"`
 	BlockedBy   string `json:"blocked_by,omitempty"`
 	// Parent groups a resource under another (database → sql-server,
 	// route → tunnel). Empty for top-level resources.

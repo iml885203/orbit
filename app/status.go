@@ -832,9 +832,13 @@ func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONA
 			continue
 		}
 		if service.LogsAvailable {
+			reason := "Review the exit output for " + name + " before retrying it."
+			if service.FailureKind == string(engine.FailureKindHealth) {
+				reason = "Review application output that may explain the failed health probe; the process is still running."
+			}
 			actions = append(actions, cli.JSONAction{
 				Command: "orbit logs " + name + " --json",
-				Reason:  "Review the exit output for " + name + " before retrying it.",
+				Reason:  reason,
 			})
 			continue
 		}
@@ -869,7 +873,11 @@ func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
 			continue
 		}
 		if service.LogsAvailable {
-			tips = append(tips, fmt.Sprintf("orbit logs %-14s  review exit output", name))
+			description := "review exit output"
+			if service.FailureKind == string(engine.FailureKindHealth) {
+				description = "diagnose failed health probe"
+			}
+			tips = append(tips, fmt.Sprintf("orbit logs %-14s  %s", name, description))
 			continue
 		}
 		tips = append(tips, fmt.Sprintf("orbit restart %-11s  retry service", name))
