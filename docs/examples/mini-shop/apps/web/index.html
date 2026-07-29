@@ -540,6 +540,7 @@
       <p class="hint">給第一次看 demo 的同事，按順序最少點擊也能看到完整關聯。</p>
       <div class="row">
         <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
+        <button id="run-beginner-flow" class="small-btn inline-btn quick-start-action">一鍵完成第一輪 demo（約 1 分鐘）</button>
         <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
         <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
         <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action beginner-mode-hide">一鍵 demo 檢核（成功→核對）</button>
@@ -926,6 +927,7 @@ web
       const progressSteps = document.getElementById('progress-steps');
       const resetFlowBtn = document.getElementById('reset-flow');
       const startDemoFlowBtn = document.getElementById('start-demo-flow');
+      const runBeginnerFlowBtn = document.getElementById('run-beginner-flow');
       const verifyDemoSignalBtn = document.getElementById('verify-demo-signal');
       const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
       const copyDemoReportBtn = document.getElementById('copy-demo-report');
@@ -3109,6 +3111,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (startDemoFlowBtn) {
           startDemoFlowBtn.disabled = disabledState;
         }
+        if (runBeginnerFlowBtn) {
+          runBeginnerFlowBtn.disabled = disabledState;
+        }
         if (heroSuccessPathBtn) {
           heroSuccessPathBtn.disabled = disabledState;
         }
@@ -4422,6 +4427,30 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (startDemoFlowButton) {
           appendSummary('開始一鍵 demo：執行一輪成功流程。');
           await runOneShotSuccessFlow();
+          return;
+        }
+        const runBeginnerFlowButton = event.target.closest('#run-beginner-flow');
+        if (runBeginnerFlowButton) {
+          appendSummary('一鍵完成第一輪：先執行 demo 一輪，接著核對可 demo 條件。');
+          const startedAt = performance.now();
+          const ok = await runOneShotSuccessFlow();
+          const pass = setDemoSignalState();
+          scrollToAndFocus(document.getElementById('value-signal-card'));
+          const cost = formatElapsed(performance.now() - startedAt);
+          if (ok && pass) {
+            setNotice('第一輪 demo 完成，三格皆綠，可直接對外 demo。', 'ok');
+            appendSummary(`一鍵完成第一輪 demo 成功：${cost}，服務/交易/關聯三格已綠。`);
+            setCopyFeedback(`一鍵完成第一輪 demo：${cost}。`);
+          } else if (ok && !pass) {
+            setNotice('已完成一輪流程，但可 demo 條件還未全部達成。請先回到核對清單。', 'warn');
+            appendSummary('第一輪流程完成，但目前還不是對外 demo 狀態：請依核對清單補齊卡住步驟。');
+            scrollToAndFocus(document.getElementById('acceptance-card'));
+            setCopyFeedback('流程完成但未可 demo，請先依核對清單修正。');
+          } else {
+            setNotice('無法完成第一輪 demo，請先確認服務就緒再重試。', 'error');
+            appendSummary('第一輪 demo 未完成：通常是服務尚未就緒或互動卡住，請先核對服務狀態。');
+            setCopyFeedback('第一輪 demo 未完成，請先重置並重試。');
+          }
           return;
         }
         const verifyDemoSignalButton = event.target.closest('#verify-demo-signal');
