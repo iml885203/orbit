@@ -61,6 +61,7 @@ test-install:
 test-docs:
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-first-five-minutes.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-local-first-adoption.sh
+	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
 	@./scripts/test-mini-shop-example.sh
 
 lint: lint-filenames

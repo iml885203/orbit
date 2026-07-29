@@ -120,19 +120,26 @@ func TestSwitchHelpDescribesUserOutcome(t *testing.T) {
 	}
 }
 
-func TestDatabaseCommandsRequireMatchingDaemonConfig(t *testing.T) {
+func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
-	db := &cobra.Command{Use: "db"}
-	list := &cobra.Command{Use: "list"}
-	status := &cobra.Command{Use: "status"}
-	root.AddCommand(db, status)
-	db.AddCommand(list)
-
-	if !commandRequiresMatchingDaemonConfig(list) {
-		t.Fatal("nested db command did not require matching daemon config")
+	for _, name := range []string{
+		"down", "restart", "logs", "open", "exec", "query", "topics", "seed",
+		"edge", "service", "db", "tunnel", "trace", "tracing",
+	} {
+		parent := &cobra.Command{Use: name}
+		child := &cobra.Command{Use: "child"}
+		root.AddCommand(parent)
+		parent.AddCommand(child)
+		if !commandRequiresMatchingDaemonConfig(child) {
+			t.Errorf("nested %s command did not require matching daemon config", name)
+		}
 	}
-	if commandRequiresMatchingDaemonConfig(status) {
-		t.Fatal("unrelated command required the db-specific guard")
+	for _, name := range []string{"up", "status", "doctor", "inspect", "history", "env", "daemon"} {
+		cmd := &cobra.Command{Use: name}
+		root.AddCommand(cmd)
+		if commandRequiresMatchingDaemonConfig(cmd) {
+			t.Errorf("%s should remain available across project contexts", name)
+		}
 	}
 }
 

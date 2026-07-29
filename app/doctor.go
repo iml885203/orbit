@@ -36,7 +36,9 @@ func runDoctorWithOptions(options doctorOptions) error {
 	if client.Health() == nil {
 		if status, err := client.Status(); err == nil {
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-				return mismatch
+				if !usesDiscoveredProjectConfig(configFile) {
+					return mismatch
+				}
 			}
 		}
 	}
@@ -137,6 +139,8 @@ func doctorResponse(client *daemon.Client) *daemon.DoctorResponse {
 					}
 					return resp
 				}
+			} else if usesDiscoveredProjectConfig(configFile) {
+				return localDoctorResponseWithContext(true, status)
 			}
 		}
 	}
@@ -148,6 +152,13 @@ func localDoctorResponse() *daemon.DoctorResponse {
 }
 
 func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
+	return localDoctorResponseWithContext(daemonRunning, nil)
+}
+
+func localDoctorResponseWithContext(
+	daemonRunning bool,
+	runningStatus *daemon.StatusResponse,
+) *daemon.DoctorResponse {
 	var checks []daemon.DoctorCheck
 	var cfg *config.Config
 	selection := readEnvironmentSelection()
@@ -174,7 +185,7 @@ func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
 		if len(cfg.Containers) > 0 {
 			checks = append(checks, daemonsrv.DockerCheck())
 		}
-		checks = append(checks, localPortChecks(cfg)...)
+		checks = append(checks, localPortChecksWithContext(cfg, runningStatus)...)
 		checks = append(checks, daemonsrv.HostEnvironmentChecks(cfg)...)
 	}
 	daemonMessage := "not running"
@@ -182,7 +193,14 @@ func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
 		daemonMessage = "running with the previous environment snapshot"
 	}
 	daemonCheck := daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage}
-	if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
+	if runningStatus != nil {
+		daemonCheck.Message = fmt.Sprintf(
+			"%s is running; orbit up switches to %s",
+			projectContextName(runningStatus.ConfigPath),
+			projectContextName(configFile),
+		)
+		daemonCheck.Hint = "run: orbit up"
+	} else if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
 		daemonCheck.Hint = "run: orbit up"
 	}
 	checks = append(checks, daemonCheck)
@@ -203,6 +221,13 @@ func localDoctorResponseWithDaemon(daemonRunning bool) *daemon.DoctorResponse {
 }
 
 func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
+	return localPortChecksWithContext(cfg, nil)
+}
+
+func localPortChecksWithContext(
+	cfg *config.Config,
+	runningStatus *daemon.StatusResponse,
+) []daemon.DoctorCheck {
 	type portEntry struct {
 		port int
 		name string
@@ -221,6 +246,12 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 	}
 	sort.Slice(ports, func(i, j int) bool { return ports[i].port < ports[j].port })
 	checks := make([]daemon.DoctorCheck, 0, len(ports))
+	releasedOnSwitch := map[int]bool{}
+	runningName := ""
+	if runningStatus != nil {
+		releasedOnSwitch = projectContextPorts(runningStatus.Resources)
+		runningName = projectContextName(runningStatus.ConfigPath)
+	}
 	for _, entry := range ports {
 		check := daemon.DoctorCheck{
 			Name:    fmt.Sprintf("Port %d", entry.port),
@@ -229,6 +260,15 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 		}
 		conflicts := port.CheckPorts(map[string][]int{entry.name: {entry.port}})
 		if len(conflicts) > 0 {
+			if releasedOnSwitch[entry.port] {
+				check.Status = daemon.CheckInfo
+				check.Message = fmt.Sprintf(
+					"used by %s; Orbit will release it when switching projects",
+					runningName,
+				)
+				checks = append(checks, check)
+				continue
+			}
 			if entry.auto {
 				check.Status = daemon.CheckInfo
 				check.Message = fmt.Sprintf(

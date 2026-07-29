@@ -62,6 +62,14 @@ directory and tools before startup, starts Redis before the host process, opens
 the actual selected URL, and retains logs. It starts its local daemon
 automatically.
 
+You can move directly to another project that has its own `orbit.yaml`.
+`orbit status` shows that the other project is still active without mixing its
+resources into the current project, and `orbit doctor` checks whether the
+current project is ready. Run `orbit up` to switch projects: Orbit validates
+the new project first, stops the previous resources, and starts the current
+ones. Commands such as `down`, `logs`, and `open` never control resources that
+belong to the other project.
+
 At this point the whole mental model is:
 
 ```text

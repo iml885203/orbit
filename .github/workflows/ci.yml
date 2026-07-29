@@ -56,3 +56,5 @@ jobs:
         run: ./scripts/test-first-five-minutes.sh
       - name: Run local-first adoption from an empty project
         run: ./scripts/test-local-first-adoption.sh
+      - name: Switch safely between two local projects
+        run: ./scripts/test-project-context-switch.sh

@@ -145,6 +145,17 @@ command 找到最近的 project `orbit.yaml` 時，status 會把這份實際啟�
 Agent 應依回傳的 source 與 path 判斷，不要從 `~/.orbit/envs` 猜測 active
 config。
 
+若另一個 project-local environment 正在執行，status 仍會成功，而且只描述
+目前專案設定的 resource。它會設定
+`data.environment.context_switch_required: true`、回報 `running_name` 與
+`running_path`，並只建議 `orbit up --json`。Doctor 會驗證目前專案，且把執行中
+專案占用的 port 視為切換時可釋放。可能誤控另一個專案 resource 的操作指令會
+以 `project_context_inactive` 失敗；agent 應遵循唯一的 `orbit up --json`
+action。切換成功後，`up` 結果的 `data.context_switch` 會包含兩邊的專案名稱與
+啟動前停止的 resource。
+Inspect 遵守同一個 ownership boundary，不會把另一個專案的 resource 或
+dashboard 回報成目前專案所有。
+
 第一次 setup 前，status 仍是成功的狀態查詢，但會回傳
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的
 `orbit init --yes --json` action。若 environment 檔案存在但內容無效，則回傳

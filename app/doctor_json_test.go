@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -164,6 +165,48 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
 	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
 		t.Fatalf("auto port produced manual recovery actions: %+v", actions)
+	}
+}
+
+func TestLocalPortChecksTreatOtherProjectPortAsReleasedOnSwitch(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"shop-b": {Ports: map[string]config.PortDef{"http": {Host: portNumber}}},
+	}}
+	status := &daemon.StatusResponse{
+		ConfigPath: "/workspace/shop-a/orbit.yaml",
+		Resources: []daemon.ResourceStatus{{
+			Name:  "shop-a",
+			Ports: map[string]int{"http": portNumber},
+		}},
+	}
+
+	checks := localPortChecksWithContext(cfg, status)
+	if len(checks) != 1 ||
+		checks[0].Status != daemon.CheckInfo ||
+		!strings.Contains(checks[0].Message, "release it when switching projects") {
+		t.Fatalf("checks = %+v", checks)
+	}
+}
+
+func TestOtherProjectDoctorPointsDirectlyToUp(t *testing.T) {
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
+		Name:    "Daemon",
+		Status:  daemon.CheckInfo,
+		Message: "shop-a is running; orbit up switches to shop-b",
+		Hint:    "run: orbit up",
+	}}}
+	if got := doctorStartCommand(resp); got != "orbit up" {
+		t.Fatalf("start command = %q", got)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit up --json" {
+		t.Fatalf("actions = %+v", actions)
 	}
 }
 

@@ -130,6 +130,25 @@ func TestBuildLifecycleJSONDataEmptySlicesMarshalAsArrays(t *testing.T) {
 	}
 }
 
+func TestLifecycleJSONDataReportsProjectSwitch(t *testing.T) {
+	contextSwitch := &projectContextSwitch{
+		FromName:         "shop-a",
+		ToName:           "shop-b",
+		ToPath:           "/workspace/shop-b/orbit.yaml",
+		StoppedResources: []string{"api-a"},
+	}
+	got := buildLifecycleJSONData(lifecycleJSONOptions{
+		Operation:     "up",
+		ContextSwitch: contextSwitch,
+	})
+	if got.ContextSwitch == nil ||
+		got.ContextSwitch.FromName != "shop-a" ||
+		got.ContextSwitch.ToName != "shop-b" ||
+		len(got.ContextSwitch.StoppedResources) != 1 {
+		t.Fatalf("context switch = %+v", got.ContextSwitch)
+	}
+}
+
 func TestDownCompletionExplainsOrbitRemainsReady(t *testing.T) {
 	got := buildLifecycleJSONData(lifecycleJSONOptions{
 		Operation: "down",

@@ -156,6 +156,19 @@ precedence over a managed environment selected elsewhere. Agents should use
 the reported source and path rather than infer the active config from
 `~/.orbit/envs`.
 
+If another project-local environment is running, status remains successful and
+describes only the current project's configured resources. It sets
+`data.environment.context_switch_required: true`, reports `running_name` and
+`running_path`, and recommends exactly `orbit up --json`. Doctor validates the
+current project and treats ports owned by the running project as releasable
+during that switch. Operational commands that could control the other
+project's resources fail with `project_context_inactive`; agents should follow
+its sole `orbit up --json` action. A successful switch reports
+`data.context_switch` in the `up` result, including both project names and the
+resources stopped before startup.
+Inspect follows the same ownership boundary and never reports the other
+project's resources or dashboard as belonging to the current project.
+
 Before first setup, status remains a successful state query with
 `data.setup_required: true`, a human-readable `setup_message`, and exactly one
 `orbit init --yes --json` action. A present but invalid environment file is

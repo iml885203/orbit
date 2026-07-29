@@ -30,19 +30,27 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	daemonRunning := client.Health() == nil
+	daemonRunningForConfig := daemonRunning
 
 	dstatus := daemonStatus{Running: daemonRunning}
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-				return mismatch
+				if !usesDiscoveredProjectConfig(configFile) {
+					return mismatch
+				}
+				daemonRunningForConfig = false
+				dstatus.ContextMismatch = true
+				dstatus.ConfigPath = status.ConfigPath
+				dstatus.RunningEnvironment = projectContextName(status.ConfigPath)
+			} else {
+				for i := range status.Resources {
+					running[status.Resources[i].Name] = status.Resources[i]
+				}
+				dstatus.ConfigStale = status.ConfigStale
+				dstatus.ConfigStaleReason = status.ConfigStaleReason
 			}
-			for i := range status.Resources {
-				running[status.Resources[i].Name] = status.Resources[i]
-			}
-			dstatus.ConfigStale = status.ConfigStale
-			dstatus.ConfigStaleReason = status.ConfigStaleReason
 		}
 		if v, err := currentDaemonVersion(client); err == nil {
 			dstatus.Version = v.Running
@@ -53,6 +61,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	setup := statusSetupState{Selection: activeEnvironmentSelection(selection, configFile)}
+	if dstatus.ContextMismatch {
+		setup.Selection.ContextSwitchRequired = true
+		setup.Selection.RunningName = dstatus.RunningEnvironment
+		setup.Selection.RunningPath = dstatus.ConfigPath
+	}
 	if environmentSelectionBlocksConfig(selection, configFile) {
 		setup.SelectionRequired = true
 		setup.Message = environmentSelectionMessage(selection)
@@ -107,7 +120,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	if !daemonRunning {
+	if !daemonRunningForConfig {
 		running = persistedRuntimeStatus(configFile, cfg)
 	}
 
@@ -177,7 +190,12 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	// Context-aware tips
 	var tips []string
-	if dstatus.ConfigStale {
+	if dstatus.ContextMismatch {
+		tips = []string{fmt.Sprintf(
+			"orbit up                  stop %s and start this project",
+			dstatus.RunningEnvironment,
+		)}
+	} else if dstatus.ConfigStale {
 		tips = []string{"orbit env apply           apply changes and restore running resources"}
 	} else if dstatus.UpdateAvailable {
 		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
@@ -469,13 +487,16 @@ type jsonService struct {
 }
 
 type daemonStatus struct {
-	Running           bool   `json:"running"`
-	Version           string `json:"version,omitempty"`
-	OnDisk            string `json:"on_disk,omitempty"`
-	OnDiskPath        string `json:"on_disk_path,omitempty"`
-	UpdateAvailable   bool   `json:"update_available"`
-	ConfigStale       bool   `json:"config_stale,omitempty"`
-	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
+	Running            bool   `json:"running"`
+	Version            string `json:"version,omitempty"`
+	OnDisk             string `json:"on_disk,omitempty"`
+	OnDiskPath         string `json:"on_disk_path,omitempty"`
+	UpdateAvailable    bool   `json:"update_available"`
+	ConfigPath         string `json:"config_path,omitempty"`
+	RunningEnvironment string `json:"running_environment,omitempty"`
+	ContextMismatch    bool   `json:"context_mismatch,omitempty"`
+	ConfigStale        bool   `json:"config_stale,omitempty"`
+	ConfigStaleReason  string `json:"config_stale_reason,omitempty"`
 }
 
 func writeStatusJSON(
@@ -540,6 +561,14 @@ func writeStatusJSON(
 	var actions []cli.JSONAction
 	if setup.SelectionRequired {
 		actions = environmentSelectionActions(setup.Selection)
+	} else if dstatus.ContextMismatch {
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit up --json",
+			Reason: fmt.Sprintf(
+				"Stop %s and start the current project.",
+				dstatus.RunningEnvironment,
+			),
+		})
 	} else if dstatus.ConfigStale {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit env apply --json",
@@ -561,7 +590,7 @@ func writeStatusJSON(
 			Reason:  "Start the selected environment.",
 		})
 	}
-	if !setup.SelectionRequired && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
+	if !setup.SelectionRequired && !dstatus.ContextMismatch && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
 		recoveryActions := statusRecoveryActions(running)
 		if len(recoveryActions) > 0 {
 			actions = cli.MergeActions(actions, recoveryActions)
@@ -757,6 +786,14 @@ func printEnvironmentHeader(w io.Writer, name string, s daemonStatus) {
 	if s.ConfigStale {
 		_, _ = fmt.Fprintf(w, "  %s environment changes pending — orbit env apply\n",
 			cli.Faint.Sprint("⚠"))
+	}
+	if s.ContextMismatch {
+		_, _ = fmt.Fprintf(
+			w,
+			"  %s %s is running — orbit up switches to this project\n",
+			cli.Faint.Sprint("⚠"),
+			s.RunningEnvironment,
+		)
 	}
 	_, _ = fmt.Fprintln(w)
 }

@@ -58,6 +58,12 @@ Orbit 會從目前目錄往上找到最近的 `orbit.yaml`，所以人在專案�
 啟動前檢查實際的 service 目錄與工具、先啟動 Redis、再啟動 host process，
 並開啟真正選到的 URL、保留 logs；本機 daemon 會自動啟動。
 
+你可以直接移動到另一個同樣有 `orbit.yaml` 的專案。`orbit status` 會告訴你
+另一個專案仍在執行，但不會把它的 resource 混入目前專案；`orbit doctor`
+則會檢查目前專案是否已準備好。執行 `orbit up` 即可切換專案：Orbit 會先
+驗證新專案、停止舊專案的 resource，再啟動目前專案。`down`、`logs`、`open`
+等指令絕不會誤控另一個專案的 resource。
+
 此時需要理解的只有：
 
 ```text

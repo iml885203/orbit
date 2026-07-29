@@ -73,7 +73,7 @@ func TestActiveEnvironmentSelectionReportsProjectOverride(t *testing.T) {
 	if active.Source != "project" {
 		t.Fatalf("source = %q, want project", active.Source)
 	}
-	if active.SelectedName != "orbit" || active.SelectedPath != discoveredPath {
+	if active.SelectedName != filepath.Base(project) || active.SelectedPath != discoveredPath {
 		t.Fatalf("active selection = %+v, want project config", active)
 	}
 	if active.Environments[0].Selected {

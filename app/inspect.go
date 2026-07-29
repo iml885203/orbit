@@ -56,12 +56,15 @@ type inspectDaemonSummary struct {
 }
 
 type inspectEnvSummary struct {
-	State        string              `json:"state"`
-	SelectedName string              `json:"selected_name,omitempty"`
-	SelectedPath string              `json:"selected_path,omitempty"`
-	Environments []environmentChoice `json:"environments"`
-	PreviewOnly  bool                `json:"preview_only,omitempty"`
-	DaemonEnv    string              `json:"daemon_env,omitempty"`
+	State                 string              `json:"state"`
+	SelectedName          string              `json:"selected_name,omitempty"`
+	SelectedPath          string              `json:"selected_path,omitempty"`
+	Environments          []environmentChoice `json:"environments"`
+	PreviewOnly           bool                `json:"preview_only,omitempty"`
+	DaemonEnv             string              `json:"daemon_env,omitempty"`
+	ContextSwitchRequired bool                `json:"context_switch_required,omitempty"`
+	RunningName           string              `json:"running_name,omitempty"`
+	RunningPath           string              `json:"running_path,omitempty"`
 }
 
 type inspectServiceSummary struct {
@@ -98,6 +101,8 @@ type inspectBuildOptions struct {
 	StatusErr       error
 	Configured      []daemon.ResourceStatus
 	Selection       environmentSelection
+	ContextMismatch bool
+	RunningPath     string
 }
 
 func inspectCmd() *cobra.Command {
@@ -128,7 +133,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		ConfigPath:    configFile,
 		ConfigErr:     cfgErr,
 		SetupRequired: setupRequired,
-		ConfigEnvName: daemonsrv.EnvShortName(configFile),
+		ConfigEnvName: projectContextName(configFile),
 		DaemonRunning: daemonRunning,
 		PID:           pid,
 		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
@@ -140,7 +145,15 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	}
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
-			opts.Status = status
+			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
+				opts.Status = status
+			} else if usesDiscoveredProjectConfig(configFile) {
+				opts.ContextMismatch = true
+				opts.RunningPath = status.ConfigPath
+				opts.DaemonEnv = projectContextName(status.ConfigPath)
+			} else {
+				opts.Status = status
+			}
 		} else {
 			opts.StatusErr = err
 		}
@@ -150,8 +163,10 @@ func runInspect(_ *cobra.Command, _ []string) error {
 			opts.OnDiskPath = version.OnDiskPath
 			opts.UpdateAvailable = version.UpdateAvailable
 		}
-		if envs, err := client.Envs(); err == nil {
-			opts.DaemonEnv = daemonsrv.EnvShortName(envs.Current)
+		if opts.DaemonEnv == "" {
+			if envs, err := client.Envs(); err == nil {
+				opts.DaemonEnv = daemonsrv.EnvShortName(envs.Current)
+			}
 		}
 	}
 
@@ -193,6 +208,11 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 		Environments: opts.Selection.Environments,
 		PreviewOnly:  opts.PreviewOnly,
 		DaemonEnv:    opts.DaemonEnv,
+	}
+	if opts.ContextMismatch {
+		environment.ContextSwitchRequired = true
+		environment.RunningName = projectContextName(opts.RunningPath)
+		environment.RunningPath = opts.RunningPath
 	}
 	if opts.SetupRequired {
 		environment = inspectEnvSummary{
@@ -242,7 +262,7 @@ func configuredInspectServices(cfg *config.Config) []daemon.ResourceStatus {
 }
 
 func inspectDashboard(opts inspectBuildOptions) string {
-	if !opts.DaemonRunning {
+	if !opts.DaemonRunning || opts.ContextMismatch {
 		return ""
 	}
 	return opts.Dashboard
@@ -316,6 +336,17 @@ func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {
 			Message:  opts.ConfigErr.Error(),
 		}, true
 	}
+	if opts.ContextMismatch {
+		return inspectRisk{
+			Code:     "project_context_inactive",
+			Severity: "low",
+			Message: fmt.Sprintf(
+				"%s is running; orbit up switches to %s",
+				projectContextName(opts.RunningPath),
+				projectContextName(opts.ConfigPath),
+			),
+		}, true
+	}
 	if inspectEnvMismatch(opts) {
 		return inspectRisk{
 			Code:     "env_mismatch",
@@ -386,6 +417,13 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 	}
 	if opts.ConfigErr != nil {
 		return inspectReadiness{State: inspectReadinessConfigInvalid, Blocked: true, Summary: "selected config cannot be loaded"}
+	}
+	if opts.ContextMismatch {
+		return inspectReadiness{
+			State:   inspectReadinessNeedsDaemon,
+			Blocked: true,
+			Summary: "another project is running; orbit up switches to this project",
+		}
 	}
 	if inspectEnvMismatch(opts) {
 		return inspectReadiness{State: inspectReadinessNeedsDaemon, Blocked: true, Summary: "daemon is running with a different env"}

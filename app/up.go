@@ -60,9 +60,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err := preflightOrAbort(configWithoutManagedEnvironment, args); err != nil {
 		return err
 	}
+	contextSwitch, err := switchDiscoveredProjectContext()
+	if err != nil {
+		return err
+	}
 
 	if cli.JSONOutput {
-		return runUpJSON(args)
+		return runUpJSON(args, contextSwitch)
 	}
 
 	client, err := daemon.EnsureDaemon(configFile, groups)
@@ -119,7 +123,7 @@ func validateUpSelection(args []string) error {
 	}
 }
 
-func runUpJSON(args []string) error {
+func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 	client, err := daemon.EnsureDaemon(configFile, groups)
 	if err != nil {
 		return renderDaemonStartError(err)
@@ -140,6 +144,7 @@ func runUpJSON(args []string) error {
 		RequestedResources: names,
 		InfraOnly:          infraOnly,
 		FinalStatus:        finalStatus,
+		ContextSwitch:      contextSwitch,
 	}), lifecycleUpSuccessActions(names, finalStatus))
 }
 

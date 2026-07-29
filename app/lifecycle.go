@@ -19,6 +19,7 @@ type lifecycleJSONOptions struct {
 	InfraOnly          bool
 	FinalStatus        *daemon.StatusResponse
 	TimedOutResources  []string
+	ContextSwitch      *projectContextSwitch
 }
 
 type lifecycleJSONData struct {
@@ -29,6 +30,7 @@ type lifecycleJSONData struct {
 	Resources          []daemon.ResourceStatus `json:"resources"`
 	DegradedResources  []string                `json:"degraded_resources"`
 	TimedOutResources  []string                `json:"timed_out_resources"`
+	ContextSwitch      *projectContextSwitch   `json:"context_switch,omitempty"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
@@ -60,6 +62,7 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 		Resources:          resources,
 		DegradedResources:  degraded,
 		TimedOutResources:  timedOutResources,
+		ContextSwitch:      opts.ContextSwitch,
 	}
 }
 

@@ -218,6 +218,44 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	}
 }
 
+func TestBuildInspectDataKeepsOtherProjectResourcesOutOfCurrentProject(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:      "/workspace/project-b/orbit.yaml",
+		ConfigEnvName:   "project-b",
+		DaemonRunning:   true,
+		DaemonEnv:       "project-a",
+		ContextMismatch: true,
+		RunningPath:     "/workspace/project-a/orbit.yaml",
+		Configured: []daemon.ResourceStatus{{
+			Name:  "app-b",
+			State: "stopped",
+		}},
+	})
+
+	if got.Readiness.State != inspectReadinessNeedsDaemon || !got.Readiness.Blocked {
+		t.Fatalf("readiness = %+v", got.Readiness)
+	}
+	if len(got.Risks) != 1 || got.Risks[0].Code != "project_context_inactive" {
+		t.Fatalf("risks = %+v", got.Risks)
+	}
+	if got.Environment.RunningName != "project-a" ||
+		!got.Environment.ContextSwitchRequired {
+		t.Fatalf("environment = %+v", got.Environment)
+	}
+	if got.Resources.Total != 1 ||
+		len(got.Resources.Stopped) != 1 ||
+		got.Resources.Stopped[0] != "app-b" {
+		t.Fatalf("resources = %+v", got.Resources)
+	}
+	if got.Daemon.Dashboard != "" {
+		t.Fatalf("other project dashboard leaked into current context: %q", got.Daemon.Dashboard)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestBuildInspectDataZeroServicesMarshalEmptyArrays(t *testing.T) {
 	data := buildInspectData(inspectBuildOptions{
 		ConfigPath:    "/tmp/development.yaml",

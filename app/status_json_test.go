@@ -48,6 +48,44 @@ func TestEnvironmentHeaderShowsUserContextNotDaemonState(t *testing.T) {
 	}
 }
 
+func TestEnvironmentHeaderExplainsProjectSwitchAsOneAction(t *testing.T) {
+	var output bytes.Buffer
+	printEnvironmentHeader(&output, "shop-b", daemonStatus{
+		Running:            true,
+		ContextMismatch:    true,
+		RunningEnvironment: "shop-a",
+	})
+
+	got := output.String()
+	if !strings.Contains(got, "shop-a is running") ||
+		!strings.Contains(got, "orbit up switches to this project") {
+		t.Fatalf("header did not explain project switch:\n%s", got)
+	}
+}
+
+func TestStatusJSONKeepsOtherProjectResourcesOutOfCurrentProject(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"shop-b": {URL: "http://localhost:8081"},
+	}}
+	envelope := renderStatusEnvelope(t, cfg, map[string]daemon.ResourceStatus{}, daemonStatus{
+		Running:            true,
+		ContextMismatch:    true,
+		ConfigPath:         "/workspace/shop-a/orbit.yaml",
+		RunningEnvironment: "shop-a",
+	})
+
+	if len(envelope.Data.Resources) != 1 ||
+		envelope.Data.Resources[0].Name != "shop-b" ||
+		envelope.Data.Resources[0].State != "stopped" {
+		t.Fatalf("resources = %+v", envelope.Data.Resources)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit up --json" ||
+		!strings.Contains(envelope.RecommendedActions[0].Reason, "shop-a") {
+		t.Fatalf("actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 func TestCrashedServiceStatusLeadsOnlyToLogs(t *testing.T) {
 	running := map[string]daemon.ResourceStatus{
 		"redis": {

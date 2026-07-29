@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
@@ -24,11 +23,14 @@ type environmentChoice struct {
 }
 
 type environmentSelection struct {
-	State        string              `json:"state"`
-	Source       string              `json:"source,omitempty"`
-	SelectedName string              `json:"selected_name,omitempty"`
-	SelectedPath string              `json:"selected_path,omitempty"`
-	Environments []environmentChoice `json:"environments"`
+	State                 string              `json:"state"`
+	Source                string              `json:"source,omitempty"`
+	SelectedName          string              `json:"selected_name,omitempty"`
+	SelectedPath          string              `json:"selected_path,omitempty"`
+	ContextSwitchRequired bool                `json:"context_switch_required,omitempty"`
+	RunningName           string              `json:"running_name,omitempty"`
+	RunningPath           string              `json:"running_path,omitempty"`
+	Environments          []environmentChoice `json:"environments"`
 }
 
 type environmentSelectionRequiredError struct {
@@ -119,7 +121,7 @@ func activeEnvironmentSelection(selection environmentSelection, configPath strin
 	if usesDiscoveredProjectConfig(configPath) {
 		selection.State = environmentSelectionSelected
 		selection.Source = "project"
-		selection.SelectedName = strings.TrimSuffix(filepath.Base(configPath), filepath.Ext(configPath))
+		selection.SelectedName = projectContextName(configPath)
 		selection.SelectedPath = configPath
 		for i := range selection.Environments {
 			selection.Environments[i].Selected = false

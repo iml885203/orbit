@@ -256,6 +256,31 @@ func TestWriteJSONErrorClassifiesUnknownGroupAPIError(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorKeepsProjectSwitchAsSoleRecovery(t *testing.T) {
+	var buf bytes.Buffer
+	err := WithJSONActions(codedTestError{
+		code:    "project_context_inactive",
+		message: "project-b is not running; project-a is still active",
+	}, []JSONAction{{
+		Command: "orbit up --json",
+		Reason:  "Stop project-a and start project-b.",
+	}})
+	if writeErr := WriteJSONError(&buf, "orbit down --json", err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+	var envelope JSONEnvelope
+	if decodeErr := json.Unmarshal(buf.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "project_context_inactive" {
+		t.Fatalf("error = %+v", envelope.Error)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended actions = %+v", envelope.RecommendedActions)
+	}
+}
+
 type codedTestError struct {
 	code    string
 	message string

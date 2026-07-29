@@ -96,6 +96,9 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 				if status, err := client.Status(); err == nil {
 					if requiresMatch {
 						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+							if usesDiscoveredProjectConfig(configFile) {
+								return projectContextInactive(configFile, status.ConfigPath)
+							}
 							return mismatch
 						}
 					}
@@ -295,12 +298,17 @@ func (e errCLIJSONAlreadyRendered) Unwrap() error {
 }
 
 func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
-	for current := cmd; current != nil; current = current.Parent() {
-		if current.Name() == "db" {
-			return true
-		}
+	top := cmd
+	for top.Parent() != nil && top.Parent().Parent() != nil {
+		top = top.Parent()
 	}
-	return false
+	switch top.Name() {
+	case "down", "restart", "logs", "open", "exec", "query", "topics", "seed",
+		"edge", "service", "db", "tunnel", "trace", "tracing":
+		return true
+	default:
+		return false
+	}
 }
 
 func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {

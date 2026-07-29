@@ -192,6 +192,18 @@ func classify(err error) JSONError {
 				Hint:      hint,
 				Retryable: true,
 			}
+		case "project_context_inactive":
+			hint := "Run orbit up from this project to switch the active environment."
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				hint = hintedErr.CLIJSONHint()
+			}
+			return JSONError{
+				Code:      "project_context_inactive",
+				Message:   msg,
+				Hint:      hint,
+				Retryable: true,
+			}
 		case "unknown_group":
 			return JSONError{
 				Code:      "invalid_argument",
@@ -349,6 +361,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		return nil
 	}
 	if err.Code == "environment_selection_required" {
+		return nil
+	}
+	if err.Code == "project_context_inactive" {
 		return nil
 	}
 	if err.Code == "orbit_update_pending" {
