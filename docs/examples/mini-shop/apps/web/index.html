@@ -553,7 +553,7 @@
       </div>
     </div>
 
-    <div id="scenario-stories-card" class="card">
+    <div id="scenario-stories-card" class="card compact-mode-hide">
       <h3>場景導演（先做這 3 個）</h3>
       <p class="hint">每個情境都會顯示「你做了什麼 → 會看到什麼 → 下一步」；先做 A，再做 B、C。</p>
       <div class="scenario-story-grid">
@@ -2485,6 +2485,37 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         readyCount,
         serviceTotal,
       }) {
+        function pickPrimaryAction(items) {
+          if (!items || !items.length) {
+            return {
+              type: 'focus',
+              payload: '#goal-next',
+              label: '查看下一步建議',
+            };
+          }
+
+          const priority = ['#service-overview-panel', '#customer-panel', '#product-panel', '#cart-panel', '#checkout-panel', '#goal-next'];
+          const withPriority = priority.reduce((acc, target) => {
+            const found = items.find((item) => item.payload === target);
+            if (found && !acc.includes(found)) {
+              acc.push(found);
+            }
+            return acc;
+          }, []);
+
+          for (const item of withPriority) {
+            if (item) {
+              return item;
+            }
+          }
+
+          return items[0] || {
+            type: 'focus',
+            payload: '#goal-next',
+            label: '查看下一步建議',
+          };
+        }
+
         if (!demoVerdictEl) {
           return;
         }
@@ -2521,9 +2552,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           : resolvedActions
             .map((action) => `<button type="button" class="small-btn inline-btn" data-demo-verdict-action="${action.type}" data-demo-verdict-payload="${action.payload || ''}">${action.label || '前往'}</button>`) 
             .join('');
+        const primaryAction = pickPrimaryAction(resolvedActions);
         const quickCompassActions = canDemo
           ? '<button type="button" class="small-btn inline-btn" data-demo-verdict-action="copy" data-demo-verdict-payload="demo-report">複製 demo 報告</button>'
-          : renderedActions;
+          : `<button type="button" class="small-btn inline-btn" data-demo-verdict-action="${primaryAction.type}" data-demo-verdict-payload="${primaryAction.payload || ''}">${primaryAction.label || '前往下一步'}</button>`;
 
         demoVerdictEl.innerHTML = [
           `<div class="verdict-line ${statusClass}">${statusText}</div>`,
