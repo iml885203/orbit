@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-fast test-e2e test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-fast test-e2e test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -39,7 +39,8 @@ clean:
 kafka-producer-image:
 	docker build -f cmd/kafka-producer-sidecar/Dockerfile -t orbit-kafka-producer:local .
 
-test: test-ui test-go
+test:
+	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
 
 test-go:
 	go test ./...
@@ -47,14 +48,21 @@ test-go:
 # Frontend checks — typecheck, lint, unit tests. Part of `make test` so the
 # standard verification path covers the dashboard, not just the Go side.
 test-ui:
+	$(MAKE) -j3 test-ui-check test-ui-lint test-ui-unit
+
+test-ui-check:
 	pnpm --dir ui run check
+
+test-ui-lint:
 	pnpm --dir ui run lint
+
+test-ui-unit:
 	pnpm --dir ui run test
 
 # Fast inner-loop confidence without builds, installer/docs contracts, or
 # release gates. The full preflight remains mandatory before every commit.
 test-fast:
-	$(MAKE) -j2 test-go test-ui
+	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
 
 # End-to-end tests against a real daemon + Docker. Uses the freshly built
 # ./bin/orbit (skips tests if they detect container name collisions).
@@ -112,7 +120,7 @@ dev:
 preflight:
 	pnpm --dir ui install --frozen-lockfile
 	$(MAKE) ui
-	$(MAKE) -j2 test-go test-ui
+	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
 	go build ./...
 	go vet ./...
 	$(MAKE) test-install
