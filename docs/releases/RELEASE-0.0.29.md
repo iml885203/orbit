@@ -26,7 +26,7 @@ dependencies becomes unavailable.
 - The full local preflight keeps every existing check but runs independent
   work in parallel and reuses one Vitest process for Svelte transforms.
 - On the reference development machine, the same preflight fell from 73.62
-  seconds to 33.82 seconds.
+  seconds to 34.29 seconds.
 - `make test-fast` provides a focused Go + dashboard inner loop; the complete
   `make preflight` remains the commit gate.
 
