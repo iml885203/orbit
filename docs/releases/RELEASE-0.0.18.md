@@ -45,12 +45,12 @@
 
 ## 變更總覽（Commit）
 
-- `c4ca4a9` feat: make mini-shop timeline explicit and progressive
-- `2f88c2c` feat: add attention cues to reduce flow mental model
-- `6cfca98` feat: add error playbook focus actions
-- `07a948a` feat: prioritize error-card recovery actions
-- `eeb2a5b` feat(mini-shop): add 1.0 onboarding UX polish and acceptance checklist
-- `6858056` docs(mini-shop): add UX smoke check and tie 1.0 journey to demo outcome
+- `4b98d33` feat: make mini-shop timeline explicit and progressive
+- `e28fe53` feat: add attention cues to reduce flow mental model
+- `a79d75d` feat: add error playbook focus actions
+- `2072b19` feat: prioritize error-card recovery actions
+- `d049e51` feat(mini-shop): add 1.0 onboarding UX polish and acceptance checklist
+- `6677537` docs(mini-shop): add UX smoke check and tie 1.0 journey to demo outcome
 
 ## 本次 release 驗證
 

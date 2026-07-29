@@ -40,7 +40,7 @@
 
 ## 變更匯總
 
-- `7a11978` docs: add demo strategy and release polish checklist for 1.0 UX
+- `131386e` docs: add demo strategy and release polish checklist for 1.0 UX
 - 本次 release 補做：`docs/examples/mini-shop/UX-SMOKE-CHECK.md` typo 修正
 
 ## 本次驗證
