@@ -208,6 +208,10 @@ cp "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
 chmod +x "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
 PATH="$browser_stub_dir:$PATH" "$orbit_bin" open demo-shop --json >"$test_root/open-service.json"
 PATH="$browser_stub_dir:$PATH" "$orbit_bin" open --json >"$test_root/open-dashboard.json"
+if PATH="$browser_stub_dir:$PATH" "$orbit_bin" open redis --json >"$test_root/open-infra.json"; then
+  echo "orbit open unexpectedly treated infrastructure as an application." >&2
+  exit 1
+fi
 demo_url="$(
   python3 -c '
 import json
@@ -262,6 +266,7 @@ version = read("version.json")
 health = read("health.json")
 service = read("open-service.json")
 dashboard = read("open-dashboard.json")
+infrastructure = read("open-infra.json")
 
 assert up["ok"] is True
 assert status["ok"] is True
@@ -290,6 +295,12 @@ assert service["data"] == {
 }
 assert dashboard["data"]["target"] == "dashboard"
 assert dashboard["data"]["url"] != demo_url
+assert infrastructure["ok"] is False
+assert infrastructure["error"]["code"] == "not_configured"
+assert infrastructure["error"]["message"] == "redis does not expose an application URL"
+assert [action["command"] for action in infrastructure["recommended_actions"]] == [
+    "orbit open --json"
+]
 PY
 
 english_handoff="https://github.com/iml885203/orbit/blob/$expected_demo_ref/docs/local-first.md"

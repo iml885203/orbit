@@ -96,6 +96,16 @@ grep -F "project-b" "$test_root/page-b.html" >/dev/null
 "$orbit_bin" doctor --json >"$test_root/doctor-b-after.json"
 "$orbit_bin" logs app-b --json >"$test_root/logs-b-after.json"
 "$orbit_bin" logs app-b >"$test_root/logs-b-after.txt"
+for command in up down restart logs open; do
+  if "$orbit_bin" "$command" appb --json >"$test_root/typo-$command.json"; then
+    echo "orbit $command unexpectedly accepted a misspelled resource." >&2
+    exit 1
+  fi
+done
+if "$orbit_bin" logs appb >"$test_root/typo-human.txt" 2>&1; then
+  echo "orbit logs unexpectedly accepted a misspelled resource." >&2
+  exit 1
+fi
 "$orbit_bin" restart app-b --json >"$test_root/restart-b-after.json"
 "$orbit_bin" down app-b --json >"$test_root/stop-b-after.json"
 if "$orbit_bin" open app-b --json >"$test_root/open-stopped-b.json"; then
@@ -188,6 +198,21 @@ assert doctor_after.get("recommended_actions", []) == []
 assert logs_after["ok"] is True
 assert logs_after.get("recommended_actions", []) == []
 assert "Next:" not in (root / "logs-b-after.txt").read_text(encoding="utf-8")
+
+for command in ("up", "down", "restart", "logs", "open"):
+    typo = read(f"typo-{command}.json")
+    corrected = f"orbit {command} app-b --json"
+    assert typo["ok"] is False
+    assert typo["error"]["code"] == "unknown_resource"
+    assert "did you mean app-b?" in typo["error"]["message"]
+    assert typo["error"]["next_command"] == corrected
+    assert [action["command"] for action in typo["recommended_actions"]] == [
+        corrected
+    ]
+
+human_typo = (root / "typo-human.txt").read_text(encoding="utf-8")
+assert "did you mean app-b?" in human_typo
+assert "Next: orbit logs app-b" in human_typo
 
 assert restart_after["ok"] is True
 assert restart_after["data"]["resources"][0]["name"] == "app-b"

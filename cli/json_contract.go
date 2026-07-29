@@ -264,10 +264,15 @@ func classify(err error) JSONError {
 				Retryable: false,
 			}
 		case "unknown_resource":
+			hint := "Run 'orbit status --json' to list configured resources."
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				hint = hintedErr.CLIJSONHint()
+			}
 			return JSONError{
 				Code:        "unknown_resource",
 				Message:     msg,
-				Hint:        "Run 'orbit status --json' to list configured resources.",
+				Hint:        hint,
 				Retryable:   false,
 				NextCommand: "orbit status --json",
 			}
@@ -291,12 +296,17 @@ func classify(err error) JSONError {
 			NextCommand: "orbit status --json",
 		}
 	case errors.Is(err, ErrNotConfigured):
+		hint := "This feature requires configuration the active env does not provide."
+		var hintedErr interface{ CLIJSONHint() string }
+		if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+			hint = hintedErr.CLIJSONHint()
+		}
 		return JSONError{
 			Code:    "not_configured",
 			Message: msg,
 			// No docs pointer here: the message itself (owned by the daemon,
 			// e.g. ErrMsgDBNotConfigured) already carries one.
-			Hint:      "This feature requires configuration the active env does not provide.",
+			Hint:      hint,
 			Retryable: false,
 		}
 	case errors.Is(err, ErrChecksFailed):

@@ -274,6 +274,11 @@ func printExecutionError(w io.Writer, err error) {
 		return
 	}
 	_, _ = fmt.Fprintf(w, "Error: %v\n", err)
+	var withHumanNext interface{ CLIHumanNextCommand() string }
+	if errors.As(err, &withHumanNext) && withHumanNext.CLIHumanNextCommand() != "" {
+		_, _ = fmt.Fprintf(w, "  Next: %s\n", withHumanNext.CLIHumanNextCommand())
+		return
+	}
 	if errors.Is(err, cli.ErrLogsUnavailable) {
 		var withActions interface{ CLIJSONActions() []cli.JSONAction }
 		if errors.As(err, &withActions) {
@@ -694,14 +699,16 @@ func runRestart(_ *cobra.Command, args []string) error {
 	}
 
 	name := args[0]
+	status, err := client.Status()
+	if err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if !lifecycleResourceExists(status, name) {
+		return newResourceNameError(status, name, func(suggestion string) string {
+			return "orbit restart " + suggestion
+		})
+	}
 	if cli.JSONOutput {
-		status, err := client.Status()
-		if err != nil {
-			return fmt.Errorf("status: %w", err)
-		}
-		if !lifecycleResourceExists(status, name) {
-			return cli.NewUnknownResourceError(name)
-		}
 		priorRestartCount := lifecycleRestartCount(status, name)
 		resp, err := client.Restart(name)
 		if err != nil {
@@ -741,14 +748,16 @@ func runStop(_ *cobra.Command, args []string) error {
 	}
 
 	name := args[0]
+	status, err := client.Status()
+	if err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if !lifecycleResourceExists(status, name) {
+		return newResourceNameError(status, name, func(suggestion string) string {
+			return "orbit down " + suggestion
+		})
+	}
 	if cli.JSONOutput {
-		status, err := client.Status()
-		if err != nil {
-			return fmt.Errorf("status: %w", err)
-		}
-		if !lifecycleResourceExists(status, name) {
-			return cli.NewUnknownResourceError(name)
-		}
 		resp, err := client.Stop(name)
 		if err != nil {
 			return fmt.Errorf("stop failed: %w", err)
@@ -784,7 +793,13 @@ func runLogs(_ *cobra.Command, args []string) error {
 	}
 	resource := lifecycleResourceStatus(status, name)
 	if resource == nil {
-		return cli.NewUnknownResourceError(name)
+		return newResourceNameError(status, name, func(suggestion string) string {
+			command := "orbit logs " + suggestion
+			if follow {
+				command += " --follow"
+			}
+			return command
+		})
 	}
 
 	if follow {
@@ -922,7 +937,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 		svc := &status.Resources[i]
 		if svc.Name == name {
 			if svc.URL == "" {
-				return fmt.Errorf("no url configured for %s — add 'url' to config", name)
+				return resourceURLNotConfiguredError{name: name}
 			}
 			if svc.State != "healthy" {
 				command := "orbit status"
@@ -947,5 +962,35 @@ func runOpen(_ *cobra.Command, args []string) error {
 			return openURL(svc.URL, "service", name)
 		}
 	}
-	return fmt.Errorf("service %s not found", name)
+	return newResourceNameError(status, name, func(suggestion string) string {
+		return "orbit open " + suggestion
+	})
+}
+
+type resourceURLNotConfiguredError struct {
+	name string
+}
+
+func (e resourceURLNotConfiguredError) Error() string {
+	return e.name + " does not expose an application URL"
+}
+
+func (e resourceURLNotConfiguredError) Unwrap() error {
+	return cli.ErrNotConfigured
+}
+
+func (e resourceURLNotConfiguredError) CLIJSONHint() string {
+	return "Open the dashboard to inspect this resource. Environment authors can add 'url' when it represents an application."
+}
+
+func (e resourceURLNotConfiguredError) CLIJSONReplacementActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     "orbit open --json",
+		Reason:      "Open the dashboard to inspect " + e.name + ".",
+		Destructive: false,
+	}}
+}
+
+func (e resourceURLNotConfiguredError) CLIHumanNextCommand() string {
+	return "orbit open"
 }

@@ -73,6 +73,9 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
+	if err := validateUpResourceNames(client, args); err != nil {
+		return err
+	}
 
 	req := daemon.UpRequest{
 		Resources: args,
@@ -128,6 +131,9 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
+	if err := validateUpResourceNames(client, args); err != nil {
+		return err
+	}
 	req := daemon.UpRequest{Resources: args, InfraOnly: infraOnly, Groups: groups}
 	resp, err := client.Up(req)
 	if err != nil {
@@ -146,6 +152,27 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		FinalStatus:        finalStatus,
 		ContextSwitch:      contextSwitch,
 	}), lifecycleUpSuccessActions(names, finalStatus))
+}
+
+func validateUpResourceNames(client *daemon.Client, names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	status, err := client.Status()
+	if err != nil {
+		return fmt.Errorf("status before up: %w", err)
+	}
+	for index, name := range names {
+		if lifecycleResourceExists(status, name) {
+			continue
+		}
+		return newResourceNameError(status, name, func(suggestion string) string {
+			corrected := append([]string{}, names...)
+			corrected[index] = suggestion
+			return "orbit up " + strings.Join(corrected, " ")
+		})
+	}
+	return nil
 }
 
 // pollLoop runs an onTick callback every 2s with the latest status snapshot
