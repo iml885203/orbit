@@ -2,16 +2,43 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"net"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/logging"
 	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/client"
 )
+
+func TestPollerDebouncesDockerOutageAndReportsItOnce(t *testing.T) {
+	cli, err := client.NewClientWithOpts(client.WithHost("tcp://127.0.0.1:1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cli.Close() }()
+
+	poller := NewPoller(cli, "test", time.Second)
+	reports := 0
+	poller.OnUnavailable = func(error) {
+		reports++
+	}
+
+	poller.poll(context.Background())
+	if reports != 0 {
+		t.Fatalf("first transport failure reported an outage: %d", reports)
+	}
+	poller.poll(context.Background())
+	poller.poll(context.Background())
+	if reports != 1 {
+		t.Fatalf("outage reports = %d, want one after consecutive failures", reports)
+	}
+}
 
 func TestContainerPortConflictHidesContainerRuntimeError(t *testing.T) {
 	listener, err := net.Listen("tcp4", "0.0.0.0:0")

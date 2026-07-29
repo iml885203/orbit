@@ -661,6 +661,7 @@ func (s *Server) resolveWorkspaceRoot() (string, DoctorCheck, bool) {
 func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 	var healthy, stopped int
 	var degraded, degradedNames, changing []string
+	dockerUnavailable := false
 	for i := range services {
 		service := &services[i]
 		switch service.State {
@@ -670,6 +671,9 @@ func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 			stopped++
 		case engine.StateDegraded:
 			degradedNames = append(degradedNames, service.Name)
+			if service.StateReason == engine.DockerObservationUnavailableReason {
+				dockerUnavailable = true
+			}
 			detail := service.Name
 			if service.StateReason != "" {
 				detail += " — " + service.StateReason
@@ -684,7 +688,9 @@ func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 	}
 	if len(degraded) > 0 {
 		hint := "run: orbit status"
-		if len(degraded) == 1 {
+		if dockerUnavailable {
+			hint = "Restore Docker; Orbit reconnects automatically"
+		} else if len(degraded) == 1 {
 			hint = "run: orbit logs " + degradedNames[0]
 		}
 		return DoctorCheck{

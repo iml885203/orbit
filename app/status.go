@@ -13,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -786,8 +787,19 @@ func terminalRuntimeBlocker(service daemon.ResourceStatus, running map[string]da
 
 func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONAction {
 	var actions []cli.JSONAction
+	dockerUnavailableAdded := false
 	for _, name := range statusRecoveryTargets(running) {
 		service := running[name]
+		if service.StateReason == engine.DockerObservationUnavailableReason {
+			if !dockerUnavailableAdded {
+				actions = append(actions, cli.JSONAction{
+					Command: "orbit doctor --json",
+					Reason:  "Check why Docker is unavailable; Orbit reconnects automatically when it returns.",
+				})
+				dockerUnavailableAdded = true
+			}
+			continue
+		}
 		if service.PortConflict != nil {
 			actions = append(actions, resourcePortConflictActions(service.PortConflict)...)
 			continue
@@ -816,8 +828,16 @@ func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONA
 
 func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
 	var tips []string
+	dockerUnavailableAdded := false
 	for _, name := range statusRecoveryTargets(running) {
 		service := running[name]
+		if service.StateReason == engine.DockerObservationUnavailableReason {
+			if !dockerUnavailableAdded {
+				tips = append(tips, "orbit doctor              diagnose Docker; Orbit reconnects automatically")
+				dockerUnavailableAdded = true
+			}
+			continue
+		}
 		if service.PortConflict != nil {
 			if service.PortConflict.InspectCommand != "" {
 				tips = append(tips, fmt.Sprintf("%s  inspect port %d owner", service.PortConflict.InspectCommand, service.PortConflict.Port))

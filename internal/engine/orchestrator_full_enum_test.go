@@ -167,6 +167,49 @@ func TestOnContainerSeen_DriftFromHealthyToDegraded(t *testing.T) {
 	}
 }
 
+func TestDockerObservationOutageInvalidatesAndReconcilesRuntimeTruth(t *testing.T) {
+	cfg := twoContainerCfg()
+	o := newTestOrchestrator(cfg)
+	o.OnContainerSeen("redis", true)
+	o.OnContainerSeen("kafka", true)
+
+	o.OnContainerObservationUnavailable()
+	for _, name := range []string{"redis", "kafka"} {
+		info, _ := o.GetServiceInfo(name)
+		if info.State != StateDegraded || info.StateReason != DockerObservationUnavailableReason {
+			t.Fatalf("%s = %s/%q, want degraded Docker observation", name, info.State, info.StateReason)
+		}
+	}
+	redisBeforeHealthNoise, _ := o.GetServiceInfo("redis")
+	_ = o.handleEvent(context.Background(), Event{
+		Type:       EventHealthFail,
+		Service:    "redis",
+		Message:    "dial tcp: connection refused",
+		Generation: redisBeforeHealthNoise.Generation,
+	})
+	redisAfterHealthNoise, _ := o.GetServiceInfo("redis")
+	if redisAfterHealthNoise.StateReason != DockerObservationUnavailableReason {
+		t.Fatalf("health noise replaced Docker root cause: %q", redisAfterHealthNoise.StateReason)
+	}
+
+	o.OnContainerSeen("redis", true)
+	redis, _ := o.GetServiceInfo("redis")
+	if redis.State != StateHealthy || redis.StateReason != "" {
+		t.Fatalf("redis = %s/%q after Docker returned, want healthy", redis.State, redis.StateReason)
+	}
+
+	o.OnContainerMissing("kafka")
+	kafka, _ := o.GetServiceInfo("kafka")
+	if kafka.StateReason != DockerObservationUnavailableReason {
+		t.Fatalf("first partial snapshot discarded Docker recovery context: %q", kafka.StateReason)
+	}
+	o.OnContainerMissing("kafka")
+	kafka, _ = o.GetServiceInfo("kafka")
+	if kafka.State != StateDegraded || kafka.StateReason != "container removed outside orbit" {
+		t.Fatalf("kafka = %s/%q after Docker returned, want specific removal", kafka.State, kafka.StateReason)
+	}
+}
+
 func TestOnContainerSeen_NotRunningFromStoppedStaysStopped(t *testing.T) {
 	cfg := twoContainerCfg()
 	o := newTestOrchestrator(cfg)

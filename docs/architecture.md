@@ -147,9 +147,15 @@ immediately instead of entering a health timeout.
 | Start | Docker `container.create` + `container.start` | `exec.Command` under a fresh process group (`setpgid` on Unix, Job Objects on Windows) |
 | Stop | Docker stop + 10s grace → kill | SIGTERM to the group → `shutdown_timeout` grace (default 30s) → SIGKILL to the group |
 | Health | Polled every 2s via `container.inspect` plus the service's declared `health_check` | The declared `health_check` only |
-| Drift detection | `ContainerDrift` event when Docker's state differs from Orbit's belief | Implicit: if the process dies, `ProcessExited` fires |
+| Drift detection | Successful Docker snapshots reconcile stopped, removed, or externally restarted containers | Implicit: if the process dies, `ProcessExited` fires |
 
 Both kinds share the same state machine and event loop. The differences are entirely inside `manager.go` of each package.
+
+Two consecutive Docker API failures invalidate previously healthy container
+claims without turning a brief transport hiccup into user-visible churn.
+`status` identifies Docker as the root cause and leads to `orbit doctor`.
+Orbit keeps polling and restores resource truth automatically when Docker
+returns; restarting Orbit or each container is not part of the recovery model.
 
 ## Cross-platform process groups
 

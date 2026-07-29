@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -28,8 +29,14 @@ type Poller struct {
 	OnDrift func(name string, state ContainerState)
 	// OnStateUpdate is called on every poll with current states.
 	OnStateUpdate func(states map[string]ContainerState)
+	// OnUnavailable is called once after Docker cannot be observed for two
+	// consecutive polls. One missed poll is treated as transient transport
+	// noise; a successful poll arms the callback for a future outage.
+	OnUnavailable func(err error)
 
-	lastStates map[string]ContainerState
+	lastStates          map[string]ContainerState
+	consecutiveFailures int
+	unavailable         bool
 }
 
 // NewPoller creates a container state poller for the given namespace.
@@ -66,14 +73,23 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 func (p *Poller) poll(ctx context.Context) {
+	if p.cli == nil {
+		p.recordFailure(errors.New("Docker client is unavailable"))
+		return
+	}
 	containers, err := p.cli.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: make(client.Filters).Add("label", labelManaged+"=true"),
 	})
 	if err != nil {
-		slog.Error("Docker list error", "component", "poller", "err", err)
+		p.recordFailure(err)
 		return
 	}
+	if p.unavailable {
+		slog.Info("Docker connection restored", "component", "poller")
+	}
+	p.consecutiveFailures = 0
+	p.unavailable = false
 
 	current := make(map[string]ContainerState)
 	for i := range containers.Items {
@@ -124,4 +140,19 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 
 	p.lastStates = current
+}
+
+func (p *Poller) recordFailure(err error) {
+	p.consecutiveFailures++
+	if p.consecutiveFailures == 1 {
+		slog.Warn("Docker poll failed; retrying", "component", "poller", "err", err)
+	}
+	if p.consecutiveFailures < 2 || p.unavailable {
+		return
+	}
+	p.unavailable = true
+	slog.Error("Docker is unavailable", "component", "poller", "err", err)
+	if p.OnUnavailable != nil {
+		p.OnUnavailable(err)
+	}
 }

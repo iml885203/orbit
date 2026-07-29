@@ -61,6 +61,9 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 					info.StateReason = conflict.Error()
 				}
 			case StateDegraded:
+				if info.StateReason == DockerObservationUnavailableReason {
+					break
+				}
 				// Recovery probing can produce a sharper diagnosis than
 				// the original exhaustion message (e.g. zombie detection)
 				// — refresh the reason without a state change.

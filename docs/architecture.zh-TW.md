@@ -146,9 +146,14 @@ sequenceDiagram
 | 啟動 | Docker `container.create` + `container.start` | `exec.Command` 放在獨立的 process group(Unix 上用 `setpgid`，Windows 上用 Job Objects) |
 | 停止 | Docker stop + 10 秒緩衝 → kill | 對 group 送 SIGTERM → `shutdown_timeout` 緩衝（預設 30 秒）→ 對 group 送 SIGKILL |
 | Health | 每 2 秒透過 `container.inspect` polling，再加上 service 宣告的 `health_check` | 只跑宣告的 `health_check` |
-| Drift 偵測 | Docker 狀態與 Orbit 認知不一致時送出 `ContainerDrift` event | 隱式:process 死掉就會觸發 `ProcessExited` |
+| Drift 偵測 | Docker snapshot 成功後，對齊停止、移除或被外部重啟的 container | 隱式:process 死掉就會觸發 `ProcessExited` |
 
 兩者共用同一套 state machine 與 event loop，差異完全收斂在各自 package 的 `manager.go` 內。
+
+Docker API 連續失敗兩次後，Orbit 才會撤回先前的 healthy 判斷，避免一次短暫的
+transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker 才是根因並導向
+`orbit doctor`。Orbit 會持續輪詢，Docker 恢復後自動修正 resource 狀態；使用者
+不需要重啟 Orbit，也不需要逐一重啟 container。
 
 ## Cross-platform process groups
 

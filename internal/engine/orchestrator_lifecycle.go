@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const DockerObservationUnavailableReason = "Docker is unavailable; Orbit will reconnect automatically"
+
 func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	o.mu.Lock()
 	info := o.services[name]
@@ -139,6 +141,7 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		o.mu.Unlock()
 		return nil
 	}
+	info.ContainerMissingObservations = 0
 	var restart *ExternalContainerRestart
 	if running && !startedAt.IsZero() {
 		switch {
@@ -164,12 +167,17 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		}
 	}
 	prev := info.State
+	observationWasUnavailable := info.StateReason == DockerObservationUnavailableReason
 	switch {
 	case restart != nil && running && prev == StateDegraded &&
 		info.StateReason == "container exited unexpectedly":
 		info.Transition(StateHealthy)
+	case running && prev == StateDegraded && observationWasUnavailable:
+		info.Transition(StateHealthy)
 	case running && prev == StateStopped:
 		info.Transition(StateHealthy)
+	case !running && prev == StateDegraded && observationWasUnavailable:
+		info.StateReason = "container exited unexpectedly"
 	case !running && prev == StateHealthy:
 		// Docker reports the container as existing but not running while we
 		// believe it healthy — it died outside orbit's control (crash, OOM
@@ -184,6 +192,44 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		o.notifyDependents(name)
 	}
 	return restart
+}
+
+// A single empty snapshot immediately after Docker reconnects is not enough
+// evidence that a previously-owned runtime was removed.
+func (o *Orchestrator) OnContainerMissing(name string) {
+	o.mu.Lock()
+	info, exists := o.services[name]
+	if !exists || info.Kind != "container" {
+		o.mu.Unlock()
+		return
+	}
+	if info.StateReason == "container removed outside orbit" {
+		o.mu.Unlock()
+		return
+	}
+	if info.StateReason == DockerObservationUnavailableReason {
+		info.ContainerMissingObservations++
+		if info.ContainerMissingObservations < 2 {
+			o.mu.Unlock()
+			return
+		}
+	}
+	o.mu.Unlock()
+	o.OnContainerGone(name)
+}
+
+// A live observation is required to keep claiming container health; stopped
+// and already-degraded resources retain their more specific truth.
+func (o *Orchestrator) OnContainerObservationUnavailable() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, info := range o.services {
+		if info.Kind != "container" || info.State != StateHealthy {
+			continue
+		}
+		info.Transition(StateDegraded)
+		info.StateReason = DockerObservationUnavailableReason
+	}
 }
 
 // OnContainerGone reconciles a tracked container that no longer exists in
@@ -208,6 +254,7 @@ func (o *Orchestrator) OnContainerGone(name string) {
 		o.mu.Unlock()
 		return
 	}
+	info.ContainerMissingObservations = 0
 	prev := info.State
 	switch prev {
 	case StateStopping:
@@ -215,6 +262,8 @@ func (o *Orchestrator) OnContainerGone(name string) {
 	case StateDegraded:
 		if info.AwaitingContainerRemoval {
 			info.Transition(StateStopped)
+		} else if info.StateReason == DockerObservationUnavailableReason {
+			info.StateReason = "container removed outside orbit"
 		}
 	case StateHealthy:
 		info.Transition(StateDegraded)

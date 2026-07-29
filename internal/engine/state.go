@@ -127,6 +127,10 @@ type ServiceInfo struct {
 	ContainerStartedAt    time.Time
 	LastExternalRestart   time.Time
 	LastExternalStartedAt time.Time
+	// A Docker API can answer before all runtimes are visible while the daemon
+	// itself is recovering. The count prevents that partial snapshot from
+	// being mistaken for a user removing every container.
+	ContainerMissingObservations int
 	// ExpectingContainerStart prevents an Orbit-managed start from being
 	// misclassified when Docker reports the replacement runtime.
 	ExpectingContainerStart bool

@@ -395,6 +395,9 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 
 func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Poller {
 	poller := container.NewPoller(nil, a.ContainerMgr.Namespace(), cfg.Settings.DockerPollInterval)
+	poller.OnUnavailable = func(_ error) {
+		orch.OnContainerObservationUnavailable()
+	}
 	poller.OnStateUpdate = func(states map[string]container.ContainerState) {
 		for name, state := range states {
 			restart := orch.OnContainerObserved(name, state.Running, state.StartedAt)
@@ -410,7 +413,7 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 				continue
 			}
 			if _, seen := states[svc.Name]; !seen {
-				orch.OnContainerGone(svc.Name)
+				orch.OnContainerMissing(svc.Name)
 			}
 		}
 	}

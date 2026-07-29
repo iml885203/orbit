@@ -13,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
 type statusJSON struct {
@@ -108,6 +109,31 @@ func TestCrashedServiceStatusLeadsOnlyToLogs(t *testing.T) {
 	}
 	tips := statusRecoveryTips(running)
 	if len(tips) != 1 || !strings.Contains(tips[0], "orbit logs api") {
+		t.Fatalf("tips = %+v", tips)
+	}
+}
+
+func TestDockerOutageStatusLeadsToOneDiagnosticInsteadOfResourceRestarts(t *testing.T) {
+	running := map[string]daemon.ResourceStatus{
+		"redis": {
+			Name:        "redis",
+			Kind:        daemon.ResourceKindContainer,
+			State:       "degraded",
+			StateReason: engine.DockerObservationUnavailableReason,
+		},
+		"postgres": {
+			Name:        "postgres",
+			Kind:        daemon.ResourceKindContainer,
+			State:       "degraded",
+			StateReason: engine.DockerObservationUnavailableReason,
+		},
+	}
+	actions := statusRecoveryActions(running)
+	if len(actions) != 1 || actions[0].Command != "orbit doctor --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+	tips := statusRecoveryTips(running)
+	if len(tips) != 1 || !strings.Contains(tips[0], "orbit doctor") {
 		t.Fatalf("tips = %+v", tips)
 	}
 }

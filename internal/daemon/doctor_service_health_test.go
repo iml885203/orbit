@@ -27,6 +27,22 @@ func TestServiceHealthCheckReportsDegradedEvidence(t *testing.T) {
 	}
 }
 
+func TestServiceHealthCheckDoesNotSendDockerOutageToContainerLogs(t *testing.T) {
+	check := serviceHealthCheck([]engine.ServiceInfo{
+		{
+			Name:        "cache",
+			State:       engine.StateDegraded,
+			StateReason: engine.DockerObservationUnavailableReason,
+		},
+	})
+
+	if check.Status != CheckFail ||
+		!strings.Contains(check.Hint, "Restore Docker") ||
+		!strings.Contains(check.Hint, "reconnects automatically") {
+		t.Fatalf("check = %+v", check)
+	}
+}
+
 func TestServiceHealthCheckTreatsStoppedAsIntentional(t *testing.T) {
 	check := serviceHealthCheck([]engine.ServiceInfo{
 		{Name: "cache", State: engine.StateHealthy},
