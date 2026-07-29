@@ -49,6 +49,13 @@ bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh
 2. 跑一輪 `mock_card` 成功 checkout
 3. 顯示關聯結果（Orders / Shipments）與下一步可執行腳本
 
+腳本完成後會輸出：
+
+- 觀察服務就緒日誌
+- 成功交易結果
+- 關聯完成摘要（`orders` / `shipments`）
+- 一份可貼報告的結果檔（預設為：`/tmp/mini-shop-smoke-reports/onboarding-summary.json`）
+
 如果這個流程能走完，通常你在 UI 也能直接看到 3 秒 demo 結論轉為可 demo 狀態。
 
 > 預設會啟動 9 個 resource：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
