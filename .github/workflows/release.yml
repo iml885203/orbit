@@ -108,6 +108,8 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.tag }}
         run: ./scripts/verify-release-candidate.sh "$RELEASE_VERSION"
+      - name: Build embedded dashboard
+        run: pnpm --dir ui run build
       - name: Build release assets
         env:
           RELEASE_VERSION: ${{ inputs.tag }}
