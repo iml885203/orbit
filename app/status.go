@@ -202,6 +202,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	} else if dstatus.UpdateAvailable {
 		tips = []string{orbitRestartCommand(false) + "      apply the Orbit update"}
 	} else {
+		if primary := statusPrimaryOpenableResource(running); primary != nil {
+			openableServices = []string{primary.Name}
+		}
 		tips = buildTips(daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTips(running), openableServices)
 	}
 	if len(tips) > 0 {
@@ -637,22 +640,37 @@ func writeStatusJSON(
 }
 
 func statusPrimaryOpenAction(resources []jsonService) (cli.JSONAction, bool) {
+	running := make(map[string]daemon.ResourceStatus, len(resources))
 	for _, resource := range resources {
 		if resource.State != "healthy" {
 			return cli.JSONAction{}, false
 		}
+		running[resource.Name] = daemon.ResourceStatus{
+			Name:  resource.Name,
+			Kind:  daemon.ResourceKind(resource.Kind),
+			Role:  resource.Role,
+			State: resource.State,
+			URL:   resource.URL,
+		}
+	}
+	resource := statusPrimaryOpenableResource(running)
+	if resource == nil {
+		return cli.JSONAction{}, false
+	}
+	return cli.JSONAction{
+		Command: "orbit open " + resource.Name + " --json",
+		Reason:  fmt.Sprintf("Open %s at %s.", resource.Name, resource.URL),
+	}, true
+}
+
+func statusPrimaryOpenableResource(resources map[string]daemon.ResourceStatus) *daemon.ResourceStatus {
+	status := &daemon.StatusResponse{
+		Resources: make([]daemon.ResourceStatus, 0, len(resources)),
 	}
 	for _, resource := range resources {
-		if resource.Kind != string(daemon.ResourceKindService) ||
-			resource.URL == "" {
-			continue
-		}
-		return cli.JSONAction{
-			Command: "orbit open " + resource.Name + " --json",
-			Reason:  fmt.Sprintf("Open %s at %s.", resource.Name, resource.URL),
-		}, true
+		status.Resources = append(status.Resources, resource)
 	}
-	return cli.JSONAction{}, false
+	return primaryOpenableResource(nil, status)
 }
 
 func statusHasStoppedResources(resources []jsonService) bool {

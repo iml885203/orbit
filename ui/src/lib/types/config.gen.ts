@@ -24,9 +24,8 @@ export interface Config {
   /**
    * Tracing is the local OpenTelemetry section. When on, the daemon runs an
    * OTLP/HTTP receiver and injects OTEL_* env into dev services so their
-   * spans flow into Orbit. Three-state and ON BY DEFAULT: an absent section
-   * means auto-on (Aspire-style zero-config); an explicit `enabled: false`
-   * opts out. See Config.TracingEnabled.
+   * spans flow into Orbit. Tracing is on unless the environment explicitly
+   * sets enabled: false. See Config.TracingEnabled.
    */
   tracing?: TracingConfig;
 }
@@ -37,7 +36,7 @@ export interface Config {
  * buffer of at most MaxTraces traces and are dropped on `orbit down`.
  */
 export interface TracingConfig {
-  enabled: boolean;
+  enabled?: boolean;
   otlp_port: number /* int */; // OTLP/HTTP receiver port; default 4318
   max_traces: number /* int */; // ring-buffer capacity in traces; default 1000
 }

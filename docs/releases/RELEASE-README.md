@@ -14,12 +14,12 @@ understand now that they could not before?”, not mirror the commit count.
 Before tagging a preview, run:
 
 ```bash
-make release-check RELEASE_VERSION=v0.0.35
+make release-check RELEASE_VERSION=v0.0.36
 ```
 
 The candidate notes and both bundled plugin manifests must match that version.
 After the candidate commit passes CI and is reviewed, tag that exact `main`
-commit and dispatch the Release workflow with `RELEASE v0.0.35`. The workflow
+commit and dispatch the Release workflow with `RELEASE v0.0.36`. The workflow
 runs platform and SQL Server smoke gates, then publishes the curated candidate
 notes as the GitHub Release body. Commit-generated notes are deliberately not
 used as the product delivery record.

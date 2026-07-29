@@ -115,16 +115,17 @@ func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
 		},
 	}})
 
-	for _, name := range []string{"exec", "query", "seed", "tunnel"} {
+	for _, name := range []string{"exec", "query", "seed", "trace", "tunnel"} {
 		assertCommandHidden(t, root, name, false)
 	}
-	for _, name := range []string{"db", "topics", "trace"} {
+	for _, name := range []string{"db", "topics"} {
 		assertCommandHidden(t, root, name, true)
 	}
 
-	cfg.Tracing = &config.TracingConfig{Enabled: true}
+	disabled := false
+	cfg.Tracing = &config.TracingConfig{Enabled: &disabled}
 	applyContextualCommandVisibility(root, cfg, nil)
-	assertCommandHidden(t, root, "trace", false)
+	assertCommandHidden(t, root, "trace", true)
 }
 
 func TestContextualHelpShowsQueryForPostgresOnlyEnvironment(t *testing.T) {

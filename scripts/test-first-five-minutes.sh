@@ -23,7 +23,7 @@ for readme in README.md README.zh-TW.md; do
     ' "$repo_root/$readme"
   )"
 
-  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-shop"; do
+  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-shop" "orbit down"; do
     if ! grep -Fx "$command" <<<"$first_run_section" >/dev/null; then
       echo "$readme first-run section is missing: $command" >&2
       exit 1
@@ -164,6 +164,7 @@ if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   exit 1
 fi
 "$orbit_bin" status --json >"$test_root/status.json"
+"$orbit_bin" status >"$test_root/status.txt"
 "$orbit_bin" env list --json >"$test_root/env-list.json"
 browser_stub_dir="$test_root/browser-stub"
 mkdir -p "$browser_stub_dir"
@@ -202,13 +203,19 @@ PATH="$(dirname "$orbit_bin"):$PATH" \
   python3 "$ORBIT_HOME/envs/seeds/mini-shop/smoke.py" \
   >"$test_root/mini-shop-smoke.txt"
 
-python3 - "$test_root" "$demo_url" <<'PY'
+expected_demo_ref="$(
+  python3 -c 'import json, sys; print("v" + json.load(open(sys.argv[1], encoding="utf-8"))["version"])' \
+    "$repo_root/plugins/orbit-agent/.codex-plugin/plugin.json"
+)"
+
+python3 - "$test_root" "$demo_url" "$expected_demo_ref" <<'PY'
 import json
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
 demo_url = sys.argv[2]
+expected_demo_ref = sys.argv[3]
 
 def read(name):
     return json.loads((root / name).read_text(encoding="utf-8"))
@@ -232,7 +239,7 @@ status_source = status["data"]["environment"]["managed_source"]
 list_source = env_list["data"]["environment"]["managed_source"]
 assert status_source == list_source
 assert status_source["url"] == "https://github.com/iml885203/orbit-demo.git"
-assert status_source["ref"] == "v0.0.35"
+assert status_source["ref"] == expected_demo_ref
 assert len(status_source["commit"]) == 40
 assert up["recommended_actions"] == [{
     "command": "orbit open demo-shop --json",
@@ -249,6 +256,21 @@ assert service["data"] == {
 assert dashboard["data"]["target"] == "dashboard"
 assert dashboard["data"]["url"] != demo_url
 PY
+
+english_handoff="https://github.com/iml885203/orbit/blob/$expected_demo_ref/docs/local-first.md"
+handoff_file="$ORBIT_HOME/envs/seeds/mini-shop/index.html"
+if ! grep -F "$english_handoff" "$handoff_file" >/dev/null; then
+  echo "demo handoff in $handoff_file does not match the Orbit release: $english_handoff" >&2
+  exit 1
+fi
+
+if [ "$(grep -c "open in browser" "$test_root/status.txt")" -ne 1 ] ||
+    ! grep -E 'orbit open[[:space:]]+demo-shop[[:space:]]+open in browser' \
+      "$test_root/status.txt" >/dev/null; then
+  echo "healthy status must lead to only the primary demo application." >&2
+  cat "$test_root/status.txt" >&2
+  exit 1
+fi
 
 grep -F \
   "failure added +0 reservations and +0 orders while preserving stock; compensation restored stock" \

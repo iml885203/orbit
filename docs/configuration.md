@@ -106,14 +106,13 @@ tracing:
   max_traces: 1000    # in-memory ring-buffer capacity, in traces
 ```
 
-Tracing is **three-state and on by default**: omit the `tracing` section
-entirely and it is enabled (zero-config, Aspire-style). A present section
-with no `enabled:` key reads as opted **out** — so if you add the section
-only for `otlp_port` / `max_traces`, set `enabled: true` explicitly.
+Tracing is **on by default**. Omitting the section or adding it only to tune
+`otlp_port` / `max_traces` keeps tracing enabled. Only an explicit
+`enabled: false` opts out.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | bool | on when section absent | Run the receiver and inject `OTEL_*` env into dev services. Absent section → on; explicit `false` → off; present section without the key → off |
+| `enabled` | bool | `true` | Run the receiver and inject `OTEL_*` env into dev services. Only explicit `false` turns it off |
 | `otlp_port` | int | `4318` | OTLP/HTTP port the receiver binds on `127.0.0.1`. Auto-advances past a conflict unless pinned |
 | `max_traces` | int | `1000` | Ring-buffer size; oldest trace is evicted past this. Not persisted — cleared on `orbit down` |
 

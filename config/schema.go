@@ -25,9 +25,8 @@ type Config struct {
 	Externals   map[string]*External  `yaml:"externals"`
 	// Tracing is the local OpenTelemetry section. When on, the daemon runs an
 	// OTLP/HTTP receiver and injects OTEL_* env into dev services so their
-	// spans flow into Orbit. Three-state and ON BY DEFAULT: an absent section
-	// means auto-on (Aspire-style zero-config); an explicit `enabled: false`
-	// opts out. See Config.TracingEnabled.
+	// spans flow into Orbit. Tracing is on unless the environment explicitly
+	// sets enabled: false. See Config.TracingEnabled.
 	Tracing *TracingConfig `yaml:"tracing"`
 	// Extensions collects top-level keys owned by registered extension
 	// sections (e.g. "claim"). yaml:",inline" routes unknown top-level
@@ -48,9 +47,9 @@ type Config struct {
 // OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf. Spans live in an in-memory ring
 // buffer of at most MaxTraces traces and are dropped on `orbit down`.
 type TracingConfig struct {
-	Enabled   bool `yaml:"enabled"`
-	OTLPPort  int  `yaml:"otlp_port"`  // OTLP/HTTP receiver port; default 4318
-	MaxTraces int  `yaml:"max_traces"` // ring-buffer capacity in traces; default 1000
+	Enabled   *bool `yaml:"enabled"`
+	OTLPPort  int   `yaml:"otlp_port"`  // OTLP/HTTP receiver port; default 4318
+	MaxTraces int   `yaml:"max_traces"` // ring-buffer capacity in traces; default 1000
 }
 
 const (
@@ -60,17 +59,10 @@ const (
 
 // TracingEnabled reports whether local tracing is on for this env.
 //
-// Three-state, aligned with Aspire's out-of-the-box tracing: an ABSENT
-// `tracing:` section means auto-on (the common case — Orbit collects traces
-// with zero config). Only an explicit `enabled: false` opts out. Note a present
-// section with no `enabled:` key parses Enabled as false, i.e. reads as opted
-// out — set `enabled: true` explicitly if the section exists only for the
-// port/max_traces knobs.
+// Tracing follows one opt-out rule: absent configuration and a section used
+// only to tune the receiver both keep it on. Only enabled: false turns it off.
 func (c *Config) TracingEnabled() bool {
-	if c.Tracing == nil {
-		return true // absent section → auto-on
-	}
-	return c.Tracing.Enabled
+	return c.Tracing == nil || c.Tracing.Enabled == nil || *c.Tracing.Enabled
 }
 
 // TracingOTLPPort returns the configured OTLP/HTTP port or the default.

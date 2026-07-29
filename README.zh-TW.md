@@ -69,7 +69,12 @@ inventory、Redis 與 orders，並保留 product、reservation、order 的關聯
 **Try 99 items** 則顯示庫存 `7 → 7`、新增 reservation `+0`、新增 order
 `+0`，並保留先前成功的 order。這不只是證明五個 processes 能啟動，而是直接
 展示 Orbit 協調一套有用的混合 runtime application。完成後再執行
-`orbit open`，即可從 dashboard 檢視與控制同一套環境。
+`orbit open`，即可從 dashboard 檢視與控制同一套環境。試用結束後，用一個
+指令停止全部資源：
+
+```bash
+orbit down
+```
 
 準備套用到真實 checkout 時，從[一份 project-local
 `orbit.yaml`](docs/local-first.zh-TW.md) 開始。這條十分鐘路徑不需要

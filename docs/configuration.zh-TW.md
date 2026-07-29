@@ -103,13 +103,12 @@ tracing:
   max_traces: 1000    # in-memory ring buffer 容量（trace 數）
 ```
 
-Tracing 是**三態、預設開啟**：整段 `tracing` 省略即為啟用（零設定，Aspire 風格）。
-一個存在但沒有 `enabled:` 鍵的 section 會被讀成 opt **out** —— 所以若你只是為了
-`otlp_port` / `max_traces` 而加上這段，記得明確設 `enabled: true`。
+Tracing **預設開啟**。省略整段，或只是加入 `otlp_port` / `max_traces`
+調整 receiver，都會維持啟用。只有明確設定 `enabled: false` 才會關閉。
 
 | Field | Type | Default | 說明 |
 |---|---|---|---|
-| `enabled` | bool | section 省略時為開 | 啟動 receiver 並對 dev service 注入 `OTEL_*`。section 省略 → 開；明確 `false` → 關；section 存在但沒這個鍵 → 關 |
+| `enabled` | bool | `true` | 啟動 receiver 並對 dev service 注入 `OTEL_*`。只有明確 `false` 才會關閉 |
 | `otlp_port` | int | `4318` | receiver 綁定在 `127.0.0.1` 的 OTLP/HTTP port。未釘死時遇衝突會自動往後找 |
 | `max_traces` | int | `1000` | ring buffer 上限，超過淘汰最舊；不落盤，`orbit down` 即清空 |
 

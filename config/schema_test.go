@@ -330,23 +330,28 @@ func TestValidate_RejectsNegativeRuntimeHealthFailureThreshold(t *testing.T) {
 	}
 }
 
-func TestConfig_TracingThreeState(t *testing.T) {
-	// Absent section → auto-on (Aspire-aligned default).
-	absent := &Config{}
-	if !absent.TracingEnabled() {
-		t.Error("absent tracing section should be enabled (default-on)")
+func TestConfig_TracingUsesExplicitOptOut(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		enabled bool
+	}{
+		{name: "section absent", source: "version: \"2\"\n", enabled: true},
+		{name: "receiver tuning only", source: "version: \"2\"\ntracing:\n  otlp_port: 5000\n", enabled: true},
+		{name: "explicitly enabled", source: "version: \"2\"\ntracing:\n  enabled: true\n", enabled: true},
+		{name: "explicitly disabled", source: "version: \"2\"\ntracing:\n  enabled: false\n", enabled: false},
 	}
 
-	// Explicit enabled: false → opt-out.
-	off := &Config{Tracing: &TracingConfig{Enabled: false}}
-	if off.TracingEnabled() {
-		t.Error("explicit enabled:false should be disabled")
-	}
-
-	// Explicit enabled: true → on.
-	on := &Config{Tracing: &TracingConfig{Enabled: true}}
-	if !on.TracingEnabled() {
-		t.Error("explicit enabled:true should be enabled")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			if err := yaml.Unmarshal([]byte(tt.source), &cfg); err != nil {
+				t.Fatalf("decode config: %v", err)
+			}
+			if got := cfg.TracingEnabled(); got != tt.enabled {
+				t.Errorf("TracingEnabled() = %t, want %t", got, tt.enabled)
+			}
+		})
 	}
 }
 

@@ -231,7 +231,7 @@ func coreCommandVisibility(cfg *config.Config) map[string]bool {
 			break
 		}
 	}
-	visibility["trace"] = cfg.Tracing != nil && cfg.Tracing.Enabled
+	visibility["trace"] = cfg.TracingEnabled()
 	return visibility
 }
 
