@@ -247,6 +247,27 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	}
 }
 
+func TestGitCheckoutRootFindsParentCheckout(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(root, "apps", "api")
+	if err := os.MkdirAll(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := gitCheckoutRoot(child); got != root {
+		t.Fatalf("gitCheckoutRoot = %q, want %q", got, root)
+	}
+}
+
+func TestGitCheckoutRootReturnsEmptyOutsideCheckout(t *testing.T) {
+	if got := gitCheckoutRoot(t.TempDir()); got != "" {
+		t.Fatalf("gitCheckoutRoot = %q, want empty", got)
+	}
+}
+
 func unsetEnvForTest(t *testing.T, key string) {
 	t.Helper()
 	value, existed := os.LookupEnv(key)

@@ -298,6 +298,12 @@ func configureRequiredWorkspace(
 	if candidate == "" {
 		candidate = detectWorkspaceRoot(settings)
 	}
+	if candidate == "" && !initYes {
+		cwd, getwdErr := os.Getwd()
+		if getwdErr == nil {
+			candidate = gitCheckoutRoot(cwd)
+		}
+	}
 	if initYes && candidate == "" {
 		return false, "", nil
 	}
@@ -308,7 +314,7 @@ func configureRequiredWorkspace(
 		daemonsrv.EnvShortName(envPath), strings.Join(requiredBy, ", "))
 	root := candidate
 	if !initYes && localWorkspaceRoot == "" {
-		label := "  Directory containing those projects"
+		label := "  Project checkout or workspace root (absolute path)"
 		if candidate != "" {
 			label += " [" + candidate + "]"
 		}
@@ -330,6 +336,20 @@ func configureRequiredWorkspace(
 	settings.ApplyToEnv()
 	output.printf("  %s Project workspace: %s\n", cli.Green.Sprint("✓"), root)
 	return true, root, nil
+}
+
+func gitCheckoutRoot(start string) string {
+	current := filepath.Clean(start)
+	for {
+		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return ""
+		}
+		current = parent
+	}
 }
 
 func runExtensionInitSteps(settings *daemon.Settings) error {

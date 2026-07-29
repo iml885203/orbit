@@ -68,6 +68,12 @@ Orbit coordinated a useful mixed runtime application—not only that five
 processes started. Afterward, run `orbit open` to inspect and control the same
 environment in the dashboard.
 
+Ready to try Orbit on a real checkout?
+[Start with one project-local `orbit.yaml`](docs/local-first.md). The
+ten-minute path needs no environment repository, no `orbit init`, and no
+manual `~/.orbit` settings; it also shows when and how to promote the proven
+file into a shared team environment.
+
 When you need more detail:
 
 ```bash
@@ -205,6 +211,7 @@ The dashboard listens locally at <http://localhost:19800>.
 
 Core user documentation:
 
+- [Use Orbit with your project](docs/local-first.md)
 - [Configuration](docs/configuration.md)
 - [Tracing](docs/tracing.md)
 - [Troubleshooting](docs/troubleshooting.md)

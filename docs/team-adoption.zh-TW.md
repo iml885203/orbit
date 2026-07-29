@@ -4,23 +4,27 @@
 
 Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 services，`orbit up` 會依照相依順序啟動，並提供 health checks、logs、tracing，以及位於 <http://localhost:19800> 的 dashboard。
 
-這個 repo 包含中性 engine、CLI、daemon、UI，以及透過明確 extension seams 接入的選用功能 packages。團隊一般直接使用已發行的 Orbit binary，只在獨立 env repo 維護自己的環境設定。
+這個 repo 包含中性 engine、CLI、daemon、UI，以及透過明確 extension seams 接入的選用功能 packages。團隊一般直接使用已發行的 Orbit binary。Environment repository 是之後的發布方式，不是本機證明 Orbit 是否適用的前置條件。
 
 ## 純設定採用
 
-1. 建立一個含 `envs/` 目錄與 env YAML 檔的 git repo。[examples/quickstart/dev.yaml](examples/quickstart/dev.yaml) 可作為最小起點。
-2. 將 Orbit 指向該 repo、告訴 Orbit 專案 checkout 的位置，然後選擇環境：
+1. 先在一個真實專案旁驗證 environment。[local-first
+   指南](local-first.zh-TW.md) 使用 project-root `orbit.yaml`，走過隊友之後也會
+   使用的 `doctor`、`up`、`open`、`logs`、`down` 迴圈；完全不需要 Git
+   environment repository 或永久 Orbit settings。
+2. 確認設定有價值後，再建立 Git repository 與 `envs/dev.yaml`。把
+   `path: .` 這類 project-relative path 改成明確的 `${WORKSPACE_ROOT}` path，
+   commit 後從 project checkout 初始化：
 
    ```sh
-   orbit env sync --url <your-env-repo-git-url>
-   cd /path/to/your/workspace
-   orbit settings set workspace-root "$PWD"
-   orbit switch dev
-   orbit doctor
+   orbit init --env-repo <your-env-repo-git-url> --env dev
    orbit up
    ```
 
-   workspace 設定可在 daemon 尚未啟動時寫入。`orbit doctor` 會檢查每個解析後的 service 目錄，並在 `orbit up` 啟動任何相依資源前只給一個修正指令。只有 containers 的環境可省略 workspace 步驟。
+   Orbit 只會在選到的設定實際引用 `${WORKSPACE_ROOT}` 時詢問 workspace；
+   只有 containers 的 environment 不會暴露這個概念。`orbit doctor` 會檢查
+   每個解析後的 service 目錄，並在 `orbit up` 啟動任何相依資源前只給一個
+   修正指令。
 
    Host service 可使用任何本機已安裝的 runtime；只有 `dotnet` 具有特殊的 build 行為：
 
@@ -34,7 +38,10 @@ Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 servic
          http: 8080
    ```
 
-   `orbit init --env-repo <your-env-repo-git-url>` 會提供相同設定路徑。只有選到實際需要 project workspace 的 environment 後才會詢問位置；自給自足的 environment 不會暴露這個概念。開發期間可用 `orbit env sync --path /path/to/your-env-repo` 指向本地 checkout。若目前使用中的環境有變更，sync 會詢問是否更新目前環境，並且只恢復原先運行中的資源。只有必須延後中斷時才需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
+   開發期間可用 `orbit env sync --path /path/to/your-env-repo --yes` 指向本地、
+   尚未 commit 的 environment files。若目前使用中的 environment 有變更，
+   sync 會詢問是否更新，並且只恢復原先運行中的資源。只有必須延後中斷時才
+   需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
 
 已發行 binary 會提供 distribution defaults。若自訂 build 沒有這些預設，`orbit env sync` 可設定 `env_repo_url` 或 `ORBIT_ENV_REPO_URL`，`orbit update` 可設定 `ORBIT_INSTALL_URL`。其餘 services、containers、graph、logs、health checks、doctor 與 dashboard 只需 env 設定即可運作。Tracing 預設開啟；env 可用明確的 `tracing.enabled: false` opt out。
 

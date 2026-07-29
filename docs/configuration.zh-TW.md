@@ -312,7 +312,7 @@ services:
 | `type` | string | yes | `dotnet` 走 build-then-run（`watch: true` 則 `dotnet watch`）；其他值（`node`、`shell`…）在 `path` 下執行 `command` |
 | `kind` | string | no | `frontend` \| `backend`（預設）\| `infra` — 決定 graph 節點顏色；只表身分，不表健康 |
 | `path` | string | yes | `.csproj` 路徑（dotnet）或 `command` 的工作目錄 |
-| `command` | string | no | 非 dotnet type 要執行的指令 |
+| `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
 | `url` | string | no | 標準 URL；`orbit open <service>` 會用它 |
 | `ports` | map | no | service 監聽的 port。alias 為 UI 上的 port 標籤；`health_check.port` 收 literal int |
@@ -323,6 +323,10 @@ services:
 | `health_check` | object | no | 形狀同 container 的 `health_check` |
 | `depends_on` | list | no | 必須先 `Healthy` 才能啟動的名稱 |
 | `kafka` | object | no | `produces` / `consumes` topic 清單 — 在 graph 上畫成 async edge |
+
+例如 `command: python3 -m http.server "$PORT"` 會把 Orbit 實際選到的單一
+service port 當成一個 argument。只有確實需要 pipe、redirect 或其他 shell
+operator 時，才明確使用 `sh -c "..."`。
 
 ### Service dependency URL
 

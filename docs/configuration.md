@@ -317,7 +317,7 @@ services:
 | `type` | string | yes | `dotnet` gets build-then-run handling (or `dotnet watch` with `watch: true`); any other value (`node`, `shell`, …) runs `command` inside `path` |
 | `kind` | string | no | `frontend` \| `backend` (default) \| `infra` — colours the graph node; identity only, never health |
 | `path` | string | yes | Path to `.csproj` (dotnet) or the working directory for `command` |
-| `command` | string | no | The process to run for non-dotnet types |
+| `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
 | `url` | string | no | Canonical URL; `orbit open <service>` uses this |
 | `ports` | map | no | Ports the service listens on. The alias labels the port for the UI; `health_check.port` takes a literal int |
@@ -328,6 +328,11 @@ services:
 | `health_check` | object | no | Same shape as container `health_check` |
 | `depends_on` | list | no | Names that must be `Healthy` before this starts |
 | `kafka` | object | no | `produces` / `consumes` topic lists — drawn as async edges on the graph |
+
+For example, `command: python3 -m http.server "$PORT"` receives Orbit's
+selected single-service port as one argument. Use an explicit shell command
+such as `sh -c "..."` only when the process genuinely needs pipes, redirects,
+or other shell operators.
 
 ### Service dependency URLs
 

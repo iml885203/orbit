@@ -7,6 +7,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/iml885203/tunlease v1.3.1
 	github.com/mattn/go-isatty v0.0.24
+	github.com/mattn/go-shellwords v1.0.14
 	github.com/microsoft/go-mssqldb v1.10.0
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0

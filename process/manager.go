@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -86,13 +84,15 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	// same OnOutput path the main process uses, so `orbit logs <service>`
 	// reveals hangs and failures inside pre_start.
 	for _, pre := range preStart {
-		if err := m.runPreStart(ctx, name, dir, pre); err != nil {
+		if err := m.runPreStart(ctx, name, dir, pre, env); err != nil {
 			return err
 		}
 	}
 
-	// Parse command
-	parts := strings.Fields(command)
+	parts, err := commandArgs(command, env)
+	if err != nil {
+		return fmt.Errorf("command for %q: %w", name, err)
+	}
 	if len(parts) == 0 {
 		return fmt.Errorf("empty command for %q", name)
 	}
@@ -100,11 +100,7 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = dir
 
-	// Build environment
-	cmd.Env = os.Environ()
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
+	cmd.Env = commandEnvironment(env)
 
 	// KEY: Set process group so we can kill the entire tree
 	platform.SetProcessGroup(cmd)
@@ -220,9 +216,17 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 // bracketed by synthetic `[pre_start] $ <cmd>` and `[pre_start] exit N`
 // lines so a user reading `orbit logs <service>` can see exactly what the
 // pre_start did and where it stopped.
-func (m *Manager) runPreStart(ctx context.Context, name, dir, pre string) error {
-	// strings.Fields splits on whitespace only; no shell quoting or expansion.
-	parts := strings.Fields(pre)
+func (m *Manager) runPreStart(
+	ctx context.Context,
+	name string,
+	dir string,
+	pre string,
+	env map[string]string,
+) error {
+	parts, err := commandArgs(pre, env)
+	if err != nil {
+		return fmt.Errorf("pre_start for %q: %w", name, err)
+	}
 	if len(parts) == 0 {
 		return nil
 	}
@@ -232,6 +236,7 @@ func (m *Manager) runPreStart(ctx context.Context, name, dir, pre string) error 
 
 	preCmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	preCmd.Dir = dir
+	preCmd.Env = commandEnvironment(env)
 
 	stdoutPipe, err := preCmd.StdoutPipe()
 	if err != nil {

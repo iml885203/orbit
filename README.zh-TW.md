@@ -62,6 +62,11 @@ inventory、Redis 與 orders，並保留 product、reservation、order 的關聯
 展示 Orbit 協調一套有用的混合 runtime application。完成後再執行
 `orbit open`，即可從 dashboard 檢視與控制同一套環境。
 
+準備套用到真實 checkout 時，從[一份 project-local
+`orbit.yaml`](docs/local-first.zh-TW.md) 開始。這條十分鐘路徑不需要
+environment repository、不需要 `orbit init`，也不需要手動編輯 `~/.orbit`
+設定；驗證完成後，文件會再說明何時、如何升級為團隊共享 environment。
+
 需要更多細節時：
 
 ```bash
@@ -181,6 +186,7 @@ Dashboard 位於 <http://localhost:19800>。
 
 核心使用者文件：
 
+- [在自己的專案使用 Orbit](docs/local-first.zh-TW.md)
 - [設定](docs/configuration.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)
 - [疑難排解](docs/troubleshooting.zh-TW.md)

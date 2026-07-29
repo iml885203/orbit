@@ -1,0 +1,25 @@
+version: "2"
+
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}:6379"
+    health_check:
+      type: tcp
+      port: ${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}
+
+services:
+  app:
+    type: python
+    kind: frontend
+    path: .
+    command: python3 -m http.server "$PORT"
+    url: http://localhost:${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
+    ports:
+      http: "${ORBIT_AUTO_PORT_LOCAL_APP:-28080}"
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /
+      port: ${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
