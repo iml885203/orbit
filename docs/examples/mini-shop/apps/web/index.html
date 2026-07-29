@@ -520,6 +520,7 @@
         <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
         <button id="copy-demo-report" class="small-btn inline-btn quick-start-action">複製 demo 報告</button>
         <button id="copy-demo-metrics-json" class="small-btn inline-btn quick-start-action">複製 demo 指標 JSON</button>
+        <button id="copy-drill-metrics-json" class="small-btn inline-btn quick-start-action">複製故障演練指標 JSON</button>
         <button id="copy-smoke-script" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/smoke-demo.sh all">複製 smoke demo 腳本命令</button>
         <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action">一鍵 demo 檢核（成功→核對）</button>
       </div>
@@ -875,6 +876,7 @@ web
       const focusDemoChecklistBtn = document.getElementById('focus-demo-checklist');
       const copyDemoReportBtn = document.getElementById('copy-demo-report');
       const copyDemoMetricsJsonBtn = document.getElementById('copy-demo-metrics-json');
+      const copyDrillMetricsJsonBtn = document.getElementById('copy-drill-metrics-json');
       const demoQuickAcceptanceBtn = document.getElementById('demo-quick-acceptance');
       const copyDrillReportBtn = document.getElementById('copy-drill-report');
       const goalCurrentText = document.getElementById('goal-current-text');
@@ -956,11 +958,13 @@ web
         relationEstablishedAt: 0,
       };
       const demoReadinessTargetMs = 60 * 1000;
+      const drillRecoveryTargetMs = 120 * 1000;
       const drillState = {
         baselineStartedAt: 0,
         baselineCompleted: false,
         baselineCompletedAt: 0,
         lastRecoverVerifyAt: 0,
+        lastFailureAt: 0,
       };
       const uiModeDefault = 'beginner';
       const singleActionDefaultText = '依目前情況，先照「下一步（照著做）」逐步前進。';
@@ -2052,9 +2056,18 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const baselineElapsed = drillState.baselineCompletedAt
           ? `基線耗時：${formatElapsed(drillState.baselineCompletedAt - drillState.baselineStartedAt)}`
           : '基線耗時：未建立';
-        const recoveryElapsed = drillState.lastRecoverVerifyAt && drillState.baselineCompletedAt
-          ? `回歸耗時：${formatElapsed(drillState.lastRecoverVerifyAt - drillState.baselineCompletedAt)}`
-          : '回歸耗時：未驗證';
+        const recoveryMs = drillState.lastRecoverVerifyAt && drillState.baselineCompletedAt
+          ? drillState.lastRecoverVerifyAt - drillState.baselineCompletedAt
+          : null;
+        const recoveryWithinTarget = recoveryMs === null
+          ? null
+          : recoveryMs <= drillRecoveryTargetMs;
+        const recoveryElapsed = recoveryMs === null
+          ? '回歸耗時：未驗證'
+          : `回歸耗時：${formatElapsed(recoveryMs)}（${recoveryWithinTarget ? '已達標' : '超過目標'}）`;
+        const failureInfo = drillState.lastFailureAt
+          ? `最近失敗時間：${formatElapsed(performance.now() - drillState.lastFailureAt)} 前`
+          : '最近失敗時間：尚未記錄';
 
         const demoGreen = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation;
         const orderText = snapshot.latestOrder
@@ -2072,6 +2085,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           `服務信號：${serviceSignal} (${snapshot.servicesReady})`,
           `交易信號：${checkoutSignal}`,
           `關聯信號：${relationSignal}`,
+          `失敗回歸目標：${formatElapsed(drillRecoveryTargetMs)}（${recoveryWithinTarget === null ? '待驗證' : recoveryWithinTarget ? '達標' : '未達標'}）`,
+          failureInfo,
           `最後 checkout：${snapshot.latestCode}`,
           `訂單：${orderText}`,
           `出貨：${shipmentText}`,
@@ -2080,6 +2095,36 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           '',
           `下一步：${demoGreen ? '可直接發表 demo 結果' : '請重跑故障演練 baseline 或檢查故障情境對照卡'}`
         ].join('\n');
+      }
+
+      function buildRecoveryMetricsJSON() {
+        if (!drillState.baselineCompleted) {
+          return null;
+        }
+        const snapshot = buildSignalSnapshot();
+        const canDemo = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation;
+        const recoveryMs = drillState.lastRecoverVerifyAt && drillState.baselineCompletedAt
+          ? drillState.lastRecoverVerifyAt - drillState.baselineCompletedAt
+          : null;
+        const baselineMs = drillState.baselineCompletedAt
+          ? drillState.baselineCompletedAt - drillState.baselineStartedAt
+          : null;
+        return JSON.stringify({
+          version: 'mini-shop-drill-metrics-1',
+          generated_at: new Date().toISOString(),
+          recovery: {
+            baseline_ready: Boolean(drillState.baselineCompleted),
+            baseline_elapsed_ms: baselineMs,
+            verify_elapsed_ms: recoveryMs,
+            verify_within_target: Number.isFinite(recoveryMs) ? recoveryMs <= drillRecoveryTargetMs : false,
+            target_ms: drillRecoveryTargetMs,
+            service_signal_ok: snapshot.allServiceReady,
+            order_shipment_relation: snapshot.hasOrderShipmentRelation,
+            can_demo: canDemo,
+            last_failure_age_ms: drillState.lastFailureAt ? performance.now() - drillState.lastFailureAt : null,
+            last_failure_code: latestFailureErrorCode || null,
+          },
+        }, null, 2);
       }
 
       function buildDemoReport() {
@@ -2622,6 +2667,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           latestCheckoutPayload = { code: 'unknown', message: `${context || 'checkout'}：未回傳 payload` };
           if (context) {
             latestFailureErrorCode = 'unknown';
+            drillState.lastFailureAt = performance.now();
             renderQuickFixAction();
           }
           return;
@@ -3455,6 +3501,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           setRunResult('ok', `✅ Checkout 成功：訂單 ${order.id}`, lines);
         } else if (order.status === 'failed' || order.status === 'cancelled') {
           latestFailureErrorCode = order.code || latestCheckoutPayload?.code || 'checkout_failed';
+          drillState.lastFailureAt = performance.now();
           setRunResult('error', `❌ Checkout 結果：訂單 ${order.id}（已失敗）`, lines);
           const orderCode = latestCheckoutPayload?.code || 'checkout_failed';
           renderErrorPlaybook(normalizeErrorCode(orderCode));
@@ -3473,6 +3520,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const code = parsed?.code;
         if (code) {
           latestFailureErrorCode = code;
+          drillState.lastFailureAt = performance.now();
         }
         const normalizedCode = normalizeErrorCode(code);
         const hints = recoveryHintsForErrorCode(code);
@@ -4042,6 +4090,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           drillState.baselineStartedAt = performance.now();
           drillState.baselineCompleted = false;
           drillState.lastRecoverVerifyAt = 0;
+          drillState.lastFailureAt = 0;
           appendSummary('故障演練：先建立可重播 baseline。');
           const ok = await runOneShotSuccessFlow();
           if (ok) {
@@ -4215,6 +4264,17 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           const payload = buildDemoMetricsJSON();
           if (!payload) {
             setCopyFeedback('目前沒有可複製指標，請先完成一次成功流程');
+            return;
+          }
+          await copyTextToClipboard(payload, setCopyFeedback);
+        });
+      }
+
+      if (copyDrillMetricsJsonBtn) {
+        copyDrillMetricsJsonBtn.addEventListener('click', async () => {
+          const payload = buildRecoveryMetricsJSON();
+          if (!payload) {
+            setCopyFeedback('目前尚未完成故障演練 baseline，無法複製回歸指標');
             return;
           }
           await copyTextToClipboard(payload, setCopyFeedback);
@@ -4544,6 +4604,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         disableActionButtons(true);
         appendSummary('開始重置流程：回到可重複執行的起點。');
         latestFailureErrorCode = '';
+        drillState.lastFailureAt = 0;
         try {
           if (customerEl.options.length > 0) {
             customerEl.selectedIndex = 0;
@@ -4592,6 +4653,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${getTrackedResourceCount(uiMode)} 個資源就緒（含 web）`]);
       latestFailureErrorCode = '';
+      drillState.lastFailureAt = 0;
       renderQuickFixAction();
       resetSessionMetrics();
       renderErrorPlaybook(fallbackPattern.code);
