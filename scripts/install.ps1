@@ -160,6 +160,23 @@ function Add-OrbitToUserPath {
     }
 }
 
+function Invoke-OrbitBinarySwap {
+    param([Parameter(Mandatory)] [scriptblock] $Operation)
+
+    $attempts = 5
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        try {
+            & $Operation
+            return
+        }
+        catch {
+            if ($attempt -eq $attempts) { throw }
+            # Windows security and indexing services can briefly retain a downloaded executable.
+            Start-Sleep -Milliseconds (100 * $attempt)
+        }
+    }
+}
+
 function Install-Orbit {
     $asset = Get-OrbitAsset
     $baseUrl = Get-ReleaseBaseUrl
@@ -206,11 +223,15 @@ function Install-Orbit {
                 $env:ORBIT_ALLOW_DOWNGRADE -ne "1") {
                 throw "refusing to replace newer Orbit $currentVersion with $candidateVersion; use 'orbit update --rollback', or set ORBIT_ALLOW_DOWNGRADE=1 for an intentional downgrade"
             }
-            [System.IO.File]::Replace($download, $target, "$target.prev", $true)
+            Invoke-OrbitBinarySwap {
+                [System.IO.File]::Replace($download, $target, "$target.prev", $true)
+            }
             Write-Host "Previous binary backed up to $target.prev"
         }
         else {
-            Move-Item -Path $download -Destination $target
+            Invoke-OrbitBinarySwap {
+                Move-Item -Path $download -Destination $target
+            }
         }
 
         Add-OrbitToUserPath $directory
