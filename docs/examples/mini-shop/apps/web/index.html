@@ -568,6 +568,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </div>
       <div id="drill-history" class="summary-list compact-mode-hide"></div>
       <div id="drill-trend" class="summary-row compact-mode-hide">尚未開始故障演練，等待 1 次回歸結果。</div>
+      <div id="drill-next-hint" class="hint compact-mode-hide">尚未建立基線時，請先按「先做一輪成功流程」。</div>
       <p class="hint">目標是確認流程能在不離開頁面思路的情況下，完成「故障→定位→恢復→回歸」。</p>
     </div>
 
@@ -905,6 +906,7 @@ web
       const runResultEl = document.getElementById('run-result');
       const drillHistoryEl = document.getElementById('drill-history');
       const drillTrendEl = document.getElementById('drill-trend');
+      const drillNextHintEl = document.getElementById('drill-next-hint');
       const flowMapEl = document.getElementById('flow-map');
       const operationLogEl = document.getElementById('operation-log');
       const observabilitySummaryEl = document.getElementById('observability-summary');
@@ -974,6 +976,30 @@ web
         recoveryAttempts: [],
         maxRecoveryAttempts: 5,
       };
+      function updateDrillNextHint(latestAttempt) {
+        if (!drillNextHintEl) {
+          return;
+        }
+        if (!latestAttempt) {
+          drillNextHintEl.textContent = drillState.baselineCompleted
+            ? '基線已建立，請在故障情境後按「回到 3 秒可 demo 指標」查看回歸結果。'
+            : '尚未建立基線時，請先按「先做一輪成功流程」。';
+          return;
+        }
+        if (!drillState.baselineCompleted) {
+          drillNextHintEl.textContent = '請先按「先做一輪成功流程」建立可重播 baseline。';
+          return;
+        }
+        if (!latestAttempt.passed) {
+          drillNextHintEl.textContent = '最新回歸未全綠：先依故障情境對照卡處理、恢復相關服務後再按「回到 3 秒可 demo 指標」。';
+          return;
+        }
+        if (latestAttempt.recoveryMs !== null && !latestAttempt.recoveryWithinTarget) {
+          drillNextHintEl.textContent = '回歸有通過但超過 120 秒目標：建議再做一次故障演練，確認是否可穩定回歸。';
+          return;
+        }
+        drillNextHintEl.textContent = '回歸已通過且在目標內，建議複製「故障回歸報告」作為這輪結果，或再跑 1 輪確認趨勢。';
+      }
       const uiModeDefault = 'beginner';
       const singleActionDefaultText = '依目前情況，先照「下一步（照著做）」逐步前進。';
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
@@ -2727,6 +2753,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             drillTrendEl.className = 'summary-row';
             drillTrendEl.innerHTML = '尚未開始故障演練，等待 1 次回歸結果。';
           }
+          updateDrillNextHint(null);
           return;
         }
         const recentWindowSize = Math.min(3, drillHistoryState.recoveryAttempts.length);
@@ -2748,6 +2775,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           return `<div class="summary-line ${statusClass}">[${item.time}] ${statusText} | 回歸耗時 ${elapsedText} | 目標 ${targetText} | ${deltaText}</div>`;
         }).join('');
         drillHistoryEl.innerHTML = items;
+        updateDrillNextHint(drillHistoryState.recoveryAttempts[0]);
       }
 
       function renderRunResult() {
