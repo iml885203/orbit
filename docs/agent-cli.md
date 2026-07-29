@@ -214,11 +214,13 @@ Stable `data.operation` values for converted control commands:
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
-For `switch`, `daemon_running_before` and `daemon_running_after` describe the
-daemon transition. `prerequisites_ready` is false when the newly selected env
-is missing a required runtime or package installation; `prerequisites` carries
-the same checks as Doctor, and `recommended_actions` includes exact runnable
-remedies when Orbit can determine one.
+For `switch`, `previous_environment_stopped` says whether Orbit stopped a
+previously running environment before making the selection. A stopped Orbit is
+not started merely to record a selection; `orbit up` remains the sole startup
+action. `prerequisites_ready` is false when the newly selected env is missing a
+required runtime or package installation; `prerequisites` carries the same
+checks as Doctor, and `recommended_actions` includes exact runnable remedies
+when Orbit can determine one.
 
 An unresolved or missing host-service path uses the stable
 `service_working_directory_missing` error code. `switch` leaves the daemon

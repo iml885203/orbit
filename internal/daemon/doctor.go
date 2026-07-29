@@ -22,18 +22,6 @@ import (
 	"github.com/moby/moby/client"
 )
 
-// CoreHostToolChecks is the ordered list of host dependencies Orbit itself
-// needs independently of the active environment.
-var CoreHostToolChecks = []HostToolCheck{
-	{
-		Name:     "Git",
-		Binary:   "git",
-		Critical: false,
-		Hint:     "Install git (brew install git or your distro's package manager)",
-		Version:  versionFromCmd("--version"),
-	},
-}
-
 // A cold tool process can exceed two seconds while the machine is compiling
 // Orbit; five seconds still bounds doctor latency without dropping valid output.
 const hostToolVersionTimeout = 5 * time.Second
@@ -375,7 +363,7 @@ func requiredHostTools(cfg *config.Config) []HostToolCheck {
 		}
 	}
 
-	tools := append([]HostToolCheck(nil), CoreHostToolChecks...)
+	var tools []HostToolCheck
 	for _, binary := range []string{"dotnet", "node", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
 		services := sortedRequirementNames(requirements[binary])
 		if len(services) == 0 {

@@ -35,6 +35,14 @@ than a moving default branch.
 - Environment schema mismatches now produce a structured, single-step remedy:
   sync an older shared environment or update an older Orbit binary. The
   previous nonexistent `orbit upgrade` instruction is gone.
+- `orbit switch` no longer starts background state merely to record a
+  selection. When Orbit is stopped it checks the selected environment and
+  points only to `orbit up`, so choosing an environment cannot fail on an
+  unrelated dashboard port.
+- Doctor now reports only tools needed to run the selected environment. Git is
+  explained at the shared-environment sync boundary instead of appearing as a
+  daily runtime prerequisite; a missing Git installation receives a specific
+  install-and-retry explanation.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.

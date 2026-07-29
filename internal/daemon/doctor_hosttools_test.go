@@ -158,8 +158,8 @@ func TestRequiredHostTools_OnlyReportsSelectedEnvironment(t *testing.T) {
 			}
 		}
 	}
-	if got := strings.Join(names, ","); got != "Git,Python" {
-		t.Errorf("tools = %s, want Git,Python", got)
+	if got := strings.Join(names, ","); got != "Python" {
+		t.Errorf("tools = %s, want Python", got)
 	}
 }
 

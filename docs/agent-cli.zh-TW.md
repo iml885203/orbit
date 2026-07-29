@@ -201,10 +201,12 @@ action。
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
-對 `switch` 而言，`daemon_running_before` 與 `daemon_running_after` 描述
-daemon transition。新 env 缺少必要 runtime 或 package installation 時，
-`prerequisites_ready` 會是 false；`prerequisites` 使用與 Doctor 相同的 checks，
-而 Orbit 能判斷修復方式時，`recommended_actions` 會包含可直接執行的指令。
+對 `switch` 而言，`previous_environment_stopped` 表示 Orbit 是否在選取前
+停止了原本執行中的 environment。Orbit 停止時不會只為了記錄 selection
+而被啟動；`orbit up` 仍是唯一啟動動作。新 env 缺少必要 runtime 或 package
+installation 時，`prerequisites_ready` 會是 false；`prerequisites` 使用與
+Doctor 相同的 checks，而 Orbit 能判斷修復方式時，`recommended_actions`
+會包含可直接執行的指令。
 
 Host service path 尚未解析或不存在時，會使用穩定的
 `service_working_directory_missing` error code。`switch` 會讓 daemon 保持

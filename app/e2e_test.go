@@ -921,6 +921,60 @@ func TestE2E_DownStopsContainersKeepsDaemon(t *testing.T) {
 	}
 }
 
+func TestE2E_SwitchWhileStoppedDoesNotCreateAnotherStartupPath(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(envsDir, "empty.yaml")
+	if err := os.WriteFile(envPath, []byte("version: \"2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	dashboardPort := listener.Addr().(*net.TCPAddr).Port
+
+	command := exec.Command(binary, "switch", "empty", "--json")
+	command.Env = append(os.Environ(),
+		"ORBIT_HOME="+home,
+		"ORBIT_NAMESPACE=e2e-"+randHex(4),
+		"ORBIT_DASHBOARD_PORT="+strconv.Itoa(dashboardPort),
+	)
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("switch failed while the unused dashboard port was occupied: %v\n%s", err, output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	var data switchJSONData
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("decode switch data: %v\n%s", err, envelope.Data)
+	}
+	if data.PreviousEnvironmentStopped {
+		t.Fatalf("switch data = %+v, no environment was running", data)
+	}
+	if !data.PrerequisitesReady {
+		t.Fatalf("switch prerequisites = %+v, want ready", data.Prerequisites)
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+	for _, path := range []string{
+		filepath.Join(home, "orbit.pid"),
+		filepath.Join(home, "orbit.sock"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("switch created background state at %s: %v", path, err)
+		}
+	}
+}
+
 func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 	env := setupE2E(t)
 	env.run(t, "daemon", "start")
@@ -2146,6 +2200,33 @@ func TestE2E_EnvSyncClassifiesRepositoryAccessFailure(t *testing.T) {
 		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit env sync --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+}
+
+func TestE2E_EnvSyncExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
+	binary := findOrbitBinary(t)
+	command := exec.Command(binary, "env", "sync", "--url", "https://example.invalid/environments.git", "--json")
+	command.Env = append(os.Environ(), "ORBIT_HOME="+t.TempDir(), "PATH="+t.TempDir())
+	output, err := command.Output()
+	if err == nil {
+		t.Fatalf("env sync unexpectedly succeeded:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, string(output))
+	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
+		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
+	}
+	for _, wanted := range []string{
+		"Git is required only to sync shared environments",
+		"git was not found on PATH",
+		"https://git-scm.com/downloads",
+	} {
+		if !strings.Contains(envelope.Error.Message, wanted) {
+			t.Fatalf("message = %q, want %q", envelope.Error.Message, wanted)
+		}
+	}
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit env sync --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }

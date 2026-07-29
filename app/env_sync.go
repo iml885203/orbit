@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -125,6 +126,19 @@ func envRepoSyncError(err error) error {
 	var cloneErr *envsync.CloneError
 	if !errors.As(err, &cloneErr) {
 		return fmt.Errorf("sync: %w", err)
+	}
+	if errors.Is(cloneErr.Err, exec.ErrNotFound) {
+		return cli.WithJSONActions(
+			cli.NewEnvRepoAccessError(
+				"Git is required only to sync shared environments, but git was not found on PATH.\n"+
+					"Install Git from https://git-scm.com/downloads, then retry 'orbit env sync'.",
+			),
+			[]cli.JSONAction{{
+				Command:     "orbit env sync --json",
+				Reason:      "Retry the environment sync after installing Git.",
+				Destructive: false,
+			}},
+		)
 	}
 	message := fmt.Sprintf("cannot access environment repo %s: %v", cloneErr.DisplayURL(), cloneErr.Err)
 	if detail := strings.TrimSpace(strings.ReplaceAll(cloneErr.Output, cloneErr.URL, cloneErr.DisplayURL())); detail != "" {

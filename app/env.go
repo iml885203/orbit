@@ -274,11 +274,6 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	}
 
 	pidBefore, alive := daemon.IsDaemonRunning()
-	daemonAction := "start"
-	if alive {
-		daemonAction = "restart"
-	}
-
 	if alive {
 		if !cli.JSONOutput {
 			fmt.Println("→ stopping current environment")
@@ -298,26 +293,13 @@ func runSwitch(_ *cobra.Command, args []string) error {
 	if !cli.JSONOutput {
 		fmt.Printf("→ switching to %s\n", daemonsrv.EnvShortName(abs))
 	}
-	if prerequisitesReady {
-		if err := ensureDaemonStarted(abs); err != nil {
-			return err
-		}
-	}
 	if cli.JSONOutput {
-		pid, running := daemon.IsDaemonRunning()
-		if !prerequisitesReady {
-			daemonAction = "deferred"
-		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildSwitchJSONData(switchJSONOptions{
-			SelectedEnv:          abs,
-			DaemonAction:         daemonAction,
-			DaemonRunningBefore:  alive,
-			DaemonRunningAfter:   running,
-			PID:                  pid,
-			ConfigPath:           abs,
-			RequestedConfigApply: true,
-			Prerequisites:        prerequisites,
-			PrerequisitesReady:   prerequisitesReady,
+			SelectedEnv:                abs,
+			PreviousEnvironmentStopped: alive,
+			ConfigPath:                 abs,
+			Prerequisites:              prerequisites,
+			PrerequisitesReady:         prerequisitesReady,
 		}), switchRecommendedActions(prerequisites, prerequisitesReady))
 	}
 	printSwitchPrerequisites(prerequisites, prerequisitesReady)
@@ -329,50 +311,33 @@ func runSwitch(_ *cobra.Command, args []string) error {
 }
 
 type switchJSONOptions struct {
-	SelectedEnv          string
-	DaemonAction         string
-	DaemonRunningBefore  bool
-	DaemonRunningAfter   bool
-	PID                  int
-	ConfigPath           string
-	RequestedConfigApply bool
-	Prerequisites        []daemon.DoctorCheck
-	PrerequisitesReady   bool
+	SelectedEnv                string
+	PreviousEnvironmentStopped bool
+	ConfigPath                 string
+	Prerequisites              []daemon.DoctorCheck
+	PrerequisitesReady         bool
 }
 
 type switchJSONData struct {
-	Operation            string               `json:"operation"`
-	SelectedEnv          string               `json:"selected_env"`
-	EnvName              string               `json:"env_name"`
-	DaemonAction         string               `json:"daemon_action"`
-	DaemonRunningBefore  bool                 `json:"daemon_running_before"`
-	DaemonRunningAfter   bool                 `json:"daemon_running_after"`
-	PID                  int                  `json:"pid,omitempty"`
-	ConfigPath           string               `json:"config_path"`
-	Dashboard            string               `json:"dashboard,omitempty"`
-	RequestedConfigApply bool                 `json:"requested_config_apply"`
-	Prerequisites        []daemon.DoctorCheck `json:"prerequisites"`
-	PrerequisitesReady   bool                 `json:"prerequisites_ready"`
+	Operation                  string               `json:"operation"`
+	SelectedEnv                string               `json:"selected_env"`
+	EnvName                    string               `json:"env_name"`
+	PreviousEnvironmentStopped bool                 `json:"previous_environment_stopped"`
+	ConfigPath                 string               `json:"config_path"`
+	Prerequisites              []daemon.DoctorCheck `json:"prerequisites"`
+	PrerequisitesReady         bool                 `json:"prerequisites_ready"`
 }
 
 func buildSwitchJSONData(opts switchJSONOptions) switchJSONData {
-	out := switchJSONData{
-		Operation:            "switch",
-		SelectedEnv:          opts.SelectedEnv,
-		EnvName:              daemonsrv.EnvShortName(opts.SelectedEnv),
-		DaemonAction:         opts.DaemonAction,
-		DaemonRunningBefore:  opts.DaemonRunningBefore,
-		DaemonRunningAfter:   opts.DaemonRunningAfter,
-		PID:                  opts.PID,
-		ConfigPath:           opts.ConfigPath,
-		RequestedConfigApply: opts.RequestedConfigApply,
-		Prerequisites:        opts.Prerequisites,
-		PrerequisitesReady:   opts.PrerequisitesReady,
+	return switchJSONData{
+		Operation:                  "switch",
+		SelectedEnv:                opts.SelectedEnv,
+		EnvName:                    daemonsrv.EnvShortName(opts.SelectedEnv),
+		PreviousEnvironmentStopped: opts.PreviousEnvironmentStopped,
+		ConfigPath:                 opts.ConfigPath,
+		Prerequisites:              opts.Prerequisites,
+		PrerequisitesReady:         opts.PrerequisitesReady,
 	}
-	if opts.DaemonRunningAfter {
-		out.Dashboard = fmt.Sprintf("http://localhost:%d", daemon.DashboardPort())
-	}
-	return out
 }
 
 func switchPrerequisites(path string) ([]daemon.DoctorCheck, bool, error) {

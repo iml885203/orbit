@@ -171,6 +171,7 @@ status = read("status.json")
 opened = read("open.json")
 
 assert doctor["ok"] is True
+assert "Git" not in {check["name"] for check in doctor["data"]["checks"]}
 assert up["ok"] is True
 assert status["ok"] is True
 resources = {resource["name"]: resource for resource in status["data"]["resources"]}
