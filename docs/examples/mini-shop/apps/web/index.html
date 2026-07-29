@@ -235,6 +235,15 @@
         color: #cbd5e1;
       }
 
+      .compact-mode-note {
+        margin-top: 8px;
+        color: #e0f2fe;
+        font-size: 12px;
+        background: #0b1328;
+        border-radius: 8px;
+        padding: 8px;
+      }
+
       .session-metric-line.ok {
         color: #86efac;
       }
@@ -531,7 +540,7 @@
       <div id="demo-verdict-actions" class="verdict-action-row"></div>
     </div>
 
-    <div class="card advanced-only">
+    <div class="card advanced-only compact-mode-hide">
       <h3>故障演練（1/2 分鐘）</h3>
       <p class="hint">這是給「真的會壞掉」的情境設計：先建立成功 baseline，再停止一個 service，接著照步驟恢復。</p>
       <ol class="step-list">
@@ -562,6 +571,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
     <div id="mode-control-panel" class="card">
       <h3>切換檢視模式</h3>
       <p class="hint">先用「新手」快速完成流程；需要排查時再切「進階」看更多診斷資訊。</p>
+      <p id="compact-mode-note" class="compact-mode-note">新手模式預設隱藏高階卡片，只保留決策最少的「能否 demo」資訊。</p>
       <div class="mode-switch">
         <button id="mode-beginner" class="small-btn mode-btn active">新手</button>
         <button id="mode-advanced" class="small-btn mode-btn">進階</button>
@@ -569,12 +579,12 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <p id="mode-help" class="hint">新手模式預設只保留最少步驟；進階模式展開完整故障排查卡。</p>
     </div>
 
-    <div id="goal-summary-card" class="card">
+    <div id="goal-summary-card" class="card compact-mode-hide">
       <h3>一眼看懂進度</h3>
       <div id="goal-summary" class="summary-grid"></div>
     </div>
 
-    <div id="ops-dashboard-card" class="card">
+    <div id="ops-dashboard-card" class="card compact-mode-hide">
       <h3>營運快覽（無需進入技術細節）</h3>
       <p class="hint">同一個畫面看懂「本輪是否有可交付結果」與「哪裡最值得修正」。</p>
       <div id="ops-dashboard" class="ops-dashboard">
@@ -595,19 +605,19 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="value-signal" class="value-signal-grid"></div>
     </div>
 
-    <div id="session-metrics-card" class="card">
+    <div id="session-metrics-card" class="card compact-mode-hide">
       <h3>本次 demo 指標</h3>
       <p class="hint">這裡記錄你這一輪「是否可 demo」的關鍵結果，重開頁面會重置。</p>
       <div id="session-metrics" class="session-metrics-grid"></div>
     </div>
 
-    <div id="data-model-card" class="card">
+    <div id="data-model-card" class="card compact-mode-hide">
       <h3>資料關係快覽</h3>
       <p class="hint">不用看原始碼，就知道這輪資料是怎麼「從商品/客戶」一路關聯到「訂單/出貨」。</p>
       <div id="data-model-summary" class="summary-grid"></div>
     </div>
 
-    <div id="observability-card" class="card advanced-only">
+    <div id="observability-card" class="card advanced-only compact-mode-hide">
       <h3>關聯觀測洞察（單頁就懂）</h3>
       <p class="hint">不看 Log，只看關聯結果：哪些訂單已關聯出貨、最近 10 筆事件是否正常。</p>
       <div id="observability-summary" class="observability-grid">
@@ -618,7 +628,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </div>
     </div>
 
-    <div class="card advanced-only">
+    <div class="card advanced-only compact-mode-hide">
       <h3>當前可驗證結果</h3>
       <div id="proof-summary" class="evidence-grid"></div>
     </div>
@@ -631,7 +641,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </div>
     </div>
 
-    <div id="acceptance-card" class="card">
+    <div id="acceptance-card" class="card compact-mode-hide">
       <h3>1.0 交付前檢核</h3>
       <p class="hint">如果這三項都綠了，就可以把 demo 視為可交付結果。</p>
       <div id="acceptance-checklist" class="acceptance-checklist">
@@ -641,13 +651,13 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </div>
     </div>
 
-    <div id="flow-map-card" class="card advanced-only">
+    <div id="flow-map-card" class="card advanced-only compact-mode-hide">
       <h3>流程依賴速覽（不看程式也能懂）</h3>
       <p class="hint">這張圖只看最新狀態：如果 checkout 有問題，先看左上游服務是否 ready。</p>
       <div id="flow-map" class="flow-map">載入服務中...</div>
     </div>
 
-    <div class="card advanced-only">
+    <div class="card advanced-only compact-mode-hide">
       <h3>下一步（照著做）</h3>
       <ul id="next-steps" class="hint step-list">
         <li>等待服務就緒</li>
@@ -666,7 +676,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="flow-state" class="hint">初始化...</div>
     </div>
 
-    <div id="diagnostic-panel" class="card advanced-only">
+    <div id="diagnostic-panel" class="card advanced-only compact-mode-hide">
       <h3>診斷命令（可複製）</h3>
       <p class="hint">當卡住時，先貼到 terminal 執行，就能快速定位是哪個 service 導致流程停住。</p>
       <textarea id="diagnostic-cmd" readonly spellcheck="false"></textarea>
@@ -676,12 +686,12 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="diagnostic-feedback" class="copy-feedback"></div>
     </div>
 
-    <div class="card">
+    <div class="card compact-mode-hide">
       <h3>操作摘要（你現在做了什麼）</h3>
       <div id="run-summary" class="summary-list hint">尚未開始</div>
     </div>
 
-    <div class="card">
+    <div class="card compact-mode-hide">
       <h3>一鍵情境（新手友善）</h3>
       <div class="row">
         <button id="scenario-success" class="inline-btn">情境 A：成功下單</button>
@@ -691,7 +701,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <p class="hint">每個情境都會自動引導你到可驗證結果：訂單/出貨/失敗訊息。</p>
     </div>
 
-    <div class="card">
+    <div class="card compact-mode-hide">
       <h3>最短重現路徑（建議優先）</h3>
       <p class="hint">只保留最小可重現步驟：點一下就能跑到指定狀態。</p>
       <div class="row">
@@ -702,7 +712,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <p class="hint">如果你想比較結果，可直接再點「一鍵完成成功流程」或「重做一次成功流程」。</p>
     </div>
 
-    <div class="card">
+    <div class="card compact-mode-hide">
       <h3>快速導覽（新手友善）</h3>
       <ol>
         <li>確認服務就緒數（後端服務）</li>
@@ -712,7 +722,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       </ol>
     </div>
 
-    <div id="error-playbook-card" class="card advanced-only">
+    <div id="error-playbook-card" class="card advanced-only compact-mode-hide">
     <h3>故障情境對照卡（先照表走）</h3>
       <p class="hint">一看到錯誤碼就對到這張卡：它會告訴你下一步該做什麼。</p>
       <div id="error-playbook" class="error-playbook"></div>
@@ -788,7 +798,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
         <div id="run-result" class="hint">尚未執行</div>
       </div>
 
-    <div id="service-relationship-card" class="card advanced-only">
+    <div id="service-relationship-card" class="card advanced-only compact-mode-hide">
       <h3>服務關係（你可不用記）</h3>
       <div class="hint">從資料流向來看：</div>
       <pre class="mono">
@@ -803,7 +813,7 @@ web
         <p class="hint">也就是你只要追一個主流程節點 checkout-api 即可理解全域。</p>
       </div>
 
-      <div id="operation-log-card" class="card advanced-only">
+      <div id="operation-log-card" class="card advanced-only compact-mode-hide">
         <h3>操作回應快照</h3>
         <p class="hint">每次關鍵操作都會留下服務回應與耗時，能快速知道「是 API 還是服務本身」卡住。</p>
         <div id="operation-log" class="operation-log">
@@ -956,6 +966,9 @@ web
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
       const panelAttentionTimers = new Map();
+      const compactModeHideSelectors = [
+        '.compact-mode-hide',
+      ];
 
       function getTrackedServiceNames(map, mode = uiMode) {
         const keys = Object.keys(map || {}).filter(Boolean);
@@ -1480,6 +1493,19 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         } else {
           panel.classList.remove('hidden');
         }
+      });
+
+      compactModeHideSelectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((panel) => {
+          if (!panel) {
+            return;
+          }
+          if (mode === 'beginner') {
+            panel.classList.add('hidden');
+          } else {
+            panel.classList.remove('hidden');
+          }
+        });
       });
 
       if (beginnerGuideCard) {
