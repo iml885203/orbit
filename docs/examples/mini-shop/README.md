@@ -43,6 +43,14 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh
 ```
 
+你可以用這個 wrapper 一次選好模式（建議新手先 standard）：
+
+```bash
+bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard
+# 或直接啟用進階模式（含觀測 + 通知）
+bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced
+```
+
 腳本會做三件事：
 
 1. 等待核心服務就緒（catalog/cart/order/checkout/shipping）
