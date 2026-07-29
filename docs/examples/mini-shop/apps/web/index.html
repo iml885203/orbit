@@ -597,6 +597,15 @@
       <div id="demo-verdict-actions" class="verdict-action-row"></div>
     </div>
 
+    <div id="quick-demo-compass-card" class="card">
+      <h3>本輪 demo 一眼結論（30秒版）</h3>
+      <p class="hint">每次只看這裡：是否可 demo、已經卡在哪、下一步該按哪顆按鈕。</p>
+      <div id="quick-demo-compass" class="summary-list">
+        <div class="verdict-line">載入中…</div>
+      </div>
+      <div id="quick-demo-compass-actions" class="verdict-action-row"></div>
+    </div>
+
     <div class="card advanced-only compact-mode-hide">
       <h3>故障演練（1/2 分鐘）</h3>
       <p class="hint">這是給「真的會壞掉」的情境設計：先建立成功 baseline，再停止一個 service，接著照步驟恢復。</p>
@@ -961,6 +970,8 @@ web
       const quickFixErrorBtn = document.getElementById('quick-fix-error');
       const demoVerdictEl = document.getElementById('demo-verdict');
       const demoVerdictActionsEl = document.getElementById('demo-verdict-actions');
+      const quickDemoCompassEl = document.getElementById('quick-demo-compass');
+      const quickDemoCompassActionsEl = document.getElementById('quick-demo-compass-actions');
       const beginnerGuideCard = document.getElementById('beginner-guide-card');
       const beginnerGuideState = document.getElementById('beginner-guide-state');
       const beginnerGuideStepEls = {
@@ -2502,11 +2513,17 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           ? '✅ 可直接 demo：服務 / 交易 / 關聯三格皆綠'
           : '⚠️ 尚未可 demo：請按卡片右上「下一步」回到可交付狀態';
         const detail = canDemo ? '已達成 1.0 交付前條件。' : `缺口：${blockers.join('；')}`;
+        const resolvedActions = actions.length
+          ? actions
+          : [{ type: 'focus', payload: '#goal-next', label: '查看下一步建議' }];
         const renderedActions = canDemo
           ? '<button type="button" class="small-btn inline-btn" data-demo-verdict-action="copy" data-demo-verdict-payload="demo-report">複製 demo 報告</button>'
-          : (actions.length ? actions : [{ type: 'focus', payload: '#goal-next', label: '查看下一步建議' }])
-            .map((action) => `<button type="button" class="small-btn inline-btn" data-demo-verdict-action="${action.type}" data-demo-verdict-payload="${action.payload || ''}">${action.label || '前往'}</button>`)
+          : resolvedActions
+            .map((action) => `<button type="button" class="small-btn inline-btn" data-demo-verdict-action="${action.type}" data-demo-verdict-payload="${action.payload || ''}">${action.label || '前往'}</button>`) 
             .join('');
+        const quickCompassActions = canDemo
+          ? '<button type="button" class="small-btn inline-btn" data-demo-verdict-action="copy" data-demo-verdict-payload="demo-report">複製 demo 報告</button>'
+          : renderedActions;
 
         demoVerdictEl.innerHTML = [
           `<div class="verdict-line ${statusClass}">${statusText}</div>`,
@@ -2515,6 +2532,17 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         ].join('');
         if (demoVerdictActionsEl) {
           demoVerdictActionsEl.innerHTML = renderedActions;
+        }
+
+        if (quickDemoCompassEl) {
+          quickDemoCompassEl.innerHTML = [
+            `<div class="verdict-line ${statusClass}">${canDemo ? '✅ 今日可展示：是' : '⚠️ 今日可展示：否'}</div>`,
+            `<div class="verdict-line ${statusClass}">卡點：${detail}</div>`,
+            `<div class="verdict-line ${statusClass}">建議下一步：${canDemo ? '先複製 demo 報告進行交付說明' : resolvedActions[0]?.label || '先回到下一步建議'}</div>`,
+          ].join('');
+        }
+        if (quickDemoCompassActionsEl) {
+          quickDemoCompassActionsEl.innerHTML = quickCompassActions;
         }
       }
 
