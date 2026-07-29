@@ -68,6 +68,32 @@ jobs:
             echo "main must pass CI preflight and first-five-minutes before release" >&2
             exit 1
           fi
+      - name: Verify paired demo evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          demo_repository="iml885203/orbit-demo"
+          ref_object="$(
+            gh api "repos/$demo_repository/git/ref/tags/$RELEASE_VERSION"
+          )"
+          demo_commit="$(jq -r '.object.sha' <<<"$ref_object")"
+          if [ "$(jq -r '.object.type' <<<"$ref_object")" = "tag" ]; then
+            demo_commit="$(
+              gh api "repos/$demo_repository/git/tags/$demo_commit" --jq '.object.sha'
+            )"
+          fi
+          successful_demo_gate="$(
+            gh api "repos/$demo_repository/commits/$demo_commit/check-runs" \
+              --jq '[.check_runs[]
+                | select(.name == "validate" and .conclusion == "success")]
+                | length'
+          )"
+          if [ "$successful_demo_gate" = "0" ]; then
+            echo "$demo_repository@$RELEASE_VERSION must pass its paired preview journey" >&2
+            exit 1
+          fi
 
   platform-smoke:
     needs: approval

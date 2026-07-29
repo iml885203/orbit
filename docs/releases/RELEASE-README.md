@@ -18,10 +18,18 @@ make release-check RELEASE_VERSION=v0.0.41
 ```
 
 The candidate notes and both bundled plugin manifests must match that version.
-After the candidate commit passes CI and is reviewed, tag that exact `main`
-commit and dispatch the Release workflow with `RELEASE v0.0.41`. The workflow
-requires successful `preflight` and `first-five-minutes` checks from that exact
-main commit, runs platform and SQL Server smoke gates, then publishes the
-curated candidate notes as the GitHub Release body. It does not rerun the same
-Linux source gate after those checks have passed. Commit-generated notes are
+After the candidate commit passes CI and is reviewed:
+
+1. Tag that exact Orbit `main` commit.
+2. Update the demo to the same version, including its `ORBIT_VERSION`, then tag
+   the exact demo `main` commit.
+3. Wait for the demo's `validate` journey to pass. Before a GitHub Release
+   exists, the journey builds the exact Orbit tag instead of a moving `main`.
+4. Dispatch the Release workflow with `RELEASE v0.0.41`.
+
+The workflow requires successful `preflight` and `first-five-minutes` checks
+from the exact Orbit commit and the successful version-matched demo journey. It
+then runs platform and SQL Server smoke gates and publishes the curated
+candidate notes as the GitHub Release body. It does not rerun the same Linux
+source gate after those checks have passed. Commit-generated notes are
 deliberately not used as the product delivery record.
