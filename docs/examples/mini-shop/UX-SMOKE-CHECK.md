@@ -21,13 +21,14 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 ## 2) 先看「不需猜」指標（30 秒內）
 
 1. 在頁面打開 `docs/examples/mini-shop/apps/web/index.html` 服務（`orbit -c docs/examples/mini-shop/dev.yaml open`）。
-2. 確認以下 3 格有節奏地出現：
+2. 確認以下 5 格有節奏地出現：
    - `快速判斷值`：服務、交易、關聯
    - `一輪 demo 結論（先看這裡）`：是否可直接 demo、缺口清單、以及導向下一步的建議按鈕
    - `1.0 交付前檢核`：每項都可被理解及點選
+   - `資料關係快覽`：本輪最重要關係能否一眼判斷
    - `現在只要做一件事`：有下一步提示
 
-如果這 3 個都不見，先回 `orbit status --json` 確認 8/8 backend ready。
+如果這 5 個都不見，先回 `orbit status --json` 確認 8/8 backend ready。
 
 ## 3) 最短成功路徑
 
@@ -92,7 +93,7 @@ orbit -c docs/examples/mini-shop/dev.yaml down
 
 ## 6) 可通過條件（你只要這 5 項）
 
-- [ ] 開啟三格判斷值與 1.0 檢核可讀；
+- [ ] 開啟三格判斷值、1.0 檢核、資料關係快覽可讀；
 - [ ] 一輪成功 demo 無需查說明文件可完成；
 - [ ] 失敗情境可由頁面給出可執行後續；
 - [ ] 時間軸可定位出問題節點；

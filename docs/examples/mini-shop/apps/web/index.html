@@ -539,6 +539,12 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="session-metrics" class="session-metrics-grid"></div>
     </div>
 
+    <div id="data-model-card" class="card">
+      <h3>資料關係快覽</h3>
+      <p class="hint">不用看原始碼，就知道這輪資料是怎麼「從商品/客戶」一路關聯到「訂單/出貨」。</p>
+      <div id="data-model-summary" class="summary-grid"></div>
+    </div>
+
     <div id="observability-card" class="card advanced-only">
       <h3>關聯觀測洞察（單頁就懂）</h3>
       <p class="hint">不看 Log，只看關聯結果：哪些訂單已關聯出貨、最近 10 筆事件是否正常。</p>
@@ -839,6 +845,7 @@ web
       const modeAdvancedBtn = document.getElementById('mode-advanced');
       const modeHelpEl = document.getElementById('mode-help');
       const sessionMetricsEl = document.getElementById('session-metrics');
+      const dataModelSummaryEl = document.getElementById('data-model-summary');
       const BASELINE_SERVICE_SET = ['catalog-api', 'inventory-api', 'customer-api', 'cart-api', 'order-api', 'payment-api', 'shipping-api', 'checkout-api'];
       const ADVANCED_SERVICE_SET = [...BASELINE_SERVICE_SET, 'observability-api', 'notification-api'];
       const BASELINE_RESOURCE_COUNT = BASELINE_SERVICE_SET.length + 1;
@@ -850,6 +857,10 @@ web
       let latestCheckoutPayload = null;
       let latestFailureErrorCode = '';
       let latestServiceMap = null;
+      let latestCustomersPayload = null;
+      let latestProductsPayload = null;
+      let latestInventoryPayload = null;
+      let latestCartPayload = null;
       let lastAutoFocusedErrorCode = '';
       const operationLog = [];
       const operationLogMaxItems = 12;
@@ -1683,6 +1694,63 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           formatValueSignalChip('服務', serviceReady, serviceText),
           formatValueSignalChip('交易', hasSuccessfulOrder, hasSuccessfulOrder ? '已完成成功 checkout' : '尚未完成成功 checkout'),
           formatValueSignalChip('關聯', hasRelation, hasRelation ? '訂單已關聯出貨' : '尚未完成關聯'),
+        ].join('');
+      }
+
+      function setDataModelSummary() {
+        if (!dataModelSummaryEl) {
+          return;
+        }
+
+        const customers = latestCustomersPayload?.customers || [];
+        const products = latestProductsPayload?.products || [];
+        const inventory = latestInventoryPayload?.items || [];
+        const selectedCustomerId = Number(customerEl.value);
+
+        const orders = latestOrdersPayload?.orders || [];
+        const selectedOrders = selectedCustomerId > 0
+          ? orders.filter((item) => item.customer_id === selectedCustomerId)
+          : [];
+        const shipments = latestShipmentsPayload?.shipments || [];
+        const selectedShipments = selectedCustomerId > 0
+          ? shipments.filter((item) => item.customer_id === selectedCustomerId)
+          : [];
+
+        const successfulOrders = orders.filter((item) => item.status === 'confirmed');
+        const linkedOrderIds = new Set(
+          shipments
+            .filter((item) => item.order_id)
+            .map((item) => item.order_id)
+        );
+
+        const latestOrder = orders[0] || null;
+        const relatedShipment = latestOrder
+          ? shipments.find((item) => item.order_id === latestOrder.id)
+          : null;
+        const readyRelation = Boolean(latestOrder && latestOrder.status === 'confirmed' && relatedShipment);
+
+        const cartCount = latestCartPayload?.item_count || 0;
+        const cartSubtotal = latestCartPayload?.total != null
+          ? latestCartPayload.total.toFixed(2)
+          : '0.00';
+        const cartSummary = selectedCustomerId > 0
+          ? `購物車 items ${cartCount} / 小計 $${cartSubtotal}`
+          : '未選客戶，無法顯示當前購物車';
+
+        const relationText = selectedCustomerId > 0
+          ? `所選客戶關聯：訂單 ${selectedOrders.length} 筆 / 出貨 ${selectedShipments.length} 筆`
+          : '請先選客戶，查看關聯是否成立';
+        const lowStockProducts = inventory.filter((item) => item.stock !== undefined && item.stock <= 5).length;
+
+        dataModelSummaryEl.innerHTML = [
+          `<div class="summary-row">• 商品主檔：${products.length} 筆</div>`,
+          `<div class="summary-row">• 客戶主檔：${customers.length} 筆</div>`,
+          `<div class="summary-row">• 庫存預警：${lowStockProducts} 種低於 5</div>`,
+          `<div class="summary-row">• ${cartSummary}</div>`,
+          `<div class="summary-row">• 交易進度：總訂單 ${orders.length} 筆（成功 ${successfulOrders.length} / 待確認 ${orders.length - successfulOrders.length}）</div>`,
+          `<div class="summary-row">• 關聯結果：出貨 ${shipments.length} 筆、已關聯 ${linkedOrderIds.size} 筆</div>`,
+          `<div class="summary-row ${readyRelation ? 'ok' : 'warn'}">• 本輪關聯可見證：${latestOrder ? `#${latestOrder.id}` : '尚未有交易'}${relatedShipment ? ` → 出貨 ${relatedShipment.tracking_no}` : ''}</div>`,
+          `<div class="summary-row">• ${relationText}</div>`,
         ].join('');
       }
 
@@ -2847,6 +2915,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           visible: false,
           action: 'load customers',
         });
+        latestCustomersPayload = payload;
         customerEl.innerHTML = '';
         payload.customers.forEach((item) => {
           const option = document.createElement('option');
@@ -2864,6 +2933,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           visible: false,
           action: 'load products',
         });
+        latestProductsPayload = payload;
         productsEl.innerHTML = '';
         productEl.innerHTML = '';
         payload.products.forEach((item) => {
@@ -2881,6 +2951,12 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       async function loadCart() {
         const customerId = Number(customerEl.value);
         if (!customerId) {
+          latestCartPayload = {
+            customer_id: 0,
+            items: [],
+            item_count: 0,
+            total: 0,
+          };
           cartEl.textContent = '先選客戶';
           cartHasItems = false;
           return;
@@ -2897,6 +2973,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           return;
         }
         cartHasItems = true;
+        latestCartPayload = payload;
         payload.items.forEach((item) => {
           const row = document.createElement('div');
           row.className = 'row';
@@ -3034,6 +3111,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         buildFlowTimeline(latestOrder, shipmentsPayload, checkoutPayload);
         buildOpsDashboard(ordersPayload, shipmentsPayload, latestServiceMap);
         setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload);
+        setDataModelSummary();
         setAcceptanceChecklist();
         if (latestOrder) {
           updateRunResultForOrder(latestOrder);
@@ -3178,6 +3256,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           visible: false,
           action: 'load inventory',
         });
+        latestInventoryPayload = payload;
         if (!payload.items.length) {
           inventorySummaryEl.textContent = '目前尚未有庫存資料';
           return;
@@ -3200,6 +3279,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           await loadObservabilityInsights();
           await Promise.all([loadCart(), loadInventory()]);
           refreshTransactionViews(ordersPayload, shipmentsPayload);
+          setDataModelSummary();
           appendSummary('已完成頁面刷新，服務與資料已同步。');
         } catch (err) {
           const parsed = parseApiError(err);
