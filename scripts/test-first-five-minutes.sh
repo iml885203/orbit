@@ -293,6 +293,11 @@ if [ "$(grep -c "open in browser" "$test_root/status.txt")" -ne 1 ] ||
   cat "$test_root/status.txt" >&2
   exit 1
 fi
+if grep -E 'Source:|https://github.com/|[0-9a-f]{12}' "$test_root/status.txt" >/dev/null; then
+  echo "daily status exposed environment-repository provenance." >&2
+  cat "$test_root/status.txt" >&2
+  exit 1
+fi
 
 grep -F \
   "failure added +0 reservations and +0 orders while preserving stock; compensation restored stock" \
