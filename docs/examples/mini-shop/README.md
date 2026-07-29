@@ -46,8 +46,11 @@ bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh
 你可以用這個 wrapper 一次選好模式（建議新手先 compact）：
 
 ```bash
+bash docs/examples/mini-shop/scripts/compact-onboarding.sh
+# 一鍵啟動 compact 環境 + success/decline 驗核（建議新手優先）
+
+# 若你只想看啟動，不含 smoke：
 bash docs/examples/mini-shop/scripts/start-mini-shop.sh compact
-# 對應最小認知模型新手路徑，先跑 1～2 分鐘就能看到可 demo 結論
 
 # 或啟用完整 baseline
 bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard
@@ -56,18 +59,21 @@ bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard
 bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced
 ```
 
-腳本會做三件事：
+`compact-onboarding.sh` 會做四件事：
 
 1. 等待核心服務就緒（catalog/cart/order/checkout/shipping）
-2. 跑一輪 `mock_card` 成功 checkout
-3. 顯示關聯結果（Orders / Shipments）與下一步可執行腳本
+2. 檢查每個核心服務是否回傳 `status: ok`
+3. 跑 `success + decline` 兩種檢核
+4. 顯示關聯結果（Orders / Shipments）與下一步可執行腳本
 
 腳本完成後會輸出：
 
 - 觀察服務就緒日誌
 - 成功交易結果
 - 關聯完成摘要（`orders` / `shipments`）
-- 一份可貼報告的結果檔（預設為：`/tmp/mini-shop-smoke-reports/onboarding-summary.json`）
+- 一份可貼報告的結果檔（預設為：`/tmp/mini-shop-smoke-reports/compact-summary.json`）
+
+如果 smoke 不是全綠，腳本會直接輸出下一步建議，建議先依照建議命令把環境回到穩定狀態後重跑。
 
 如果這個流程能走完，通常你在 UI 也能直接看到 3 秒 demo 結論轉為可 demo 狀態。
 
