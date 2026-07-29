@@ -79,12 +79,12 @@ check_cart_checkout_success() {
 }
 
 run_success_flow() {
-  log "情境 success：清空購物車→加 1 件→mock_card"
+  log "情境 success：清空購物車→加 1 件→mock_card" >&2
   check_cart_checkout_success "mock_card"
 }
 
 run_decline_flow() {
-  log "情境 decline：清空購物車→加 1 件→decline"
+  log "情境 decline：清空購物車→加 1 件→decline" >&2
   check_cart_checkout_success "decline"
 }
 
