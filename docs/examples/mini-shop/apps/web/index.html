@@ -43,6 +43,30 @@
       .acceptance-item.warn .acceptance-dot { background: #f59e0b; }
       .acceptance-item.fail .acceptance-dot { background: #fb7185; }
       .hint { color: #94a3b8; font-size: 13px; }
+      .scenario-story-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .story-card {
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+        padding: 8px;
+        background: #0b1328;
+      }
+      .story-card h4 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      .story-subtitle {
+        margin: 2px 0;
+        font-size: 12px;
+        color: #c7d2fe;
+      }
+      .story-expected {
+        margin: 4px 0;
+        font-size: 12px;
+        color: #d1d5db;
+      }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       li { margin: 4px 0; }
       .step-list { margin: 0; padding-left: 20px; }
@@ -527,11 +551,40 @@
         <button id="copy-onboarding-script" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh">複製 2 分鐘導覽命令</button>
         <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action">一鍵 demo 檢核（成功→核對）</button>
       </div>
-      <p class="hint">如果你要用 terminal 驗收，直接複製一個場景腳本就能看到預期結果。</p>
-      <div class="row">
-        <button id="copy-scenario-success" class="small-btn inline-btn quick-start-action">情境 A：成功下單（複製腳本）</button>
-        <button id="copy-scenario-decline" class="small-btn inline-btn quick-start-action">情境 B：付款失敗（複製腳本）</button>
-        <button id="copy-scenario-stock" class="small-btn inline-btn quick-start-action">情境 C：庫存不足（複製腳本）</button>
+    </div>
+
+    <div id="scenario-stories-card" class="card">
+      <h3>場景導演（先做這 3 個）</h3>
+      <p class="hint">每個情境都會顯示「你做了什麼 → 會看到什麼 → 下一步」；先做 A，再做 B、C。</p>
+      <div class="scenario-story-grid">
+        <article class="story-card">
+          <h4>情境 A：成功下單（最重要）</h4>
+          <p class="story-subtitle">目標：看到一次完整的訂單與出貨關聯。</p>
+          <p class="story-expected">期望：產生一筆 confirmed 訂單，並在出貨列表看到對應 order_id。</p>
+          <div class="row">
+            <button id="scenario-success" class="small-btn inline-btn">直接跑 A（快速）</button>
+            <button id="copy-scenario-success" class="small-btn inline-btn">複製 A 腳本（終端機）</button>
+          </div>
+        </article>
+        <article class="story-card">
+          <h4>情境 B：付款失敗（故障最小化）</h4>
+          <p class="story-subtitle">目標：驗證失敗訊息是否清楚，且知道該怎麼修。</p>
+          <p class="story-expected">期望：回傳付款失敗類錯誤碼，且介面會顯示改用 mock_card 重試。</p>
+          <div class="row">
+            <button id="scenario-decline" class="small-btn inline-btn warn">直接跑 B</button>
+            <button id="copy-scenario-decline" class="small-btn inline-btn">複製 B 腳本（終端機）</button>
+          </div>
+        </article>
+        <article class="story-card">
+          <h4>情境 C：庫存不足（邏輯保護）</h4>
+          <p class="story-subtitle">目標：知道庫存不足時，checkout 如何阻斷且不新增錯亂資料。</p>
+          <p class="story-expected">期望：顯示 insufficient_stock，且訂單/出貨沒有被新增。</p>
+          <p class="hint" style="margin-top: 4px;">（註）若看到關聯成功，代表你這一輪不是真正庫存不足，請先清空購物車再重跑。</p>
+          <div class="row">
+            <button id="scenario-stock" class="small-btn inline-btn danger">直接跑 C</button>
+            <button id="copy-scenario-stock" class="small-btn inline-btn">複製 C 腳本（終端機）</button>
+          </div>
+        </article>
       </div>
     </div>
 
@@ -699,25 +752,10 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <div id="run-summary" class="summary-list hint">尚未開始</div>
     </div>
 
-    <div class="card compact-mode-hide">
-      <h3>一鍵情境（新手友善）</h3>
-      <div class="row">
-        <button id="scenario-success" class="inline-btn">情境 A：成功下單</button>
-        <button id="scenario-decline" class="inline-btn warn">情境 B：付款失敗</button>
-        <button id="scenario-stock" class="inline-btn danger">情境 C：庫存不足</button>
-      </div>
-      <p class="hint">每個情境都會自動引導你到可驗證結果：訂單/出貨/失敗訊息。</p>
-    </div>
-
-    <div class="card compact-mode-hide">
-      <h3>最短重現路徑（建議優先）</h3>
-      <p class="hint">只保留最小可重現步驟：點一下就能跑到指定狀態。</p>
-      <div class="row">
-        <button id="quick-success" class="inline-btn">1) 最短成功路徑</button>
-        <button id="quick-fail-payment" class="inline-btn warn">2) 快速付款失敗</button>
-        <button id="quick-fail-stock" class="inline-btn danger">3) 快速庫存不足</button>
-      </div>
-      <p class="hint">如果你想比較結果，可直接再點「一鍵完成成功流程」或「重做一次成功流程」。</p>
+    <div class="hidden">
+      <button id="quick-success" class="inline-btn">1) 最短成功路徑</button>
+      <button id="quick-fail-payment" class="inline-btn warn">2) 快速付款失敗</button>
+      <button id="quick-fail-stock" class="inline-btn danger">3) 快速庫存不足</button>
     </div>
 
     <div class="card compact-mode-hide">
