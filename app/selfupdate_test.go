@@ -12,6 +12,9 @@ import (
 )
 
 func TestRunSelfUpdateFailsWhenInstallScriptDownloadFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows Beta updates use install.ps1")
+	}
 	t.Setenv("ORBIT_HOME", t.TempDir())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
