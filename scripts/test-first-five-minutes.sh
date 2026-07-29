@@ -58,8 +58,11 @@ cd "$test_root/empty-directory"
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   http://127.0.0.1:28080/health >"$test_root/health.json"
 
-grep -F '"ok":true' "$test_root/up.json" >/dev/null
-grep -F '"ok":true' "$test_root/status.json" >/dev/null
-grep -F '"status": "ok"' "$test_root/health.json" >/dev/null
+python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
+  "$test_root/up.json"
+python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
+  "$test_root/status.json"
+python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
+  "$test_root/health.json"
 
 echo "README first five minutes succeeds outside a source checkout"
