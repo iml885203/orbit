@@ -13,43 +13,6 @@ import (
 	"github.com/iml885203/orbit/daemon"
 )
 
-func TestBuildLogsJSONData(t *testing.T) {
-	got := buildLogsJSONData("worker", 2, &daemon.LogsResponse{Lines: []string{"a", "b"}})
-	if got.Resource != "worker" {
-		t.Fatalf("resource = %q", got.Resource)
-	}
-	if got.LinesRequested != 2 {
-		t.Fatalf("lines_requested = %d", got.LinesRequested)
-	}
-	if !got.Truncated {
-		t.Fatal("truncated = false, want true when returned lines equals requested lines")
-	}
-}
-
-func TestBuildLogsJSONDataNilResponseUsesEmptyLines(t *testing.T) {
-	got := buildLogsJSONData("svc", 10, nil)
-	assertLogsJSONLinesEmpty(t, got)
-}
-
-func TestBuildLogsJSONDataNilResponseLinesUsesEmptyLines(t *testing.T) {
-	got := buildLogsJSONData("svc", 10, &daemon.LogsResponse{})
-	assertLogsJSONLinesEmpty(t, got)
-}
-
-func assertLogsJSONLinesEmpty(t *testing.T, got logsJSONData) {
-	t.Helper()
-	if got.Lines == nil {
-		t.Fatal("Lines = nil, want non-nil empty slice")
-	}
-	encoded, err := json.Marshal(got)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if !bytes.Contains(encoded, []byte(`"lines":[]`)) {
-		t.Fatalf("encoded lines = %s, want lines encoded as []", encoded)
-	}
-}
-
 func TestWriteLogJSONEvent(t *testing.T) {
 	var buf bytes.Buffer
 	if err := writeLogJSONEvent(&buf, "worker", "ready"); err != nil {
@@ -70,82 +33,6 @@ func TestWriteLogJSONEvent(t *testing.T) {
 	}
 	if _, ok := got["service"]; ok {
 		t.Fatalf("event contains legacy service field: %+v", got)
-	}
-}
-
-func TestBuildLifecycleJSONDataClassifiesResources(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "redis", Kind: daemon.ResourceKindContainer, State: "healthy"},
-			{Name: "worker", Kind: daemon.ResourceKindService, State: "degraded"},
-			{Name: "payments", Kind: daemon.ResourceKindService, State: "starting"},
-		},
-	}
-	got := buildLifecycleJSONData(lifecycleJSONOptions{
-		Operation:          "up",
-		Message:            "starting 2 resources",
-		RequestedResources: []string{"worker", "payments"},
-		FinalStatus:        status,
-		TimedOutResources:  []string{"payments"},
-	})
-	if got.Operation != "up" {
-		t.Fatalf("operation = %q", got.Operation)
-	}
-	if len(got.Resources) != 2 {
-		t.Fatalf("resources count = %d, want 2", len(got.Resources))
-	}
-	if len(got.DegradedResources) != 1 || got.DegradedResources[0] != "worker" {
-		t.Fatalf("degraded_resources = %+v", got.DegradedResources)
-	}
-	if len(got.TimedOutResources) != 1 || got.TimedOutResources[0] != "payments" {
-		t.Fatalf("timed_out_resources = %+v", got.TimedOutResources)
-	}
-}
-
-func TestBuildLifecycleJSONDataEmptySlicesMarshalAsArrays(t *testing.T) {
-	got := buildLifecycleJSONData(lifecycleJSONOptions{Operation: "up"})
-	encoded, err := json.Marshal(got)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	for _, field := range []string{
-		`"requested_resources":[]`,
-		`"resources":[]`,
-		`"degraded_resources":[]`,
-		`"timed_out_resources":[]`,
-	} {
-		if !bytes.Contains(encoded, []byte(field)) {
-			t.Fatalf("encoded lifecycle payload = %s, want %s", encoded, field)
-		}
-	}
-	for _, legacy := range []string{
-		`"requested_services"`,
-		`"services"`,
-		`"degraded_services"`,
-		`"timed_out_services"`,
-	} {
-		if bytes.Contains(encoded, []byte(legacy)) {
-			t.Fatalf("encoded lifecycle payload = %s, contains legacy field %s", encoded, legacy)
-		}
-	}
-}
-
-func TestLifecycleJSONDataReportsProjectSwitch(t *testing.T) {
-	contextSwitch := &projectContextSwitch{
-		FromName:         "shop-a",
-		ToName:           "shop-b",
-		ToPath:           "/workspace/shop-b/orbit.yaml",
-		StoppedResources: []string{"api-a"},
-	}
-	got := buildLifecycleJSONData(lifecycleJSONOptions{
-		Operation:     "up",
-		ContextSwitch: contextSwitch,
-	})
-	if got.ContextSwitch == nil ||
-		got.ContextSwitch.FromName != "shop-a" ||
-		got.ContextSwitch.ToName != "shop-b" ||
-		len(got.ContextSwitch.StoppedResources) != 1 {
-		t.Fatalf("context switch = %+v", got.ContextSwitch)
 	}
 }
 

@@ -48,13 +48,7 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
-      - name: Build installed-user binary
-        run: |
-          pnpm --dir ui install --frozen-lockfile
-          make build
-      - name: Run README journey from an empty directory
-        run: ./scripts/test-first-five-minutes.sh
-      - name: Run local-first adoption from an empty project
-        run: ./scripts/test-local-first-adoption.sh
-      - name: Switch safely between two local projects
-        run: ./scripts/test-project-context-switch.sh
+      - name: Install dashboard dependencies
+        run: pnpm --dir ui install --frozen-lockfile
+      - name: Run installed-user journeys with one build
+        run: make test-journeys

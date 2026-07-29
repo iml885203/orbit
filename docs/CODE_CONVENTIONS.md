@@ -261,3 +261,13 @@ Repeated multi-step setup across 3+ call sites is a signal the domain
 hasn't exposed the right method. Push it down to the owning domain along
 with its sentinel errors and user-facing hints. CLI-side `requireFoo()`
 helpers are a smell.
+
+## 18. Test at behavioral boundaries
+
+See [testing.md](testing.md).
+
+Orbit favors end-to-end journeys and sociable domain tests. Solitary tests are
+for algorithms, parsers, escaping, security boundaries, concurrency invariants,
+and stable wire contracts—not DTO builders, getters, thin wrappers, or private
+call sequences. Prefer one test through a public behavior over several tests
+for its implementation helpers.

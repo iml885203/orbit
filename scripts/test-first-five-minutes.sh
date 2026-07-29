@@ -61,6 +61,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
+"$orbit_bin" --help >"$test_root/root-help.txt"
+"$orbit_bin" version --json >"$test_root/version.json"
+"$orbit_bin" env --help >"$test_root/env-help.txt"
+"$orbit_bin" logs --help >"$test_root/logs-help.txt"
+"$orbit_bin" switch --help >"$test_root/switch-help.txt"
+for command in doctor down env init logs open restart status switch uninstall up update version; do
+  grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
+done
+for hidden in daemon edge history inspect service settings tracing; do
+  if grep -E "^[[:space:]]+$hidden[[:space:]]" "$test_root/root-help.txt" >/dev/null; then
+    echo "advanced command $hidden leaked into installed-user root help." >&2
+    exit 1
+  fi
+done
+for command in list sync; do
+  grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/env-help.txt" >/dev/null
+done
+grep -F -- "--tail" "$test_root/logs-help.txt" >/dev/null
+grep -F "orbit up" "$test_root/switch-help.txt" >/dev/null
+if grep -i "daemon" "$test_root/switch-help.txt" >/dev/null; then
+  echo "switch help exposes daemon implementation details." >&2
+  exit 1
+fi
+
 missing_runtime_root="$test_root/missing-runtime"
 mkdir -p "$missing_runtime_root/bin" "$missing_runtime_root/project/envs"
 ln -s "$(command -v git)" "$missing_runtime_root/bin/git"
@@ -135,6 +159,7 @@ if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   exit 1
 fi
 "$orbit_bin" status --json >"$test_root/status.json"
+"$orbit_bin" env list --json >"$test_root/env-list.json"
 browser_stub_dir="$test_root/browser-stub"
 mkdir -p "$browser_stub_dir"
 printf '#!/bin/sh\nexit 0\n' >"$browser_stub_dir/open"
@@ -185,13 +210,25 @@ def read(name):
 
 up = read("up.json")
 status = read("status.json")
+env_list = read("env-list.json")
+version = read("version.json")
 health = read("health.json")
 service = read("open-service.json")
 dashboard = read("open-dashboard.json")
 
 assert up["ok"] is True
 assert status["ok"] is True
+assert env_list["ok"] is True
+assert version["ok"] is True
+assert version["schema_version"] == "orbit.cli.v1"
+assert version["data"]["version"]
 assert health["ok"] is True
+status_source = status["data"]["environment"]["managed_source"]
+list_source = env_list["data"]["environment"]["managed_source"]
+assert status_source == list_source
+assert status_source["url"] == "https://github.com/iml885203/orbit-demo.git"
+assert status_source["ref"] == "v0.0.33"
+assert len(status_source["commit"]) == 40
 assert up["recommended_actions"] == [{
     "command": "orbit open demo-shop --json",
     "reason": f"Open demo-shop at {demo_url}.",

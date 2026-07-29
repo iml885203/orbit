@@ -97,6 +97,11 @@ func (p *Poller) poll(ctx context.Context) {
 		if inspectErr != nil {
 			slog.Warn("Docker inspect error", "component", "poller", "name", name, "err", inspectErr)
 		} else if inspect.Container.State != nil {
+			// ContainerList and ContainerInspect are separate Docker API calls.
+			// A container can move from created to running between them, so the
+			// later inspect result is the authoritative runtime snapshot.
+			state.Status = string(inspect.Container.State.Status)
+			state.Running = inspect.Container.State.Running
 			startedAt, parseErr := time.Parse(time.RFC3339Nano, inspect.Container.State.StartedAt)
 			if parseErr == nil {
 				state.StartedAt = startedAt

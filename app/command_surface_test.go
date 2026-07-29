@@ -1,124 +1,12 @@
 package app
 
 import (
-	"bytes"
-	"slices"
-	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
 	"github.com/spf13/cobra"
 )
-
-func TestEnvironmentHelpShowsDailyWorkflow(t *testing.T) {
-	cmd := envCmd()
-	var visible []string
-	for _, child := range cmd.Commands() {
-		if !child.Hidden {
-			visible = append(visible, child.Name())
-		}
-	}
-	if want := []string{"list", "sync"}; !slices.Equal(visible, want) {
-		t.Fatalf("visible env commands = %v, want %v", visible, want)
-	}
-}
-
-func TestAdvancedCommandsAreHidden(t *testing.T) {
-	apply := envApplyCmd()
-	commands := []struct {
-		name   string
-		hidden bool
-	}{
-		{"env " + apply.Name(), apply.Hidden},
-		{daemonCmd().Name(), daemonCmd().Hidden},
-		{edgeCmd().Name(), edgeCmd().Hidden},
-		{historyCmd().Name(), historyCmd().Hidden},
-		{inspectCmd().Name(), inspectCmd().Hidden},
-		{serviceCmd().Name(), serviceCmd().Hidden},
-		{settingsCmd().Name(), settingsCmd().Hidden},
-		{tracingCmd().Name(), tracingCmd().Hidden},
-	}
-	for _, command := range commands {
-		if !command.hidden {
-			t.Errorf("%s should be hidden from root help", command.name)
-		}
-	}
-}
-
-func TestDailyCommandsUseOptionalTargetInsteadOfDuplicateVerbs(t *testing.T) {
-	for _, cmd := range []struct {
-		name string
-		use  string
-	}{
-		{"down", downCmd().Use},
-		{"open", openCmd().Use},
-		{"trace", traceCmd().Use},
-	} {
-		if cmd.use[0:len(cmd.name)] != cmd.name {
-			t.Errorf("%s use = %q", cmd.name, cmd.use)
-		}
-		if err := map[string]func([]string) error{
-			"down":  func(args []string) error { return downCmd().Args(downCmd(), args) },
-			"open":  func(args []string) error { return openCmd().Args(openCmd(), args) },
-			"trace": func(args []string) error { return traceCmd().Args(traceCmd(), args) },
-		}[cmd.name]([]string{"one", "two"}); err == nil {
-			t.Errorf("%s accepted more than one target", cmd.name)
-		}
-	}
-}
-
-func TestExecHelpIsNotTreatedAsAContainer(t *testing.T) {
-	cmd := execCmd()
-	var output bytes.Buffer
-	cmd.SetOut(&output)
-	cmd.SetErr(&output)
-	cmd.SetArgs([]string{"--help"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("exec --help: %v", err)
-	}
-	if output.Len() == 0 {
-		t.Fatal("exec --help produced no help")
-	}
-}
-
-func TestLogsAcceptsTailAlias(t *testing.T) {
-	previous := logLines
-	t.Cleanup(func() { logLines = previous })
-	cmd := logsCmd()
-	if cmd.Flags().Lookup("lines") == nil || cmd.Flags().Lookup("tail") == nil {
-		t.Fatal("logs must support both --lines and the familiar --tail alias")
-	}
-	if err := cmd.Flags().Set("tail", "20"); err != nil {
-		t.Fatal(err)
-	}
-	if logLines != 20 {
-		t.Fatalf("logLines = %d, want 20", logLines)
-	}
-}
-
-func TestUpdateUsesShortPublicName(t *testing.T) {
-	if got := selfUpdateCmd().Name(); got != "update" {
-		t.Fatalf("update command name = %q", got)
-	}
-}
-
-func TestUninstallUsesShortPublicName(t *testing.T) {
-	if got := uninstallCmd().Name(); got != "uninstall" {
-		t.Fatalf("uninstall command name = %q", got)
-	}
-}
-
-func TestSwitchHelpDescribesUserOutcome(t *testing.T) {
-	cmd := switchCmd()
-	help := strings.ToLower(cmd.Short + " " + cmd.Long)
-	if strings.Contains(help, "daemon") {
-		t.Fatalf("switch help exposes daemon lifecycle: %q", help)
-	}
-	if !strings.Contains(help, "orbit up") {
-		t.Fatalf("switch help does not explain the prepared next state: %q", help)
-	}
-}
 
 func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}

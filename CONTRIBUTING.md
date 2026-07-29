@@ -15,16 +15,22 @@ The required tools and build commands are documented in
 ```bash
 pnpm --dir ui install --frozen-lockfile
 make build
-make preflight
+make test-fast
 ```
 
-Run `make preflight` before every commit. It is the same gate used by CI.
-Use `make lint` for the stricter Go lint pass.
+During implementation, run the narrowest relevant sociable test. After a
+coherent user-visible change is complete, run `make test-fast`. Run
+`make preflight` once before committing that complete change; it is the same
+source and contract gate used by CI. `make test-journeys` exercises the built
+binary through real Git, process, and Docker boundaries. Use `make lint` for
+the stricter Go lint pass.
 
 ## Pull requests
 
 - Keep each pull request focused on one user-visible problem.
 - Add tests that prove the behavior, including failure and recovery paths.
+- Prefer end-to-end journeys and sociable domain tests over tests coupled to
+  private helpers. See [Testing strategy](docs/testing.md).
 - Update English and Traditional Chinese documentation together when both
   versions exist.
 - Preserve the `orbit.cli.v1` JSON contract and keep destructive operations

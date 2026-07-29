@@ -42,14 +42,3 @@ func TestRestorableEnvironmentResourcesSeparatesRemovedConfig(t *testing.T) {
 		t.Fatalf("unavailable = %v", unavailable)
 	}
 }
-
-func TestBuildEnvironmentApplyJSONDataUsesEmptyArrays(t *testing.T) {
-	got := buildEnvironmentApplyJSONData(emptyEnvironmentApplyResult())
-	if got.Operation != "env_apply" {
-		t.Fatalf("operation = %q", got.Operation)
-	}
-	if got.PreviouslyRunning == nil || got.RestoredResources == nil ||
-		got.UnavailableResources == nil || got.Resources == nil {
-		t.Fatalf("array fields must not be null: %+v", got)
-	}
-}

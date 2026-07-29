@@ -3,8 +3,6 @@ package app
 import (
 	"bytes"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,111 +19,52 @@ func setTestDistribution(t *testing.T, d extension.Distribution) {
 	t.Cleanup(func() { distribution = prev })
 }
 
-// Pure helper test: resolveEnvRepoURL picks flag > settings > default.
-func TestResolveEnvRepoURL(t *testing.T) {
-	setTestDistribution(t, extension.Distribution{EnvRepoURL: "http://dist/default.git"})
-	tests := []struct {
-		name    string
-		flag    string
-		setting string
-		want    string
-	}{
-		{"flag wins", "http://a/x.git", "http://b/y.git", "http://a/x.git"},
-		{"setting fills in", "", "http://b/y.git", "http://b/y.git"},
-		{"default fallback", "", "", "http://dist/default.git"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Ensure no ambient env var interferes.
-			t.Setenv("ORBIT_ENV_REPO_URL", "")
-			got := resolveEnvRepoURL(tt.flag, tt.setting)
-			if got != tt.want {
-				t.Errorf("resolveEnvRepoURL(%q,%q) = %q, want %q", tt.flag, tt.setting, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestResolveEnvRepoURL_PrefersFlag(t *testing.T) {
-	t.Setenv("ORBIT_ENV_REPO_URL", "env-url")
-	got := resolveEnvRepoURL("flag-url", "setting-url")
-	if got != "flag-url" {
-		t.Errorf("got %q, want flag-url", got)
-	}
-}
-
-func TestResolveEnvRepoURL_PrefersSettingOverEnv(t *testing.T) {
-	t.Setenv("ORBIT_ENV_REPO_URL", "env-url")
-	got := resolveEnvRepoURL("", "setting-url")
-	if got != "setting-url" {
-		t.Errorf("got %q, want setting-url", got)
-	}
-}
-
-func TestResolveEnvRepoURL_FallsBackToEnvVar(t *testing.T) {
-	t.Setenv("ORBIT_ENV_REPO_URL", "env-url")
-	got := resolveEnvRepoURL("", "")
-	if got != "env-url" {
-		t.Errorf("got %q, want env-url", got)
-	}
-}
-
-func TestResolveEnvRepoURL_DistributionDefault(t *testing.T) {
-	setTestDistribution(t, extension.Distribution{EnvRepoURL: "http://dist/default.git"})
-	t.Setenv("ORBIT_ENV_REPO_URL", "")
-	got := resolveEnvRepoURL("", "")
-	if got != "http://dist/default.git" {
-		t.Errorf("got %q, want distribution default", got)
-	}
-}
-
-func TestResolveEnvRepositoryKeepsURLAndRefFromSameSource(t *testing.T) {
+func TestResolveEnvRepositoryKeepsURLAndRefFromOnePrecedenceLevel(t *testing.T) {
 	setTestDistribution(t, extension.Distribution{
 		EnvRepoURL: "https://example.com/default.git",
 		EnvRepoRef: "v1.2.3",
 	})
-	t.Setenv("ORBIT_ENV_REPO_URL", "")
-	t.Setenv("ORBIT_ENV_REPO_REF", "")
-
-	if got := resolveEnvRepository("", "", "", ""); got != (envRepository{
-		URL: "https://example.com/default.git",
-		Ref: "v1.2.3",
-	}) {
-		t.Fatalf("distribution repository = %+v", got)
+	tests := []struct {
+		name       string
+		flagURL    string
+		flagRef    string
+		settingURL string
+		settingRef string
+		envURL     string
+		envRef     string
+		want       envRepository
+	}{
+		{
+			name:    "explicit URL does not inherit another source ref",
+			flagURL: "https://example.com/explicit.git",
+			want:    envRepository{URL: "https://example.com/explicit.git"},
+		},
+		{
+			name:       "explicit ref updates saved repository",
+			flagRef:    "release",
+			settingURL: "https://example.com/saved.git",
+			settingRef: "old",
+			want:       envRepository{URL: "https://example.com/saved.git", Ref: "release"},
+		},
+		{
+			name:   "environment pair stays together",
+			envURL: "https://example.com/environment.git",
+			envRef: "environment-ref",
+			want:   envRepository{URL: "https://example.com/environment.git", Ref: "environment-ref"},
+		},
+		{
+			name: "distribution pair stays together",
+			want: envRepository{URL: "https://example.com/default.git", Ref: "v1.2.3"},
+		},
 	}
-	if got := resolveEnvRepository("https://example.com/custom.git", "", "", ""); got.Ref != "" {
-		t.Fatalf("custom URL inherited distribution ref: %+v", got)
-	}
-	if got := resolveEnvRepository("", "release", "https://example.com/saved.git", "old"); got != (envRepository{
-		URL: "https://example.com/saved.git",
-		Ref: "release",
-	}) {
-		t.Fatalf("explicit ref did not update saved repository: %+v", got)
-	}
-}
-
-// An unbranded build (no distribution) resolves to "" — the sync
-// command reports the missing configuration instead of cloning.
-func TestResolveEnvRepoURL_Unbranded(t *testing.T) {
-	setTestDistribution(t, extension.Distribution{})
-	t.Setenv("ORBIT_ENV_REPO_URL", "")
-	if got := resolveEnvRepoURL("", ""); got != "" {
-		t.Errorf("got %q, want empty for unbranded build", got)
-	}
-}
-
-// Ensures the envs destination is ~/.orbit/envs (via OrbitDir()).
-func TestEnvsDestDir_UsesOrbitHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("ORBIT_HOME", home)
-	got := envsDestDir()
-	want := filepath.Join(home, "envs")
-	if got != want {
-		t.Errorf("envsDestDir() = %q, want %q", got, want)
-	}
-	// Call must not create the dir itself — caller (sync/init) decides.
-	if _, err := os.Stat(got); !os.IsNotExist(err) {
-		t.Errorf("envsDestDir should not create the dir yet; stat err=%v", err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ORBIT_ENV_REPO_URL", test.envURL)
+			t.Setenv("ORBIT_ENV_REPO_REF", test.envRef)
+			if got := resolveEnvRepository(test.flagURL, test.flagRef, test.settingURL, test.settingRef); got != test.want {
+				t.Fatalf("repository = %+v, want %+v", got, test.want)
+			}
+		})
 	}
 }
 

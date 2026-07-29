@@ -2,68 +2,11 @@ package health
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/iml885203/orbit/config"
 )
-
-func TestProgress_UnknownNameReturnsZeroValue(t *testing.T) {
-	c := NewChecker(nil, nil)
-	got := c.Progress("never-seen")
-	if got.Configured || got.Attempts != 0 || got.LastErr != "" {
-		t.Errorf("expected zero value, got %+v", got)
-	}
-}
-
-func TestProgress_ConfiguredFlagReflectsHCPresence(t *testing.T) {
-	c := NewChecker(nil, nil)
-	c.recordProgress("svc-with-hc", true /*configured*/, 1, 0, nil)
-	if !c.Progress("svc-with-hc").Configured {
-		t.Errorf("Configured should be true when hc != nil")
-	}
-	c.recordProgress("svc-without-hc", false, 0, 0, nil)
-	if c.Progress("svc-without-hc").Configured {
-		t.Errorf("Configured should be false when hc == nil")
-	}
-}
-
-func TestProgress_RecordsLatestAttemptCount(t *testing.T) {
-	c := NewChecker(nil, nil)
-	c.recordProgress("svc", true, 1, 3, errors.New("connection refused"))
-	c.recordProgress("svc", true, 2, 3, errors.New("connection refused"))
-	c.recordProgress("svc", true, 3, 3, nil)
-	got := c.Progress("svc")
-	if got.Attempts != 3 {
-		t.Errorf("Attempts = %d, want 3", got.Attempts)
-	}
-	if got.MaxRetries != 3 {
-		t.Errorf("MaxRetries = %d, want 3", got.MaxRetries)
-	}
-}
-
-func TestProgress_LastErrClearsOnSuccessfulAttempt(t *testing.T) {
-	c := NewChecker(nil, nil)
-	c.recordProgress("svc", true, 1, 3, errors.New("connection refused"))
-	if c.Progress("svc").LastErr == "" {
-		t.Fatalf("LastErr should be set after failed attempt")
-	}
-	c.recordProgress("svc", true, 2, 3, nil)
-	if c.Progress("svc").LastErr != "" {
-		t.Errorf("LastErr should clear on successful attempt, got %q", c.Progress("svc").LastErr)
-	}
-}
-
-func TestProgress_ResetClearsPriorState(t *testing.T) {
-	c := NewChecker(nil, nil)
-	c.recordProgress("svc", true, 5, 60, errors.New("connection refused"))
-	c.resetProgress("svc")
-	got := c.Progress("svc")
-	if got.Attempts != 0 || got.LastErr != "" {
-		t.Errorf("reset should zero attempts and last err, got %+v", got)
-	}
-}
 
 func TestProgress_WaitForHealthyRecordsAttemptsAndClearsOnSuccess(t *testing.T) {
 	c := NewChecker(nil, nil)

@@ -705,6 +705,7 @@ func TestStatusJSON_DaemonIsObjectNotBool(t *testing.T) {
 }
 
 func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
+	restartedAt := time.Date(2026, time.July, 28, 14, 4, 6, 0, time.UTC)
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{
 			"redis": {Ports: map[string]config.PortDef{"cli": {Host: 16379}}},
@@ -714,7 +715,18 @@ func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
 		},
 	}
 	running := map[string]daemon.ResourceStatus{
-		"redis": {Name: "redis", State: "healthy"},
+		"redis": {
+			Name:                 "redis",
+			Kind:                 daemon.ResourceKindContainer,
+			Role:                 "infra",
+			State:                "healthy",
+			ExternalRestartCount: 1,
+			LastRestart: &daemon.ResourceRestart{
+				Source:     "external",
+				StartedAt:  restartedAt,
+				ObservedAt: restartedAt.Add(time.Second),
+			},
+		},
 	}
 	got := renderStatusJSON(t, cfg, running, daemonStatus{Running: true})
 
@@ -732,6 +744,10 @@ func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
 	}
 	if redis == nil || redis.State != "healthy" || redis.Kind != "container" {
 		t.Errorf("redis entry wrong: %+v", redis)
+	}
+	if redis.Role != "infra" || redis.ExternalRestartCount != 1 ||
+		redis.LastRestart == nil || !redis.LastRestart.StartedAt.Equal(restartedAt) {
+		t.Errorf("redis runtime truth lost: %+v", redis)
 	}
 	if worker == nil || worker.State != "stopped" || worker.Kind != "service" {
 		t.Errorf("worker entry wrong: %+v", worker)

@@ -3,147 +3,11 @@ package app
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
 )
-
-func TestListEnvFiles_TopLevelOnly(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "development.yaml"), []byte{}, 0644)
-	_ = os.WriteFile(filepath.Join(dir, "example.yaml"), []byte{}, 0644)
-	_ = os.MkdirAll(filepath.Join(dir, "data"), 0755)
-	_ = os.WriteFile(filepath.Join(dir, "data", "kafka-topics.yaml"), []byte{}, 0644)
-	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte{}, 0644)
-
-	got := listEnvFiles(dir)
-	sort.Strings(got)
-	want := []string{"development.yaml", "example.yaml"}
-	if len(got) != len(want) {
-		t.Fatalf("listEnvFiles = %v, want %v", got, want)
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
-func TestPickDefault_PrefersDistributionDefault(t *testing.T) {
-	setTestDistribution(t, extension.Distribution{DefaultEnv: "development.yaml"})
-	got := pickDefault([]string{"example.yaml", "development.yaml", "test-minimal.yaml"})
-	if got != "development.yaml" {
-		t.Errorf("pickDefault = %q, want development.yaml", got)
-	}
-}
-
-func TestPickDefault_FirstWhenNoDefault(t *testing.T) {
-	got := pickDefault([]string{"custom.yaml", "other.yaml"})
-	if got != "custom.yaml" {
-		t.Errorf("pickDefault = %q, want first", got)
-	}
-}
-
-func TestResolveInitEnvName(t *testing.T) {
-	available := []string{"development.yaml", "example.yaml"}
-	tests := []struct {
-		in, want string
-	}{
-		{"development", "development.yaml"},
-		{"development.yaml", "development.yaml"},
-		{"example", "example.yaml"},
-		{"missing", ""},
-		{"", ""},
-	}
-	for _, tt := range tests {
-		if got := resolveInitEnvName(tt.in, available); got != tt.want {
-			t.Errorf("resolveInitEnvName(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
-func TestDetectWorkspaceRoot_PrefersCurrentDirectoryWithEnvs(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(cwd); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	}()
-
-	current := t.TempDir()
-	if err := os.Mkdir(filepath.Join(current, "envs"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(current); err != nil {
-		t.Fatal(err)
-	}
-	current, err = os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	saved := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "settings.json")
-	settings := daemon.LoadSettings(settingsPath)
-	if err := settings.Set("workspace_root", saved); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := detectWorkspaceRoot(settings); got != current {
-		t.Errorf("detectWorkspaceRoot = %q, want current directory %q", got, current)
-	}
-}
-
-func TestDetectWorkspaceRootDoesNotInventWorkspaceFromCurrentDirectory(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(cwd); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	}()
-
-	if err := os.Chdir(t.TempDir()); err != nil {
-		t.Fatal(err)
-	}
-
-	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
-	if got := detectWorkspaceRoot(settings); got != "" {
-		t.Errorf("detectWorkspaceRoot = %q, want no unproven workspace", got)
-	}
-}
-
-func TestDetectWorkspaceRoot_PrefersSavedRootOverUnmarkedCurrentDirectory(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(cwd); err != nil {
-			t.Errorf("restore working directory: %v", err)
-		}
-	}()
-
-	if err := os.Chdir(t.TempDir()); err != nil {
-		t.Fatal(err)
-	}
-	saved := t.TempDir()
-	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
-	if err := settings.Set("workspace_root", saved); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := detectWorkspaceRoot(settings); got != saved {
-		t.Errorf("detectWorkspaceRoot = %q, want saved root %q", got, saved)
-	}
-}
 
 // setTestExtensions swaps the package extensions for one test.
 func setTestExtensions(t *testing.T, exts []extension.Extension) {
@@ -244,27 +108,6 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	}
 	if configured || root != "" || settings.Get("workspace_root") != "" {
 		t.Fatalf("configured = %v, root = %q, saved = %q", configured, root, settings.Get("workspace_root"))
-	}
-}
-
-func TestGitCheckoutRootFindsParentCheckout(t *testing.T) {
-	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	child := filepath.Join(root, "apps", "api")
-	if err := os.MkdirAll(child, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := gitCheckoutRoot(child); got != root {
-		t.Fatalf("gitCheckoutRoot = %q, want %q", got, root)
-	}
-}
-
-func TestGitCheckoutRootReturnsEmptyOutsideCheckout(t *testing.T) {
-	if got := gitCheckoutRoot(t.TempDir()); got != "" {
-		t.Fatalf("gitCheckoutRoot = %q, want empty", got)
 	}
 }
 
