@@ -166,7 +166,20 @@ time.sleep(600)
 ' &
 port_guard_pid=$!
 
-"$orbit_bin" init --yes
+"$orbit_bin" init --yes | tee "$test_root/init.txt"
+for expected in "Step 1: Quickstart" "Preparing the Orbit demo" "Demo environment ready"; do
+  if ! grep -F "$expected" "$test_root/init.txt" >/dev/null; then
+    echo "default init did not present the value-first quickstart: $expected" >&2
+    cat "$test_root/init.txt" >&2
+    exit 1
+  fi
+done
+if grep -E 'Environment source|https://github.com/|@[[:space:]]+v[0-9]|/envs' \
+  "$test_root/init.txt" >/dev/null; then
+  echo "default init exposed environment-repository mechanics." >&2
+  cat "$test_root/init.txt" >&2
+  exit 1
+fi
 if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   echo "orbit up failed during the first-five-minutes acceptance test." >&2
   if [ -s "$test_root/up.json" ]; then

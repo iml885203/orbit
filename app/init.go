@@ -132,8 +132,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	settings.ApplyToEnv()
 
-	output.boldln("Step 1: Environment source")
-
 	currentURL := settings.Get(settingKeyEnvRepoURL)
 	currentRef := settings.Get(settingKeyEnvRepoRef)
 	repository := resolveEnvRepository(initEnvRepo, initEnvRef, currentURL, currentRef)
@@ -169,6 +167,18 @@ func runInit(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("saving env repo ref: %w", err)
 		}
 	}
+	defaultQuickstart := !useLocalEnvs &&
+		!explicit &&
+		currentURL == "" &&
+		currentRef == "" &&
+		distribution.DefaultEnv != "" &&
+		repoURL == distribution.EnvRepoURL &&
+		repoRef == distribution.EnvRepoRef
+	if defaultQuickstart {
+		output.boldln("Step 1: Quickstart")
+	} else {
+		output.boldln("Step 1: Environment source")
+	}
 
 	envsDir := envsDestDir()
 	var syncFailure error
@@ -201,22 +211,34 @@ func runInit(_ *cobra.Command, _ []string) error {
 		result.EnvSource = "remote"
 		result.EnvRepoURL = repoURL
 		result.EnvRepoRef = repoRef
-		sourceLabel := repoURL
-		if repoRef != "" {
-			sourceLabel += " @ " + repoRef
+		if defaultQuickstart {
+			output.println("  Preparing the Orbit demo")
+		} else {
+			sourceLabel := repoURL
+			if repoRef != "" {
+				sourceLabel += " @ " + repoRef
+			}
+			output.printf("  Syncing %s → %s\n", sourceLabel, envsDir)
 		}
-		output.printf("  Syncing %s → %s\n", sourceLabel, envsDir)
 		syncRes, err := envsync.SyncFromRepo(repoURL, repoRef, envsDir, envsync.Options{})
 		if err != nil {
 			err = envRepoSyncError(err)
 			syncFailure = err
 			syncWarning = "env sync failed: " + err.Error()
-			output.warnln("  ! Could not sync the environment repository")
+			if defaultQuickstart {
+				output.warnln("  ! Could not prepare the Orbit demo")
+			} else {
+				output.warnln("  ! Could not sync the environment repository")
+			}
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
 			result.SyncedFiles = syncRes.Written
 			result.EnvRepoCommit = syncRes.Source.Commit
-			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
+			if defaultQuickstart {
+				output.printf("  %s Demo environment ready\n", cli.Green.Sprint("✓"))
+			} else {
+				output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
+			}
 		}
 	}
 
