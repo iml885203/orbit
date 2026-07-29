@@ -198,6 +198,20 @@ bash docs/examples/mini-shop/scripts/smoke-demo.sh
 bash docs/examples/mini-shop/scripts/smoke-p1.sh all
 ```
 
+如果你想只做「1.0 前新手最短路徑」的驗收（只跑 success + decline，目標 2 分鐘）：
+
+```bash
+bash docs/examples/mini-shop/scripts/smoke-compact.sh
+```
+
+這個指令會輸出可讀報告到：
+
+```bash
+/tmp/mini-shop-smoke-reports/compact-summary.json
+```
+
+報告會保留 `success / decline` 每一項的 pass + details，失敗時直接顯示你下一步先做什麼，適合用來做每次 release 的「demo 可用性對帳」。
+
 只驗證成功流程可改 `success`：
 
 ```bash
@@ -369,7 +383,7 @@ curl http://127.0.0.1:3010/events
 
 ### 近期釋出摘要（內部 review 用）
 
-- 本次可交付差異請直接看：[`RELEASE-0.5.58.md`](./RELEASE-0.5.58.md)
+- 本次可交付差異請直接看：[`RELEASE-0.5.60.md`](./RELEASE-0.5.60.md)
 - [ ] 至少完成一筆 `mock_card` 成功 checkout
 - [ ] 訂單有對應出貨，且前端顯示「關聯完整性快檢查」為綠色
 - [ ] 「故障情境對照卡」能在情境 B / C 下提供可執行建議（可複製命令或一鍵動作）
@@ -392,6 +406,8 @@ curl http://127.0.0.1:3010/events
   先驗證成功路徑、再驗證兩個失敗回歸（付款失敗 / 庫存不足），確保文案與操作仍是「可猜測率低」的流程。
 
 你可把「操作摘要」當作目前這一步的進度日誌，搭配「診斷命令」快速定位。
+
+進一步規劃可參考：[`DEMO-FAMILY-PLAN.md`](./DEMO-FAMILY-PLAN.md)
 想重複 demo 時，直接按「重置流程」即可回到起始節點（清空購物車、回到預設付款方式）。
 
 ### 常見錯誤對照
