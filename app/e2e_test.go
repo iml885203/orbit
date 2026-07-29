@@ -326,6 +326,8 @@ func TestE2E_DaemonStartAlone(t *testing.T) {
 // Covers: orbit up --infra starts containers to healthy, then reconciles an
 // out-of-band Docker restart without requiring an Orbit or daemon restart.
 func TestE2E_UpInfraReconcilesExternalRestart(t *testing.T) {
+	t.Parallel()
+
 	env := setupE2E(t)
 	env.run(t, "daemon", "start")
 	_, _ = env.runNoFail(t, "up", "--infra")
@@ -565,6 +567,8 @@ services:
 }
 
 func TestE2E_UpdateReconnectsTheRunningEnvironment(t *testing.T) {
+	t.Parallel()
+
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
@@ -1782,6 +1786,8 @@ services:
 }
 
 func TestE2E_CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency(t *testing.T) {
+	t.Parallel()
+
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")

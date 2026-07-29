@@ -28,6 +28,8 @@ func TestDaemonRecoveryUnrelatedProcessHelper(t *testing.T) {
 }
 
 func TestE2E_StaleDaemonMetadataNeverKillsUnrelatedProcess(t *testing.T) {
+	t.Parallel()
+
 	binary := findOrbitBinary(t)
 	home, err := os.MkdirTemp("/tmp", "orb-stale-")
 	if err != nil {
