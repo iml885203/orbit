@@ -6,6 +6,7 @@
   import { onAppMount as extAppMount, onDaemonState as extDaemonState, onEnvChanged as extEnvChanged, onDaemonReset as extDaemonReset } from '$ext'
   import { store, replaceServices, replaceGraphData, appendLog, resetForNewDaemon } from '$lib/stores.svelte'
   import { fetchEnvToggles, fetchSettings, fetchVersion, fetchEnvs, fetchGraph } from '$lib/api'
+  import { tracing, fetchTracingStatus, subscribeLiveTraces } from '$lib/tracing.svelte'
   import type { StatusResponse } from '$lib/types.gen'
 
   type LogMessage = { service: string; line: string }
@@ -53,6 +54,7 @@
     })
     fetchEnvs().then(e => { store.daemon.envs = e })
     fetchGraph().then(g => { if (g) replaceGraphData(g) })
+    fetchTracingStatus().then(s => { tracing.status = s })
   }
 
   onMount(() => {
@@ -61,6 +63,7 @@
       if (store.daemon.daemonEpoch !== resp.epoch) {
         if (store.daemon.daemonEpoch !== null) {
           resetForNewDaemon()
+          tracing.reset()
           extDaemonReset()
           fetchDaemonState()
         }
@@ -82,6 +85,7 @@
       appendLog(msg.service, msg.line)
     })
     const cleanupHistory = startHistoryStream()
+    const cleanupTraces = subscribeLiveTraces()
     const cleanupExt = extAppMount()
 
     fetchDaemonState()
@@ -102,6 +106,7 @@
       cleanupConn()
       cleanupLogs()
       cleanupHistory()
+      cleanupTraces()
       cleanupExt()
       clearInterval(versionInterval)
     }

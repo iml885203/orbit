@@ -3,7 +3,7 @@
   import { push, replace, router } from 'svelte-spa-router'
   import TraceTable from '../components/tracing/TraceTable.svelte'
   import TraceDetailModal from '../components/tracing/TraceDetailModal.svelte'
-  import { tracing, subscribeLiveTraces, fetchTraces, fetchTracingStatus } from '$lib/tracing.svelte'
+  import { tracing, fetchTraces, fetchTracingStatus } from '$lib/tracing.svelte'
   import { parseTraceQuery, buildTraceQuery } from '$lib/traceQuery'
   import { store } from '$lib/stores.svelte'
   import { copyToClipboard } from '$lib/clipboard'
@@ -72,13 +72,11 @@
       }),
     ])
     first.finally(() => (loading = false))
-    const unsub = subscribeLiveTraces()
     statusTimer = setInterval(() => {
       fetchTracingStatus().then((s) => (tracing.status = s))
       nowMs = Date.now()
     }, 3000)
     return () => {
-      unsub()
       clearInterval(statusTimer)
     }
   })
@@ -168,8 +166,9 @@
   {:else if tracing.traces.length === 0}
     <div class="empty">
       <p>No spans captured yet.</p>
-      <p class="hint">Receiver healthy on port {st?.actualPort ?? st?.otlpPort ?? 4318}. Generate some traffic against a running service:</p>
+      <p class="hint">Receiver ready on port {st?.actualPort ?? st?.otlpPort ?? 4318}. No instrumented service has sent a span yet.</p>
       {#if trafficTargets.length > 0}
+        <p class="hint">After adding OpenTelemetry instrumentation, generate traffic against a running service:</p>
         <ul class="targets">
           {#each trafficTargets as svc (svc.name)}
             <li>

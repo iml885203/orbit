@@ -18,6 +18,12 @@ class TracingStore {
   // "status unavailable" state instead of silently hiding the indicator.
   statusUnavailable = $state(false)
 
+  get navigationVisible() {
+    if (this.traces.length > 0) return true
+    if (!this.status?.configured) return false
+    return !this.status.receiverHealthy || this.status.traceCount > 0
+  }
+
   upsert(sum: TraceSummary) {
     const i = this.traces.findIndex((t) => t.traceId === sum.traceId)
     if (i >= 0) {
@@ -35,6 +41,8 @@ class TracingStore {
 
   reset() {
     this.traces = []
+    this.status = null
+    this.statusUnavailable = false
   }
 }
 

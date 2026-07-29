@@ -3,6 +3,7 @@ import MainPage from './MainPage.svelte'
 import HealthCheckPage from './HealthCheckPage.svelte'
 import TracingPage from './TracingPage.svelte'
 import { navItems as extNavItems, routes as extRoutes } from '$ext'
+import { tracing } from '$lib/tracing.svelte'
 
 export type NavItem = {
   path: string
@@ -17,7 +18,7 @@ export type NavItem = {
 export const navItems: NavItem[] = [
   { path: '/', label: 'Services' },
   ...extNavItems,
-  { path: '/tracing', label: 'Tracing' },
+  { path: '/tracing', label: 'Tracing', hidden: () => !tracing.navigationVisible },
 ]
 
 export const routes: RouteDefinition = {

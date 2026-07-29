@@ -4,12 +4,11 @@ import TracingPage from './TracingPage.svelte'
 import { store } from '$lib/stores.svelte'
 import { tracing } from '$lib/tracing.svelte'
 
-const { push, replace, fetchTraces, fetchTracingStatus, subscribeLiveTraces } = vi.hoisted(() => ({
+const { push, replace, fetchTraces, fetchTracingStatus } = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   fetchTraces: vi.fn(),
   fetchTracingStatus: vi.fn(),
-  subscribeLiveTraces: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('svelte-spa-router', () => ({
@@ -19,7 +18,7 @@ vi.mock('svelte-spa-router', () => ({
 }))
 vi.mock('$lib/tracing.svelte', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/tracing.svelte')>()
-  return { ...actual, fetchTraces, fetchTracingStatus, subscribeLiveTraces }
+  return { ...actual, fetchTraces, fetchTracingStatus }
 })
 vi.mock('../components/tracing/TraceTable.svelte', () => ({ default: () => null }))
 vi.mock('../components/tracing/TraceDetailModal.svelte', () => ({ default: () => null }))

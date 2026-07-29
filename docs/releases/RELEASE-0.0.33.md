@@ -47,6 +47,9 @@ than a moving default branch.
   start a stopped environment or root dependency, inspect the degraded root,
   and open the application once healthy. Stop is secondary and
   infrastructure-only startup moves behind progressive disclosure.
+- Tracing stays out of the primary navigation until it has data or needs
+  attention. The application listens globally, reveals the workspace on the
+  first span, and keeps direct links available for setup and diagnosis.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.
