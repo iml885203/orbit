@@ -996,6 +996,7 @@ web
       let scenarioRunning = false;
       let latestOrdersPayload = null;
       let latestShipmentsPayload = null;
+      let latestCheckoutAttempt = null;
       let latestCheckoutPayload = null;
       let latestFailureErrorCode = '';
       let latestServiceMap = null;
@@ -1994,14 +1995,15 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (!valueSignalEl) {
           return;
         }
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot();
+        const latestOrder = checkoutSnapshot.targetOrder;
+        const latestShipment = checkoutSnapshot.targetOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === checkoutSnapshot.targetOrder.id)
+          : null;
         const readyCount = map ? getReadyTrackedServiceCount(map) : 0;
         const serviceCount = getTrackedServiceCount(map);
         const serviceReady = Boolean(map && serviceCount > 0 && readyCount === serviceCount);
-        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
-        const latestShipment = latestOrder
-          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
-          : null;
-        const hasSuccessfulOrder = latestOrder && latestOrder.status === 'confirmed';
+        const hasSuccessfulOrder = checkoutSnapshot.hasSuccessfulOrder;
         const hasRelation = Boolean(hasSuccessfulOrder && latestShipment && latestShipment.order_id === latestOrder.id);
 
         const serviceText = serviceReady
@@ -2041,7 +2043,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             .map((item) => item.order_id)
         );
 
-        const latestOrder = orders[0] || null;
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot(orders);
+        const latestOrder = checkoutSnapshot.targetOrder || orders[0] || null;
         const relatedShipment = latestOrder
           ? shipments.find((item) => item.order_id === latestOrder.id)
           : null;
@@ -2077,7 +2080,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           return;
         }
 
-        const latestOrder = ordersPayload?.orders?.[0] || null;
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot(ordersPayload);
+        const latestOrder = checkoutSnapshot.targetOrder || ordersPayload?.orders?.[0] || null;
         const relatedShipment = latestOrder
           ? (shipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
           : null;
@@ -2209,11 +2213,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const readyCount = trackedService.readyCount;
         const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
         const servicesReady = `${readyCount}/${serviceTotal}`;
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot();
 
-        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
-        const relatedShipment = latestOrder
-          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
-          : null;
+        const latestOrder = checkoutSnapshot.targetOrder;
+        const relatedShipment = checkoutSnapshot.latestShipment;
 
         return {
           serviceTotal,
@@ -2224,7 +2227,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           relatedShipment,
           hasSuccessfulOrder: Boolean(latestOrder && latestOrder.status === 'confirmed'),
           hasOrderShipmentRelation: Boolean(latestOrder && relatedShipment && relatedShipment.order_id === latestOrder.id),
-          latestCode: latestCheckoutPayload?.code || latestCheckoutPayload?.status || 'N/A',
+          hasCheckoutAttempt: checkoutSnapshot.hasAttempted,
+          latestCode: checkoutSnapshot.latestCode,
+          latestCheckoutPayload: checkoutSnapshot.latestCheckoutPayload,
         };
       }
 
@@ -2272,6 +2277,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           `失敗回歸目標：${formatElapsed(drillRecoveryTargetMs)}（${recoveryWithinTarget === null ? '待驗證' : recoveryWithinTarget ? '達標' : '未達標'}）`,
           failureInfo,
           `最後 checkout：${snapshot.latestCode}`,
+          `最後 checkout 嘗試時間：${snapshot.latestCheckoutPayload?.occurred_at ? new Date(snapshot.latestCheckoutPayload.occurred_at).toLocaleString() : '未記錄'}`,
           `訂單：${orderText}`,
           `出貨：${shipmentText}`,
           `可 demo：${demoGreen ? '是' : '否'}（依三格信號判斷）`,
@@ -2322,7 +2328,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           ? `#${snapshot.relatedShipment.id} tracking=${snapshot.relatedShipment.tracking_no || 'N/A'} status=${snapshot.relatedShipment.status}`
           : '尚未關聯出貨';
         const checkoutText = snapshot.latestCode
-          ? `最後 checkout code=${snapshot.latestCode}${latestCheckoutPayload?.occurred_at ? ` 時間=${new Date(latestCheckoutPayload.occurred_at).toLocaleString()}` : ''}`
+          ? `最後 checkout code=${snapshot.latestCode}${snapshot.latestCheckoutPayload?.occurred_at ? ` 時間=${new Date(snapshot.latestCheckoutPayload.occurred_at).toLocaleString()}` : ''}`
           : '尚未執行 checkout';
         const serviceSignal = snapshot.allServiceReady ? '綠' : '未全綠';
         const serviceReadyText = `服務信號：${serviceSignal} (${snapshot.servicesReady})`;
@@ -2450,14 +2456,13 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const serviceTotal = trackedService.totalCount;
         const readyCount = trackedService.readyCount;
         const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
+        const snapshot = buildCheckoutAttemptSnapshot();
+        const latestOrder = snapshot.targetOrder;
+        const relatedShipment = snapshot.latestShipment;
+        const hasSuccessfulOrder = snapshot.hasSuccessfulOrder;
+        const hasOrderShipmentRelation = snapshot.hasOrderShipmentRelation;
 
-        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
-        const relatedShipment = latestOrder
-          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
-          : null;
-        const hasSuccessfulOrder = latestOrder && latestOrder.status === 'confirmed';
-        const hasOrderShipmentRelation = hasSuccessfulOrder && relatedShipment && relatedShipment.order_id === latestOrder.id;
-        const relationErrorCode = latestCheckoutPayload?.code ? normalizeErrorCode(latestCheckoutPayload.code) : 'checkout_failed';
+        const relationErrorCode = snapshot.latestCode ? normalizeErrorCode(snapshot.latestCode) : 'checkout_failed';
         const relationSelector = latestOrder
           ? `#flow-timeline-panel|error:${relationErrorCode}`
           : '#goal-next';
@@ -2738,7 +2743,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       }
 
       function hasLatestSuccessfulOrder() {
-        return Boolean(latestOrdersPayload?.orders?.some((order) => order.status === 'confirmed'));
+        const snapshot = buildCheckoutAttemptSnapshot();
+        return Boolean(snapshot.hasSuccessfulOrder);
       }
 
       function scrollToAndFocus(el) {
@@ -2798,6 +2804,107 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           return step;
         }
         return null;
+      }
+
+      function normalizeCheckoutCodeFromPayload(payload) {
+        if (typeof payload?.code === 'string' && payload.code.trim()) {
+          return payload.code;
+        }
+        return payload?.status === 'error' && typeof payload?.error_code === 'string' && payload.error_code.trim()
+          ? payload.error_code
+          : '';
+      }
+
+      function buildCheckoutAttemptSnapshot(ordersPayload = latestOrdersPayload) {
+        const attempt = latestCheckoutAttempt;
+        if (!attempt) {
+          return {
+            attempt: null,
+            targetOrder: null,
+            hasAttempted: false,
+            isCheckoutSucceeded: false,
+            isCheckoutFailed: false,
+            hasSuccessfulOrder: false,
+            hasOrderShipmentRelation: false,
+            latestCode: attempt?.code || attempt?.status || 'N/A',
+            occurredAt: attempt?.occurred_at || null,
+            latestCheckoutPayload: null,
+          };
+        }
+
+        const targetOrder = attempt.orderId && ordersPayload?.orders
+          ? ordersPayload.orders.find((order) => order.id === attempt.orderId) || null
+          : null;
+        const hasSuccessfulOrder = Boolean(targetOrder && targetOrder.status === 'confirmed');
+        const relatedShipment = targetOrder
+          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === targetOrder.id)
+          : null;
+        return {
+          attempt,
+          targetOrder,
+          hasAttempted: true,
+          isCheckoutSucceeded: attempt.state === 'success' && hasSuccessfulOrder,
+          isCheckoutFailed: attempt.state === 'error' || attempt.state === 'failed' || Boolean(attempt.code),
+          hasSuccessfulOrder,
+          hasOrderShipmentRelation: Boolean(hasSuccessfulOrder && relatedShipment && relatedShipment.order_id === targetOrder.id),
+          latestCode: attempt.code || attempt.status || 'N/A',
+          occurredAt: attempt.occurred_at || null,
+          latestCheckoutPayload: attempt.rawPayload,
+          latestShipment: relatedShipment || null,
+        };
+      }
+
+      function setCheckoutAttempt(payload, context = '') {
+        if (!payload) {
+          latestCheckoutAttempt = {
+            context: context || 'checkout',
+            state: 'error',
+            code: 'unknown',
+            message: '未回傳 payload',
+            occurred_at: new Date().toISOString(),
+            orderId: null,
+            rawPayload: null,
+          };
+          if (context) {
+            latestFailureErrorCode = 'unknown';
+          }
+          return;
+        }
+
+        const normalizedCode = normalizeCheckoutCodeFromPayload(payload) || (payload?.code && typeof payload.code === 'string' ? payload.code : '');
+        const orderPayload = Array.isArray(payload?.orders) && payload.orders.length > 0 ? payload.orders[0] : null;
+        const orderId = orderPayload?.id ?? null;
+        const inferredFailedState = orderPayload && !normalizedCode && ['failed', 'cancelled'].includes(orderPayload.status);
+        const state = normalizedCode ? 'error' : (inferredFailedState ? 'failed' : 'success');
+        latestCheckoutAttempt = {
+          context,
+          state,
+          code: normalizedCode || null,
+          message: payload?.message || null,
+          occurred_at: payload.occurred_at || new Date().toISOString(),
+          orderId,
+          rawPayload: {
+            ...payload,
+            context,
+            occurred_at: payload.occurred_at || new Date().toISOString(),
+          },
+        };
+        latestCheckoutPayload = {
+          ...(payload || {}),
+          context,
+          occurred_at: payload.occurred_at || new Date().toISOString(),
+        };
+
+        if (normalizedCode) {
+          latestFailureErrorCode = normalizedCode;
+          drillState.lastFailureAt = performance.now();
+          renderQuickFixAction();
+        }
+      }
+
+      function clearCheckoutAttempt() {
+        latestCheckoutAttempt = null;
+        latestCheckoutPayload = null;
       }
 
       function renderErrorPlaybook(activeCode = fallbackPattern.code) {
@@ -2896,24 +3003,11 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       }
 
       function captureCheckoutPayload(payload, context = null) {
-        if (!payload) {
-          latestCheckoutPayload = { code: 'unknown', message: `${context || 'checkout'}：未回傳 payload` };
-          if (context) {
-            latestFailureErrorCode = 'unknown';
-            drillState.lastFailureAt = performance.now();
-            renderQuickFixAction();
-          }
-          return;
-        }
-        latestCheckoutPayload = {
-          ...payload,
-          context,
-          occurred_at: payload.occurred_at || new Date().toISOString(),
-        };
+        setCheckoutAttempt(payload, context || 'checkout');
       }
 
       function clearCheckoutPayload() {
-        latestCheckoutPayload = null;
+        clearCheckoutAttempt();
       }
 
       function setNotice(message, kind = 'ok') {
@@ -3132,6 +3226,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       function setFlowState(allReady, customerSelected, cartReady) {
         let stateText = '尚未開始';
         let stage = 0;
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot();
+        const hasSuccessfulOrder = checkoutSnapshot.hasSuccessfulOrder;
         if (!allReady) {
           stage = 1;
           const modeLabel = uiMode === 'advanced' ? '進階服務' : '後端服務';
@@ -3145,8 +3241,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           stateText = '第 3 步：加入 1 件商品到購物車。';
         } else {
           stage = 4;
-          const latestOrder = latestOrdersPayload?.orders?.[0];
-          if (latestOrder) {
+          if (checkoutSnapshot.targetOrder) {
             stateText = '第 4 步：Checkout 已可執行，提交後請到「最近關聯交易」看 order → shipment。';
           } else {
             stateText = '第 4 步：Cart 已有資料，現在可 Checkout。';
@@ -3160,7 +3255,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           {
             id: 4,
             text: 'Checkout 完成一筆關聯訂單',
-            done: Boolean(latestOrdersPayload?.orders?.length),
+            done: Boolean(hasSuccessfulOrder),
           },
         ];
 
@@ -3299,8 +3394,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         status.textContent = formatActionNotice(map);
         setFlowState(allReady, customerSelected, cartReady);
         const hasSuccessfulOrder = hasLatestSuccessfulOrder();
+        const checkoutSnapshot = buildCheckoutAttemptSnapshot();
         const goalState = computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder);
-        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
+        const latestOrder = checkoutSnapshot.targetOrder;
         const latestOrderShipment = latestOrder
           ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
           : null;
@@ -3655,7 +3751,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function refreshTransactionViews(ordersPayload, shipmentsPayload, checkoutPayload = latestCheckoutPayload) {
         buildFlowTrace(ordersPayload, shipmentsPayload);
-        const latestOrder = ordersPayload?.orders?.[0] || null;
+        const latestOrder = buildCheckoutAttemptSnapshot(ordersPayload).targetOrder || ordersPayload?.orders?.[0] || null;
         buildFlowTimeline(latestOrder, shipmentsPayload, checkoutPayload);
         buildOpsDashboard(ordersPayload, shipmentsPayload, latestServiceMap);
         setProofSummary(ordersPayload, shipmentsPayload, checkoutPayload);
@@ -3771,11 +3867,12 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           latestFailureErrorCode = '';
           setRunResult('ok', `✅ Checkout 成功：訂單 ${order.id}`, lines);
         } else if (order.status === 'failed' || order.status === 'cancelled') {
-          latestFailureErrorCode = order.code || latestCheckoutPayload?.code || 'checkout_failed';
+          const checkoutSnapshot = buildCheckoutAttemptSnapshot();
+          const failedCode = order.code || checkoutSnapshot.latestCode || 'checkout_failed';
+          latestFailureErrorCode = failedCode;
           drillState.lastFailureAt = performance.now();
           setRunResult('error', `❌ Checkout 結果：訂單 ${order.id}（已失敗）`, lines);
-          const orderCode = latestCheckoutPayload?.code || 'checkout_failed';
-          renderErrorPlaybook(normalizeErrorCode(orderCode));
+          renderErrorPlaybook(normalizeErrorCode(failedCode));
         } else {
           setRunResult('warn', `🧭 Checkout 已啟動：訂單 ${order.id}`, lines);
           renderErrorPlaybook(fallbackPattern.code);
@@ -4273,11 +4370,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const map = latestServiceMap || {};
         const { readyCount, totalCount } = getTrackedServiceStatusPayload(map);
         const serviceReady = totalCount > 0 && readyCount === totalCount;
-        const latestOrder = latestOrdersPayload?.orders?.[0] || null;
-        const latestShipment = latestOrder
-          ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
-          : null;
-        const orderConfirmed = latestOrder && latestOrder.status === 'confirmed';
+        const snapshot = buildCheckoutAttemptSnapshot();
+        const latestOrder = snapshot.targetOrder;
+        const latestShipment = snapshot.latestShipment;
+        const orderConfirmed = Boolean(latestOrder && latestOrder.status === 'confirmed');
         const relationOk = Boolean(orderConfirmed && latestShipment && latestShipment.order_id === latestOrder.id);
         const allGreen = serviceReady && orderConfirmed && relationOk;
         if (!allGreen) {
