@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/platform"
+	"github.com/iml885203/orbit/process"
 )
 
 // Sentinel errors classifying daemon start failures so callers can render
@@ -139,20 +141,40 @@ func DefaultLogPath() string {
 // WritePID writes the current process PID to the PID file.
 func WritePID() error {
 	path := DefaultPIDPath()
-	return os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0644)
+	data, err := json.Marshal(pidRecord{
+		PID:           os.Getpid(),
+		DashboardPort: DashboardPort(),
+	})
+	if err != nil {
+		return fmt.Errorf("encoding daemon ownership: %w", err)
+	}
+	return os.WriteFile(path, append(data, '\n'), 0644)
 }
 
 // ReadPID reads the PID from the PID file. Returns 0 if not found.
 func ReadPID() int {
+	return readPIDRecord().PID
+}
+
+type pidRecord struct {
+	PID           int `json:"pid"`
+	DashboardPort int `json:"dashboard_port"`
+}
+
+func readPIDRecord() pidRecord {
 	data, err := os.ReadFile(DefaultPIDPath())
 	if err != nil {
-		return 0
+		return pidRecord{}
+	}
+	var record pidRecord
+	if json.Unmarshal(data, &record) == nil && record.PID > 0 {
+		return record
 	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		return 0
+		return pidRecord{}
 	}
-	return pid
+	return pidRecord{PID: pid, DashboardPort: DashboardPort()}
 }
 
 // RemovePID removes the PID file.
@@ -204,9 +226,15 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 			}
 			return client, nil
 		}
-		// Process alive but socket dead — kill and restart
-		_ = platform.SendTermSignal(pid)
-		time.Sleep(500 * time.Millisecond)
+		// A stale PID can be reused after reboot. The dashboard listener is
+		// independent ownership evidence; without it, killing the recorded PID
+		// could terminate an unrelated user process.
+		record := readPIDRecord()
+		if record.PID == pid && daemonOwnsDashboardPort(pid, record.DashboardPort) {
+			if err := retireUnreachableDaemon(pid); err != nil {
+				return nil, fmt.Errorf("%w: %w", ErrDaemonNotReady, err)
+			}
+		}
 		RemovePID()
 		_ = os.Remove(DefaultSocketPath())
 	}
@@ -239,6 +267,41 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+func daemonOwnsDashboardPort(pid, port int) bool {
+	if port <= 0 {
+		return false
+	}
+	for _, holder := range process.FindPortHolders([]int{port}) {
+		if holder.PID == pid {
+			return true
+		}
+	}
+	return false
+}
+
+func retireUnreachableDaemon(pid int) error {
+	_ = platform.SendTermSignal(pid)
+	if waitForProcessExit(pid, 3*time.Second) {
+		return nil
+	}
+	_ = platform.SendKillSignal(pid)
+	if waitForProcessExit(pid, 2*time.Second) {
+		return nil
+	}
+	return fmt.Errorf("owned Orbit daemon pid %d did not exit after termination", pid)
+}
+
+func waitForProcessExit(pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !platform.IsProcessAlive(pid) {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return !platform.IsProcessAlive(pid)
 }
 
 // StartDaemon forks a new daemon process in a new session. Returns the

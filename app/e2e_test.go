@@ -1126,6 +1126,12 @@ func readE2EDaemonPID(t *testing.T, home string) int {
 	if err != nil {
 		t.Fatalf("read daemon pid: %v", err)
 	}
+	var record struct {
+		PID int `json:"pid"`
+	}
+	if json.Unmarshal(data, &record) == nil && record.PID > 0 {
+		return record.PID
+	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		t.Fatalf("parse daemon pid %q: %v", data, err)
