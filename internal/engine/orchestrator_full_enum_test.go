@@ -68,37 +68,6 @@ func TestNewOrchestrator_InitialStateIsStopped(t *testing.T) {
 	}
 }
 
-func TestRun_DoesNotAutoStartAnything(t *testing.T) {
-	cfg := twoContainerCfg()
-	o := newTestOrchestrator(cfg)
-
-	started := map[string]bool{}
-	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) error {
-		started[name] = true
-		return nil
-	}
-	o.OnStartProcess = func(_ context.Context, name string, _ int, _ *config.Config, _ *config.Service) error {
-		started[name] = true
-		return nil
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() { _ = o.Run(ctx) }()
-
-	time.Sleep(80 * time.Millisecond)
-	cancel()
-
-	if len(started) != 0 {
-		t.Errorf("Run() auto-started services %v; should have started none", started)
-	}
-	for _, s := range o.GetAllServices() {
-		if s.State != StateStopped {
-			t.Errorf("%s state = %s, want stopped (Run should not transition)", s.Name, s.State)
-		}
-	}
-}
-
 func TestStart_TransitionsFromStoppedToStarting(t *testing.T) {
 	cfg := twoContainerCfg()
 	o := newTestOrchestrator(cfg)
@@ -122,30 +91,6 @@ func TestStart_TransitionsFromStoppedToStarting(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("OnStartContainer never called for redis")
-	}
-}
-
-func TestStart_SkipsAlreadyHealthy(t *testing.T) {
-	cfg := twoContainerCfg()
-	o := newTestOrchestrator(cfg)
-
-	o.MarkServiceHealthy("redis")
-
-	starts := 0
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) error {
-		starts++
-		return nil
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() { _ = o.Run(ctx) }()
-
-	o.Start([]string{"redis"})
-	time.Sleep(80 * time.Millisecond)
-
-	if starts != 0 {
-		t.Errorf("OnStartContainer called %d times, want 0 (already healthy)", starts)
 	}
 }
 

@@ -427,8 +427,7 @@ func TestStart_SkipHealthy(t *testing.T) {
 	select {
 	case evt := <-o.events:
 		t.Errorf("unexpected event: %s for %s", evt.Type, evt.Service)
-	case <-time.After(100 * time.Millisecond):
-		// OK — no event expected
+	default:
 	}
 }
 
@@ -455,8 +454,7 @@ func TestStart_WithUnhealthyDep(t *testing.T) {
 	select {
 	case evt := <-o.events:
 		t.Errorf("unexpected event: %s for %s", evt.Type, evt.Service)
-	case <-time.After(100 * time.Millisecond):
-		// OK
+	default:
 	}
 }
 
@@ -517,7 +515,6 @@ func TestStartService_SkipsAlreadyRunning(t *testing.T) {
 	ctx := context.Background()
 	_ = o.startService(ctx, "api")
 
-	time.Sleep(50 * time.Millisecond)
 	if called {
 		t.Error("OnStartProcess should not be called for already healthy service")
 	}

@@ -15,11 +15,13 @@ import (
 // fakeInspector is a hand-rolled ContainerInspector double for unit tests.
 // Exec and Health are separate queues so tests can script per-call returns.
 type fakeInspector struct {
-	mu         sync.Mutex
-	execReturn []execResult
-	execCalls  int32
-	healthQ    []healthResult
-	healthErr  error
+	mu           sync.Mutex
+	execReturn   []execResult
+	execCalls    int32
+	execCalled   chan struct{}
+	healthQ      []healthResult
+	healthErr    error
+	healthCalled chan struct{}
 }
 
 type execResult struct {
@@ -34,6 +36,12 @@ type healthResult struct {
 
 func (f *fakeInspector) ExecInContainer(_ context.Context, _ string, _ []string) (int, error) {
 	atomic.AddInt32(&f.execCalls, 1)
+	if f.execCalled != nil {
+		select {
+		case f.execCalled <- struct{}{}:
+		default:
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.execReturn) == 0 {
@@ -47,6 +55,12 @@ func (f *fakeInspector) ExecInContainer(_ context.Context, _ string, _ []string)
 }
 
 func (f *fakeInspector) HealthStatus(_ context.Context, _ string) (string, error) {
+	if f.healthCalled != nil {
+		select {
+		case f.healthCalled <- struct{}{}:
+		default:
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.healthErr != nil {
@@ -66,7 +80,7 @@ func shortExec(cmd []string, retries int) *config.HealthCheckConfig {
 	return &config.HealthCheckConfig{
 		Type:     "exec",
 		Command:  cmd,
-		Interval: 20 * time.Millisecond,
+		Interval: time.Millisecond,
 		Retries:  retries,
 	}
 }
@@ -112,7 +126,10 @@ func TestWaitForExec_RetriesExhausted(t *testing.T) {
 }
 
 func TestWaitForExec_ContextCancel(t *testing.T) {
-	insp := &fakeInspector{execReturn: []execResult{{code: 1}}}
+	insp := &fakeInspector{
+		execReturn: []execResult{{code: 1}},
+		execCalled: make(chan struct{}, 1),
+	}
 	c := NewChecker(nil, insp)
 	hc := &config.HealthCheckConfig{Type: "exec", Command: []string{"x"}, Interval: 10 * time.Millisecond, Retries: 1000}
 
@@ -120,7 +137,11 @@ func TestWaitForExec_ContextCancel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- c.WaitForHealthy(ctx, "svc", hc, nil) }()
 
-	time.Sleep(15 * time.Millisecond)
+	select {
+	case <-insp.execCalled:
+	case <-time.After(time.Second):
+		t.Fatal("health check did not start")
+	}
 	cancel()
 
 	select {

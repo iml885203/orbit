@@ -53,6 +53,9 @@ than a moving default branch.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.
+- Engine and health-check tests now synchronize on real events instead of
+  fixed sleeps. Duplicate negative tests were removed and retry timing was
+  shortened without weakening the lifecycle and cancellation contracts.
 
 ## Why it matters
 

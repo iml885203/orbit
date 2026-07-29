@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,17 @@ func newLogChecker() (*Checker, *logging.Multiplexer) {
 	return NewChecker(mux, nil), mux
 }
 
+func waitForLogSubscriber(t *testing.T, mux *logging.Multiplexer) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for mux.SubscriberCount() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("health check did not subscribe to logs")
+		}
+		runtime.Gosched()
+	}
+}
+
 func TestWaitForLog_Matches(t *testing.T) {
 	checker, mux := newLogChecker()
 	hc := &config.HealthCheckConfig{Type: "log", Pattern: "Recovery is complete", Timeout: 2 * time.Second}
@@ -26,8 +38,7 @@ func TestWaitForLog_Matches(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- checker.WaitForHealthy(ctx, "sql-server", hc, nil) }()
 
-	// Give the goroutine time to subscribe.
-	time.Sleep(10 * time.Millisecond)
+	waitForLogSubscriber(t, mux)
 
 	mux.Write("sql-server", "Starting up database 'master'")
 	mux.Write("sql-server", "Recovery is complete. This is an informational message only")
@@ -44,12 +55,12 @@ func TestWaitForLog_Matches(t *testing.T) {
 
 func TestWaitForLog_IgnoresOtherServices(t *testing.T) {
 	checker, mux := newLogChecker()
-	hc := &config.HealthCheckConfig{Type: "log", Pattern: "ready", Timeout: 200 * time.Millisecond}
+	hc := &config.HealthCheckConfig{Type: "log", Pattern: "ready", Timeout: 25 * time.Millisecond}
 
 	done := make(chan error, 1)
 	go func() { done <- checker.WaitForHealthy(context.Background(), "target", hc, nil) }()
 
-	time.Sleep(10 * time.Millisecond)
+	waitForLogSubscriber(t, mux)
 	mux.Write("other-service", "ready") // wrong service — must not unblock
 
 	select {
@@ -67,7 +78,7 @@ func TestWaitForLog_IgnoresOtherServices(t *testing.T) {
 
 func TestWaitForLog_Timeout(t *testing.T) {
 	checker, _ := newLogChecker()
-	hc := &config.HealthCheckConfig{Type: "log", Pattern: "never-emitted", Timeout: 100 * time.Millisecond}
+	hc := &config.HealthCheckConfig{Type: "log", Pattern: "never-emitted", Timeout: 25 * time.Millisecond}
 
 	err := checker.WaitForHealthy(context.Background(), "svc", hc, nil)
 	if err == nil {
@@ -79,14 +90,14 @@ func TestWaitForLog_Timeout(t *testing.T) {
 }
 
 func TestWaitForLog_ContextCancel(t *testing.T) {
-	checker, _ := newLogChecker()
+	checker, mux := newLogChecker()
 	hc := &config.HealthCheckConfig{Type: "log", Pattern: "x", Timeout: 10 * time.Second}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- checker.WaitForHealthy(ctx, "svc", hc, nil) }()
 
-	time.Sleep(10 * time.Millisecond)
+	waitForLogSubscriber(t, mux)
 	cancel()
 
 	select {
@@ -106,7 +117,7 @@ func TestWaitForLog_UnsubscribesAfterMatch(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- checker.WaitForHealthy(context.Background(), "svc", hc, nil) }()
 
-	time.Sleep(10 * time.Millisecond)
+	waitForLogSubscriber(t, mux)
 	mux.Write("svc", "ready")
 	<-done
 

@@ -31,6 +31,12 @@ browser, remote networks, clocks, and process signals are reasonable seams.
 Do not mock one Orbit package merely to test another Orbit package's call
 sequence.
 
+Concurrency tests wait for an observable boundary such as a subscription,
+callback, or state transition before taking the next action. Do not use a
+fixed sleep to guess that a goroutine or component is ready. Keep retry
+intervals in tests as short as the contract allows; production timing is
+covered at the installed-user boundary.
+
 ## Tests not worth owning
 
 Do not add tests whose only purpose is to:

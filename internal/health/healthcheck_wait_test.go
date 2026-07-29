@@ -13,7 +13,7 @@ import (
 func shortHealth(retries int) *config.HealthCheckConfig {
 	return &config.HealthCheckConfig{
 		Type:     "healthcheck",
-		Interval: 20 * time.Millisecond,
+		Interval: time.Millisecond,
 		Retries:  retries,
 	}
 }
@@ -76,14 +76,21 @@ func TestWaitForHealthcheck_InspectError(t *testing.T) {
 }
 
 func TestWaitForHealthcheck_ContextCancel(t *testing.T) {
-	insp := &fakeInspector{healthQ: []healthResult{{status: "starting"}}}
+	insp := &fakeInspector{
+		healthQ:      []healthResult{{status: "starting"}},
+		healthCalled: make(chan struct{}, 1),
+	}
 	c := NewChecker(nil, insp)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- c.WaitForHealthy(ctx, "svc", shortHealth(1000), nil) }()
 
-	time.Sleep(15 * time.Millisecond)
+	select {
+	case <-insp.healthCalled:
+	case <-time.After(time.Second):
+		t.Fatal("health check did not start")
+	}
 	cancel()
 
 	select {
