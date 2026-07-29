@@ -57,10 +57,10 @@ port 已被占用，Orbit 會為整張 dependency graph 自動選擇可用 port�
 
 選擇 **Run checkout**，頁面會顯示同一個 request 如何穿過 catalog、
 inventory、Redis 與 orders，並保留 product、reservation、order 的關聯。
-**Try 99 items** 則證明失敗時不會建立 order，也不會改變庫存。這不只是證明
-五個 processes 能啟動，而是直接展示 Orbit 協調一套有用的混合 runtime
-application。完成後再執行 `orbit open`，即可從 dashboard 檢視與控制同一套
-環境。
+**Try 99 items** 則顯示庫存 `7 → 7`、新增 reservation `+0`、新增 order
+`+0`，並保留先前成功的 order。這不只是證明五個 processes 能啟動，而是直接
+展示 Orbit 協調一套有用的混合 runtime application。完成後再執行
+`orbit open`，即可從 dashboard 檢視與控制同一套環境。
 
 需要更多細節時：
 

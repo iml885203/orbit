@@ -163,5 +163,7 @@ assert dashboard["data"]["target"] == "dashboard"
 assert dashboard["data"]["url"] != demo_url
 PY
 
-grep -F "failure and compensation preserved stock" "$test_root/mini-shop-smoke.txt"
+grep -F \
+  "failure added +0 reservations and +0 orders while preserving stock; compensation restored stock" \
+  "$test_root/mini-shop-smoke.txt"
 echo "README first five minutes completes a linked checkout before the dashboard"

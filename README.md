@@ -62,9 +62,11 @@ automatically across the dependency graph.
 Choose **Run checkout**. The page shows one request cross catalog, inventory,
 Redis, and orders while preserving the links between product, reservation, and
 order. **Try 99 items** proves the failure path commits no order and leaves
-stock unchanged. This is direct evidence that Orbit coordinated a useful mixed
-runtime application—not only that five processes started. Afterward, run
-`orbit open` to inspect and control the same environment in the dashboard.
+stock unchanged: it shows `7 → 7`, `+0` reservations, and `+0` orders while
+keeping the earlier successful order visible. This is direct evidence that
+Orbit coordinated a useful mixed runtime application—not only that five
+processes started. Afterward, run `orbit open` to inspect and control the same
+environment in the dashboard.
 
 When you need more detail:
 
