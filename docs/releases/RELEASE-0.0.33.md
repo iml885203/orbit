@@ -65,6 +65,9 @@ than a moving default branch.
   behavior, `make test-journeys` for installed cross-process flows, and
   `make preflight` for the complete commit gate. The duplicate `test-fast`
   alias and repeated static checks are gone.
+- Preview releases now require version-matched curated notes and publish those
+  notes verbatim to GitHub. A release shows the coherent user outcome instead
+  of asking reviewers to reconstruct it from commit-generated notes.
 
 ## Why it matters
 

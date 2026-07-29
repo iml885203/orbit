@@ -38,6 +38,7 @@ jobs:
             echo "tag is not a semantic version: $RELEASE_VERSION" >&2
             exit 1
           fi
+          ./scripts/verify-release-candidate.sh "$RELEASE_VERSION"
           git fetch --force origin main "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
           tag_commit="$(git rev-list -n 1 "$RELEASE_VERSION")"
           main_commit="$(git rev-parse origin/main)"
@@ -45,8 +46,6 @@ jobs:
             echo "$RELEASE_VERSION points to $tag_commit, but main is $main_commit" >&2
             exit 1
           fi
-          test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
-          test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
 
   platform-smoke:
     needs: approval
@@ -87,8 +86,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.tag }}
         run: |
-          test "$(jq -r .version plugins/orbit-agent/.codex-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
-          test "$(jq -r .version plugins/orbit-agent/.claude-plugin/plugin.json)" = "${RELEASE_VERSION#v}"
+          ./scripts/verify-release-candidate.sh "$RELEASE_VERSION"
           make preflight
       - name: Build release assets
         env:
@@ -135,4 +133,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.tag }}
-        run: gh release create "$RELEASE_VERSION" dist/* --verify-tag --generate-notes --title "$RELEASE_VERSION"
+        run: |
+          notes_file="docs/releases/RELEASE-${RELEASE_VERSION#v}.md"
+          gh release create "$RELEASE_VERSION" dist/* \
+            --verify-tag \
+            --notes-file "$notes_file" \
+            --title "$RELEASE_VERSION"

@@ -10,3 +10,16 @@ Do not create speculative per-commit version notes. Accumulate a coherent
 product slice in the next candidate, verify it, and get review before
 publishing one release. A release should answer “what can the user do or
 understand now that they could not before?”, not mirror the commit count.
+
+Before tagging a preview, run:
+
+```bash
+make release-check RELEASE_VERSION=v0.0.33
+```
+
+The candidate notes and both bundled plugin manifests must match that version.
+After the candidate commit passes CI and is reviewed, tag that exact `main`
+commit and dispatch the Release workflow with `RELEASE v0.0.33`. The workflow
+runs platform and SQL Server smoke gates, then publishes the curated candidate
+notes as the GitHub Release body. Commit-generated notes are deliberately not
+used as the product delivery record.

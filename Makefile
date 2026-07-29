@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -84,6 +84,13 @@ test-docs:
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
 	@./scripts/test-mini-shop-example.sh
 
+test-release:
+	@version="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' plugins/orbit-agent/.codex-plugin/plugin.json)"; \
+	./scripts/verify-release-candidate.sh "v$$version"
+
+release-check:
+	@./scripts/verify-release-candidate.sh "$(RELEASE_VERSION)"
+
 lint: lint-filenames
 	golangci-lint run ./...
 
@@ -130,6 +137,7 @@ preflight:
 	go vet ./...
 	$(MAKE) test-install
 	$(MAKE) test-docs
+	$(MAKE) test-release
 	$(MAKE) verify-types
 	$(MAKE) check-neutral
 	@echo "preflight OK - matches the CI gate"
