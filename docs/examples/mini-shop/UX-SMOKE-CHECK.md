@@ -23,7 +23,7 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 1. 在頁面打開 `docs/examples/mini-shop/apps/web/index.html` 服務（`orbit -c docs/examples/mini-shop/dev.yaml open`）。
 2. 確認以下 3 格有節奏地出現：
    - `快速判斷值`：服務、交易、關聯
-   - `一輪 demo 結論（先看這裡）`：是否可直接 demo + 缺口清單
+   - `一輪 demo 結論（先看這裡）`：是否可直接 demo、缺口清單、以及導向下一步的建議按鈕
    - `1.0 交付前檢核`：每項都可被理解及點選
    - `現在只要做一件事`：有下一步提示
 

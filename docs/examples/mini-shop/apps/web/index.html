@@ -212,6 +212,13 @@
         color: #fb7185;
       }
 
+      .verdict-action-row {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
       .session-metric-line.fail {
         color: #fb7185;
       }
@@ -459,6 +466,7 @@
       <div id="demo-verdict" class="summary-list">
         <div class="verdict-line">載入中…</div>
       </div>
+      <div id="demo-verdict-actions" class="verdict-action-row"></div>
     </div>
 
     <div class="card advanced-only">
@@ -818,6 +826,7 @@ web
       const singleActionFeedbackEl = document.getElementById('single-action-feedback');
       const quickFixErrorBtn = document.getElementById('quick-fix-error');
       const demoVerdictEl = document.getElementById('demo-verdict');
+      const demoVerdictActionsEl = document.getElementById('demo-verdict-actions');
       const beginnerGuideCard = document.getElementById('beginner-guide-card');
       const beginnerGuideState = document.getElementById('beginner-guide-state');
       const beginnerGuideStepEls = {
@@ -1956,14 +1965,22 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         }
         const canDemo = allServiceReady && hasSuccessfulOrder && hasOrderShipmentRelation;
         const blockers = [];
+        const actions = [];
         if (!allServiceReady) {
           blockers.push(`服務未就緒（${readyCount || 0}/${serviceTotal || 0}）`);
+          actions.push({ type: 'focus', payload: '#service-overview-panel', label: acceptanceChecklistActionLabels.serviceUnready });
         }
         if (!hasSuccessfulOrder) {
           blockers.push('尚未完成成功 checkout');
+          actions.push({
+            type: cartHasItems ? 'focus' : 'focus',
+            payload: Number(customerEl.value) > 0 ? (cartHasItems ? '#checkout-panel' : '#product-panel') : '#customer-panel',
+            label: cartHasItems ? '前往 checkout' : '先補齊流程',
+          });
         }
         if (!hasOrderShipmentRelation) {
           blockers.push('訂單未關聯出貨');
+          actions.push({ type: 'focus', payload: '#goal-next', label: acceptanceChecklistActionLabels.relationMissing });
         }
 
         const statusClass = canDemo ? 'ok' : 'warn';
@@ -1971,12 +1988,20 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           ? '✅ 可直接 demo：服務 / 交易 / 關聯三格皆綠'
           : '⚠️ 尚未可 demo：請按卡片右上「下一步」回到可交付狀態';
         const detail = canDemo ? '已達成 1.0 交付前條件。' : `缺口：${blockers.join('；')}`;
+        const renderedActions = canDemo
+          ? '<button type="button" class="small-btn inline-btn" data-demo-verdict-action="copy" data-demo-verdict-payload="demo-report">複製 demo 報告</button>'
+          : (actions.length ? actions : [{ type: 'focus', payload: '#goal-next', label: '查看下一步建議' }])
+            .map((action) => `<button type="button" class="small-btn inline-btn" data-demo-verdict-action="${action.type}" data-demo-verdict-payload="${action.payload || ''}">${action.label || '前往'}</button>`)
+            .join('');
 
         demoVerdictEl.innerHTML = [
           `<div class="verdict-line ${statusClass}">${statusText}</div>`,
           `<div class="verdict-line ${statusClass}">服務：${allServiceReady ? '就緒' : '未就緒'}，交易：${hasSuccessfulOrder ? '有成功 checkout' : '未完成'}，關聯：${hasOrderShipmentRelation ? '已關聯出貨' : '未關聯'}</div>`,
           `<div class="verdict-line ${statusClass}">${detail}</div>`,
         ].join('');
+        if (demoVerdictActionsEl) {
+          demoVerdictActionsEl.innerHTML = renderedActions;
+        }
       }
 
       function formatSessionMetric(value, ok, fallback) {
@@ -3585,6 +3610,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const operationCopyButton = event.target.closest('[data-operation-copy]');
         const operationRunCheckoutButton = event.target.closest('[data-operation-run-checkout]');
         const acceptanceActionButton = event.target.closest('[data-checklist-action]');
+        const verdictActionButton = event.target.closest('[data-demo-verdict-action]');
         const errorQuickActionButton = event.target.closest('[data-error-quick-action]');
         const beginnerGuideCta = event.target.closest('#beginner-guide-cta');
         const errorCopyCommandButton = event.target.closest('[data-error-copy-cmd]');
@@ -3606,6 +3632,27 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           const payload = acceptanceActionButton.dataset.checklistPayload || '';
           await executeErrorGuidanceAction({ type, payload });
           appendSummary(`已執行清單建議：${acceptanceActionButton.textContent.trim()}`);
+          return;
+        }
+        if (verdictActionButton) {
+          const type = verdictActionButton.dataset.demoVerdictAction;
+          const payload = verdictActionButton.dataset.demoVerdictPayload || '';
+          if (type === 'copy') {
+            const report = buildDemoReport();
+            if (report) {
+              await copyTextToClipboard(report, setCopyFeedback);
+              appendSummary('已複製 demo 結論報告');
+            } else {
+              setCopyFeedback('目前沒有可複製報告，請先完成流程');
+            }
+          } else {
+            await executeErrorGuidanceAction({
+              type,
+              payload,
+              label: verdictActionButton.textContent.trim(),
+            });
+            appendSummary(`已執行結論建議：${verdictActionButton.textContent.trim()}`);
+          }
           return;
         }
         if (beginnerGuideCta) {
