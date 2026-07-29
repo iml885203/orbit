@@ -542,14 +542,14 @@
         <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
         <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
         <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
-        <button id="copy-demo-report" class="small-btn inline-btn quick-start-action">複製 demo 報告</button>
-        <button id="copy-mini-shop-standard" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard">複製標準啟動指令</button>
-        <button id="copy-mini-shop-advanced" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced">複製進階啟動指令</button>
-        <button id="copy-demo-metrics-json" class="small-btn inline-btn quick-start-action">複製 demo 指標 JSON</button>
-        <button id="copy-drill-metrics-json" class="small-btn inline-btn quick-start-action">複製故障演練指標 JSON</button>
-        <button id="copy-smoke-script" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/smoke-demo.sh all">複製 smoke demo 腳本命令</button>
-        <button id="copy-onboarding-script" class="small-btn inline-btn quick-start-action" data-copy-cmd="bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh">複製 2 分鐘導覽命令</button>
-        <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action">一鍵 demo 檢核（成功→核對）</button>
+        <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action beginner-mode-hide">一鍵 demo 檢核（成功→核對）</button>
+        <button id="copy-demo-report" class="small-btn inline-btn quick-start-action beginner-mode-hide">複製 demo 報告</button>
+        <button id="copy-mini-shop-standard" class="small-btn inline-btn quick-start-action beginner-mode-hide" data-copy-cmd="bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard">複製標準啟動指令</button>
+        <button id="copy-mini-shop-advanced" class="small-btn inline-btn quick-start-action beginner-mode-hide" data-copy-cmd="bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced">複製進階啟動指令</button>
+        <button id="copy-demo-metrics-json" class="small-btn inline-btn quick-start-action beginner-mode-hide">複製 demo 指標 JSON</button>
+        <button id="copy-drill-metrics-json" class="small-btn inline-btn quick-start-action beginner-mode-hide">複製故障演練指標 JSON</button>
+        <button id="copy-smoke-script" class="small-btn inline-btn quick-start-action beginner-mode-hide" data-copy-cmd="bash docs/examples/mini-shop/scripts/smoke-demo.sh all">複製 smoke demo 腳本命令</button>
+        <button id="copy-onboarding-script" class="small-btn inline-btn quick-start-action beginner-mode-hide" data-copy-cmd="bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh">複製 2 分鐘導覽命令</button>
       </div>
     </div>
 
@@ -1139,6 +1139,9 @@ web
       const compactModeHideSelectors = [
         '.compact-mode-hide',
       ];
+      const beginnerModeHideSelectors = [
+        '.beginner-mode-hide',
+      ];
 
       function getTrackedServiceNames(map, mode = uiMode) {
         const keys = Object.keys(map || {}).filter(Boolean);
@@ -1674,6 +1677,19 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             panel.classList.add('hidden');
           } else {
             panel.classList.remove('hidden');
+          }
+        });
+      });
+
+      beginnerModeHideSelectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((control) => {
+          if (!control) {
+            return;
+          }
+          if (mode === 'beginner') {
+            control.classList.add('hidden');
+          } else {
+            control.classList.remove('hidden');
           }
         });
       });
