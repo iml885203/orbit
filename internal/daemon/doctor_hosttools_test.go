@@ -314,6 +314,57 @@ func TestDirectNodeServiceUsesWorkspacePackageManager(t *testing.T) {
 	}
 }
 
+func TestProjectDependencyChecksCoalesceOneWorkspaceSetup(t *testing.T) {
+	runtimeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(runtimeDir, "pnpm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", runtimeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	workspace := t.TempDir()
+	if err := os.Mkdir(filepath.Join(workspace, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(workspace, "package.json"),
+		[]byte(`{"packageManager":"pnpm@10.0.0","dependencies":{"shared":"1.0.0"}}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	services := map[string]*config.Service{}
+	for _, name := range []string{"api", "worker"} {
+		path := filepath.Join(workspace, "apps", name)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(
+			filepath.Join(path, "package.json"),
+			[]byte(`{"dependencies":{"shared":"1.0.0"}}`),
+			0o644,
+		); err != nil {
+			t.Fatal(err)
+		}
+		services[name] = &config.Service{Type: "node", Command: "node server.js", Path: path}
+	}
+
+	checks := projectDependencyChecks(&config.Config{Services: services})
+
+	if len(checks) != 1 {
+		t.Fatalf("checks = %+v, want one shared setup", checks)
+	}
+	check := checks[0]
+	if check.Name != "Packages (api, worker)" {
+		t.Fatalf("name = %q", check.Name)
+	}
+	if check.Message != "project packages are not installed (required by api, worker)" {
+		t.Fatalf("message = %q", check.Message)
+	}
+	wantHint := "run: pnpm --dir " + shellquote.Quote(workspace) + " install"
+	if check.Hint != wantHint {
+		t.Fatalf("hint = %q, want %q", check.Hint, wantHint)
+	}
+}
+
 func TestMissingNodePackageManagerDefersPackageInstall(t *testing.T) {
 	runtimeDir, _ := fakeBin(t, "node", "#!/bin/sh\necho v22.0.0\n")
 	t.Setenv("PATH", runtimeDir)

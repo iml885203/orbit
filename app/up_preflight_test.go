@@ -69,14 +69,16 @@ func TestPreflightBlocksUnsatisfiedPythonRequirementsWithSetupAction(t *testing.
 	}
 }
 
-func TestPreflightBlocksMissingNodePackagesWithSetupAction(t *testing.T) {
+func TestPreflightCoalescesSharedNodePackagesIntoOneSetupAction(t *testing.T) {
 	project := t.TempDir()
 	manifest := `{"packageManager":"pnpm@10.0.0","dependencies":{"fastify":"5.0.0"}}`
 	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
-	config := "version: \"3\"\nservices:\n  api:\n    type: node\n    path: " + project + "\n    command: node server.js\n"
+	config := "version: \"3\"\nservices:\n" +
+		"  api:\n    type: node\n    path: " + project + "\n    command: node api.js\n" +
+		"  worker:\n    type: node\n    path: " + project + "\n    command: node worker.js\n"
 	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +87,11 @@ func TestPreflightBlocksMissingNodePackagesWithSetupAction(t *testing.T) {
 	t.Cleanup(func() { configFile = previousConfig })
 
 	err := preflightOrAbort(true, nil)
-	if err == nil || !strings.Contains(err.Error(), "project packages are not installed") {
+	if err == nil || !strings.Contains(err.Error(), "project packages are not installed (required by api, worker)") {
 		t.Fatalf("preflight error = %v", err)
+	}
+	if strings.Count(err.Error(), "pnpm --dir") != 1 {
+		t.Fatalf("preflight repeated one workspace remedy: %v", err)
 	}
 	withActions, ok := err.(interface{ CLIJSONReplacementActions() []cli.JSONAction })
 	if !ok {

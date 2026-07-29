@@ -251,7 +251,93 @@ func projectDependencyChecks(cfg *config.Config) []DoctorCheck {
 			checks = append(checks, results[i])
 		}
 	}
-	return checks
+	return coalesceProjectDependencyFailures(checks)
+}
+
+func coalesceProjectDependencyFailures(checks []DoctorCheck) []DoctorCheck {
+	type group struct {
+		first    int
+		indices  []int
+		services []string
+		checks   []DoctorCheck
+	}
+	groups := make(map[string]*group)
+	for i, check := range checks {
+		service, packageCheck := packageCheckService(check.Name)
+		if !packageCheck || check.Status != CheckFail || !strings.HasPrefix(check.Hint, "run: ") {
+			continue
+		}
+		key := check.Hint
+		current := groups[key]
+		if current == nil {
+			current = &group{first: i}
+			groups[key] = current
+		}
+		current.indices = append(current.indices, i)
+		current.services = append(current.services, service)
+		current.checks = append(current.checks, check)
+	}
+
+	mergedAt := make(map[int]DoctorCheck)
+	skipped := make(map[int]bool)
+	for _, current := range groups {
+		if len(current.checks) < 2 {
+			continue
+		}
+		merged := current.checks[0]
+		merged.Name = "Packages (" + strings.Join(current.services, ", ") + ")"
+		merged.Message = sharedProjectDependencyMessage(current.checks, current.services)
+		mergedAt[current.first] = merged
+		for _, index := range current.indices[1:] {
+			skipped[index] = true
+		}
+	}
+
+	result := make([]DoctorCheck, 0, len(checks))
+	for i, check := range checks {
+		if merged, ok := mergedAt[i]; ok {
+			result = append(result, merged)
+			continue
+		}
+		if !skipped[i] {
+			result = append(result, check)
+		}
+	}
+	return result
+}
+
+func packageCheckService(name string) (string, bool) {
+	service, ok := strings.CutPrefix(name, "Packages (")
+	if !ok || !strings.HasSuffix(service, ")") {
+		return "", false
+	}
+	return strings.TrimSuffix(service, ")"), true
+}
+
+func sharedProjectDependencyMessage(checks []DoctorCheck, services []string) string {
+	message := checks[0].Message
+	identical := true
+	for _, check := range checks[1:] {
+		if check.Message != message {
+			identical = false
+			break
+		}
+	}
+	if identical {
+		return message + " (required by " + strings.Join(services, ", ") + ")"
+	}
+
+	firstSuffix := " for " + services[0]
+	base, ok := strings.CutSuffix(message, firstSuffix)
+	if ok {
+		for i := 1; i < len(checks); i++ {
+			if checks[i].Message != base+" for "+services[i] {
+				return "project packages need setup for " + strings.Join(services, ", ")
+			}
+		}
+		return base + " for " + strings.Join(services, ", ")
+	}
+	return "project packages need setup for " + strings.Join(services, ", ")
 }
 
 func nodeDependencyCheckForService(serviceName string, service *config.Service) (DoctorCheck, bool) {

@@ -70,6 +70,42 @@ func TestPythonRequirementsPassWhenExactInterpreterReportsSatisfied(t *testing.T
 	}
 }
 
+func TestPythonRequirementsCoalesceSharedProjectSetup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is POSIX-only")
+	}
+	project := t.TempDir()
+	requirements := filepath.Join(project, "requirements.txt")
+	if err := os.WriteFile(requirements, []byte("humanize==4.12.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	interpreter := filepath.Join(t.TempDir(), "python3")
+	if err := os.WriteFile(interpreter, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api":    {Type: "python", Path: project, Command: interpreter + " api.py"},
+		"worker": {Type: "python", Path: project, Command: interpreter + " worker.py"},
+	}}
+
+	checks := projectDependencyChecks(cfg)
+
+	if len(checks) != 1 {
+		t.Fatalf("checks = %+v, want one shared setup", checks)
+	}
+	check := checks[0]
+	if check.Name != "Packages (api, worker)" {
+		t.Fatalf("name = %q", check.Name)
+	}
+	if check.Message != "requirements.txt is not satisfied for api, worker" {
+		t.Fatalf("message = %q", check.Message)
+	}
+	wantHint := "run: " + interpreter + " -m pip install --user -r " + requirements
+	if check.Hint != wantHint {
+		t.Fatalf("hint = %q, want %q", check.Hint, wantHint)
+	}
+}
+
 func TestPythonRequirementsSetupResolvesProjectRelativeInterpreter(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture is POSIX-only")
