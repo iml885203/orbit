@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,9 +27,10 @@ func statusCmd() *cobra.Command {
 	}
 }
 
-func runStatus(_ *cobra.Command, _ []string) error {
+func runStatus(cmd *cobra.Command, _ []string) error {
 	selection := readEnvironmentSelection()
 	cfg, cfgErr := config.Load(configFile)
+	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	daemonRunning := client.Health() == nil
@@ -38,10 +40,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
-			if cfgErr != nil &&
-				!configFileExists(configFile) &&
-				isProjectConfigPath(status.ConfigPath) &&
-				configFileExists(status.ConfigPath) {
+			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
 				configFile = status.ConfigPath
 				cfg, cfgErr = config.Load(configFile)
 				dstatus.DetachedProject = true
@@ -94,6 +93,10 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 	if cfgErr != nil && configFileExists(configFile) {
+		var mismatch *config.SchemaVersionMismatchError
+		if errors.As(cfgErr, &mismatch) {
+			return mismatch
+		}
 		err := cli.NewInvalidEnvironmentError(
 			fmt.Sprintf("active environment %s is invalid: %v", filepath.Base(configFile), cfgErr),
 		)
@@ -124,12 +127,6 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		}
 		fmt.Println("Orbit is not set up yet.")
 		_, _ = cli.Faint.Println("  Next: orbit init")
-		_, _ = cli.Faint.Println("  Or: orbit env sync --url <git-url>   sync env repository")
-		_, _ = cli.Faint.Println("  Or: orbit up                          start the configured environment")
-		if cfgErr != nil {
-			_, _ = cli.Faint.Println("  Current config issue:")
-			_, _ = cli.Faint.Printf("    %s\n", cfgErr)
-		}
 		return nil
 	}
 

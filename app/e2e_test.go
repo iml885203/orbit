@@ -1428,8 +1428,10 @@ func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {
 			t.Fatalf("human status missing %q:\n%s", evidence, human)
 		}
 	}
-	if bytes.Contains(human, []byte("orbit up")) {
-		t.Fatalf("human status suggested startup before setup:\n%s", human)
+	for _, competingPath := range []string{"orbit up", "orbit env sync", "Current config issue", home} {
+		if bytes.Contains(human, []byte(competingPath)) {
+			t.Fatalf("human status exposed %q before setup:\n%s", competingPath, human)
+		}
 	}
 
 	output, err := command("status", "--json").Output()
@@ -1596,6 +1598,61 @@ func TestE2E_StatusRejectsInvalidSelectedEnvironment(t *testing.T) {
 	}
 	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != envelope.Command {
 		t.Fatalf("recommended_actions = %+v, command = %q", envelope.RecommendedActions, envelope.Command)
+	}
+}
+
+func TestE2E_ProjectSchemaMigrationDoesNotLoop(t *testing.T) {
+	t.Parallel()
+
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	project := t.TempDir()
+	envPath := filepath.Join(project, "orbit.yaml")
+	source := `version: "2"
+containers:
+  database:
+    image: database:latest
+    seed:
+      type: sqlserver
+      database: app
+      files: [seed.sql]
+`
+	if err := os.WriteFile(envPath, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := func(args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Dir = project
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+
+	human, err := command("doctor").CombinedOutput()
+	if err == nil {
+		t.Fatalf("doctor accepted schema 2:\n%s", human)
+	}
+	const migrationGuideURL = "https://github.com/iml885203/orbit/blob/main/docs/configuration.md#migrating-schema-2-to-3"
+	for _, evidence := range []string{"Change version to \"3\"", migrationGuideURL} {
+		if !bytes.Contains(human, []byte(evidence)) {
+			t.Fatalf("human migration guidance missing %q:\n%s", evidence, human)
+		}
+	}
+
+	for _, args := range [][]string{{"doctor", "--json"}, {"status", "--json"}} {
+		output, err := command(args...).Output()
+		if err == nil {
+			t.Fatalf("%s accepted schema 2:\n%s", strings.Join(args, " "), output)
+		}
+		envelope := parseE2EEnvelope(t, string(output))
+		if envelope.Error == nil || envelope.Error.Code != "environment_schema_outdated" {
+			t.Fatalf("%s envelope = %+v:\n%s", strings.Join(args, " "), envelope, output)
+		}
+		if !strings.Contains(envelope.Error.Message, migrationGuideURL) {
+			t.Fatalf("%s omitted migration URL:\n%s", strings.Join(args, " "), output)
+		}
+		if len(envelope.RecommendedActions) != 0 || envelope.Error.NextCommand != "" {
+			t.Fatalf("%s created a non-resolving action loop: %+v", strings.Join(args, " "), envelope)
+		}
 	}
 }
 
@@ -1782,6 +1839,78 @@ services:
 	retryEnvelope := parseE2EEnvelope(t, string(retryOut))
 	if !retryEnvelope.OK {
 		t.Fatalf("targeted retry envelope = %+v\n%s", retryEnvelope, retryOut)
+	}
+}
+
+func TestE2E_LiteralSingleServicePortInjectsPORT(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+	binary := findOrbitBinary(t)
+	servicePort := reserveLocalPort(t)
+	dashboardPort := reserveLocalPort(t)
+	home, err := os.MkdirTemp("/tmp", "orb-literal-port-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	configPath := filepath.Join(workspace, "orbit.yaml")
+	configYAML := fmt.Sprintf(`version: "3"
+services:
+  app:
+    type: python
+    path: %q
+    command: python3 -m http.server "$PORT"
+    ports:
+      http: %d
+    health_check:
+      type: http
+      path: /
+`, workspace, servicePort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE=e2e-literal-port",
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() {
+		_ = command("down").Run()
+		_ = command("daemon", "stop").Run()
+	})
+
+	doctorOutput, err := command("doctor", "--json").Output()
+	if err != nil {
+		t.Fatalf("doctor rejected literal service port: %v\n%s", err, doctorOutput)
+	}
+	if envelope := parseE2EEnvelope(t, string(doctorOutput)); !envelope.OK {
+		t.Fatalf("doctor envelope = %+v\n%s", envelope, doctorOutput)
+	}
+
+	upOutput, err := command("up", "--json").Output()
+	if err != nil {
+		t.Fatalf("service did not receive its declared PORT: %v\n%s", err, upOutput)
+	}
+	if envelope := parseE2EEnvelope(t, string(upOutput)); !envelope.OK {
+		t.Fatalf("up envelope = %+v\n%s", envelope, upOutput)
+	}
+	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", servicePort))
+	if err != nil {
+		t.Fatalf("service is not reachable on literal port %d: %v", servicePort, err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("service status = %s", response.Status)
 	}
 }
 

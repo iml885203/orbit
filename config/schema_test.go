@@ -183,7 +183,7 @@ func TestCheckVersion(t *testing.T) {
 			version:     "2",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", `"2"`, `"3"`, "supported schema", "migration guide"},
+			wantContain: []string{"envs/development.yaml", `"2"`, `"3"`, "Change version", schemaMigrationGuideURL},
 		},
 		{
 			name:        "env newer than binary",

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -777,7 +778,7 @@ func TestLoad_VersionMismatch(t *testing.T) {
 		{
 			name:        "env older than binary",
 			yaml:        `version: "2"` + "\n",
-			wantContain: "project-local migration guide",
+			wantContain: schemaMigrationGuideURL,
 		},
 		{
 			name:        "missing version",
@@ -800,6 +801,27 @@ func TestLoad_VersionMismatch(t *testing.T) {
 				t.Errorf("error %q missing substring %q", err.Error(), tc.wantContain)
 			}
 		})
+	}
+}
+
+func TestLoadChecksVersionBeforeLegacyFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orbit.yaml")
+	source := `version: "2"
+containers:
+  database:
+    image: database:latest
+    seed:
+      type: sqlserver
+      database: app
+      files: [seed.sql]
+`
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	var mismatch *SchemaVersionMismatchError
+	if !errors.As(err, &mismatch) || mismatch.Kind != SchemaVersionOlder {
+		t.Fatalf("error = %v, want older schema guidance before legacy-field parsing", err)
 	}
 }
 

@@ -165,6 +165,14 @@ services:
 	if resolved["HTTP_PORT"] != "explicit" {
 		t.Fatalf("HTTP_PORT override = %q", resolved["HTTP_PORT"])
 	}
+
+	literal := map[string]string{}
+	InjectServicePorts(literal, map[string]config.PortDef{
+		"http": {Host: 28083},
+	})
+	if literal["PORT"] != "28083" || literal["HTTP_PORT"] != "28083" {
+		t.Fatalf("literal service port missing conventional env: %+v", literal)
+	}
 }
 
 func TestBuildEnvInjectsRuntimeServiceURLWithoutOverridingExplicitEnv(t *testing.T) {

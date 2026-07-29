@@ -159,9 +159,19 @@ assert [(item["name"], item["state"]) for item in after["data"]["resources"]] ==
 PY
 
 "$orbit_bin" down --json >/dev/null
+mkdir -p "$ORBIT_HOME/envs"
+cp "$test_root/project-a/orbit.yaml" "$ORBIT_HOME/envs/quickstart.yaml"
+"$orbit_bin" env use "$ORBIT_HOME/envs/quickstart.yaml" --json >/dev/null
 cd "$test_root"
 "$orbit_bin" status --json >"$test_root/status-outside-project.json"
 "$orbit_bin" status >"$test_root/status-outside-project.txt"
+"$orbit_bin" doctor --json >"$test_root/doctor-outside-project.json"
+"$orbit_bin" doctor >"$test_root/doctor-outside-project.txt"
+if "$orbit_bin" --config "$ORBIT_HOME/envs/quickstart.yaml" status --json \
+  >"$test_root/explicit-managed-status.json"; then
+  echo "explicit managed config unexpectedly controlled the active project." >&2
+  exit 1
+fi
 python3 - "$test_root" <<'PY'
 import json
 import pathlib
@@ -169,6 +179,8 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 status = json.loads((root / "status-outside-project.json").read_text(encoding="utf-8"))
+doctor = json.loads((root / "doctor-outside-project.json").read_text(encoding="utf-8"))
+explicit = json.loads((root / "explicit-managed-status.json").read_text(encoding="utf-8"))
 assert status["ok"] is True
 assert status["data"]["environment"]["source"] == "project"
 assert status["data"]["environment"]["selected_name"] == "project-b"
@@ -182,6 +194,20 @@ human = (root / "status-outside-project.txt").read_text(encoding="utf-8")
 assert "last project context" in human
 assert "daemon restart" not in human
 assert "quickstart.yaml" not in human
+
+assert doctor["ok"] is True
+environment_check = next(
+    check for check in doctor["data"]["checks"] if check["name"] == "Daemon"
+)
+assert "project-b is still active" in environment_check["message"]
+assert str(root / "project-b") in environment_check["message"]
+doctor_human = (root / "doctor-outside-project.txt").read_text(encoding="utf-8")
+assert "project-b is still active" in doctor_human
+assert "daemon restart" not in doctor_human
+assert "quickstart.yaml" not in doctor_human
+
+assert explicit["ok"] is False
+assert explicit["error"]["code"] == "env_mismatch"
 PY
 "$orbit_bin" daemon stop --json >/dev/null
 

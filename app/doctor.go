@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/iml885203/orbit/port"
 	"github.com/spf13/cobra"
 )
@@ -24,12 +26,16 @@ func doctorCmd() *cobra.Command {
 	}
 }
 
-func runDoctor(_ *cobra.Command, _ []string) error {
-	return runDoctorWithOptions(doctorOptions{showDaemon: true})
+func runDoctor(cmd *cobra.Command, _ []string) error {
+	return runDoctorWithOptions(doctorOptions{
+		showDaemon:     true,
+		explicitConfig: cmd.Root().PersistentFlags().Changed("config"),
+	})
 }
 
 type doctorOptions struct {
-	showDaemon bool
+	showDaemon     bool
+	explicitConfig bool
 }
 
 type setupRequiredError struct{}
@@ -59,19 +65,40 @@ func setupRequired(selection environmentSelection, path string) bool {
 
 func runDoctorWithOptions(options doctorOptions) error {
 	client := daemon.NewClient(daemon.DefaultSocketPath())
+	var detachedStatus *daemon.StatusResponse
 	if client.Health() == nil {
 		if status, err := client.Status(); err == nil {
-			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
+			if shouldResumeDetachedProject(options.explicitConfig, configFile, status.ConfigPath) {
+				configFile = status.ConfigPath
+				detachedStatus = status
+			} else if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
 				if !usesDiscoveredProjectConfig(configFile) {
 					return mismatch
 				}
 			}
 		}
 	}
-	resp := doctorResponse(client)
+	var resp *daemon.DoctorResponse
+	if detachedStatus != nil {
+		resp = localDoctorResponseWithContext(true, detachedStatus)
+	} else {
+		resp = doctorResponse(client)
+	}
 	failure := doctorFailure(resp, options.showDaemon)
+	var schemaMismatch *config.SchemaVersionMismatchError
+	if failure != nil {
+		if _, err := config.Load(configFile); errors.As(err, &schemaMismatch) {
+			failure = schemaMismatch
+		}
+	}
 	if cli.JSONOutput {
 		if failure != nil {
+			if schemaMismatch != nil {
+				if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, nil); err != nil {
+					return err
+				}
+				return errCLIJSONAlreadyRendered{err: failure}
+			}
 			actions := doctorRecommendedActions(resp)
 			failure = cli.WithJSONReplacementActions(failure, actions)
 			if err := cli.WriteJSONFailure(os.Stdout, commandString(), resp, failure, actions); err != nil {
@@ -230,12 +257,21 @@ func localDoctorResponseWithContext(
 	}
 	daemonCheck := daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage}
 	if runningStatus != nil {
-		daemonCheck.Message = fmt.Sprintf(
-			"%s is running; orbit up switches to %s",
-			projectContextName(runningStatus.ConfigPath),
-			projectContextName(configFile),
-		)
-		daemonCheck.Hint = "run: orbit up"
+		if sameFilePath(configFile, runningStatus.ConfigPath) {
+			daemonCheck.Message = fmt.Sprintf(
+				"%s is still active; run commands from %s or pass --config %s",
+				projectContextName(runningStatus.ConfigPath),
+				filepath.Dir(runningStatus.ConfigPath),
+				shellquote.Quote(runningStatus.ConfigPath),
+			)
+		} else {
+			daemonCheck.Message = fmt.Sprintf(
+				"%s is running; orbit up switches to %s",
+				projectContextName(runningStatus.ConfigPath),
+				projectContextName(configFile),
+			)
+			daemonCheck.Hint = "run: orbit up"
+		}
 	} else if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
 		daemonCheck.Hint = "run: orbit up"
 	}

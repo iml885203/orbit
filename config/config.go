@@ -28,15 +28,21 @@ func Load(path string) (*Config, error) {
 
 	expanded := substituteEnvVars(string(data))
 
+	var header struct {
+		Version string `yaml:"version"`
+	}
+	if err := yaml.Unmarshal([]byte(expanded), &header); err != nil {
+		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	if err := CheckVersion(header.Version, path); err != nil {
+		return nil, err
+	}
+
 	var cfg Config
 	dec := yaml.NewDecoder(strings.NewReader(expanded))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
-	}
-
-	if err := CheckVersion(cfg.Version, path); err != nil {
-		return nil, err
 	}
 
 	// Registered extension sections (allowlist + decoders): the inline

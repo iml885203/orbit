@@ -59,28 +59,20 @@ func buildServiceEndpoint(name string, service *config.Service) map[string]strin
 	return map[string]string{key: url}
 }
 
-// InjectServicePorts exposes runtime-selected ports to host services that
-// explicitly opted into automatic port recovery. An explicit value unrelated
-// to the preferred port wins; a value derived from that preference follows the
-// runtime selection.
+// InjectServicePorts leaves deliberate environment overrides alone while
+// keeping values derived from an auto-port preference aligned with reality.
 func InjectServicePorts(target map[string]string, ports map[string]config.PortDef) {
-	autoPorts := make(map[string]config.PortDef)
 	for label, definition := range ports {
-		if definition.IsAuto() {
-			autoPorts[label] = definition
-		}
-	}
-	for label, definition := range autoPorts {
 		key := strings.ToUpper(strings.ReplaceAll(label, "-", "_")) + "_PORT"
 		value, exists := target[key]
-		if !exists || value == fmt.Sprintf("%d", definition.PreferredHost()) {
+		if !exists || definition.IsAuto() && value == fmt.Sprintf("%d", definition.PreferredHost()) {
 			target[key] = fmt.Sprintf("%d", definition.Host)
 		}
 	}
-	if len(ports) == 1 && len(autoPorts) == 1 {
-		for _, definition := range autoPorts {
+	if len(ports) == 1 {
+		for _, definition := range ports {
 			value, exists := target["PORT"]
-			if !exists || value == fmt.Sprintf("%d", definition.PreferredHost()) {
+			if !exists || definition.IsAuto() && value == fmt.Sprintf("%d", definition.PreferredHost()) {
 				target["PORT"] = fmt.Sprintf("%d", definition.Host)
 			}
 		}

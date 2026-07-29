@@ -369,6 +369,8 @@ func (c *Container) ResolveKind() string {
 //	command that receives each seed file on standard input.
 const supportedEnvVersion = "3"
 
+const schemaMigrationGuideURL = "https://github.com/iml885203/orbit/blob/main/docs/configuration.md#migrating-schema-2-to-3"
+
 type SchemaVersionMismatchKind string
 
 const (
@@ -394,10 +396,18 @@ func (e *SchemaVersionMismatchError) Error() string {
 			e.Path, e.Supported,
 		)
 	case SchemaVersionOlder:
+		if e.Found == "2" && e.Supported == "3" {
+			return fmt.Sprintf(
+				"env file %s uses schema version %q; this Orbit binary requires %q. "+
+					"Change version to %q. If a container seed uses type, database, username, or password_env, replace those fields with command and keep files. "+
+					"Migration guide: %s",
+				e.Path, e.Found, e.Supported, e.Supported, schemaMigrationGuideURL,
+			)
+		}
 		return fmt.Sprintf(
 			"env file %s: schema version %q but this Orbit binary requires %q. "+
-				"Update this environment file to the supported schema; sync it if it comes from a shared environment repository, or follow the project-local migration guide",
-			e.Path, e.Found, e.Supported,
+				"Update this environment file to the supported schema. Migration guide: %s",
+			e.Path, e.Found, e.Supported, schemaMigrationGuideURL,
 		)
 	case SchemaVersionNewer:
 		return fmt.Sprintf(

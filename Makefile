@@ -72,7 +72,7 @@ test-journeys: build
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-first-five-minutes.sh
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency)$$'
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency)$$'
 
 test-install:
 	@./scripts/test-install.sh
