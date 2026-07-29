@@ -96,7 +96,9 @@ assert [resource["name"] for resource in status["data"]["resources"]] == ["overr
 PY
 
 python3 -c '
+import pathlib
 import socket
+import sys
 import time
 
 listeners = []
@@ -106,9 +108,21 @@ for port in (26379, 28080):
     listener.bind(("127.0.0.1", port))
     listener.listen()
     listeners.append(listener)
+pathlib.Path(sys.argv[1]).touch()
 time.sleep(600)
-' &
+' "$test_root/ports-ready" &
 port_guard_pid=$!
+
+for _ in $(seq 1 100); do
+  if [ -f "$test_root/ports-ready" ]; then
+    break
+  fi
+  sleep 0.05
+done
+if [ ! -f "$test_root/ports-ready" ]; then
+  echo "Timed out waiting for occupied-port guard." >&2
+  exit 1
+fi
 
 "$orbit_bin" doctor --json >"$test_root/doctor.json"
 if ! "$orbit_bin" up --json \
