@@ -12,7 +12,7 @@ import (
 func DBCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db",
-		Short: "Manage local databases via host-side schema publish",
+		Short: "Manage SQL Server Database Projects",
 		Long: `Manage SQL Server Database Projects declared by the active environment.
 
 Examples:

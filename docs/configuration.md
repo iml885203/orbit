@@ -169,6 +169,31 @@ containers:
 | `init` | object | no | Typed init hooks (Kafka topics, Mongo replica set) |
 | `sidecars` | list | no | Per-container sidecar containers (web UIs, agents) |
 
+### Native database clients
+
+`orbit query redis`, `orbit query mongo`, and `orbit query postgres` run the
+client already present inside a configured container. A `redis`, `mongo`,
+`postgres`, or `postgresql` port alias makes the target discoverable even when
+the container has a domain-specific name:
+
+```yaml
+containers:
+  primary-data:
+    image: postgres:18
+    ports:
+      postgres: "5432:5432"
+```
+
+When exactly one container matches, Orbit selects it automatically. Multiple
+matches are never resolved by map order: the command lists their names and
+requires `--container <name>`. For another database client, use
+`orbit exec <container> <client...>`.
+
+These commands are connection conveniences, not a generic schema lifecycle.
+The optional `sqlserver` workflow owns SQL Server Database Project diff,
+publish, and reset semantics because those operations do not map honestly onto
+every database.
+
 ### Ports that may move
 
 Project ports are fixed by default: a conflict remains an error because silently

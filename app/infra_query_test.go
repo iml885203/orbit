@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -37,18 +39,59 @@ func TestPostgresQueryDockerArgsKeepsSQLOutOfTheShellProgram(t *testing.T) {
 	}
 }
 
-func TestFindPostgresContainerUsesPortLabelOrClearName(t *testing.T) {
-	byPort := &config.Config{Containers: map[string]*config.Container{
-		"database": {Ports: map[string]config.PortDef{"postgres": {Host: 5432, Target: 5432}}},
+func TestQueryContainerSelectionIsPredictable(t *testing.T) {
+	cfg := &config.Config{Containers: map[string]*config.Container{
+		"app-db": {
+			Ports: map[string]config.PortDef{"postgres": {Host: 5432, Target: 5432}},
+		},
+		"analytics-db": {
+			Ports: map[string]config.PortDef{"postgres": {Host: 5433, Target: 5432}},
+		},
+		"cache": {
+			Ports: map[string]config.PortDef{"redis": {Host: 6379, Target: 6379}},
+		},
 	}}
-	if got := findPostgresContainer(byPort); got != "database" {
-		t.Fatalf("port-labelled container = %q, want database", got)
-	}
 
-	byName := &config.Config{Containers: map[string]*config.Container{
-		"postgresql": {},
-	}}
-	if got := findPostgresContainer(byName); got != "postgresql" {
-		t.Fatalf("named container = %q, want postgresql", got)
+	if got, err := resolveQueryContainer(cfg, "PostgreSQL", "analytics-db", "postgres", "postgresql"); err != nil ||
+		got != "analytics-db" {
+		t.Fatalf("explicit PostgreSQL selection = %q, %v", got, err)
+	}
+	if got, err := resolveQueryContainer(cfg, "Redis", "", "redis"); err != nil || got != "cache" {
+		t.Fatalf("single Redis selection = %q, %v", got, err)
+	}
+	if _, err := resolveQueryContainer(cfg, "MongoDB", "missing", "mongo"); err == nil ||
+		!strings.Contains(err.Error(), "analytics-db, app-db, cache") {
+		t.Fatalf("missing explicit target = %v", err)
+	}
+}
+
+func TestQueryCommandRejectsAnAmbiguousTargetBeforeDocker(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orbit.yaml")
+	source := `version: "2"
+containers:
+  app-db:
+    image: postgres:18
+    ports:
+      postgres: "5432:5432"
+  analytics-db:
+    image: postgres:18
+    ports:
+      postgres: "5433:5432"
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousConfigFile := configFile
+	configFile = path
+	t.Cleanup(func() { configFile = previousConfigFile })
+
+	command := queryCmd()
+	command.SetArgs([]string{"postgres", "SELECT 1"})
+	command.SilenceUsage = true
+	err := command.Execute()
+	if err == nil ||
+		!strings.Contains(err.Error(), "analytics-db, app-db") ||
+		!strings.Contains(err.Error(), "--container") {
+		t.Fatalf("ambiguous query error = %v", err)
 	}
 }

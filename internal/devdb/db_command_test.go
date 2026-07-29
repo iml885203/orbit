@@ -1,6 +1,7 @@
 package devdb
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -8,6 +9,9 @@ import (
 
 func TestDBCommand_ExposesOnlyUserWorkflow(t *testing.T) {
 	cmd := DBCmd()
+	if !strings.Contains(cmd.Short, "SQL Server Database Projects") {
+		t.Fatalf("db command does not identify its provider-specific workflow: %q", cmd.Short)
+	}
 	visible := map[string]bool{}
 	for _, child := range cmd.Commands() {
 		if !child.Hidden {

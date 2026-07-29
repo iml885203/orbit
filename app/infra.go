@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
@@ -30,16 +31,21 @@ Examples:
 }
 
 func queryCmd() *cobra.Command {
+	var target string
 	cmd := &cobra.Command{
 		Use:   "query <type> [args...]",
 		Short: "Query infrastructure databases",
 		Long: `Query infrastructure databases using the container's built-in client.
 
+Orbit selects the target automatically when exactly one configured container
+matches. Use --container when an environment has more than one of that type.
+
 Examples:
   orbit query mongo mydb '{"name":"test"}'
   orbit query postgres "SELECT current_database();"
-  orbit query redis GET session:123`,
+  orbit query redis --container cache GET session:123`,
 	}
+	cmd.PersistentFlags().StringVar(&target, "container", "", "target container name (required when more than one matches)")
 	cmd.AddCommand(&cobra.Command{
 		Use:   "mongo [db] [query]",
 		Short: "Query MongoDB",
@@ -48,8 +54,11 @@ Examples:
 Examples:
   orbit query mongo                            # interactive shell
   orbit query mongo mydb                       # connect to specific db
+  orbit query mongo --container audit mydb     # choose between multiple MongoDB containers
   orbit query mongo mydb '{"name":"test"}'     # run a query`,
-		RunE: runQueryMongo,
+		RunE: func(_ *cobra.Command, args []string) error {
+			return runQueryMongo(target, args)
+		},
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "redis [command...]",
@@ -59,8 +68,10 @@ Examples:
 Examples:
   orbit query redis                           # interactive mode
   orbit query redis GET session:123
-  orbit query redis KEYS '*'`,
-		RunE: runQueryRedis,
+  orbit query redis --container cache KEYS '*'`,
+		RunE: func(_ *cobra.Command, args []string) error {
+			return runQueryRedis(target, args)
+		},
 	})
 	postgres := &cobra.Command{
 		Use:     "postgres [sql]",
@@ -73,13 +84,14 @@ The container's POSTGRES_USER and POSTGRES_DB select the default connection.
 Examples:
   orbit query postgres
   orbit query postgres "SELECT current_database();"
+  orbit query postgres --container analytics
   orbit query postgres --database app "SELECT * FROM users LIMIT 5"`,
 		Args: cobra.ArbitraryArgs,
 	}
 	var postgresDatabase string
 	postgres.Flags().StringVarP(&postgresDatabase, "database", "d", "", "database name (defaults to POSTGRES_DB)")
 	postgres.RunE = func(_ *cobra.Command, args []string) error {
-		return runQueryPostgres(postgresDatabase, args)
+		return runQueryPostgres(target, postgresDatabase, args)
 	}
 	cmd.AddCommand(postgres)
 	return cmd
@@ -103,15 +115,15 @@ func runExec(cmd *cobra.Command, args []string) error {
 	return execDocker(cmdArgs)
 }
 
-func runQueryMongo(_ *cobra.Command, args []string) error {
+func runQueryMongo(target string, args []string) error {
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	container := findContainer(cfg, "mongo")
-	if container == "" {
-		return fmt.Errorf("no MongoDB container found in config")
+	container, err := resolveQueryContainer(cfg, "MongoDB", target, "mongo")
+	if err != nil {
+		return err
 	}
 
 	cmdArgs := []string{"exec", "-it", orbitContainerName(container), "mongosh", "--quiet"}
@@ -126,15 +138,15 @@ func runQueryMongo(_ *cobra.Command, args []string) error {
 	return execDocker(cmdArgs)
 }
 
-func runQueryRedis(_ *cobra.Command, args []string) error {
+func runQueryRedis(target string, args []string) error {
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	container := findContainer(cfg, "redis")
-	if container == "" {
-		return fmt.Errorf("no Redis container found in config")
+	container, err := resolveQueryContainer(cfg, "Redis", target, "redis")
+	if err != nil {
+		return err
 	}
 
 	cmdArgs := make([]string, 0, 4+len(args))
@@ -144,15 +156,15 @@ func runQueryRedis(_ *cobra.Command, args []string) error {
 	return execDocker(cmdArgs)
 }
 
-func runQueryPostgres(database string, queryParts []string) error {
+func runQueryPostgres(target, database string, queryParts []string) error {
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	container := findPostgresContainer(cfg)
-	if container == "" {
-		return fmt.Errorf("no PostgreSQL container found in config")
+	container, err := resolveQueryContainer(cfg, "PostgreSQL", target, "postgres", "postgresql")
+	if err != nil {
+		return err
 	}
 
 	return execDocker(postgresQueryDockerArgs(orbitContainerName(container), database, queryParts))
@@ -180,6 +192,69 @@ exec psql -U "$user" -d "$database"`
 		database,
 		query,
 	}
+}
+
+func resolveQueryContainer(
+	cfg *config.Config,
+	family string,
+	explicit string,
+	labels ...string,
+) (string, error) {
+	if explicit != "" {
+		if _, ok := cfg.Containers[explicit]; !ok {
+			names := sortedQueryContainerNames(cfg.Containers)
+			if len(names) == 0 {
+				return "", fmt.Errorf("container %q is not configured", explicit)
+			}
+			return "", fmt.Errorf("container %q is not configured — choose one of: %s",
+				explicit, strings.Join(names, ", "))
+		}
+		return explicit, nil
+	}
+
+	portMatches := make(map[string]bool)
+	for name, container := range cfg.Containers {
+		for _, label := range labels {
+			if _, ok := container.Ports[label]; ok {
+				portMatches[name] = true
+			}
+		}
+	}
+	if len(portMatches) > 0 {
+		return oneQueryContainer(family, sortedQueryContainerNames(portMatches))
+	}
+
+	nameMatches := make(map[string]bool)
+	for name := range cfg.Containers {
+		lowerName := strings.ToLower(name)
+		for _, label := range labels {
+			if strings.Contains(lowerName, label) {
+				nameMatches[name] = true
+			}
+		}
+	}
+	if len(nameMatches) > 0 {
+		return oneQueryContainer(family, sortedQueryContainerNames(nameMatches))
+	}
+	return "", fmt.Errorf("no %s container found — label its port %q or choose it with --container",
+		family, labels[0])
+}
+
+func sortedQueryContainerNames[V any](containers map[string]V) []string {
+	names := make([]string, 0, len(containers))
+	for name := range containers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func oneQueryContainer(family string, candidates []string) (string, error) {
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	return "", fmt.Errorf("multiple %s containers found (%s) — choose one with --container <name>",
+		family, strings.Join(candidates, ", "))
 }
 
 func topicsCmd() *cobra.Command {

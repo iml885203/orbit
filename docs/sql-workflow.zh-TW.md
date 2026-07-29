@@ -1,9 +1,10 @@
-# SQL schema workflow
+# SQL Server Database Projects
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
-Orbit 對使用者提供五個資料庫指令：`list`、`diff`、`publish`、`reset`、
-`query`。
+Environment 只有在明確啟用 `sqlserver` 時，才會出現五個 Database Project
+指令：`list`、`diff`、`publish`、`reset`、`query`。其他 environment 不會顯示
+這套 workflow。
 Publish 全程在 host 上進行——用 `dotnet build` 建置 SQL project，再用
 `sqlpackage` 把 dacpac 推到設定指定的 SQL Server target。快速 reset 的
 底層機制由 Orbit 自己管理。

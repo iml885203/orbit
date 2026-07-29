@@ -164,6 +164,29 @@ containers:
 | `init` | object | no | 有型別的 init hook（Kafka topics、Mongo replica set） |
 | `sidecars` | list | no | 隸屬於該 container 的 sidecar container（web UI、agent 等） |
 
+### Database 原生 clients
+
+`orbit query redis`、`orbit query mongo` 與 `orbit query postgres` 會執行
+configured container 內已存在的 client。即使 container 使用 domain-specific
+名稱，也能以 `redis`、`mongo`、`postgres` 或 `postgresql` port alias 讓 Orbit
+找到 target：
+
+```yaml
+containers:
+  primary-data:
+    image: postgres:18
+    ports:
+      postgres: "5432:5432"
+```
+
+只有一個符合的 container 時 Orbit 會直接選取。有多個時不會依 map 順序猜測；
+command 會列出名稱並要求 `--container <name>`。其他 database client 可使用
+`orbit exec <container> <client...>`。
+
+這些 commands 是連線便利層，不是泛用 schema lifecycle。選用的 `sqlserver`
+workflow 擁有 SQL Server Database Project 的 diff、publish 與 reset semantics，
+因為這些操作無法誠實地套用到所有 database。
+
 ### 可自動調整的 port
 
 專案 port 預設固定；衝突仍會報錯，因為 API 或資料庫偷偷換 port

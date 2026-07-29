@@ -165,8 +165,10 @@ can get the same reproducibility with
 For configured infrastructure containers, `orbit query redis`,
 `orbit query mongo`, and `orbit query postgres` open the container's native
 client. PostgreSQL uses the container's `POSTGRES_USER` and `POSTGRES_DB`;
-pass `--database` only when you need another database. These query helpers are
-separate from the optional SQL Server schema-project workflow below.
+pass `--database` only when you need another database. With one matching
+container Orbit selects it; with several, it lists the candidates and requires
+`--container <name>` instead of guessing. These query helpers are separate from
+the optional SQL Server schema-project workflow below.
 
 ## Optional workflows
 

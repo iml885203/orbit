@@ -1,9 +1,10 @@
-# SQL schema workflow
+# SQL Server Database Projects
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
-Orbit exposes five database commands: `list`, `diff`, `publish`, `reset`, and
-`query`.
+An environment that explicitly enables `sqlserver` gets five Database Project
+commands: `list`, `diff`, `publish`, `reset`, and `query`. Other environments
+do not show this workflow.
 Publishing runs entirely on the host — build the SQL project with `dotnet
 build`, then push the dacpac to the configured SQL Server target with
 `sqlpackage`.

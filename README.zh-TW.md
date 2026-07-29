@@ -152,8 +152,9 @@ project packages。
 若 environment 設定了對應的 infrastructure container，`orbit query redis`、
 `orbit query mongo` 與 `orbit query postgres` 會開啟 container 的原生 client。
 PostgreSQL 會沿用 container 的 `POSTGRES_USER` 與 `POSTGRES_DB`；只有要查其他
-database 時才需要傳入 `--database`。這些 query helper 與下方選用的 SQL
-Server schema-project workflow 是兩件不同的事。
+database 時才需要傳入 `--database`。只有一個符合的 container 時 Orbit 會
+直接選取；有多個時則列出候選，要求 `--container <name>`，不會猜測。這些
+query helper 與下方選用的 SQL Server schema-project workflow 是兩件不同的事。
 
 ## 選用 workflows
 
