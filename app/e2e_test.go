@@ -23,6 +23,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/internal/shellquote"
+	"github.com/iml885203/orbit/platform"
 )
 
 // These tests exercise the real orbit binary against a real Docker engine.
@@ -210,6 +211,32 @@ func parseE2EEnvelope(t *testing.T, out string) e2eCLIEnvelope {
 	return env
 }
 
+func reserveLocalPort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return port
+}
+
+func readPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read pid file: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatalf("parse pid file: %v", err)
+	}
+	return pid
+}
+
 func (e *e2eEnv) status(t *testing.T) e2eStatus {
 	t.Helper()
 	out := e.run(t, "status", "--json")
@@ -296,6 +323,158 @@ func TestE2E_RestartAdoptsContainers(t *testing.T) {
 	env.waitFor(t, "redis re-adopted as healthy", e2eBootTimeout, func() bool {
 		return env.serviceState(t, "redis") == "healthy"
 	})
+}
+
+func TestE2E_DaemonRestartThenUpRecoversTheWholeEnvironment(t *testing.T) {
+	binary := findOrbitBinary(t)
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+
+	servicePort := reserveLocalPort(t)
+	redisPort := reserveLocalPort(t)
+	dashboardPort := reserveLocalPort(t)
+
+	home, err := os.MkdirTemp("/tmp", "orb-restart-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	pidPath := filepath.Join(workspace, "api.pid")
+	appPath := filepath.Join(workspace, "app.py")
+	appSource := fmt.Sprintf(`import http.server
+import os
+
+with open(%q, "w", encoding="utf-8") as pid_file:
+    pid_file.write(str(os.getpid()))
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), http.server.SimpleHTTPRequestHandler)
+server.serve_forever()
+`, pidPath, servicePort)
+	if err := os.WriteFile(appPath, []byte(appSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	envsDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(envsDir, "restart-recovery.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+settings:
+  health_check_interval: 1s
+  docker_poll_interval: 1s
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "%d:6379"
+    health_check:
+      type: tcp
+      port: %d
+services:
+  api:
+    type: python
+    path: %q
+    command: python3 app.py
+    ports:
+      http: %d
+    depends_on: [redis]
+    health_check:
+      type: http
+      path: /
+      port: %d
+`, redisPort, redisPort, workspace, servicePort, servicePort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	namespace := "e2e-restart-" + randHex(4)
+	command := func(args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(binary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		return cmd
+	}
+	t.Cleanup(func() {
+		_ = command("down").Run()
+		_ = command("daemon", "stop").Run()
+	})
+
+	initialUp, err := command("up", "--json").Output()
+	if err != nil {
+		t.Fatalf("initial up: %v\n%s", err, initialUp)
+	}
+	if envelope := parseE2EEnvelope(t, string(initialUp)); !envelope.OK {
+		t.Fatalf("initial up envelope = %+v\n%s", envelope, initialUp)
+	}
+
+	containerName := "orbit-" + namespace + "-redis"
+	containerIDBefore, err := exec.Command("docker", "inspect", "--format", "{{.Id}}", containerName).Output()
+	if err != nil {
+		t.Fatalf("inspect initial redis: %v", err)
+	}
+	apiPIDBefore := readPIDFile(t, pidPath)
+
+	restartOutput, err := command("daemon", "restart", "--json").Output()
+	if err != nil {
+		t.Fatalf("daemon restart: %v\n%s", err, restartOutput)
+	}
+	restartEnvelope := parseE2EEnvelope(t, string(restartOutput))
+	if !restartEnvelope.OK {
+		t.Fatalf("daemon restart envelope = %+v\n%s", restartEnvelope, restartOutput)
+	}
+	var restartData struct {
+		RequestedServiceShutdown bool `json:"requested_service_shutdown"`
+	}
+	if err := json.Unmarshal(restartEnvelope.Data, &restartData); err != nil {
+		t.Fatalf("parse daemon restart data: %v\n%s", err, restartOutput)
+	}
+	if !restartData.RequestedServiceShutdown {
+		t.Fatalf("daemon restart did not request service shutdown:\n%s", restartOutput)
+	}
+
+	secondUp, err := command("up", "--json").Output()
+	if err != nil {
+		t.Fatalf("up after daemon restart: %v\n%s", err, secondUp)
+	}
+	secondEnvelope := parseE2EEnvelope(t, string(secondUp))
+	if !secondEnvelope.OK {
+		t.Fatalf("second up envelope = %+v\n%s", secondEnvelope, secondUp)
+	}
+	var upData struct {
+		DegradedResources []string `json:"degraded_resources"`
+		TimedOutResources []string `json:"timed_out_resources"`
+	}
+	if err := json.Unmarshal(secondEnvelope.Data, &upData); err != nil {
+		t.Fatalf("parse second up data: %v\n%s", err, secondUp)
+	}
+	if len(upData.DegradedResources) > 0 || len(upData.TimedOutResources) > 0 {
+		t.Fatalf("restart recovery left unhealthy resources: %+v\n%s", upData, secondUp)
+	}
+
+	containerIDAfter, err := exec.Command("docker", "inspect", "--format", "{{.Id}}", containerName).Output()
+	if err != nil {
+		t.Fatalf("inspect adopted redis: %v", err)
+	}
+	if !bytes.Equal(bytes.TrimSpace(containerIDAfter), bytes.TrimSpace(containerIDBefore)) {
+		t.Fatalf("daemon restart recreated redis: before=%s after=%s", containerIDBefore, containerIDAfter)
+	}
+	apiPIDAfter := readPIDFile(t, pidPath)
+	if apiPIDAfter == apiPIDBefore {
+		t.Fatalf("host service kept stale pid %d across daemon restart", apiPIDAfter)
+	}
+	if platform.IsProcessAlive(apiPIDBefore) {
+		t.Fatalf("old host service pid %d survived daemon restart", apiPIDBefore)
+	}
 }
 
 // Covers: orbit down stops containers but leaves daemon running.
