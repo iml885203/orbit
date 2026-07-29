@@ -181,9 +181,10 @@ type e2eStatus struct {
 		Version string `json:"version,omitempty"`
 	} `json:"daemon"`
 	Resources []struct {
-		Name  string `json:"name"`
-		Kind  string `json:"kind"`
-		State string `json:"state"`
+		Name                 string `json:"name"`
+		Kind                 string `json:"kind"`
+		State                string `json:"state"`
+		ExternalRestartCount int    `json:"external_restart_count"`
 	} `json:"resources"`
 }
 
@@ -322,14 +323,29 @@ func TestE2E_DaemonStartAlone(t *testing.T) {
 	}
 }
 
-// Covers: orbit up --infra starts containers to healthy.
-func TestE2E_UpInfra(t *testing.T) {
+// Covers: orbit up --infra starts containers to healthy, then reconciles an
+// out-of-band Docker restart without requiring an Orbit or daemon restart.
+func TestE2E_UpInfraReconcilesExternalRestart(t *testing.T) {
 	env := setupE2E(t)
 	env.run(t, "daemon", "start")
 	_, _ = env.runNoFail(t, "up", "--infra")
 
 	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
 		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	redisName := "orbit-" + env.namespace + "-redis"
+	restart := exec.Command("docker", "restart", redisName)
+	if output, err := restart.CombinedOutput(); err != nil {
+		t.Fatalf("docker restart %s: %v\n%s", redisName, err, output)
+	}
+	env.waitFor(t, "redis external restart reconciled", e2eBootTimeout, func() bool {
+		for _, resource := range env.status(t).Resources {
+			if resource.Name == "redis" {
+				return resource.State == "healthy" && resource.ExternalRestartCount == 1
+			}
+		}
+		return false
 	})
 }
 
@@ -1770,6 +1786,12 @@ func TestE2E_CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency(t *test
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("suspending a process to model system sleep requires Unix signals")
+	}
+	if _, err := exec.LookPath("kill"); err != nil {
+		t.Skip("kill command not available")
+	}
 
 	serviceListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -1891,8 +1913,19 @@ services:
 	if err != nil {
 		t.Fatal(err)
 	}
+	daemonPID := readE2EDaemonPID(t, home)
+	resumeDaemon := func() {
+		_ = exec.Command("kill", "-CONT", strconv.Itoa(daemonPID)).Run()
+	}
+	t.Cleanup(resumeDaemon)
+	if output, err := exec.Command("kill", "-STOP", strconv.Itoa(daemonPID)).CombinedOutput(); err != nil {
+		t.Fatalf("suspend daemon: %v\n%s", err, output)
+	}
 	if err := apiProcess.Kill(); err != nil {
 		t.Fatalf("kill api: %v", err)
+	}
+	if output, err := exec.Command("kill", "-CONT", strconv.Itoa(daemonPID)).CombinedOutput(); err != nil {
+		t.Fatalf("resume daemon: %v\n%s", err, output)
 	}
 
 	var statusEnvelope e2eCLIEnvelope

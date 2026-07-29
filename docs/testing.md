@@ -62,6 +62,7 @@ The release gate owns these installed-user behaviors:
 - switching between project contexts;
 - managed environment sync with reproducible repository provenance;
 - startup failure, dependency blocking, and recovery;
+- Docker restarts and host-service failures observed after system resume;
 - release artifacts on supported platforms.
 
 ## Cross-platform coverage
