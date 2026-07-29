@@ -570,6 +570,10 @@ func writeStatusJSON(
 				Command: "orbit up --json",
 				Reason:  "Start the selected environment.",
 			}})
+		} else if !setup.Required {
+			if action, ok := statusPrimaryOpenAction(resources); ok {
+				actions = cli.MergeActions(actions, []cli.JSONAction{action})
+			}
 		}
 	}
 	setupMessage := ""
@@ -589,6 +593,25 @@ func writeStatusJSON(
 		Daemon:            dstatus,
 		Resources:         resources,
 	}, actions)
+}
+
+func statusPrimaryOpenAction(resources []jsonService) (cli.JSONAction, bool) {
+	for _, resource := range resources {
+		if resource.State != "healthy" {
+			return cli.JSONAction{}, false
+		}
+	}
+	for _, resource := range resources {
+		if resource.Kind != string(daemon.ResourceKindService) ||
+			resource.URL == "" {
+			continue
+		}
+		return cli.JSONAction{
+			Command: "orbit open " + resource.Name + " --json",
+			Reason:  fmt.Sprintf("Open %s at %s.", resource.Name, resource.URL),
+		}, true
+	}
+	return cli.JSONAction{}, false
 }
 
 func statusHasStoppedResources(resources []jsonService) bool {

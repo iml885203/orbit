@@ -46,13 +46,18 @@ export PATH="$HOME/.local/bin:$PATH"
 orbit init --yes
 orbit up
 orbit status
-orbit open
+orbit open demo-api
 ```
 
 `orbit init --yes` 會使用公開的
 [Orbit demo environment](https://github.com/iml885203/orbit-demo)：在 host 上執行
 Python 標準函式庫 service，搭配 container 內的 Redis。若缺少必要工具或 port
 無法使用，setup 會在啟動前停止，並直接顯示修復方式。
+
+重新整理 demo 頁面，Redis 保存的瀏覽次數會繼續增加。這是第一個直接證據：
+Orbit 已協調 host process 與 container infrastructure，並注入實際 runtime
+連線資訊。看完這個結果後，再執行 `orbit open`，即可從 dashboard 檢視與控制
+同一套環境。
 
 需要更多細節時：
 
@@ -66,7 +71,10 @@ Windows PowerShell：
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
-orbit init
+orbit init --yes
+orbit up
+orbit status
+orbit open demo-api
 ```
 
 Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell

@@ -14,7 +14,7 @@ for readme in README.md README.zh-TW.md; do
     ' "$repo_root/$readme"
   )"
 
-  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open"; do
+  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-api"; do
     if ! grep -Fx "$command" <<<"$first_run_section" >/dev/null; then
       echo "$readme first-run section is missing: $command" >&2
       exit 1
@@ -90,6 +90,13 @@ if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   exit 1
 fi
 "$orbit_bin" status --json >"$test_root/status.json"
+browser_stub_dir="$test_root/browser-stub"
+mkdir -p "$browser_stub_dir"
+printf '#!/bin/sh\nexit 0\n' >"$browser_stub_dir/open"
+cp "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
+chmod +x "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
+PATH="$browser_stub_dir:$PATH" "$orbit_bin" open demo-api --json >"$test_root/open-service.json"
+PATH="$browser_stub_dir:$PATH" "$orbit_bin" open --json >"$test_root/open-dashboard.json"
 demo_url="$(
   python3 -c '
 import json
@@ -104,12 +111,48 @@ print(resources["demo-api"]["url"])
 )"
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
+curl --fail --silent --show-error \
+  "${demo_url%/}/api/visits" >"$test_root/visits-first.json"
+curl --fail --silent --show-error \
+  "${demo_url%/}/api/visits" >"$test_root/visits-second.json"
 
-python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
-  "$test_root/up.json"
-python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
-  "$test_root/status.json"
-python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
-  "$test_root/health.json"
+python3 - "$test_root" "$demo_url" <<'PY'
+import json
+import pathlib
+import sys
 
-echo "README first five minutes succeeds outside a source checkout"
+root = pathlib.Path(sys.argv[1])
+demo_url = sys.argv[2]
+
+def read(name):
+    return json.loads((root / name).read_text(encoding="utf-8"))
+
+up = read("up.json")
+status = read("status.json")
+health = read("health.json")
+service = read("open-service.json")
+dashboard = read("open-dashboard.json")
+first = read("visits-first.json")
+second = read("visits-second.json")
+
+assert up["ok"] is True
+assert status["ok"] is True
+assert health["ok"] is True
+assert up["recommended_actions"] == [{
+    "command": "orbit open demo-api --json",
+    "reason": f"Open demo-api at {demo_url}.",
+    "destructive": False,
+}]
+assert status["recommended_actions"][0]["command"] == "orbit open demo-api --json"
+assert service["data"] == {
+    "url": demo_url,
+    "target": "service",
+    "service": "demo-api",
+    "opened": True,
+}
+assert dashboard["data"]["target"] == "dashboard"
+assert dashboard["data"]["url"] != demo_url
+assert second["visits"] == first["visits"] + 1
+PY
+
+echo "README first five minutes reaches the service value before the dashboard"

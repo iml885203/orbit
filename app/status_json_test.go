@@ -677,3 +677,60 @@ func TestStatusJSONPrefersRuntimePortsAndURL(t *testing.T) {
 		t.Fatalf("runtime endpoint lost: %+v", api)
 	}
 }
+
+func TestStatusJSONHealthyServiceLeadsToRuntimeApplication(t *testing.T) {
+	cfg := &config.Config{
+		Services: map[string]*config.Service{
+			"demo-api": {
+				URL:   "http://localhost:28080",
+				Ports: map[string]config.PortDef{"http": {Host: 28080, Target: 28080}},
+			},
+		},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"demo-api": {
+			Name:  "demo-api",
+			Kind:  daemon.ResourceKindService,
+			State: "healthy",
+			URL:   "http://localhost:28081",
+			Ports: map[string]int{"http": 28081},
+		},
+	}
+
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	if len(envelope.RecommendedActions) != 1 {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
+	}
+	action := envelope.RecommendedActions[0]
+	if action.Command != "orbit open demo-api --json" ||
+		action.Reason != "Open demo-api at http://localhost:28081." {
+		t.Fatalf("recommended action = %+v", action)
+	}
+}
+
+func TestStatusJSONWaitsForWholeEnvironmentBeforeOpeningApplication(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{"redis": {}},
+		Services: map[string]*config.Service{
+			"demo-api": {URL: "http://localhost:28080"},
+		},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"redis": {
+			Name:  "redis",
+			Kind:  daemon.ResourceKindContainer,
+			State: "reconciling",
+		},
+		"demo-api": {
+			Name:  "demo-api",
+			Kind:  daemon.ResourceKindService,
+			State: "healthy",
+			URL:   "http://localhost:28080",
+		},
+	}
+
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	if len(envelope.RecommendedActions) != 0 {
+		t.Fatalf("recommended_actions = %+v, want none while environment converges", envelope.RecommendedActions)
+	}
+}

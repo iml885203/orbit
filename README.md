@@ -49,7 +49,7 @@ environment; you do not need to clone this repository or create a config file:
 orbit init --yes
 orbit up
 orbit status
-orbit open
+orbit open demo-api
 ```
 
 `orbit init --yes` uses the public
@@ -57,6 +57,11 @@ orbit open
 standard-library Python service on the host with Redis in a container. If a
 required tool or port is unavailable, setup stops before startup and prints
 the specific remedy.
+
+Refresh the demo page to see its Redis-backed visit count increase. That is the
+first proof that Orbit coordinated a host process with container
+infrastructure and injected the runtime connection details. Afterward, run
+`orbit open` to inspect and control the same environment in the dashboard.
 
 When you need more detail:
 
@@ -70,7 +75,10 @@ On Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
-orbit init
+orbit init --yes
+orbit up
+orbit status
+orbit open demo-api
 ```
 
 The Unix export makes the newly installed command available immediately when
