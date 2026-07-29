@@ -183,7 +183,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		ports := getServicePorts(cfg, svc.Name, svc.Kind)
 		url := ""
 		if svcCfg, ok := cfg.Services[svc.Name]; ok {
-			url = svcCfg.URL
+			url = svcCfg.ResolveURL()
 		}
 		startupTime := ""
 		uptime := ""
@@ -250,7 +250,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 		resp.Resources = append(resp.Resources, ResourceStatus{
 			Name: name, Kind: ResourceKindService, State: engine.StateStopped.String(),
-			Role: svc.ResolveKind(), Ports: ports, URL: svc.URL,
+			Role: svc.ResolveKind(), Ports: ports, URL: svc.ResolveURL(),
 		})
 	}
 	return resp

@@ -23,6 +23,12 @@ func Validate(cfg *Config) error {
 		if s.HealthCheck != nil && s.HealthCheck.FailureThreshold < 0 {
 			errs = append(errs, fmt.Sprintf("service %q health_check.failure_threshold must be at least 1", name))
 		}
+		if healthCheckRequiresPort(s.HealthCheck) && s.HealthCheck.Port == 0 {
+			errs = append(errs, fmt.Sprintf(
+				"service %q health_check.port is required when ports does not identify one endpoint",
+				name,
+			))
+		}
 		for _, dep := range s.DependsOn {
 			if !known[dep] {
 				errs = append(errs, fmt.Sprintf("service %q depends on unknown %q", name, dep))
@@ -32,6 +38,12 @@ func Validate(cfg *Config) error {
 	for name, c := range cfg.Containers {
 		if c.HealthCheck != nil && c.HealthCheck.FailureThreshold < 0 {
 			errs = append(errs, fmt.Sprintf("container %q health_check.failure_threshold must be at least 1", name))
+		}
+		if healthCheckRequiresPort(c.HealthCheck) && c.HealthCheck.Port == 0 {
+			errs = append(errs, fmt.Sprintf(
+				"container %q health_check.port is required when ports does not identify one endpoint",
+				name,
+			))
 		}
 		if !isValidPullPolicy(c.PullPolicy) {
 			errs = append(errs, fmt.Sprintf("container %q has invalid pull_policy %q (expected always, if_not_present, or never)", name, c.PullPolicy))
@@ -110,6 +122,10 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("config validation errors:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+func healthCheckRequiresPort(check *HealthCheckConfig) bool {
+	return check != nil && (check.Type == "http" || check.Type == "tcp")
 }
 
 func isValidPullPolicy(value string) bool {

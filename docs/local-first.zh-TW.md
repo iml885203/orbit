@@ -19,7 +19,6 @@ containers:
       redis: "${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}:6379"
     health_check:
       type: tcp
-      port: ${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}
 
 services:
   app:
@@ -27,19 +26,18 @@ services:
     kind: frontend
     path: .
     command: python3 -m http.server "$PORT"
-    url: http://localhost:${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
     ports:
       http: "${ORBIT_AUTO_PORT_LOCAL_APP:-28080}"
     depends_on: [redis]
     health_check:
       type: http
       path: /
-      port: ${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
 ```
 
 這個例子會用 Python 提供目前專案目錄，並先啟動 Redis；只使用公開 demo
 已經需要的 Python 3 與 Docker。Orbit 會把實際選定的 application port 注入
-為 `PORT`，因此偏好 port 被占用時不需要修改 config。
+為 `PORT`，因此偏好 port 被占用時不需要修改 config。每個 endpoint 只宣告
+一次，Orbit 會把它同時用於 health check、`orbit open` 與 dependency URL。
 
 ## 2. 證明本機開發迴圈
 

@@ -54,7 +54,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		ports := getServicePorts(cfg, svc.Name, svc.Kind)
 		url := ""
 		if svcCfg, ok := cfg.Services[svc.Name]; ok {
-			url = svcCfg.URL
+			url = svcCfg.ResolveURL()
 		}
 		startupTime := ""
 		uptime := ""

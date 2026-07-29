@@ -51,11 +51,12 @@ func dependencyEnvironment(name string, cfg *config.Config) map[string]string {
 }
 
 func buildServiceEndpoint(name string, service *config.Service) map[string]string {
-	if service.URL == "" {
+	url := service.ResolveURL()
+	if url == "" {
 		return nil
 	}
 	key := strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_URL"
-	return map[string]string{key: service.URL}
+	return map[string]string{key: url}
 }
 
 // InjectServicePorts exposes runtime-selected ports to host services that

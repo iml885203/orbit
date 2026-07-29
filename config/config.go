@@ -232,11 +232,11 @@ func applyDefaults(cfg *Config) {
 		if c.PullPolicy == "" {
 			c.PullPolicy = "always"
 		}
-		applyHealthCheckDefaults(c.HealthCheck, cfg.Settings.HealthCheckInterval)
+		applyHealthCheckDefaults(c.HealthCheck, c.Ports, cfg.Settings.HealthCheckInterval)
 	}
 
 	for _, s := range cfg.Services {
-		applyHealthCheckDefaults(s.HealthCheck, cfg.Settings.HealthCheckInterval)
+		applyHealthCheckDefaults(s.HealthCheck, s.Ports, cfg.Settings.HealthCheckInterval)
 		if s.Type == "dotnet" && s.Command == "" {
 			s.Command = "dotnet watch run"
 		}
@@ -245,9 +245,25 @@ func applyDefaults(cfg *Config) {
 
 // applyHealthCheckDefaults fills the zero fields of a health_check stanza.
 // Shared by the container and service loops so the two can't drift.
-func applyHealthCheckDefaults(hc *HealthCheckConfig, interval time.Duration) {
+func applyHealthCheckDefaults(
+	hc *HealthCheckConfig,
+	ports map[string]PortDef,
+	interval time.Duration,
+) {
 	if hc == nil {
 		return
+	}
+	if hc.Port == 0 && (hc.Type == "http" || hc.Type == "tcp") {
+		if hc.Type == "http" {
+			if port, ok := ports["http"]; ok {
+				hc.Port = port.Host
+			}
+		}
+		if hc.Port == 0 && len(ports) == 1 {
+			for _, port := range ports {
+				hc.Port = port.Host
+			}
+		}
 	}
 	if hc.Interval == 0 {
 		hc.Interval = interval

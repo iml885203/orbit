@@ -334,6 +334,24 @@ func (s *Service) ResolveKind() string {
 	return "backend"
 }
 
+// ResolveURL keeps one declared endpoint authoritative across open, status,
+// the dashboard, and dependency injection.
+func (s *Service) ResolveURL() string {
+	if s == nil {
+		return ""
+	}
+	if s.URL != "" {
+		return s.URL
+	}
+	if port, ok := s.Ports["http"]; ok {
+		return fmt.Sprintf("http://localhost:%d", port.Host)
+	}
+	if port, ok := s.Ports["https"]; ok {
+		return fmt.Sprintf("https://localhost:%d", port.Host)
+	}
+	return ""
+}
+
 // ResolveKind returns the explicit kind or the fallback for a container ("infra").
 func (c *Container) ResolveKind() string {
 	if validKinds[c.Kind] {

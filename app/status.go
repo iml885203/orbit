@@ -376,7 +376,7 @@ func persistedRuntimeStatus(configPath string, cfg *config.Config) map[string]da
 			if definition := cfg.Services[name]; definition != nil {
 				resource.Role = definition.ResolveKind()
 				resource.Ports = configPortNumbers(definition.Ports)
-				resource.URL = definition.URL
+				resource.URL = definition.ResolveURL()
 			}
 		default:
 			continue
@@ -571,7 +571,7 @@ func writeStatusJSON(
 			resources = append(resources, svc)
 		}
 		for name, s := range cfg.Services {
-			svc := jsonService{Name: name, Kind: "service", Role: s.ResolveKind(), State: "stopped", URL: s.URL}
+			svc := jsonService{Name: name, Kind: "service", Role: s.ResolveKind(), State: "stopped", URL: s.ResolveURL()}
 			ports := make(map[string]int, len(s.Ports))
 			for label, p := range s.Ports {
 				ports[label] = p.Host

@@ -20,7 +20,6 @@ containers:
       redis: "${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}:6379"
     health_check:
       type: tcp
-      port: ${ORBIT_AUTO_PORT_LOCAL_REDIS:-26379}
 
 services:
   app:
@@ -28,20 +27,19 @@ services:
     kind: frontend
     path: .
     command: python3 -m http.server "$PORT"
-    url: http://localhost:${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
     ports:
       http: "${ORBIT_AUTO_PORT_LOCAL_APP:-28080}"
     depends_on: [redis]
     health_check:
       type: http
       path: /
-      port: ${ORBIT_AUTO_PORT_LOCAL_APP:-28080}
 ```
 
 This example serves the current project directory with Python and starts Redis
 first. It uses tools already required by the public demo: Python 3 and Docker.
 Orbit injects the selected application port as `PORT`; occupied preferred
-ports therefore require no config edit.
+ports therefore require no config edit. Each endpoint is declared once: Orbit
+reuses it for health checks, `orbit open`, and dependency URLs.
 
 ## 2. Prove the local loop
 

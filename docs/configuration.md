@@ -157,7 +157,7 @@ containers:
 | `icon` | string | no | Iconify icon slug for graph dashboard infra logo, e.g. `devicon:postgresql` |
 | `platform` | string | no | Platform override (`linux/amd64` for forced emulation) |
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`. The alias is a label for Orbit's UI and dependency wiring; it is not resolved by `health_check.port` |
+| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port` |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings |
 | `command` | list | no | Override the image's default command |
@@ -251,7 +251,7 @@ If `icon` is omitted, the graph UI shows a generic gear icon. Orbit does not inf
 health_check:
   type: http | tcp | exec | log | healthcheck
   # plus type-specific fields:
-  port: <int>           # http, tcp — literal port number, not a ports alias
+  port: <int>           # http, tcp — optional for one port; http prefers the "http" alias
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
@@ -268,6 +268,10 @@ health_check:
 | `exec` | Run `command` inside the container, treat exit 0 as healthy |
 | `log` | Tail container logs for a regex match (one-shot readiness signal; not a runtime liveness probe) |
 | `healthcheck` | Use the image's own `HEALTHCHECK` as reported by `docker inspect` |
+
+For `http` and `tcp`, omit `port` when the resource declares one port. An
+`http` check also selects the `http` alias when other ports exist. Orbit asks
+for an explicit health-check port only when the endpoint remains ambiguous.
 
 ### `seed`
 
@@ -369,8 +373,8 @@ services:
 | `path` | string | yes | Path to `.csproj` (dotnet) or the working directory for `command` |
 | `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
-| `url` | string | no | Canonical URL; `orbit open <service>` uses this |
-| `ports` | map | no | Ports the service listens on. The alias labels the port for the UI; `health_check.port` takes a literal int |
+| `url` | string | no | Canonical URL; `orbit open <service>` uses this. Omit it when an `http` or `https` port already identifies the endpoint |
+| `ports` | map | no | Ports the service listens on. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
 | `env` | map | no | Process env. `${VAR}` substituted at load time |
 | `build_env` | map | no | dotnet only: env passed to `dotnet build`, not to the running process |
 | `env_toggles` | map | no | Dashboard-controlled on/off flipping of individual env keys |
@@ -386,8 +390,8 @@ or other shell operators.
 
 ### Service dependency URLs
 
-When a service in `depends_on` declares `url`, Orbit injects that endpoint into
-the dependent process as `<DEPENDENCY_NAME>_URL`:
+When a service in `depends_on` declares `url` or an `http`/`https` port, Orbit
+injects that endpoint into the dependent process as `<DEPENDENCY_NAME>_URL`:
 
 ```yaml
 services:

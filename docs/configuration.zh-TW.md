@@ -152,7 +152,7 @@ containers:
 | `icon` | string | no | graph dashboard infra logo 用的 Iconify icon slug，例如 `devicon:postgresql` |
 | `platform` | string | no | Platform 覆寫（`linux/amd64` 用於強制 emulation） |
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`。alias 是 Orbit UI 與依賴串接用的標籤，不會被 `health_check.port` 解析 |
+| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串 |
 | `command` | list | no | 覆寫 image 預設的 command |
@@ -243,7 +243,7 @@ containers:
 health_check:
   type: http | tcp | exec | log | healthcheck
   # plus type-specific fields:
-  port: <int>           # http, tcp — literal port number, not a ports alias
+  port: <int>           # http、tcp；只有一個 port 時可省略，http 會優先用 "http" alias
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
@@ -260,6 +260,10 @@ health_check:
 | `exec` | 在 container 內執行 `command`，exit code 0 視為 healthy |
 | `log` | tail container logs 比對 regex（僅為一次性 readiness 訊號，不是 runtime liveness probe） |
 | `healthcheck` | 直接用 image 自己的 `HEALTHCHECK`，由 `docker inspect` 回報 |
+
+`http` 與 `tcp` 在 resource 只有一個 port 時可省略 `port`。有多個 port
+時，`http` check 仍會優先選擇 `http` alias；只有 endpoint 仍有歧義時，
+Orbit 才要求明確指定 health-check port。
 
 ### `seed`
 
@@ -360,8 +364,8 @@ services:
 | `path` | string | yes | `.csproj` 路徑（dotnet）或 `command` 的工作目錄 |
 | `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
-| `url` | string | no | 標準 URL；`orbit open <service>` 會用它 |
-| `ports` | map | no | service 監聽的 port。alias 為 UI 上的 port 標籤；`health_check.port` 收 literal int |
+| `url` | string | no | 標準 URL；`orbit open <service>` 會用它。已有 `http` 或 `https` port 時可省略 |
+| `ports` | map | no | service 監聽的 port。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
 | `env` | map | no | Process env。`${VAR}` 在載入時替換 |
 | `build_env` | map | no | 僅 dotnet：傳給 `dotnet build` 的 env，不進執行中的 process |
 | `env_toggles` | map | no | dashboard 控制的單一 env key 開關 |
@@ -376,8 +380,8 @@ operator 時，才明確使用 `sh -c "..."`。
 
 ### Service dependency URL
 
-當 `depends_on` 中的 service 宣告了 `url`，Orbit 會把 endpoint 以
-`<DEPENDENCY_NAME>_URL` 注入下游 process：
+當 `depends_on` 中的 service 宣告 `url` 或 `http`/`https` port，Orbit 會把
+endpoint 以 `<DEPENDENCY_NAME>_URL` 注入下游 process：
 
 ```yaml
 services:

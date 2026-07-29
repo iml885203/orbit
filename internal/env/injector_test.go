@@ -215,7 +215,6 @@ services:
     type: python
     path: .
     command: python3 app.py
-    url: http://localhost:%d
     ports:
       http: "${ORBIT_AUTO_PORT_ENV_UPSTREAM_TEST:-%d}"
   checkout-api:
@@ -223,7 +222,7 @@ services:
     path: .
     command: python3 app.py
     depends_on: [catalog-api]
-`, preferred, preferred)
+`, preferred)
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}

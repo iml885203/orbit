@@ -20,13 +20,15 @@ containers:
       redis: 6379
     health_check:
       type: tcp
-      port: 6379
 services:
   api:
     type: dotnet
     path: /tmp/test.csproj
     ports:
       http: 5000
+    health_check:
+      type: http
+      path: /health
     depends_on: [redis]
 `
 	path := writeOrbitYAML(t, content)
@@ -57,8 +59,17 @@ services:
 	if got := cfg.Containers["redis"].HealthCheck.FailureThreshold; got != DefaultHealthFailureThreshold {
 		t.Errorf("failure threshold = %d, want %d", got, DefaultHealthFailureThreshold)
 	}
+	if got := cfg.Containers["redis"].HealthCheck.Port; got != 6379 {
+		t.Errorf("container health port = %d, want inferred 6379", got)
+	}
 	if cfg.Services["api"].Command != "dotnet watch run" {
 		t.Errorf("dotnet default command not applied, got %q", cfg.Services["api"].Command)
+	}
+	if got := cfg.Services["api"].HealthCheck.Port; got != 5000 {
+		t.Errorf("service health port = %d, want inferred 5000", got)
+	}
+	if got := cfg.Services["api"].ResolveURL(); got != "http://localhost:5000" {
+		t.Errorf("service URL = %q, want inferred HTTP endpoint", got)
 	}
 }
 
