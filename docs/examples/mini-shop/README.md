@@ -43,10 +43,15 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh
 ```
 
-你可以用這個 wrapper 一次選好模式（建議新手先 standard）：
+你可以用這個 wrapper 一次選好模式（建議新手先 compact）：
 
 ```bash
+bash docs/examples/mini-shop/scripts/start-mini-shop.sh compact
+# 對應最小認知模型新手路徑，先跑 1～2 分鐘就能看到可 demo 結論
+
+# 或啟用完整 baseline
 bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard
+
 # 或直接啟用進階模式（含觀測 + 通知）
 bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced
 ```
@@ -66,7 +71,9 @@ bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced
 
 如果這個流程能走完，通常你在 UI 也能直接看到 3 秒 demo 結論轉為可 demo 狀態。
 
-> 預設會啟動 9 個 resource：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
+> 預設與 `compact` 入門啟動共用核心基線：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
+>
+> 新手建議先從 `compact` 路徑開始，完成 `success/decline` 檢核後再切進 `standard` 或 `advanced`。
 
 
 進階版本（加入觀測服務）可改用：
