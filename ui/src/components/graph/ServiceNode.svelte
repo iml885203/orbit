@@ -181,7 +181,7 @@
             onclick={makeHandler(doStart)}
           ><Play size={15} strokeWidth={2} /></button>
         {/if}
-        {#if running && !node.portConflict}
+        {#if running && !node.portConflict && !node.blockedBy}
           <button
             class="action-btn"
             type="button"

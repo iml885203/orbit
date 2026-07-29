@@ -97,6 +97,20 @@ describe('ServiceNode', () => {
     expect(getByRole('button', { name: /open logs for api/i })).toBeTruthy()
   })
 
+  it('removes ineffective lifecycle actions from a dependency-blocked node', () => {
+    const node = {
+      ...baseNode,
+      state: 'degraded',
+      stateReason: 'dependency redis is stopped',
+      blockedBy: 'redis',
+    }
+    const { queryByRole, getByRole } = render(ServiceNode, { props: { data: node, id: 'api' } })
+
+    expect(queryByRole('button', { name: /^restart api$/i })).toBeNull()
+    expect(queryByRole('button', { name: /^stop api$/i })).toBeNull()
+    expect(getByRole('button', { name: /open logs for api/i })).toBeTruthy()
+  })
+
   it('shows start button when stopped', () => {
     const stoppedNode = { ...baseNode, state: 'stopped' }
     const { getByRole, queryByRole } = render(ServiceNode, { props: { data: stoppedNode, id: 'api' } })

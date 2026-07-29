@@ -26,11 +26,13 @@ type Manager struct {
 
 	// OnOutput is called for each line of stdout/stderr from a process.
 	OnOutput func(name string, line string)
-	// OnExit is called when a process exits. epoch echoes the value given
-	// to Start for the process that actually exited, so a late exit from a
-	// replaced process can't be attributed to its successor (0 for
+	// OnExit is called when a process exits. stderr contains only output from
+	// this process generation, so callers never mistake an earlier run or a
+	// successful stdout request for crash evidence. epoch echoes the value
+	// given to Start for the process that actually exited, so a late exit
+	// from a replaced process can't be attributed to its successor (0 for
 	// reconnected processes, which predate any epoch).
-	OnExit func(name string, epoch int, err error)
+	OnExit func(name string, epoch int, err error, stderr []string)
 	// OnStarted runs after ownership is registered. The daemon uses it to
 	// persist PID/PGID before health can be reported, closing the crash
 	// window where a live child could otherwise become anonymous.
@@ -171,15 +173,27 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		return fmt.Errorf("start %q aborted: %w", name, err)
 	}
 
-	// Stream output in background
-	go m.streamOutput(name, stdoutPipe)
-	go m.streamOutput(name, stderrPipe)
+	// Keep stderr scoped to this process generation. The combined log remains
+	// the user-facing stream; the separate buffer exists only so failure
+	// summaries do not guess causality from ordinary stdout traffic.
+	stderr := logging.NewRingBuffer(20)
+	var outputWG sync.WaitGroup
+	outputWG.Add(2)
+	go func() {
+		defer outputWG.Done()
+		m.streamOutput(name, stdoutPipe, nil)
+	}()
+	go func() {
+		defer outputWG.Done()
+		m.streamOutput(name, stderrPipe, stderr.Write)
+	}()
 
 	// Wait for exit in background
 	go func() {
 		mp.mu.Lock()
 		mp.Err = cmd.Wait()
 		mp.mu.Unlock()
+		outputWG.Wait()
 
 		if mp.Err != nil {
 			slog.Warn("exited", "component", "process", "name", name, "err", mp.Err)
@@ -204,7 +218,7 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		mp.CloseDone()
 
 		if m.OnExit != nil {
-			m.OnExit(name, mp.Epoch, mp.Err)
+			m.OnExit(name, mp.Epoch, mp.Err, stderr.Lines())
 		}
 	}()
 
@@ -260,8 +274,8 @@ func (m *Manager) runPreStart(
 	// Mirror the main-process path: one streamOutput goroutine per pipe.
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); m.streamOutput(name, stdoutPipe) }()
-	go func() { defer wg.Done(); m.streamOutput(name, stderrPipe) }()
+	go func() { defer wg.Done(); m.streamOutput(name, stdoutPipe, nil) }()
+	go func() { defer wg.Done(); m.streamOutput(name, stderrPipe, nil) }()
 	wg.Wait()
 
 	waitErr := preCmd.Wait()
@@ -285,8 +299,11 @@ func (m *Manager) runPreStart(
 	return nil
 }
 
-func (m *Manager) streamOutput(name string, r io.Reader) {
+func (m *Manager) streamOutput(name string, r io.Reader, tee func(string)) {
 	lb := logging.NewLineBuffer(func(line string) {
+		if tee != nil {
+			tee(line)
+		}
 		if m.OnOutput != nil {
 			m.OnOutput(name, line)
 		}
@@ -448,7 +465,7 @@ func (m *Manager) monitorReconnected(name string, pid int, mp *ManagedProcess) {
 				slog.Info("reconnected process exited", "component", "process", "name", name, "pid", pid)
 
 				if m.OnExit != nil {
-					m.OnExit(name, mp.Epoch, fmt.Errorf("process exited (detected via poll)"))
+					m.OnExit(name, mp.Epoch, fmt.Errorf("process exited (detected via poll)"), nil)
 				}
 				return
 			}

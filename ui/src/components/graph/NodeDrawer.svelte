@@ -11,7 +11,7 @@
   import { X, Play, Square, RotateCcw, ExternalLink, AppWindow, ScrollText, ChevronDown, Copy, Cog } from '@lucide/svelte'
   import { fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
-  import { MediaQuery } from 'svelte/reactivity'
+  import { MediaQuery, SvelteSet } from 'svelte/reactivity'
   import { tooltip } from '../../lib/tooltip.svelte'
   import Icon from '@iconify/svelte'
 
@@ -32,6 +32,22 @@
   const readOnly = $derived(mutationsDisabled())
   const activeGraph = $derived(store.graph.active)
 
+  function rootBlocker(start: GraphNode): GraphNode | null {
+    const graph = activeGraph
+    if (!graph || !start.blockedBy) return null
+    const seen = new SvelteSet([start.name])
+    let name: string | undefined = start.blockedBy
+    let blocker: GraphNode | undefined
+    while (name && !seen.has(name)) {
+      seen.add(name)
+      blocker = graph.nodes.find(candidate => candidate.name === name)
+      if (!blocker) return null
+      name = blocker.blockedBy
+    }
+    return blocker ?? null
+  }
+  const blockedByRoot = $derived(node ? rootBlocker(node) : null)
+
   // Primary lifecycle CTA for this node. We pick a single dominant
   // action based on state so the drawer header has one obvious button
   // instead of duplicating the six-button strip on the node.
@@ -51,6 +67,19 @@
     if (!node) return null
     if (node.portConflict) {
       return { label: 'Port blocked', icon: null, tone: 'muted', disabled: true }
+    }
+    if (blockedByRoot) {
+      const blocker = blockedByRoot
+      return {
+        label: `Start ${blocker.name}`,
+        icon: 'play',
+        tone: 'primary',
+        disabled: busy,
+        run: () => withBusy(
+          () => apiPost('/api/up', { resources: [blocker.name] }),
+          `Failed to start ${blocker.name}`,
+        ),
+      }
     }
     const name = node.name
     switch (node.state) {
@@ -119,7 +148,8 @@
   }
 
   const canRestart = $derived(
-    !!node && !node.portConflict && ['healthy', 'degraded', 'building', 'starting'].includes(node.state)
+    !!node && !node.portConflict && !blockedByRoot &&
+    ['healthy', 'degraded', 'building', 'starting'].includes(node.state)
   )
   function doRestart() {
     if (!node) return

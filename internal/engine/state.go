@@ -140,9 +140,10 @@ type ServiceInfo struct {
 	// Transition clears it on every other target so a stale reason never
 	// survives a restart. Mutation requires the owning Orchestrator's mu.
 	StateReason string
-	// FailureEvidence preserves the last meaningful application log line
-	// associated with the current degradation. It is cleared with StateReason
-	// so evidence from an earlier generation never survives recovery.
+	// FailureEvidence preserves the last meaningful stderr line captured from
+	// the process generation associated with the current degradation. It is
+	// cleared with StateReason so evidence from an earlier generation never
+	// survives recovery.
 	// Mutation requires the owning Orchestrator's mu.
 	FailureEvidence string
 	PortConflict    *port.ConflictError

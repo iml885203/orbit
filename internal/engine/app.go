@@ -3,6 +3,7 @@ package engine
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -130,7 +131,7 @@ func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {
 	a.ContainerMgr.OnAction = narrate
 	a.ProcessMgr.OnAction = narrate
 	orch.OnAction = narrate
-	a.ProcessMgr.OnExit = func(name string, epoch int, err error) {
+	a.ProcessMgr.OnExit = func(name string, epoch int, err error, stderr []string) {
 		msg := "exited"
 		if err != nil {
 			msg = fmt.Sprintf("exited: %v", err)
@@ -139,16 +140,20 @@ func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {
 			Type:       EventProcessExited,
 			Service:    name,
 			Message:    msg,
-			Evidence:   processFailureEvidence(logs.GetLastLines(name, 20)),
+			Evidence:   processFailureEvidence(err, stderr),
 			Generation: epoch,
 		}
 	}
 }
 
-func processFailureEvidence(lines []string) string {
+func processFailureEvidence(exitErr error, stderr []string) string {
+	var processExit *exec.ExitError
+	if errors.As(exitErr, &processExit) && processExit.ExitCode() < 0 {
+		return ""
+	}
 	const maxLength = 240
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
+	for i := len(stderr) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(stderr[i])
 		if line == "" || strings.HasPrefix(line, "[orbit]") {
 			continue
 		}

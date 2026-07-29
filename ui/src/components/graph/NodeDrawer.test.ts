@@ -1,8 +1,16 @@
-import { describe, it, expect } from 'vitest'
-import { render, fireEvent } from '@testing-library/svelte'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { render, fireEvent, waitFor } from '@testing-library/svelte'
 import NodeDrawer from './NodeDrawer.svelte'
+import { store } from '../../lib/stores.svelte'
 
 describe('NodeDrawer', () => {
+  beforeEach(() => {
+    store.graph.data = null
+    store.graph.preview = null
+    store.daemon.envs = null
+    vi.restoreAllMocks()
+  })
+
   it('renders nothing when no node selected', () => {
     const { queryByRole } = render(NodeDrawer, { props: { node: null, onClose: () => {} } })
     expect(queryByRole('dialog')).toBeNull()
@@ -79,5 +87,74 @@ describe('NodeDrawer', () => {
     const { getByText } = render(NodeDrawer, { props: { node, onClose: () => {} } })
 
     expect(getByText(/change redis's host port/)).toBeTruthy()
+  })
+
+  it('starts the direct blocker instead of restarting the dependent', async () => {
+    const node = {
+      name: 'api',
+      kind: 'backend' as const,
+      state: 'degraded',
+      stateReason: 'dependency redis is stopped',
+      blockedBy: 'redis',
+    }
+    store.graph.data = {
+      env: 'local',
+      previewOnly: false,
+      nodes: [
+        node,
+        { name: 'redis', kind: 'infra', state: 'stopped' },
+      ],
+      edges: [{ from: 'api', to: 'redis', kind: 'dependency', detachable: false, detached: false }],
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    )
+    const { getByRole, queryByRole } = render(NodeDrawer, {
+      props: { node, onClose: () => {} },
+    })
+
+    expect(queryByRole('button', { name: 'Restart' })).toBeNull()
+    await fireEvent.click(getByRole('button', { name: 'Start redis' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resources: ['redis'] }),
+    }))
+  })
+
+  it('follows a blocked chain to the root dependency', () => {
+    const node = {
+      name: 'shop',
+      kind: 'frontend' as const,
+      state: 'degraded',
+      stateReason: 'dependency api is unavailable',
+      blockedBy: 'api',
+    }
+    store.graph.data = {
+      env: 'local',
+      previewOnly: false,
+      nodes: [
+        node,
+        {
+          name: 'api',
+          kind: 'backend',
+          state: 'degraded',
+          stateReason: 'dependency redis is stopped',
+          blockedBy: 'redis',
+        },
+        { name: 'redis', kind: 'infra', state: 'stopped' },
+      ],
+      edges: [
+        { from: 'shop', to: 'api', kind: 'dependency', detachable: false, detached: false },
+        { from: 'api', to: 'redis', kind: 'dependency', detachable: false, detached: false },
+      ],
+    }
+    const { getByRole, queryByRole } = render(NodeDrawer, {
+      props: { node, onClose: () => {} },
+    })
+
+    expect(getByRole('button', { name: 'Start redis' })).toBeTruthy()
+    expect(queryByRole('button', { name: 'Restart' })).toBeNull()
   })
 })
