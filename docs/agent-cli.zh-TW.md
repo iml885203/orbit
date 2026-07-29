@@ -295,7 +295,7 @@ Inspect payload 包含：
 |---|---:|---|
 | `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
 | `selection_required` | true | 先前 selection 已失效；actions 會提供精確的 `orbit switch <env> --json` 選項，沒有候選時則提供 `orbit env sync --json`。 |
-| `config_invalid` | true | 選到的 config 無法載入。 |
+| `config_invalid` | true | 選到的 config 無法載入。較舊的共用 schema 唯一 action 是 `orbit env sync --json`；較新的 schema 唯一 action 是 `orbit update --json`。語法錯誤與未知欄位需要編輯回報的檔案，因此 Orbit 不會回傳沒有推進效果的 `inspect` 自我重試。 |
 | `update_required` | true | 新版 Orbit binary 已安裝，但 daemon 仍執行舊版本；唯一 action 是 `orbit daemon restart --json`。 |
 | `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
 | `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |

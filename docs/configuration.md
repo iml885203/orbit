@@ -54,7 +54,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 
 | Key | Type | Required | Purpose |
 |---|---|---|---|
-| `version` | string | yes | Schema version. Must be `"2"` — a mismatch fails the load with a hint to run `orbit env sync` (env too old) or upgrade orbit (env too new) |
+| `version` | string | yes | Schema version. Must be `"2"` — a mismatch fails the load with one action: `orbit env sync` when the shared env is older, or `orbit update` when Orbit is older |
 | `previewOnly` | bool | no | Env can be inspected on the dashboard but not activated on this machine (guards against misclicks; not a security boundary) |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
@@ -64,6 +64,11 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | `externals` | map | no | Non-orbit producers/consumers rendered as placeholder graph nodes |
 | `sqlserver` | object | no | Explicit opt-in for SQL Server Database Projects |
 | `<extension-key>` | any | no | Feature-owned configuration registered by an extension compiled into this binary; accepted keys and shapes depend on the distribution |
+
+Orbit decodes the core schema and registered extension sections strictly.
+Unknown keys and misspelled fields fail before any container or host process
+starts, and the error identifies the offending field and source line. Orbit
+does not silently ignore configuration it cannot understand.
 
 ## `settings`
 

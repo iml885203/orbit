@@ -358,6 +358,50 @@ func (c *Container) ResolveKind() string {
 //	`Group`; new optional `color` field on each group.
 const supportedEnvVersion = "2"
 
+type SchemaVersionMismatchKind string
+
+const (
+	SchemaVersionMissing SchemaVersionMismatchKind = "missing"
+	SchemaVersionOlder   SchemaVersionMismatchKind = "older"
+	SchemaVersionNewer   SchemaVersionMismatchKind = "newer"
+	SchemaVersionInvalid SchemaVersionMismatchKind = "invalid"
+)
+
+type SchemaVersionMismatchError struct {
+	Path      string
+	Found     string
+	Supported string
+	Kind      SchemaVersionMismatchKind
+}
+
+func (e *SchemaVersionMismatchError) Error() string {
+	switch e.Kind {
+	case SchemaVersionMissing:
+		return fmt.Sprintf(
+			"env file %s is missing required field 'version' (expected %q). "+
+				"This file may be from an older Orbit that didn't require versioning, or it may be corrupt",
+			e.Path, e.Supported,
+		)
+	case SchemaVersionOlder:
+		return fmt.Sprintf(
+			"env file %s: schema version %q but this Orbit binary requires %q. "+
+				"Your env files are out of date — pull the latest env revision or run 'orbit env sync'",
+			e.Path, e.Found, e.Supported,
+		)
+	case SchemaVersionNewer:
+		return fmt.Sprintf(
+			"env file %s: schema version %q but this Orbit binary supports %q. "+
+				"Your Orbit binary is out of date — run 'orbit update' or check out an older env revision",
+			e.Path, e.Found, e.Supported,
+		)
+	default:
+		return fmt.Sprintf(
+			"env file %s: unrecognized schema version %q (expected %q)",
+			e.Path, e.Found, e.Supported,
+		)
+	}
+}
+
 // CheckVersion returns an error if version doesn't match supportedEnvVersion.
 // path is included in the error to identify which env file is mismatched.
 // When both versions parse as integers, the error message distinguishes
@@ -368,30 +412,34 @@ func CheckVersion(version, path string) error {
 		return nil
 	}
 	if version == "" {
-		return fmt.Errorf(
-			"env file %s is missing required field 'version' (expected %q). "+
-				"This file may be from an older orbit that didn't require versioning, or it may be corrupt",
-			path, supportedEnvVersion,
-		)
+		return &SchemaVersionMismatchError{
+			Path:      path,
+			Supported: supportedEnvVersion,
+			Kind:      SchemaVersionMissing,
+		}
 	}
 	envN, envErr := strconv.Atoi(version)
 	binN, binErr := strconv.Atoi(supportedEnvVersion)
 	if envErr == nil && binErr == nil {
 		if envN < binN {
-			return fmt.Errorf(
-				"env file %s: schema version %q but this orbit binary requires %q. "+
-					"Your env files are out of date — pull the latest env revision or run 'orbit env sync'",
-				path, version, supportedEnvVersion,
-			)
+			return &SchemaVersionMismatchError{
+				Path:      path,
+				Found:     version,
+				Supported: supportedEnvVersion,
+				Kind:      SchemaVersionOlder,
+			}
 		}
-		return fmt.Errorf(
-			"env file %s: schema version %q but this orbit binary supports %q. "+
-				"Your orbit binary is out of date — run 'orbit upgrade' or check out an older env revision",
-			path, version, supportedEnvVersion,
-		)
+		return &SchemaVersionMismatchError{
+			Path:      path,
+			Found:     version,
+			Supported: supportedEnvVersion,
+			Kind:      SchemaVersionNewer,
+		}
 	}
-	return fmt.Errorf(
-		"env file %s: unrecognized schema version %q (expected %q)",
-		path, version, supportedEnvVersion,
-	)
+	return &SchemaVersionMismatchError{
+		Path:      path,
+		Found:     version,
+		Supported: supportedEnvVersion,
+		Kind:      SchemaVersionInvalid,
+	}
 }

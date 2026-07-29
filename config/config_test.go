@@ -763,7 +763,7 @@ func TestLoad_VersionMismatch(t *testing.T) {
 		{
 			name:        "env newer than binary",
 			yaml:        `version: "3"` + "\n",
-			wantContain: "orbit binary is out of date",
+			wantContain: "Orbit binary is out of date",
 		},
 		{
 			name:        "env older than binary",

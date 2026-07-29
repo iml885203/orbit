@@ -45,8 +45,35 @@ func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 	if len(got.Risks) != 1 || got.Risks[0].Code != "config_invalid" {
 		t.Fatalf("risks = %+v", got.Risks)
 	}
-	if got.RecommendedActions[0].Command != "orbit inspect --json" {
-		t.Fatalf("first action = %+v", got.RecommendedActions[0])
+	if len(got.RecommendedActions) != 0 {
+		t.Fatalf("recommended_actions = %+v, want no self-loop for an error that requires editing", got.RecommendedActions)
+	}
+}
+
+func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		command string
+	}{
+		{name: "older shared environment", version: "1", command: "orbit env sync --json"},
+		{name: "newer environment", version: "3", command: "orbit update --json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildInspectData(inspectBuildOptions{
+				ConfigPath: "/tmp/orbit.yaml",
+				ConfigErr:  config.CheckVersion(tt.version, "/tmp/orbit.yaml"),
+			})
+
+			if got.Readiness.State != inspectReadinessConfigInvalid {
+				t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConfigInvalid)
+			}
+			if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != tt.command {
+				t.Fatalf("recommended_actions = %+v, want only %q", got.RecommendedActions, tt.command)
+			}
+		})
 	}
 }
 

@@ -190,7 +190,7 @@ func TestCheckVersion(t *testing.T) {
 			version:     "3",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", `"3"`, `"2"`, "orbit binary is out of date", "orbit upgrade"},
+			wantContain: []string{"envs/development.yaml", `"3"`, `"2"`, "Orbit binary is out of date", "orbit update"},
 		},
 		{
 			name:        "missing version",

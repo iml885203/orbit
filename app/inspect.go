@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -200,7 +201,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	}
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services, opts.Command, opts.ConfigEnvName, opts.Selection)
+	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.ConfigEnvName, opts.Selection)
 	environment := inspectEnvSummary{
 		State:        opts.Selection.State,
 		SelectedName: opts.Selection.SelectedName,
@@ -457,7 +458,7 @@ func inspectRecommendedActions(
 	readiness inspectReadiness,
 	risks []inspectRisk,
 	services inspectServiceSummary,
-	retryCommand string,
+	configErr error,
 	selectedEnv string,
 	selection environmentSelection,
 ) []cli.JSONAction {
@@ -478,15 +479,24 @@ func inspectRecommendedActions(
 			Destructive: false,
 		})
 	case inspectReadinessConfigInvalid:
-		command := "orbit inspect --json"
-		if retryCommand != "" {
-			command = retryCommand
+		var mismatch *config.SchemaVersionMismatchError
+		if !errors.As(configErr, &mismatch) {
+			break
 		}
-		actions = append(actions, cli.JSONAction{
-			Command:     command,
-			Reason:      "Retry inspection after fixing the reported environment file.",
-			Destructive: false,
-		})
+		switch mismatch.Kind {
+		case config.SchemaVersionOlder:
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit env sync --json",
+				Reason:      "Refresh the shared environment file to the supported schema.",
+				Destructive: false,
+			})
+		case config.SchemaVersionNewer:
+			actions = append(actions, cli.JSONAction{
+				Command:     "orbit update --json",
+				Reason:      "Update Orbit to support this environment schema.",
+				Destructive: false,
+			})
+		}
 	case inspectReadinessNeedsDaemon:
 		if inspectHasRisk(risks, "env_mismatch") {
 			command := "orbit daemon restart --json"

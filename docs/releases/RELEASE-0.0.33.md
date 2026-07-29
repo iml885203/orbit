@@ -32,6 +32,9 @@ than a moving default branch.
   the internal control process. Repeating `down` after Orbit has already
   stopped is a successful human/JSON no-op that points only to the next normal
   `orbit up`.
+- Environment schema mismatches now produce a structured, single-step remedy:
+  sync an older shared environment or update an older Orbit binary. The
+  previous nonexistent `orbit upgrade` instruction is gone.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.

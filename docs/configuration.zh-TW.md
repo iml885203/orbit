@@ -53,7 +53,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 
 | Key | Type | Required | 用途 |
 |---|---|---|---|
-| `version` | string | yes | Schema 版本，必須是 `"2"` — 不符時載入失敗，並提示 `orbit env sync`（env 太舊）或升級 orbit（env 太新） |
+| `version` | string | yes | Schema 版本，必須是 `"2"`；不符時只提供一個動作：共享 env 較舊時執行 `orbit env sync`，Orbit 較舊時執行 `orbit update` |
 | `previewOnly` | bool | no | env 可在 dashboard 檢視但不能在本機啟用（防誤點，非安全邊界） |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
@@ -63,6 +63,10 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | `externals` | map | no | 非 orbit 管理的 producer/consumer，畫成佔位 graph 節點 |
 | `sqlserver` | object | no | 明確啟用 SQL Server Database Projects |
 | `<extension-key>` | any | no | 由編譯進此 binary 的 extension 註冊並擁有；可接受的 key 與形狀依發行版而定 |
+
+Orbit 會嚴格 decode core schema 與已註冊的 extension sections。未知 key
+或拼錯的 field 會在任何 container 或 host process 啟動前失敗，錯誤也會指出
+有問題的 field 與來源行號；Orbit 不會安靜忽略它無法理解的設定。
 
 ## `settings`
 

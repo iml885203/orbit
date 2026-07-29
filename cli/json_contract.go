@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -109,6 +110,34 @@ func classify(err error) JSONError {
 			Hint:        "Run 'orbit up' to start the selected environment.",
 			Retryable:   true,
 			NextCommand: "orbit up --json",
+		}
+	}
+	var schemaVersion *config.SchemaVersionMismatchError
+	if errors.As(err, &schemaVersion) {
+		switch schemaVersion.Kind {
+		case config.SchemaVersionOlder:
+			return JSONError{
+				Code:        "environment_schema_outdated",
+				Message:     schemaVersion.Error(),
+				Hint:        "Refresh the shared environment files.",
+				Retryable:   true,
+				NextCommand: "orbit env sync --json",
+			}
+		case config.SchemaVersionNewer:
+			return JSONError{
+				Code:        "environment_schema_newer",
+				Message:     schemaVersion.Error(),
+				Hint:        "Update Orbit to a version that supports this environment schema.",
+				Retryable:   true,
+				NextCommand: "orbit update --json",
+			}
+		default:
+			return JSONError{
+				Code:      "invalid_environment_schema",
+				Message:   schemaVersion.Error(),
+				Hint:      "Set the required numeric environment schema version before retrying.",
+				Retryable: false,
+			}
 		}
 	}
 	var portConflict *daemon.PortConflictError
@@ -372,6 +401,30 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 			Reason:      "Restart Orbit to run the installed version.",
 			Destructive: false,
 		}}
+	}
+	if err.Code == "daemon_unreachable" {
+		return []JSONAction{{
+			Command:     "orbit up --json",
+			Reason:      "Start the selected environment.",
+			Destructive: false,
+		}}
+	}
+	if err.Code == "environment_schema_outdated" {
+		return []JSONAction{{
+			Command:     "orbit env sync --json",
+			Reason:      "Refresh the shared environment files.",
+			Destructive: false,
+		}}
+	}
+	if err.Code == "environment_schema_newer" {
+		return []JSONAction{{
+			Command:     "orbit update --json",
+			Reason:      "Update Orbit to support this environment schema.",
+			Destructive: false,
+		}}
+	}
+	if err.Code == "invalid_environment_schema" {
+		return nil
 	}
 	if err.Code == "resource_port_conflict" {
 		if err.NextCommand == "" {

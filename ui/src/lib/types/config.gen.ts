@@ -164,3 +164,14 @@ export interface HealthCheckConfig {
   retries: number /* int */;
   failure_threshold: number /* int */;
 }
+export type SchemaVersionMismatchKind = string;
+export const SchemaVersionMissing: SchemaVersionMismatchKind = "missing";
+export const SchemaVersionOlder: SchemaVersionMismatchKind = "older";
+export const SchemaVersionNewer: SchemaVersionMismatchKind = "newer";
+export const SchemaVersionInvalid: SchemaVersionMismatchKind = "invalid";
+export interface SchemaVersionMismatchError {
+  Path: string;
+  Found: string;
+  Supported: string;
+  Kind: SchemaVersionMismatchKind;
+}

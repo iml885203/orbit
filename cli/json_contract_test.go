@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -72,6 +73,52 @@ func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 	}
 	if got.Error.NextCommand != "orbit up --json" {
 		t.Fatalf("next_command = %q", got.Error.NextCommand)
+	}
+	if len(got.RecommendedActions) != 1 ||
+		got.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("actions = %+v, want only orbit up", got.RecommendedActions)
+	}
+}
+
+func TestWriteJSONErrorGivesSchemaMismatchOneAdvancingAction(t *testing.T) {
+	tests := []struct {
+		name        string
+		version     string
+		code        string
+		nextCommand string
+	}{
+		{
+			name:        "shared environment is older",
+			version:     "1",
+			code:        "environment_schema_outdated",
+			nextCommand: "orbit env sync --json",
+		},
+		{
+			name:        "Orbit is older",
+			version:     "3",
+			code:        "environment_schema_newer",
+			nextCommand: "orbit update --json",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := config.CheckVersion(tc.version, "envs/team.yaml")
+			if writeErr := WriteJSONError(&buf, "orbit up --json", err); writeErr != nil {
+				t.Fatalf("WriteJSONError: %v", writeErr)
+			}
+			got := decodeEnvelope(t, buf.Bytes())
+			if got.Error == nil || got.Error.Code != tc.code {
+				t.Fatalf("error = %+v, want code %q", got.Error, tc.code)
+			}
+			if got.Error.NextCommand != tc.nextCommand {
+				t.Fatalf("next command = %q, want %q", got.Error.NextCommand, tc.nextCommand)
+			}
+			if len(got.RecommendedActions) != 1 ||
+				got.RecommendedActions[0].Command != tc.nextCommand {
+				t.Fatalf("actions = %+v, want only %q", got.RecommendedActions, tc.nextCommand)
+			}
+		})
 	}
 }
 
