@@ -116,6 +116,27 @@ func TestHostEnvironmentChecksPythonVersionFromToolVersions(t *testing.T) {
 	}
 }
 
+func TestHostEnvironmentChecksGoModToolchainBeforeStartup(t *testing.T) {
+	project := t.TempDir()
+	writeRuntimeFile(t, project, "go.mod", "module example.invalid/api\n\ngo 1.24\ntoolchain go1.25.1\n")
+	dir, _ := fakeBin(t, "go", "#!/bin/sh\necho 'go version go1.24.6 test/arch'\n")
+	t.Setenv("PATH", dir)
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api": {Type: "go", Command: "go run .", Path: project},
+	}}
+
+	check := runtimeCheck(t, HostEnvironmentChecks(cfg), "Go")
+	if check.Status != CheckFail {
+		t.Fatalf("check = %+v", check)
+	}
+	if !strings.Contains(check.Message, "api requires 1.25.1 (go.mod); installed 1.24.6") {
+		t.Fatalf("message = %q", check.Message)
+	}
+	if !strings.Contains(check.Hint, "Select the project version of Go") {
+		t.Fatalf("hint = %q", check.Hint)
+	}
+}
+
 func TestHostEnvironmentChecksMalformedVersionFileFails(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".python-version", "\n")

@@ -22,10 +22,13 @@
 
 使用 container 的環境在 macOS 與 Windows 需要 Docker Desktop，在 Linux
 需要 Docker Engine。每個環境也可能宣告額外的 host runtime；`orbit doctor`
-會列出並提供安裝提示。透過 npm、pnpm、Yarn 或 Bun 啟動的 Node service，
-也會區分缺少 runtime 與尚未安裝 project packages，並提供精確的 install
-指令。`orbit switch` 會在使用者執行 `orbit up` 前，回報新 environment 的
-這些 checks。Runtime checks 會讀取 `.nvmrc`、`.node-version`、
+會列出並提供安裝提示，包含 Go。Node service 也會區分缺少 runtime 與尚未
+安裝 project packages，並提供精確的 npm、pnpm、Yarn 或 Bun install 指令。
+即使 command 直接以 `node` 啟動也適用；Orbit 會讀取 `packageManager` 或
+最近 workspace 的 project lockfile，不要求 package manager 一定出現在
+command，並會確認該 package manager 已安裝。`orbit switch` 會在使用者執行
+`orbit up` 前，回報新 environment 的這些 checks。Runtime checks 會讀取
+Go 的 `go.mod`、`.nvmrc`、`.node-version`、
 `.python-version`、`.bun-version`、`.tool-versions` 的相關項目，以及 .NET
 `global.json`。Orbit 會回報版本不符或互相衝突的宣告，但不會安裝或切換
 runtime。同步 environment repository 需要 Git。

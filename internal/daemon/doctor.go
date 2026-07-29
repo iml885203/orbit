@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -222,12 +223,8 @@ func projectDependencyChecks(cfg *config.Config) []DoctorCheck {
 		}
 		switch service.Type {
 		case "node":
-			manager := commandBinary(service.Command)
-			if !isNodePackageManager(manager) {
-				continue
-			}
 			tasks = append(tasks, func() (DoctorCheck, bool) {
-				return nodeProjectDependencyCheck(name, service.Path, manager), true
+				return nodeDependencyCheckForService(name, service)
 			})
 		case "python":
 			tasks = append(tasks, func() (DoctorCheck, bool) {
@@ -257,7 +254,88 @@ func projectDependencyChecks(cfg *config.Config) []DoctorCheck {
 	return checks
 }
 
-func nodeProjectDependencyCheck(service, path, manager string) DoctorCheck {
+func nodeDependencyCheckForService(serviceName string, service *config.Service) (DoctorCheck, bool) {
+	if service == nil || service.Type != "node" {
+		return DoctorCheck{}, false
+	}
+	manager := commandBinary(service.Command)
+	installPath := service.Path
+	inferredManager, inferredPath, supported := inferredNodePackageManager(service.Path)
+	if isNodePackageManager(manager) {
+		if supported && inferredManager == manager {
+			installPath = inferredPath
+		}
+	} else {
+		manager, installPath = inferredManager, inferredPath
+		if !supported {
+			return DoctorCheck{}, false
+		}
+	}
+	managerExecutable := manager
+	if executable := commandExecutable(service.Command); commandBinary(service.Command) == manager {
+		managerExecutable = executable
+	}
+	if _, err := resolveProjectCommand(managerExecutable, service.Path); err != nil {
+		return DoctorCheck{}, false
+	}
+	return nodeProjectDependencyCheck(serviceName, service.Path, installPath, manager), true
+}
+
+type nodePackageManifest struct {
+	PackageManager  string                     `json:"packageManager"`
+	Dependencies    map[string]json.RawMessage `json:"dependencies"`
+	DevDependencies map[string]json.RawMessage `json:"devDependencies"`
+}
+
+func inferredNodePackageManager(path string) (string, string, bool) {
+	data, err := os.ReadFile(filepath.Join(path, "package.json"))
+	if err != nil {
+		return "", "", false
+	}
+	var manifest nodePackageManifest
+	if json.Unmarshal(data, &manifest) != nil {
+		return "", "", false
+	}
+	if len(manifest.Dependencies) == 0 && len(manifest.DevDependencies) == 0 {
+		return "", "", false
+	}
+
+	for current := filepath.Clean(path); ; current = filepath.Dir(current) {
+		if current != path {
+			if data, err := os.ReadFile(filepath.Join(current, "package.json")); err == nil {
+				var parent nodePackageManifest
+				if json.Unmarshal(data, &parent) == nil {
+					manifest.PackageManager = parent.PackageManager
+				}
+			}
+		}
+		if manager := strings.SplitN(manifest.PackageManager, "@", 2)[0]; isNodePackageManager(manager) {
+			return manager, current, true
+		}
+		for _, candidate := range []struct {
+			file    string
+			manager string
+		}{
+			{"pnpm-lock.yaml", "pnpm"},
+			{"yarn.lock", "yarn"},
+			{"bun.lock", "bun"},
+			{"bun.lockb", "bun"},
+			{"package-lock.json", "npm"},
+		} {
+			if _, err := os.Stat(filepath.Join(current, candidate.file)); err == nil {
+				return candidate.manager, current, true
+			}
+		}
+		parent := filepath.Dir(current)
+		_, gitBoundaryErr := os.Stat(filepath.Join(current, ".git"))
+		if parent == current || gitBoundaryErr == nil {
+			break
+		}
+	}
+	return "npm", path, true
+}
+
+func nodeProjectDependencyCheck(service, path, installPath, manager string) DoctorCheck {
 	check := DoctorCheck{Name: "Packages (" + service + ")"}
 	if info, err := os.Stat(path); err != nil || !info.IsDir() {
 		check.Status = CheckFail
@@ -271,26 +349,30 @@ func nodeProjectDependencyCheck(service, path, manager string) DoctorCheck {
 		check.Hint = "Update services." + service + ".path to the Node project directory"
 		return check
 	}
-	if nodePackagesInstalled(path, manager) {
+	if nodePackagesInstalled(path, installPath, manager) {
 		check.Status = CheckPass
-		check.Message = "installed in " + path
+		check.Message = "installed in " + installPath
 		return check
 	}
-	command := nodeInstallCommand(manager, path)
+	command := nodeInstallCommand(manager, installPath)
 	check.Status = CheckFail
 	check.Message = "project packages are not installed"
 	check.Hint = "run: " + command
 	return check
 }
 
-func nodePackagesInstalled(path, manager string) bool {
-	if info, err := os.Stat(filepath.Join(path, "node_modules")); err == nil && info.IsDir() {
-		return true
+func nodePackagesInstalled(path, installPath, manager string) bool {
+	for _, candidate := range []string{path, installPath} {
+		if info, err := os.Stat(filepath.Join(candidate, "node_modules")); err == nil && info.IsDir() {
+			return true
+		}
 	}
 	if manager == "yarn" {
-		for _, marker := range []string{".pnp.cjs", ".pnp.js"} {
-			if _, err := os.Stat(filepath.Join(path, marker)); err == nil {
-				return true
+		for _, candidate := range []string{path, installPath} {
+			for _, marker := range []string{".pnp.cjs", ".pnp.js"} {
+				if _, err := os.Stat(filepath.Join(candidate, marker)); err == nil {
+					return true
+				}
 			}
 		}
 	}
@@ -343,9 +425,11 @@ func requiredHostTools(cfg *config.Config) []HostToolCheck {
 					add("bun", name)
 				} else {
 					add("node", name)
-				}
-				if isNodePackageManager(binary) && binary != "bun" {
-					add(binary, name)
+					if isNodePackageManager(binary) {
+						add(binary, name)
+					} else if manager, _, ok := inferredNodePackageManager(service.Path); ok {
+						add(manager, name)
+					}
 				}
 			case "python":
 				if binary == "" {
@@ -364,7 +448,7 @@ func requiredHostTools(cfg *config.Config) []HostToolCheck {
 	}
 
 	var tools []HostToolCheck
-	for _, binary := range []string{"dotnet", "node", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
+	for _, binary := range []string{"dotnet", "go", "node", "python", "python3", "uv", "poetry", "npm", "pnpm", "yarn", "bun"} {
 		services := sortedRequirementNames(requirements[binary])
 		if len(services) == 0 {
 			continue
@@ -408,7 +492,7 @@ func isNodePackageManager(binary string) bool {
 
 func isKnownRuntime(binary string) bool {
 	switch binary {
-	case "dotnet", "python", "python3", "uv", "poetry", "node", "npm", "pnpm", "yarn", "bun":
+	case "dotnet", "go", "python", "python3", "uv", "poetry", "node", "npm", "pnpm", "yarn", "bun":
 		return true
 	default:
 		return false
@@ -437,6 +521,10 @@ func hostToolDefinition(binary string, requiredBy []string) HostToolCheck {
 		tool.Name = ".NET SDK"
 		tool.Hint = "Install the .NET SDK: https://dotnet.microsoft.com/download"
 		tool.Version = dotnetSDKVersion
+	case "go":
+		tool.Name = "Go"
+		tool.Hint = "Install Go: https://go.dev/doc/install"
+		tool.Version = versionFromCmd("version")
 	case "node":
 		tool.Name = "Node.js"
 		tool.Hint = "Install Node.js: https://nodejs.org/"

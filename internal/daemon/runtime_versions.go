@@ -33,6 +33,12 @@ func projectRuntimeVersionRequirements(cfg *config.Config) map[string][]HostVers
 			continue
 		}
 		switch service.Type {
+		case "go":
+			if commandBinary(service.Command) == "go" {
+				if requirement, ok := goVersionRequirement(name, service.Path); ok {
+					requirements["go"] = append(requirements["go"], requirement)
+				}
+			}
 		case "node":
 			if commandBinary(service.Command) == "bun" {
 				requirements["bun"] = append(requirements["bun"], bunVersionRequirements(name, service.Path)...)
@@ -54,6 +60,39 @@ func projectRuntimeVersionRequirements(cfg *config.Config) map[string][]HostVers
 		}
 	}
 	return requirements
+}
+
+func goVersionRequirement(service, projectPath string) (HostVersionRequirement, bool) {
+	source := filepath.Join(projectPath, "go.mod")
+	content, err := os.ReadFile(source)
+	if os.IsNotExist(err) {
+		return HostVersionRequirement{}, false
+	}
+	requirement := HostVersionRequirement{Service: service, ProjectPath: projectPath, Source: source}
+	if err != nil {
+		requirement.ParseError = err.Error()
+		return requirement, true
+	}
+	var languageVersion string
+	for _, line := range strings.Split(string(content), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		switch fields[0] {
+		case "go":
+			languageVersion = fields[1]
+		case "toolchain":
+			requirement.Requested = strings.TrimPrefix(fields[1], "go")
+		}
+	}
+	if requirement.Requested == "" {
+		requirement.Requested = languageVersion
+	}
+	if requirement.Requested == "" {
+		requirement.ParseError = "go version is missing"
+	}
+	return requirement, true
 }
 
 func nodeVersionRequirements(service, projectPath string) []HostVersionRequirement {

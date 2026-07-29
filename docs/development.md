@@ -23,11 +23,15 @@ test current source, follow [Testing unreleased main](#testing-unreleased-main).
 
 Container-based environments require Docker Desktop on macOS and Windows, or
 Docker Engine on Linux. Every environment may declare additional host runtimes;
-`orbit doctor` names them and provides installation guidance. For Node services
-started through npm, pnpm, Yarn, or Bun, it also distinguishes a missing runtime
-from project packages that have not been installed and reports the exact install
-command. `orbit switch` reports these checks for the newly selected environment
-before the user runs `orbit up`. Runtime checks honor `.nvmrc`, `.node-version`,
+`orbit doctor` names them and provides installation guidance, including Go.
+For Node services, it distinguishes a missing runtime from project packages
+that have not been installed and reports the exact npm, pnpm, Yarn, or Bun
+install command. This also works when the service command starts with `node`;
+Orbit reads `packageManager` or the nearest workspace lockfile instead of
+requiring the package manager to appear in the command, and verifies that
+manager is installed. `orbit switch` reports these checks for the newly
+selected environment before the user runs `orbit up`. Runtime checks honor
+Go's `go.mod`, `.nvmrc`, `.node-version`,
 `.python-version`, `.bun-version`, relevant entries in `.tool-versions`, and
 .NET `global.json`. Orbit reports mismatches and conflicting declarations but
 does not install or switch runtimes. Git is required to sync environment

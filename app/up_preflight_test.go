@@ -69,6 +69,35 @@ func TestPreflightBlocksUnsatisfiedPythonRequirementsWithSetupAction(t *testing.
 	}
 }
 
+func TestPreflightBlocksMissingNodePackagesWithSetupAction(t *testing.T) {
+	project := t.TempDir()
+	manifest := `{"packageManager":"pnpm@10.0.0","dependencies":{"fastify":"5.0.0"}}`
+	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
+	config := "version: \"2\"\nservices:\n  api:\n    type: node\n    path: " + project + "\n    command: node server.js\n"
+	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previousConfig := configFile
+	configFile = envPath
+	t.Cleanup(func() { configFile = previousConfig })
+
+	err := preflightOrAbort(true, nil)
+	if err == nil || !strings.Contains(err.Error(), "project packages are not installed") {
+		t.Fatalf("preflight error = %v", err)
+	}
+	withActions, ok := err.(interface{ CLIJSONReplacementActions() []cli.JSONAction })
+	if !ok {
+		t.Fatalf("error has no exact actions: %T", err)
+	}
+	actions := withActions.CLIJSONReplacementActions()
+	if len(actions) != 1 || !strings.Contains(actions[0].Command, "pnpm --dir") {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
 func TestInfrastructurePreflightIgnoresHostProjectRequirements(t *testing.T) {
 	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
 	config := "version: \"2\"\nservices:\n  api:\n    type: python\n    path: /missing/project\n    command: python3 app.py\n"

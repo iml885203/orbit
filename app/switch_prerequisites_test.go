@@ -9,7 +9,7 @@ import (
 	"github.com/iml885203/orbit/daemon"
 )
 
-func TestSwitchPrerequisitesUseSelectedEnvironmentPackages(t *testing.T) {
+func TestSwitchPrerequisitesLeadWithMissingRuntimeBeforePackages(t *testing.T) {
 	project := t.TempDir()
 	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(`{}`), 0644); err != nil {
 		t.Fatal(err)
@@ -35,10 +35,16 @@ services:
 	if ready {
 		t.Fatal("prerequisites ready despite missing runtime and packages")
 	}
+	var failed []string
 	for _, check := range checks {
-		if check.Name == "Packages (web)" && check.Status == daemon.CheckFail {
-			return
+		if check.Name == "Packages (web)" {
+			t.Fatalf("packages were checked before their manager is available: %+v", checks)
+		}
+		if check.Status == daemon.CheckFail {
+			failed = append(failed, check.Name)
 		}
 	}
-	t.Fatalf("checks = %+v", checks)
+	if got := fmt.Sprint(failed); got != "[Node.js pnpm]" {
+		t.Fatalf("failed checks = %s, want [Node.js pnpm]", got)
+	}
 }

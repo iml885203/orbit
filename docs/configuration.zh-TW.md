@@ -538,6 +538,14 @@ requirements 尚未滿足，Doctor 會提供明確的 `pip install` 指令。com
 installation，且只有 interpreter 表明需要時才加入 pip 的
 externally-managed override。
 
+對於 `package.json` 有宣告 dependencies 的 `type: node` service，Doctor
+也會確認 packages 已安裝。Install command 會優先採用 `packageManager`，
+其次依 lockfile 判斷，否則使用 npm；workspace metadata 與已安裝 packages
+可放在最近的 repository root。除了 package-manager command，像
+`node server.js` 這種直接啟動方式也會檢查，Doctor 也會確認選定的 package
+manager 本身已安裝。若 manager 缺少，這會是唯一與 packages 相關的下一步；
+工具可用後 Orbit 才會繼續檢查 project packages。
+
 `orbit up` 會在啟動 containers 或 host processes 前執行相同檢查，因此錯誤
 workspace 或已知缺少的 project dependency 不會留下只啟動一半的
 environment。安裝 dependency 仍是使用者明確執行的動作。

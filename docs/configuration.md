@@ -559,6 +559,15 @@ environment when the command names one; otherwise it keeps packages in the
 user installation and adds pip's externally-managed override only when that
 interpreter reports it is required.
 
+For a `type: node` service whose `package.json` declares dependencies, Doctor
+also verifies that packages are installed. It chooses the install command from
+`packageManager`, then the lockfile, and otherwise uses npm. Workspace metadata
+and installed packages may live at the nearest repository root. This applies
+to direct commands such as `node server.js` as well as package-manager commands,
+and Doctor checks that the selected package manager itself is installed. A
+missing manager is the only package-related next step; Orbit checks project
+packages after that tool becomes available.
+
 `orbit up` performs the same checks before starting containers or host
 processes, so an invalid workspace or known-missing project dependency cannot
 leave a partially started environment. Dependency installation remains an

@@ -123,9 +123,10 @@ eight-API variant for contributors. Repository-relative commands under
 environment repository or project workspace the demo does not use.
 Orbit does not install project runtimes or dependencies implicitly;
 `orbit doctor` reports what the selected environment expects and detects an
-unsatisfied Python `requirements.txt` before startup. After `orbit up`, Orbit
-shows the healthy application URL and one command to open it; the dashboard
-remains a secondary option.
+unsatisfied Python `requirements.txt`, missing Node packages, and missing host
+runtimes such as Go before startup. After `orbit up`, Orbit shows the healthy
+application URL and one command to open it; the dashboard remains a secondary
+option.
 
 macOS and Linux are supported. Windows builds are Beta; see
 [platform support and installation](docs/development.md#platform-support).

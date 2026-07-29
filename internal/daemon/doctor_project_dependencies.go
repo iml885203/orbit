@@ -80,7 +80,14 @@ func ProjectDependencySetupCommand(cfg *config.Config, serviceName string) (stri
 	if service == nil {
 		return "", false
 	}
-	check, supported := pythonProjectDependencyCheck(serviceName, service)
+	var check DoctorCheck
+	var supported bool
+	switch service.Type {
+	case "node":
+		check, supported = nodeDependencyCheckForService(serviceName, service)
+	case "python":
+		check, supported = pythonProjectDependencyCheck(serviceName, service)
+	}
 	if !supported || check.Status != CheckFail {
 		return "", false
 	}
