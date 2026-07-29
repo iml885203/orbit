@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       ORBIT_PRIVATE_IDENTIFIERS_PATTERN: ${{ secrets.ORBIT_PRIVATE_IDENTIFIERS_PATTERN }}
     steps:
@@ -34,6 +39,7 @@ jobs:
 
   first-five-minutes:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
