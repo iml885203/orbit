@@ -35,6 +35,22 @@
 orbit -c docs/examples/mini-shop/dev.yaml up
 ```
 
+### 2 分鐘新手導覽（推薦第一次用）
+
+把「第一次上手」直接變成可重播指令：
+
+```bash
+bash docs/examples/mini-shop/scripts/onboarding-walkthrough.sh
+```
+
+腳本會做三件事：
+
+1. 等待核心服務就緒（catalog/cart/order/checkout/shipping）
+2. 跑一輪 `mock_card` 成功 checkout
+3. 顯示關聯結果（Orders / Shipments）與下一步可執行腳本
+
+如果這個流程能走完，通常你在 UI 也能直接看到 3 秒 demo 結論轉為可 demo 狀態。
+
 > 預設會啟動 9 個 resource：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
 
 
@@ -208,6 +224,31 @@ bash docs/examples/mini-shop/scripts/smoke-compact.sh
 
 ```bash
 /tmp/mini-shop-smoke-reports/compact-summary.json
+```
+
+如果你要做「可直接貼進 release note 的打磨交付」可以用：
+
+```bash
+bash docs/examples/mini-shop/scripts/release-check.sh quick
+```
+
+`quick` 會輸出一份打包報告到：
+
+```bash
+/tmp/mini-shop-smoke-reports/release-check-summary.json
+```
+
+裡面會保留：
+
+- compact 檢核結果（success / decline）
+- 可選 `p1` 檢核結果（`full` / `all`）
+- release-ready 判斷、git 版本與分支
+
+想再加上 stock + 進階服務（observability/notification）:
+
+```bash
+bash docs/examples/mini-shop/scripts/release-check.sh full
+bash docs/examples/mini-shop/scripts/release-check.sh all
 ```
 
 報告會保留 `success / decline` 每一項的 pass + details，失敗時直接顯示你下一步先做什麼，適合用來做每次 release 的「demo 可用性對帳」。
