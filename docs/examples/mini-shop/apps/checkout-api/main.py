@@ -1,5 +1,4 @@
 import json
-import os
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -12,7 +11,6 @@ ORDER_API_URL = "http://127.0.0.1:3002"
 CART_API_URL = "http://127.0.0.1:3005"
 PAYMENT_API_URL = "http://127.0.0.1:3007"
 SHIPPING_API_URL = "http://127.0.0.1:3008"
-NOTIFICATION_API_URL = os.environ.get("NOTIFICATION_API_URL", "").strip()
 
 
 def _get(url: str):
@@ -169,28 +167,6 @@ def create_shipment(customer_id: int, order_id: int) -> dict | None:
     return None
 
 
-def _notify(customer_id: int, order_id: int, title: str, message: str) -> bool:
-    if not NOTIFICATION_API_URL:
-        return False
-
-    try:
-        _, payload = _post(
-            f"{NOTIFICATION_API_URL}/notifications",
-            {
-                "customer_id": customer_id,
-                "order_id": order_id,
-                "title": title,
-                "message": message,
-            },
-        )
-    except urllib.error.URLError:
-        return False
-    except (ValueError, json.JSONDecodeError):
-        return False
-
-    return isinstance(payload, dict) and payload.get("status") == "ok"
-
-
 def clear_cart(customer_id: int) -> None:
     try:
         _post(f"{CART_API_URL}/carts/{customer_id}/clear", {})
@@ -239,8 +215,6 @@ class Handler(BaseHTTPRequestHandler):
             "payment_api": health_check(PAYMENT_API_URL, "payment-api"),
             "shipping_api": health_check(SHIPPING_API_URL, "shipping-api"),
         }
-        if NOTIFICATION_API_URL:
-            deps["notification_api"] = health_check(NOTIFICATION_API_URL, "notification-api")
         ready = all(item.get("ready") for item in deps.values())
         payload = {
             "service": "checkout-api",
@@ -321,21 +295,10 @@ class Handler(BaseHTTPRequestHandler):
             orders.append(order)
 
         shipments = []
-        notifications_requested = 0
-        notifications_sent = 0
         for order in orders:
             ship = create_shipment(customer_id=customer_id, order_id=order["id"])
             if ship:
                 shipments.append(ship)
-                if NOTIFICATION_API_URL:
-                    notifications_requested += 1
-                if _notify(
-                    customer_id=customer_id,
-                    order_id=order["id"],
-                    title="order shipped",
-                    message=f"order {order['id']} shipped with {ship.get('tracking_no', 'pending')}",
-                ):
-                    notifications_sent += 1
 
         clear_cart(customer_id)
 
@@ -348,11 +311,6 @@ class Handler(BaseHTTPRequestHandler):
             "shipments": shipments,
             "total": cart["total"],
             "items_count": cart["item_count"],
-            "notifications": {
-                "enabled": bool(NOTIFICATION_API_URL),
-                "requested": notifications_requested,
-                "sent": notifications_sent,
-            },
         }
         headers, body = write_json(payload, HTTPStatus.CREATED)
         json_response(self, HTTPStatus.CREATED, headers, body)

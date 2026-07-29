@@ -73,7 +73,8 @@ def write_json(payload, status=HTTPStatus.OK):
 
 def json_response(handler, status, headers, body):
     handler.send_response(status)
-    handler.send_header("Content-Type", headers[1])
+    for key, value in headers:
+        handler.send_header(key, value)
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()

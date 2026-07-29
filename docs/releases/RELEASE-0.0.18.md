@@ -14,7 +14,7 @@
 
 ### 1) 1.0 打磨用 Demo UX 改造（核心）
 
-- [docs/examples/mini-shop/apps/web/index.html](../examples/mini-shop/apps/web/index.html)
+- [docs/examples/mini-shop/apps/web/app.html](../examples/mini-shop/apps/web/app.html)
   - 新增「現在只要做一件事」卡片：依目前狀態動態顯示下一步。
   - 新增「第一次 demo（30 秒）」：
     - 開始 demo 一輪

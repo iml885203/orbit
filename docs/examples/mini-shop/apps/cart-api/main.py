@@ -42,8 +42,8 @@ def ensure_db() -> None:
 def db_ready() -> bool:
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("SELECT name FROM carts LIMIT 1")
-            conn.execute("SELECT name FROM cart_items LIMIT 1")
+            conn.execute("SELECT 1 FROM carts LIMIT 1")
+            conn.execute("SELECT 1 FROM cart_items LIMIT 1")
         return True
     except sqlite3.DatabaseError:
         return False

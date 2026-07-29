@@ -1,56 +1,13 @@
-# mini-shop UX 驗收檢查單（1.0 前）
+# Mini-shop UX acceptance
 
-目標：每次 release 後都能快速判斷「有沒有真的對新手友善」。
-
-## 15 分鐘手動驗收（本機可直接做）
-
-### A. 首次可用性（最重要）
-
-- [ ] 開啟頁面後，使用者能在 **30 秒內**看到一個清楚的「下一步」指示。
-  - 檢查：「現在只要做一件事」卡片有文字與可點按鈕。
-- [ ] 使用者能在 **60 秒內**完成一次 success smoke（`smoke-compact.sh all` 的 success）並看到：
-  - `ux_readiness.first_run_within_target = true`
-  - `scenarios.success.duration_ms <= 60000`
-- [ ] 一鍵流程能一次看到完整成功鏈路。
-  - 點「開始 demo 一輪」後，有可視覺結果（訂單、出貨、時間軸）出現。
-- [ ] 「快速判斷值」有明確三格狀態：
-  - 服務（backend）
-  - 交易（checkout）
-  - 關聯（order + shipment）
-- [ ] 進階模式若有 `notification-api`，能看到「關聯事件」包含通知輸出（不必強制要求，但有則可見）。
-- [ ] 新增「資料關係快覽」卡片能在 15 秒內形成完整上下文：  
-  - 客戶/商品/庫存基礎資料是否可見  
-  - 選定客戶的購物車關係是否有正確小計/件數  
-  - 最新訂單與出貨是否可直接判斷是否有對應關聯  
-- [ ] 失敗時，卡片應能立刻提示「無法判斷關聯」而非顯示上一輪殘留結果。
-
-### B. 可否 demo 給人（是否有顯性最小價值）
-
-- [ ] 三格判斷值可達綠色，且可被使用者理解為「可 demo」條件。
-- [ ] 1.0 檢核清單有未完成項目時，會顯示可導向下一步的行為（不是只有文字）。
-- [ ] 至少有一個成功路徑能在不看 console 的情況下驗證 end-to-end。
-  - [ ] 可以用「情境 A / B / C」UI 一鍵，或 README 中三組 CLI 複製腳本執行。
-
-### C. 故障時不猜原因
-
-- [ ] 讓系統進入失敗情境（例如 `decline`、庫存不足）後，頁面有可立即對應的提示。
-- [ ] 故障卡片的建議操作可點擊且可執行（copy/run/focus）。
-- [ ] 時間軸可對到失敗節點（至少會定位到對應步驟）。
-
-### D. 心智負擔一致性
-
-- [ ] 預設新手模式時，主線步驟可用、非必要排障資訊不干擾。
-- [ ] 進階模式可逐步看到更多診斷區塊（但同樣能回到主流程）。
-- [ ] 回到起始狀態（重置）要能在兩步內完成（不需要清楚服務內部細節）。
-
-## 失敗回報格式（建議回報欄位）
-
-若任一項失敗，請回報：
-
-- 失敗步驟（使用者要點哪個按鈕）
-- 畫面截圖（對應卡片）
-- 你預期下一步要看到的提示文字（1 句）
-- 實際看到的提示（1 句）
-- 是否可直接按一個建議按鈕繼續
-
-這份清單可以每次 release 後重跑；只要 A～D 有清晰通過，就是 1.0 前 UX 有進步。 
+- [ ] The initial viewport has one primary action.
+- [ ] A new user can explain the goal without knowing service names.
+- [ ] Successful checkout shows one order and its linked shipment.
+- [ ] Payment failure is offered only after the success path.
+- [ ] Expected failure explains that no order or shipment was created.
+- [ ] Manual controls and topology remain collapsed by default.
+- [ ] The first unhealthy service and a logs command are available on demand.
+- [ ] Keyboard focus, button disabled states, and narrow layout remain usable.
+- [ ] `bash docs/examples/mini-shop/scripts/smoke.sh` passes.
+- [ ] No unpublished version notes or alternate demo modes appear in the
+  example.

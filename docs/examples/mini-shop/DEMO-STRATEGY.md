@@ -1,73 +1,42 @@
-# Mini-shop demo 策略（Orbit 1.0 前）
+# Mini-shop demo strategy
 
-## 先回答你最初的問題：現在這個 demo 太簡單嗎？
+Mini-shop exists to make Orbit's value visible, not to maximize the number of
+technologies in one repository.
 
-**結論：不算太簡單。**
+## Product story
 
-- 已有 `host + container` 混合環境（`redis` container + 多個 Python host services）
-- 有 9 個 resource，有清楚 dependency chain（`depends_on`）
-- 有跨服務關聯驗證（cart/order/shipping）
-- 有明確失敗情境（付款失敗、缺貨）
-- 有「下一步」與排錯指令導向，已比一般 demo 僅「可用」更接近「好上手」
+One browser action crosses host processes, a container, SQLite databases, and
+eight dependent APIs. The result is useful only when the user can see the
+relationship: a successful order has one linked shipment, while a declined
+payment creates neither.
 
-但還可以再往「更符合 Orbit 價值」推一層：
+## Experience contract
 
-- 不只「看起來有很多服務」，而是**每輪操作都能一眼判斷成敗與下一步**（mental model 極低）
-- 不只 demo 成功，還要讓使用者能把「修復」也做成一條流程
+- The first screen offers one primary action.
+- Readiness, order creation, and shipment linkage are the only always-visible
+  evidence.
+- Failure simulation appears after the successful path establishes context.
+- Manual controls and service topology are progressive disclosure.
+- A service failure names the affected resource and one logs command.
+- The demo uses Python's standard library and never installs dependencies.
 
-## 為什麼用 mini-shop 當主 demo（優先）
+## Scope decisions
 
-相比直接借 `dotnet/eshop`、`eShopOnContainers` 這類企業級專案：
+The baseline keeps one language because package installation is not the value
+being demonstrated. It keeps eight APIs because dependency ordering, health,
+targeted logs, and relationship evidence become meaningful at that size.
 
-- 目前目標是本地新手 30–120 秒上手，而不是「學一套完整平台」
-- mini-shop 可在 `orbit -c ... up` 後就能操作，能直接驗證 Orbit 的價值點：
-  - 多服務協調
-  - 可預測啟動順序與健康檢查
-  - host/container 混部署
-  - 失敗快速定位到某個 service
+Additional runtimes or observability services belong in a separate example.
+They must not add modes, profiles, or setup choices to this first journey.
 
-## 推薦的 1.0 前 demo 演進路徑（按價值排序）
+## Release evidence
 
-### P0（立即保留）
-- 保持 mini-shop 為主要可 demo 案例
-- 「第一次只做一件事」流程不變：
-  - 準備完成檢查（3 綠格）
-  - 一鍵成功路徑
-  - 一鍵失敗回歸（付款/缺貨）
-- 每次 release 前都在 `UX-SMOKE-CHECK` + `UX-ACCEPTANCE-CHECKLIST` 有紀錄
+Before publishing a preview that changes mini-shop:
 
-### P1（已完成）
-- 已補上「最小故障演練」片段（停掉單一 service，再重啟）
-  - 目標：驗證新手不用猜，能直接跟著頁面建議修復
-- README 與指令頁補上「失敗後最短回復流程」
-  - 例如：`down -> status -> restart`
+```bash
+orbit -c docs/examples/mini-shop/dev.yaml up
+bash docs/examples/mini-shop/scripts/smoke.sh
+orbit -c docs/examples/mini-shop/dev.yaml down
+```
 
-- 已補上「命令列示範腳本」三件組（A 成功 / B 付款失敗 / C 庫存不足）
-  - 基線固定、失敗再回歸；讓 review 或 CI 能重複驗證，而不是靠口頭講解。
-
-### P2（觀察期）
-
-- 可再增加一個「更偏混合語言」的 profile（但不作為預設 demo）
-  - 只在進階章節提供：展示 `orbit switch` / env 切換價值
-  - 維持 mini-shop 作為主線，避免把第一印象變成環境維護負擔
-
-- 可做的擴充（不改主線）：
-  - 新增一個 `mini-shop-advanced` env，用不同 stack（例如一個小型 worker）來示範「同樣 UX，不同 service」；
-  - 但維持主線 mini-shop 的 30 秒 demo 不變，確保每次上手都能成功。
-
-### 避免的方向
-- 不要直接上完整 `eShopOnContainers` 作為唯一主 demo
-  - 會把第一體驗從「會用」推向「先熟悉專案結構」
-  - 對於 1.0 前目標（低 mental model）不友善
-
-## 可考慮的外部參考（只用於設計，不複製全部）
-
-- [dotnet/eshop](https://github.com/dotnet/eshop): 可做功能結構與前後端邊界的靈感來源
-- [GoogleCloudPlatform/microservices-demo](https://github.com/GoogleCloudPlatform/microservices-demo): 可借 flow / trace / 可觀測性呈現方式
-- [dockersamples/example-voting-app](https://github.com/dockersamples/example-voting-app): 可借「輕量多語言」組合思路，但不作為預設入口
-
-## 1.0 前你會看到的判斷依據（很重要）
-
-- 如果使用者在第一次打開後，能在不看原始碼前，直接完成一次成功與一次失敗回放；
-- 如果失敗時能照著頁面命令做 2 步內修正；
-- 如果不必猜「我要先查什麼」，就表示 demo 已經在真正降低 mental model。
+The browser journey must also be checked at desktop and narrow viewport widths.

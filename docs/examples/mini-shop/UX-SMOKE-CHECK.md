@@ -1,144 +1,26 @@
-# mini-shop UX smoke check（15分鐘內可重複）
+# Mini-shop UX smoke check
 
-這不是自動化單元測試，而是你在開發/打磨中可以快速跑的「可重複驗證」。目標是：
-每次改完都能用同一份流程判斷：**這次改動到底有沒有讓新手更順？**
-
-## 0) 前置條件
-
-- 已經可讀 `orbit` CLI。
-- 已在此 repo 根目錄。
-- 端口沒有被舊資源占用（若被占用，先 `orbit down`）。
-
-## 1) 啟動
+## Automated evidence
 
 ```bash
-cd /Users/logan/dev/orbit
 orbit -c docs/examples/mini-shop/dev.yaml up
+bash docs/examples/mini-shop/scripts/smoke.sh
 ```
 
-期待結果：沒有阻塞式錯誤卡住；看到 dashboard 可讀且服務回到可恢復狀態。
+The script checks every backend health endpoint, a successful order/shipment
+relationship, and a safe declined-payment path.
 
-## 2) 先看「不需猜」指標（30 秒內）
+## Browser evidence
 
-1. 在頁面打開 `docs/examples/mini-shop/apps/web/index.html` 服務（`orbit -c docs/examples/mini-shop/dev.yaml open`）。
-2. 確認以下 5 格有節奏地出現：
-   - `快速判斷值`：服務、交易、關聯
-   - `一輪 demo 結論（先看這裡）`：是否可直接 demo、缺口清單、以及導向下一步的建議按鈕
-   - `1.0 交付前檢核`：每項都可被理解及點選
-   - `資料關係快覽`：本輪最重要關係能否一眼判斷
-   - `現在只要做一件事`：有下一步提示
+1. Open <http://127.0.0.1:3000>.
+2. Confirm **Run a successful checkout** is the only primary action.
+3. Run it and verify all three journey steps become complete.
+4. Confirm the evidence cards show one order and a shipment with the same order
+   ID.
+5. Run **Then show a payment failure**.
+6. Confirm the page calls the failure safe and offers one recovery action.
+7. Expand manual controls and the dependency graph only after the primary path.
+8. Repeat at a viewport narrower than 520px.
 
-如果這 5 個都不見，先回 `orbit status --json` 確認 8/8 backend ready。
-
-## 3) 最短成功路徑
-
-點：  
-- 「開始 demo 一輪」→ 應看到成功訂單與出貨
-- 立刻點「核對可 demo 條件」→ 三格若為綠即可視為 demo 可展示
-- 進一步看「訂單 / 出貨 / 流程時間軸」是否同一筆關聯
-
-### 命令列對照（1.0 前快速心理模型門檻）
-
-對應 CLI 可在每次打磨後快速回填：
-
-- `bash docs/examples/mini-shop/scripts/smoke-compact.sh all`
-- 觀察 `ux_readiness.first_run_success_ms` 與 `ux_readiness.first_run_target_ms`
-- 目標：`first_run_within_target = true` 且 `first_run_success_ms <= 60000`
-
-建議你把這個值寫到 release note：
-
-```text
-- 一分鐘可 demo：PASS/FAIL（first_run_success_ms=XXX）
-- 成功流/失敗流是否穩定：smoke-compact pass true/false
-```
-
-記錄：
-
-- 成功耗時（從開始按鈕到關聯確認）
-- 是否有卡住（若卡住，直接從 `故障情境對照卡` 拿建議）
-
-延伸驗證：使用命令列腳本版本（README 裡的「命令列示範腳本」）各跑一次，確認成功與失敗輸出都一致。
-
-## 4) 故障回歸（至少做一次）
-
-各至少各做一次（各 2 分鐘）：
-
-- 付款失敗（情境 B / `decline`）
-- 庫存不足（情境 C）
-
-驗收條件：
-
-- 無需先看 console 就知道「我現在該做什麼」；
-- 可以直接點「建議行為」或「命令複製」完成下一步；
-- 時間軸有對到失敗節點（例如付款或出貨）。
-
-## 5) service down 演練（至少做一次）
-
-在頁面「故障演練（1/2 分鐘）」依序做：
-
-- 「先做一輪成功流程」
-- 貼上 `orbit ... down cart-api --json`
-- 貼上 `orbit ... status --json`
-- 貼上 `orbit ... restart cart-api --json`
-- 點「回到 3 秒可 demo 指標」
-
-驗收條件：
-
-- 無需查看程式碼就知道哪個步驟沒做好；
-- 只要頁面提示 + 兩條 CLI 命令就能回歸；
-- 3 秒指標可再度回到綠色。
-
-記錄欄位：
-
-- 基線耗時（`先做一輪成功流程`）：`___` 秒
-- 故障後回歸耗時（`回到 3 秒可 demo 指標`）：`___` 秒
-
-目標（可作為跨 release 比較標準）：
-
-- 成功基線 15 秒內完成
-- 回歸 120 秒內達到三格綠色
-
-## 6) 重置與再次演示
-
-點「重置流程」後要能在兩步內回到起始（服務不重建、流程 UI 可重跑）。
-
-```bash
-orbit -c docs/examples/mini-shop/dev.yaml down
-```
-
-## 6) 可通過條件（你只要這 5 項）
-
-- [ ] 開啟三格判斷值、1.0 檢核、資料關係快覽可讀；
-- [ ] 一輪成功 demo 無需查說明文件可完成；
-- [ ] 失敗情境可由頁面給出可執行後續；
-- [ ] 時間軸可定位出問題節點；
-- [ ] `service down → restart` 演練可由頁面引導完成並回到可 demo 狀態；
-- [ ] 重置後可快速回到可 demo 狀態。
-- [ ] `bash docs/examples/mini-shop/scripts/smoke-compact.sh all` 可在 60 秒內讓 success 場景通過（或明確記錄阻塞原因）
-
-不通過的項目，直接在 release note 記成「修正項」並回到對應卡片優先改善。
-
-## 7) 1.0 前 release 交付前固定 smoke（可選）
-
-固定每次打磨/Release 前先執行（mini 參照）：
-
-```bash
-bash docs/examples/mini-shop/scripts/smoke-p1.sh mini
-```
-
-可選擇一起跑進階觀測版：
-
-```bash
-bash docs/examples/mini-shop/scripts/smoke-p1.sh all
-```
-
-`all` 會先跑 mini，完成後關閉 mini-group，接著跑 advanced，避免同端口衝突。
-
-執行結果會落在：
-
-- `/tmp/mini-shop-smoke-reports/mini-summary.json`
-- `/tmp/mini-shop-smoke-reports/advanced-summary.json`（若用 `all`）
-- `/tmp/mini-shop-smoke-reports/all-summary.json`
-- 對應日誌：`/tmp/mini-shop-smoke-reports/*`
-
-如果 JSON 報告的 `suite_passed` 為 `false`，請先修完再發版。  
+If services are unavailable, the page must lead to the first affected resource
+and `orbit logs <resource>` rather than showing generic retry guidance.

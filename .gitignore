@@ -14,3 +14,4 @@ cmd/orbit/dist/
 ui/node_modules/
 __pycache__/
 *.pyc
+docs/examples/mini-shop/apps/*/*.db
