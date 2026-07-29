@@ -20,6 +20,8 @@ make release-check RELEASE_VERSION=v0.0.37
 The candidate notes and both bundled plugin manifests must match that version.
 After the candidate commit passes CI and is reviewed, tag that exact `main`
 commit and dispatch the Release workflow with `RELEASE v0.0.37`. The workflow
-runs platform and SQL Server smoke gates, then publishes the curated candidate
-notes as the GitHub Release body. Commit-generated notes are deliberately not
-used as the product delivery record.
+requires successful `preflight` and `first-five-minutes` checks from that exact
+main commit, runs platform and SQL Server smoke gates, then publishes the
+curated candidate notes as the GitHub Release body. It does not rerun the same
+Linux source gate after those checks have passed. Commit-generated notes are
+deliberately not used as the product delivery record.
