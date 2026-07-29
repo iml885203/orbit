@@ -159,7 +159,7 @@ PY
     rm -f "$payload_path"
     echo "pass:checkout_ok"
     if [[ -n "${correlation:-}" ]]; then
-      echo "關聯驗證：order_id=${correlation}"
+      echo "corr:${correlation}"
     fi
     return 0
   fi
@@ -175,18 +175,50 @@ PY
 
 run_success_flow() {
   log "情境 success：清空購物車→加 1 件→mock_card" >&2
-  check_cart_checkout_success "mock_card"
+  local start_ts
+  local response
+  local first_line
+  local corr_line
+  local rc
+  start_ts="$(date +%s%N)"
+  set +e
+  response="$(check_cart_checkout_success "mock_card")"
+  rc=$?
+  set -e
+  first_line="$(printf '%s\n' "$response" | sed -n '1p')"
+  corr_line="$(printf '%s\n' "$response" | awk -F: '/^corr:/{print $2}' | tr -d '\n')"
+  echo "${first_line}|${start_ts}|${corr_line}"
+  return "$rc"
 }
 
 run_decline_flow() {
   log "情境 decline：清空購物車→加 1 件→decline" >&2
-  check_cart_checkout_success "decline"
+  local start_ts
+  local response
+  local first_line
+  local corr_line
+  local rc
+  start_ts="$(date +%s%N)"
+  set +e
+  response="$(check_cart_checkout_success "decline")"
+  rc=$?
+  set -e
+  first_line="$(printf '%s\n' "$response" | sed -n '1p')"
+  corr_line="$(printf '%s\n' "$response" | awk -F: '/^corr:/{print $2}' | tr -d '\n')"
+  echo "${first_line}|${start_ts}|${corr_line}"
+  return "$rc"
 }
 
 success_detail="not_run:mode does not include success"
 decline_detail="not_run:mode does not include decline"
+success_corr=""
+decline_corr=""
 success_passed=0
 decline_passed=0
+success_start_ts=""
+decline_start_ts=""
+success_ms=0
+decline_ms=0
 
 if [[ "$MODE" != "all" && "$MODE" != "success" && "$MODE" != "decline" ]]; then
   echo "Usage: $0 [all|success|decline]" >&2
@@ -194,7 +226,18 @@ if [[ "$MODE" != "all" && "$MODE" != "success" && "$MODE" != "decline" ]]; then
 fi
 
 if [[ "$MODE" == "all" || "$MODE" == "success" ]]; then
-  if success_detail="$(run_success_flow)"; then
+  set +e
+  success_result="$(run_success_flow)"
+  success_rc=$?
+  set -e
+  success_detail="$(printf '%s\n' "$success_result" | awk -F'|' 'NR==1{print $1}')"
+  success_start_ts="$(printf '%s\n' "$success_result" | awk -F'|' '{print $2}')"
+  success_corr="$(printf '%s\n' "$success_result" | awk -F'|' '{print $3}')"
+  if [[ -n "$success_start_ts" ]]; then
+    success_ms=$(( $(date +%s%N) - success_start_ts ))
+    success_ms=$(( success_ms / 1000000 ))
+  fi
+  if [[ "$success_rc" -eq 0 ]]; then
     success_passed=1
   else
     success_passed=0
@@ -202,7 +245,18 @@ if [[ "$MODE" == "all" || "$MODE" == "success" ]]; then
 fi
 
 if [[ "$MODE" == "all" || "$MODE" == "decline" ]]; then
-  if decline_detail="$(run_decline_flow)"; then
+  set +e
+  decline_result="$(run_decline_flow)"
+  decline_rc=$?
+  set -e
+  decline_detail="$(printf '%s\n' "$decline_result" | awk -F'|' 'NR==1{print $1}')"
+  decline_start_ts="$(printf '%s\n' "$decline_result" | awk -F'|' '{print $2}')"
+  decline_corr="$(printf '%s\n' "$decline_result" | awk -F'|' '{print $3}')"
+  if [[ -n "$decline_start_ts" ]]; then
+    decline_ms=$(( $(date +%s%N) - decline_start_ts ))
+    decline_ms=$(( decline_ms / 1000000 ))
+  fi
+  if [[ "$decline_rc" -eq 0 ]]; then
     decline_passed=1
   else
     decline_passed=0
@@ -233,6 +287,10 @@ export SUCCESS_DETAIL="$success_detail"
 export DECLINE_DETAIL="$decline_detail"
 export SUCCESS_HINT="$success_hint"
 export DECLINE_HINT="$decline_hint"
+export SUCCESS_MS="$success_ms"
+export DECLINE_MS="$decline_ms"
+export SUCCESS_CORR="$success_corr"
+export DECLINE_CORR="$decline_corr"
 export MODE_NAME="$MODE"
 export SUITE_PASSED="$suite_passed"
 export DURATION_SEC="$DURATION"
@@ -252,16 +310,27 @@ report = {
     "suite_passed": suite_passed,
     "release_ready": suite_passed,
     "scenarios": {
-        "success": {
+    "success": {
             "passed": mode in ("all", "success") and os.environ["SUCCESS_DETAIL"].startswith("pass:"),
             "details": os.environ["SUCCESS_DETAIL"],
+            "correlation_order_ids": [int(item) for item in (os.environ.get("SUCCESS_CORR", "").split(",")) if item],
             "next_action": os.environ["SUCCESS_HINT"],
+            "duration_ms": int(os.environ["SUCCESS_MS"]),
         },
         "decline": {
             "passed": mode in ("all", "decline") and os.environ["DECLINE_DETAIL"].startswith("pass:"),
             "details": os.environ["DECLINE_DETAIL"],
+            "correlation_order_ids": [int(item) for item in (os.environ.get("DECLINE_CORR", "").split(",")) if item],
             "next_action": os.environ["DECLINE_HINT"],
+            "duration_ms": int(os.environ["DECLINE_MS"]),
         },
+    },
+    "ux_readiness": {
+        "first_run_success_ms": int(os.environ["SUCCESS_MS"] if os.environ["SUCCESS_DETAIL"].startswith("pass:") else 0),
+        "first_run_target_ms": 60000,
+        "first_run_within_target": True if (
+            os.environ["SUCCESS_DETAIL"].startswith("pass:") and int(os.environ["SUCCESS_MS"]) <= 60000
+        ) else False,
     },
     "evidence": {
         "endpoints_checked": [
@@ -275,11 +344,11 @@ report = {
         "target_product_id": 1,
         "method": "sequential_http",
     },
-    "release_signal": {
-        "first_time_path": True,
-        "meaningful_for_demo": "compact 路徑只驗證成功與 payment 失敗，不包含庫存不足；適合 1.0 前快速心理模型檢核。",
-    },
-}
+        "release_signal": {
+            "first_time_path": True,
+            "meaningful_for_demo": "compact 路徑只驗證成功與 payment 失敗，不包含庫存不足；適合 1.0 前快速心理模型檢核。",
+        },
+    }
 
 path = "/tmp/mini-shop-smoke-reports/compact-summary.json"
 with open(path, "w", encoding="utf-8") as f:
@@ -290,6 +359,7 @@ PY
 REPORT_PATH="$REPORT_DIR/compact-summary.json"
 if [[ "$suite_passed" -eq 1 ]]; then
   log "compact smoke passed in ${DURATION}s, report=$REPORT_PATH"
+  log "success duration_ms=${success_ms}, decline duration_ms=${decline_ms}"
   log "success: ${success_detail}"
   log "decline: ${decline_detail}"
   exit 0

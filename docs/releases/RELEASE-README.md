@@ -16,6 +16,20 @@
   - 新增「本次 demo 指標」panel，集中展示 1.0 核心交付條件（服務就緒、成功 checkout、關聯驗證）的即時進度。
 - `RELEASE-0.0.23.md`
   - 修正本次 demo 指標的 session 重置行為，避免重置後仍殘留舊 session 的完成時間。
+- `RELEASE-0.5.72.md`
+  - first-run 60 秒門檻可量化，並加入可貼式 release 交付摘要方向。
+- `RELEASE-0.5.73.md`
+  - release-check 可直接輸出可貼到版本描述的 body（含 ready_for_release 與 60 秒門檻）。
+- `RELEASE-0.5.74.md`
+  - 新手首屏只保留最小 demo 路徑，降低心智模型負擔。
+- `RELEASE-0.5.75.md`
+  - 將 1.0 前打磨聚焦為「可交付價值可見」：新增明確的 demo 價值敘述、第一輪成功-失敗可復現、與 release-ready 交付摘要一致化。
+- `RELEASE-0.5.76.md`
+  - 把 `release-check` 變成新手交付儀表板：加入 decline、first-run 時間、onboarding_score 讓每輪 UX 進步可量化。
+- `RELEASE-0.5.77.md`
+  - 增加 PR 交付門檻輸出（success/decline/time/score 一起判斷），並在 README 新增可直接貼 PR 的標準段落。
+- `RELEASE-0.5.78.md`
+  - 新增 demo 族譜與參考專案採用策略，明確「不為了複雜化而複雜化」的 1.0 前 UX 方針，將重點轉為交易敘事與可回歸心智模型。
 
 建議流程：
 

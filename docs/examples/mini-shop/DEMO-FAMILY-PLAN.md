@@ -30,6 +30,22 @@
 2. **加入 compact 腳本路徑**：只做 success + decline，做為「新手首次 2 分鐘路徑」。
 3. **把 compact profile 當成明確的目標（未來版）**：在 `1.0.0` 前先做可用的 4-service 原型，不一定要同時把所有原始 API 重構完成。
 
+## Demo 族譜補充：不用自己重寫整個新專案的做法
+
+你問「是不是太簡單」很實際。建議採用「分層 demo」而不是「大 repo 突然上去」：
+
+1. **主 demo（保留）**  
+   - 直接用 `mini-shop`：最短路徑、第一眼可 demo。  
+   - 目標是讓新手 1–2 分鐘內完成「一筆成功 + 一筆失敗」並說清楚卡在哪裡。
+
+2. **進階引用（外部參考）**  
+   - 把 [dotnet/eshop](https://github.com/dotnet/eshop) 或 [microservices-demo](https://github.com/GoogleCloudPlatform/microservices-demo) 的概念，只做可觀測與服務分層的演示素材，不做預設入口。  
+   - 例如：把「請求路徑圖」、「trace」做成 demo chapter，讓你能用同一個 Orbit 介紹不同風格，不增加新手首輪負擔。
+
+3. **不做的事（1.0 前明確卡關）**  
+   - 不再拿企業級 monolith/microservices 套件直接當主 demo。  
+   - 不把資料庫類型（SQL Server / Kafka）當作先決條件。先做跨 service 的可理解，後再談技術棧擴展。
+
 ## 你現在可以直接打包的 UX 交付（本輪）
 
 - 對外 release 的主要訊息：
@@ -37,4 +53,3 @@
   - 「能修」(故障演練一鍵)
   - 「能驗」(可複製 demo 報告)
 - 新增 `compact smoke`：只做最核心流程，先驗證使用者是不是 2 分鐘內可完成一次成功與一次處理失敗。
-

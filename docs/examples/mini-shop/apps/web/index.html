@@ -491,8 +491,8 @@
         </div>
         <div class="goal-action">
           <button id="goal-next" class="small-btn inline-btn">下一步操作建議</button>
-          <button id="goal-replay" class="small-btn inline-btn danger">重做一次成功流程</button>
-          <button id="one-shot-success" class="small-btn inline-btn">一鍵完成成功流程</button>
+          <button id="goal-replay" class="small-btn inline-btn danger beginner-mode-hide">重做一次成功流程</button>
+          <button id="one-shot-success" class="small-btn inline-btn beginner-mode-hide">一鍵完成成功流程</button>
         </div>
       </div>
     </div>
@@ -533,16 +533,16 @@
 
       <div id="quick-start-card" class="card quick-start-card">
         <h3>第一次 demo（30 秒）</h3>
-        <div class="hero-action-row">
-          <button id="hero-success-path" class="hero-btn hero-btn-success">一鍵走完成功 demo</button>
-          <button id="hero-repair-path" class="hero-btn hero-btn-repair" hidden>一鍵修復最近錯誤</button>
+      <div class="hero-action-row">
+        <button id="hero-success-path" class="hero-btn hero-btn-success">一鍵走完成功 demo</button>
+        <button id="hero-repair-path" class="hero-btn hero-btn-repair" hidden>一鍵修復最近錯誤</button>
       </div>
-      <p class="hint">給第一次看 demo 的同事，按順序最少點擊也能看到完整關聯。</p>
+      <p class="hint">給第一次看 demo 的同事，按最少點擊也能看到完整關聯。</p>
       <div class="row">
-        <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
         <button id="run-beginner-flow" class="small-btn inline-btn quick-start-action">一鍵完成第一輪 demo（約 1 分鐘）</button>
         <button id="verify-demo-signal" class="small-btn inline-btn quick-start-action">核對可 demo 條件</button>
-        <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action">先看核對清單</button>
+        <button id="start-demo-flow" class="small-btn inline-btn quick-start-action beginner-mode-hide">開始 demo 一輪</button>
+        <button id="focus-demo-checklist" class="small-btn inline-btn quick-start-action beginner-mode-hide">先看核對清單</button>
         <button id="demo-quick-acceptance" class="small-btn inline-btn quick-start-action beginner-mode-hide">一鍵 demo 檢核（成功→核對）</button>
         <button id="copy-demo-report" class="small-btn inline-btn quick-start-action beginner-mode-hide">複製 demo 報告</button>
         <button id="copy-mini-shop-standard" class="small-btn inline-btn quick-start-action beginner-mode-hide" data-copy-cmd="bash docs/examples/mini-shop/scripts/start-mini-shop.sh standard">複製標準啟動指令</button>
@@ -648,7 +648,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
         <button id="mode-beginner" class="small-btn mode-btn active">新手</button>
         <button id="mode-advanced" class="small-btn mode-btn">進階</button>
       </div>
-      <p id="mode-help" class="hint">新手模式預設只保留最少步驟；進階模式展開完整故障排查卡。</p>
+      <p id="mode-help" class="hint">新手：直接做「一鍵完成第一輪 demo」→「核對可 demo」，就能得到可 demo 結論；需要深入排障再切進階。</p>
     </div>
 
     <div id="goal-summary-card" class="card compact-mode-hide">

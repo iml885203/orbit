@@ -37,6 +37,21 @@ orbit -c docs/examples/mini-shop/dev.yaml up
 - 立刻點「核對可 demo 條件」→ 三格若為綠即可視為 demo 可展示
 - 進一步看「訂單 / 出貨 / 流程時間軸」是否同一筆關聯
 
+### 命令列對照（1.0 前快速心理模型門檻）
+
+對應 CLI 可在每次打磨後快速回填：
+
+- `bash docs/examples/mini-shop/scripts/smoke-compact.sh all`
+- 觀察 `ux_readiness.first_run_success_ms` 與 `ux_readiness.first_run_target_ms`
+- 目標：`first_run_within_target = true` 且 `first_run_success_ms <= 60000`
+
+建議你把這個值寫到 release note：
+
+```text
+- 一分鐘可 demo：PASS/FAIL（first_run_success_ms=XXX）
+- 成功流/失敗流是否穩定：smoke-compact pass true/false
+```
+
 記錄：
 
 - 成功耗時（從開始按鈕到關聯確認）
@@ -99,6 +114,7 @@ orbit -c docs/examples/mini-shop/dev.yaml down
 - [ ] 時間軸可定位出問題節點；
 - [ ] `service down → restart` 演練可由頁面引導完成並回到可 demo 狀態；
 - [ ] 重置後可快速回到可 demo 狀態。
+- [ ] `bash docs/examples/mini-shop/scripts/smoke-compact.sh all` 可在 60 秒內讓 success 場景通過（或明確記錄阻塞原因）
 
 不通過的項目，直接在 release note 記成「修正項」並回到對應卡片優先改善。
 

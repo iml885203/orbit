@@ -167,6 +167,10 @@ if [[ -f "$report" ]]; then
   python3 - "$report" <<'PY'
 import json, sys
 payload = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
+ux = payload.get('ux_readiness', {}) or {}
+first_run_ms = ux.get('first_run_success_ms', 0)
+first_run_target = ux.get('first_run_target_ms', 0)
+within_target = ux.get('first_run_within_target', False)
 print('[mini-shop-compact-onboarding] 版本摘要：')
 print('  suite_passed=', payload.get('suite_passed'))
 print('  success=', payload.get('scenarios', {}).get('success', {}).get('passed'))
@@ -174,6 +178,13 @@ print('  decline=', payload.get('scenarios', {}).get('decline', {}).get('passed'
 print('  hints=', payload.get('scenarios', {}).get('decline', {}).get('next_action'))
 print('  started_at=', payload.get('started_at'))
 print('  duration_seconds=', payload.get('duration_seconds'))
+print('  first_success_ms=', first_run_ms)
+print('  first_run_within_60s=', within_target)
+print('  first_run_target_ms=', first_run_target)
+if first_run_ms:
+    delta = first_run_ms - (first_run_target or 0)
+    status = 'PASS' if within_target else f'WARN (+{delta}ms)'
+    print('  一分鐘可 demo指標：', status)
 PY
 else
   echo "[mini-shop-compact-onboarding] warning: 沒有找到 ${report}，請再跑一次 smoke-compact。" >&2

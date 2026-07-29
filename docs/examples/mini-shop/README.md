@@ -75,6 +75,17 @@ bash docs/examples/mini-shop/scripts/start-mini-shop.sh advanced
 
 如果 smoke 不是全綠，腳本會直接輸出下一步建議，建議先依照建議命令把環境回到穩定狀態後重跑。
 
+## 為什麼這個 demo 有價值（不是只做「會跑」）
+
+Orbit 的第一輪 demo 不只要「看起來有東西」，而是要回答三個問題：
+
+1. 前端操作（`web`）和後端服務（`catalog/cart/checkout/order/shipping`）能不能協作完成一筆訂單？
+2. 任一服務有問題時，是否可直接看出**最有可能**卡在哪裡？
+3. 新手是否能在 1 分鐘內做完一次「成功 + 失敗」的完整心智路徑？
+
+`mini-shop` 正是因為有「多服務 + host/container 混合 + 可重播故障情境」這三件事，才適合當 Orbit 的主 demo。  
+而 `dotnet/eshop` 這類大型專案可保留為進階參考，但會比這裡更慢上手；在 1.0 前的目標是先讓新手在第一分鐘建立信心，不是立刻吃滿整個商店網域。
+
 如果這個流程能走完，通常你在 UI 也能直接看到 3 秒 demo 結論轉為可 demo 狀態。
 
 > 預設與 `compact` 入門啟動共用核心基線：`catalog-api`、`inventory-api`、`customer-api`、`cart-api`、`order-api`、`payment-api`、`shipping-api`、`checkout-api`、`web`。
@@ -416,12 +427,12 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 ### 首次最小心智體驗（建議新手先做）
 
 1. 開啟後先不用看所有卡片。
-2. 直接按「第一次 demo（30 秒）」裡的「開始 demo 一輪」，最快可直接看到完整成功鏈路（訂單 + 出貨 + 時間軸）。
-3. 接著按「核對可 demo 條件」，確認「快速判斷值（服務 / 交易 / 關聯）」都為綠色。
-4. 需要更細可回到「一頁式目標導覽」按「下一步操作建議」逐步操作。
+2. 直接按「第一次 demo（30 秒）」裡的「一鍵完成第一輪 demo（約 1 分鐘）」即可啟動最小成功路徑。
+3. 接著按「核對可 demo 條件」，確認「快速判斷值（服務 / 交易 / 關聯）」都為綠色，這代表可對外 demo。
+4. 需要更細可回到「一頁式目標導覽」按「下一步操作建議」逐步操作，或在「場景導演」看成功/失敗對照。
 5. 核對「訂單 / 出貨 / 時間軸」出現同一筆關聯結果。
-6. 若只想快速重播一次成功 path，按「一鍵完成成功流程」或「重做一次成功流程」。
-7. 需要回報時可直接點「複製 demo 報告」，可拿到簡明文字摘要。
+6. 需要快速重播一次成功 path，可切到進階模式後用「開始 demo 一輪」或「一鍵完成成功流程」重跑；新手模式預設只保留最小步驟。
+7. 需要回報時可切進階模式點「複製 demo 報告」，可拿到簡明文字摘要。
 8. 若要貼到 PR 交付說明，還可點「複製 demo 指標 JSON」，直接貼上就能做逐版本比對。
 9. 做完故障演練後，可再按「複製故障回歸報告」，直接把基線耗時、回歸耗時與三格可 demo 狀態一起貼給團隊。
 10. 遇到失敗時，先按「現在只要做一件事」裡的「一鍵修復最近錯誤」，系統會依最近錯誤碼套用建議動作。
@@ -475,6 +486,58 @@ curl http://127.0.0.1:3010/events
   先驗證成功路徑、再驗證兩個失敗回歸（付款失敗 / 庫存不足），確保文案與操作仍是「可猜測率低」的流程。
 
 你可把「操作摘要」當作目前這一步的進度日誌，搭配「診斷命令」快速定位。
+
+另外，`release-check.sh` 會把「最小交付條件」直接做成機讀結果（含 60 秒門檻）：
+
+- `bash docs/examples/mini-shop/scripts/release-check.sh quick`  
+  - 檢查 `success` 是否通過、`ux_readiness.first_run_within_target=true`，不符合會回傳非 0。
+- `bash docs/examples/mini-shop/scripts/release-check.sh full`  
+  - 在 `quick` 基礎上補 `smoke-p1 mini`，產生 `/tmp/mini-shop-smoke-reports/release-check-summary.json` 作為 release 依據。
+- 每次執行都會印出可直接複製到 release note 的「mini-shop Release 交付摘要」，例如：
+
+  - `compact suite`
+  - `success scenario`
+  - `decline scenario`
+  - `first_run_success_ms`
+  - `decline_ms`
+  - `first_run_within_60s`
+  - `onboarding_score`
+  - `ready_for_release`
+- 腳本同時會輸出 `/tmp/mini-shop-smoke-reports/release-check-body.md`，
+  可直接貼到 GitHub Release 描述，並保留本輪可交付判斷的 markdown 版本。
+
+### 1.0 前打磨交付門檻（每次 release 前）
+
+這三件是這週你最重要的判斷，不依賴主觀感覺：
+
+- **最短新手路徑**：`bash docs/examples/mini-shop/scripts/smoke-compact.sh all`
+  - 必需：`suite_passed=true`
+  - 建議：`ux_readiness.first_run_within_target=true`
+- **可維持節奏**：`smoke-compact.sh all` 之後，`compact-onboarding.sh` 的建議應可在 2 步內完成。
+- **可回歸**：`service down` 演練（`cart-api`）至少一輪後，仍可回到三格綠。
+
+如果這三項都過，這版變更通常可以列為「對外演示可見進步」；若缺一不可，建議先補完再進入下一個 PR。
+
+#### PR/Release 可直接貼的標準交付段落
+
+當前版本達到 1.0 前門檻時，可直接貼到 PR 描述：
+
+```markdown
+### mini-shop 1.0 前 UX 打磨交付
+
+- compact suite：true
+- success scenario：true
+- decline scenario：true
+- first_run_success_ms：`<ms>`
+- decline_ms：`<ms>`
+- first_run_within_60s：true
+- onboarding_score：`>=70/100`
+- PR 準備度：true
+- PR 備註：success + decline + 首次成功時間 + onboarding_score 都達門檻，可直接提 PR
+```
+
+若任一項為 false，請先補齊對應項目後再提。  
+你也可以直接把 `release-check.sh` 的輸出貼到 Release Notes 的「可貼摘要」欄位。
 
 進一步規劃可參考：[`DEMO-FAMILY-PLAN.md`](./DEMO-FAMILY-PLAN.md)
 想重複 demo 時，直接按「重置流程」即可回到起始節點（清空購物車、回到預設付款方式）。

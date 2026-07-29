@@ -8,6 +8,9 @@
 
 - [ ] 開啟頁面後，使用者能在 **30 秒內**看到一個清楚的「下一步」指示。
   - 檢查：「現在只要做一件事」卡片有文字與可點按鈕。
+- [ ] 使用者能在 **60 秒內**完成一次 success smoke（`smoke-compact.sh all` 的 success）並看到：
+  - `ux_readiness.first_run_within_target = true`
+  - `scenarios.success.duration_ms <= 60000`
 - [ ] 一鍵流程能一次看到完整成功鏈路。
   - 點「開始 demo 一輪」後，有可視覺結果（訂單、出貨、時間軸）出現。
 - [ ] 「快速判斷值」有明確三格狀態：
