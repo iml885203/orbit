@@ -47,6 +47,36 @@
       li { margin: 4px 0; }
       .step-list { margin: 0; padding-left: 20px; }
       .small-btn { font-size: 12px; padding: 4px 8px; background: #93c5fd; }
+      .hero-action-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .hero-btn {
+        width: 100%;
+        min-height: 56px;
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .hero-btn-success {
+        background: #34d399;
+        color: #052e16;
+      }
+      .hero-btn-success:active,
+      .hero-btn-success:hover {
+        background: #10b981;
+      }
+      .hero-btn-repair {
+        background: #f59e0b;
+        color: #111827;
+      }
+      .hero-btn-repair:active,
+      .hero-btn-repair:hover {
+        background: #fbbf24;
+      }
       .copy-feedback { color: #86efac; font-size: 12px; min-height: 16px; }
       .inline-btn { background: #93c5fd; }
       .inline-btn.primary-action {
@@ -470,6 +500,10 @@
 
     <div id="quick-start-card" class="card quick-start-card">
       <h3>第一次 demo（30 秒）</h3>
+      <div class="hero-action-row">
+        <button id="hero-success-path" class="hero-btn hero-btn-success">一鍵走完成功 demo</button>
+        <button id="hero-repair-path" class="hero-btn hero-btn-repair" hidden>一鍵修復最近錯誤</button>
+      </div>
       <p class="hint">給第一次看 demo 的同事，按順序最少點擊也能看到完整關聯。</p>
       <div class="row">
         <button id="start-demo-flow" class="small-btn inline-btn quick-start-action">開始 demo 一輪</button>
@@ -844,6 +878,8 @@ web
       const goalNextBtn = document.getElementById('goal-next');
       const goalReplayBtn = document.getElementById('goal-replay');
       const oneShotSuccessBtn = document.getElementById('one-shot-success');
+      const heroSuccessPathBtn = document.getElementById('hero-success-path');
+      const heroRepairPathBtn = document.getElementById('hero-repair-path');
       const goalSummaryEl = document.getElementById('goal-summary');
       const proofSummaryEl = document.getElementById('proof-summary');
       const valueSignalEl = document.getElementById('value-signal');
@@ -1389,9 +1425,25 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (hasFailure) {
           quickFixErrorBtn.dataset.quickFixCode = latestFailureErrorCode;
           quickFixErrorBtn.title = `根據 ${latestFailureErrorCode} 自動帶出修復建議`;
+          if (heroRepairPathBtn) {
+            heroRepairPathBtn.hidden = false;
+            heroRepairPathBtn.disabled = false;
+            heroRepairPathBtn.textContent = '一鍵修復最近錯誤';
+            heroRepairPathBtn.title = `根據 ${latestFailureErrorCode} 自動帶出修復建議`;
+          }
         } else {
           quickFixErrorBtn.dataset.quickFixCode = '';
           quickFixErrorBtn.title = '請先執行一次失敗場景，系統才會提供修復建議';
+          if (heroRepairPathBtn) {
+            if (runResultState?.kind === 'error') {
+              heroRepairPathBtn.hidden = false;
+              heroRepairPathBtn.disabled = true;
+              heroRepairPathBtn.textContent = '先完成一次錯誤場景';
+              heroRepairPathBtn.title = '先重現一次錯誤情境後，會顯示可一鍵修復';
+            } else {
+              heroRepairPathBtn.hidden = true;
+            }
+          }
         }
       }
 
@@ -2681,6 +2733,12 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         oneShotSuccessBtn.disabled = disabledState;
         if (startDemoFlowBtn) {
           startDemoFlowBtn.disabled = disabledState;
+        }
+        if (heroSuccessPathBtn) {
+          heroSuccessPathBtn.disabled = disabledState;
+        }
+        if (heroRepairPathBtn) {
+          heroRepairPathBtn.disabled = disabledState || heroRepairPathBtn.hidden;
         }
         if (verifyDemoSignalBtn) {
           verifyDemoSignalBtn.disabled = disabledState;
@@ -4131,6 +4189,22 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             appendSummary('一鍵 demo 檢核中止：未完成成功流程');
             setCopyFeedback('一鍵 demo 檢核未完成，請先讓服務與資料回復可用');
           }
+        });
+      }
+
+      if (heroSuccessPathBtn) {
+        heroSuccessPathBtn.addEventListener('click', async () => {
+          appendSummary('超大按鈕：直接執行一鍵成功 demo。');
+          const ok = await runOneShotSuccessFlow();
+          if (!ok) {
+            setNotice('成功 demo 路徑未完成，請先確認服務可用。', 'warn');
+          }
+        });
+      }
+
+      if (heroRepairPathBtn) {
+        heroRepairPathBtn.addEventListener('click', async () => {
+          await runLatestFailureRecovery();
         });
       }
 
