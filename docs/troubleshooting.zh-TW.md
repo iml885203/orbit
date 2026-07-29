@@ -117,10 +117,11 @@ orbit daemon start
 ```
 
 ### Dashboard 的 :19800 port 打不開
-有別的 process 在用。為這一次的 instance 換個 port：
+Orbit 通常會自動選擇其他可用的 port，`orbit open` 也會使用實際位址。如果你有
+明確設定 `ORBIT_DASHBOARD_PORT`，請移除設定或改用其他 port：
 
 ```bash
-export ORBIT_DASHBOARD_PORT=19801
+unset ORBIT_DASHBOARD_PORT
 orbit daemon restart
 ```
 

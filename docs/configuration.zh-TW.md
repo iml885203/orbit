@@ -601,7 +601,7 @@ path: ${API_ROOT:-~/dev/api}
 |----------|---------|---------|
 | `ORBIT_HOME` | `envs/`、socket、PID、settings 的路徑 | `~/.orbit` |
 | `ORBIT_NAMESPACE` | Docker container / label 名稱的 prefix | empty（legacy `orbit-<svc>`） |
-| `ORBIT_DASHBOARD_PORT` | 覆寫 dashboard 的 TCP port | `19800` |
+| `ORBIT_DASHBOARD_PORT` | 固定 dashboard TCP port；未設定時若衝突會自動避開 | `19800` |
 | `ORBIT_LOG_LEVEL` | Daemon log 等級（`debug`/`info`/`warn`/`error`） | `info` |
 
 請在 `orbit up` 之前設定 —— daemon 已經跑起來後再改的話，需要 `orbit daemon restart`。

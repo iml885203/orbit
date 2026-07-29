@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"net"
 
@@ -68,4 +69,25 @@ func availableDashboardPort(after int) int {
 	}
 	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port
+}
+
+func selectDashboardPort(preferred int, pinned bool) (int, error) {
+	probe, err := ListenDashboard(preferred)
+	if err == nil {
+		_ = probe.Close()
+		return preferred, nil
+	}
+	if pinned {
+		return 0, err
+	}
+	var conflict *PortConflictError
+	if !errors.As(err, &conflict) || conflict.SuggestedPort <= 0 {
+		return 0, err
+	}
+	probe, err = ListenDashboard(conflict.SuggestedPort)
+	if err != nil {
+		return 0, err
+	}
+	_ = probe.Close()
+	return conflict.SuggestedPort, nil
 }

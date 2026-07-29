@@ -624,7 +624,7 @@ Isolate multiple Orbit instances on one machine (e2e tests, sandboxes):
 |----------|---------|---------|
 | `ORBIT_HOME` | Path for `envs/`, socket, PID, settings | `~/.orbit` |
 | `ORBIT_NAMESPACE` | Prefix for Docker container / label names | empty (legacy `orbit-<svc>`) |
-| `ORBIT_DASHBOARD_PORT` | Override dashboard TCP port | `19800` |
+| `ORBIT_DASHBOARD_PORT` | Pin the dashboard TCP port; without it, conflicts relocate automatically | `19800` |
 | `ORBIT_LOG_LEVEL` | Daemon log verbosity (`debug`/`info`/`warn`/`error`) | `info` |
 
 Set these before `orbit up` — changing them after the daemon is already running requires `orbit daemon restart`.

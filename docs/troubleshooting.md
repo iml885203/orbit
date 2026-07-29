@@ -121,10 +121,12 @@ orbit daemon start
 ```
 
 ### Dashboard port :19800 won't open
-Another process is using it. Override the port for this instance:
+Orbit normally chooses another available port automatically, and `orbit open`
+uses the active address. If you explicitly pinned `ORBIT_DASHBOARD_PORT`,
+either unset it or choose another port:
 
 ```bash
-export ORBIT_DASHBOARD_PORT=19801
+unset ORBIT_DASHBOARD_PORT
 orbit daemon restart
 ```
 

@@ -174,7 +174,7 @@ func readPIDRecord() pidRecord {
 	if err != nil {
 		return pidRecord{}
 	}
-	return pidRecord{PID: pid, DashboardPort: DashboardPort()}
+	return pidRecord{PID: pid, DashboardPort: configuredDashboardPortOrDefault()}
 }
 
 // RemovePID removes the PID file.
@@ -307,17 +307,14 @@ func waitForProcessExit(pid int, timeout time.Duration) bool {
 // StartDaemon forks a new daemon process in a new session. Returns the
 // child PID so callers can poll for early exit while waiting for ready.
 func StartDaemon(configPath string, features []string) (int, error) {
-	// Fail fast if the dashboard port is held by another process. A
-	// silent-no-dashboard daemon start is the exact failure mode that
-	// masks stale/zombie daemon instances. The close/fork gap is a
-	// TOCTOU race, but the daemon child also calls listenDashboard and
-	// surfaces the same error — this pre-check exists so the user sees
-	// the conflict at the CLI instead of having to grep daemon.log.
-	probe, err := ListenDashboard(DashboardPort())
+	// Respect explicitly pinned ports, while allowing the default setup to
+	// coexist with another Orbit instance without user configuration. The
+	// child validates the selected port again after the close/fork gap.
+	preferredDashboardPort, pinnedDashboardPort := dashboardPortFromEnv()
+	dashboardPort, err := selectDashboardPort(preferredDashboardPort, pinnedDashboardPort)
 	if err != nil {
 		return 0, err
 	}
-	_ = probe.Close()
 
 	configPath = strings.TrimSpace(configPath)
 
@@ -344,6 +341,7 @@ func StartDaemon(configPath string, features []string) (int, error) {
 	}
 
 	cmd := exec.Command(exe, args...)
+	cmd.Env = append(os.Environ(), "ORBIT_DASHBOARD_PORT="+strconv.Itoa(dashboardPort))
 	if configPath != "" {
 		cmd.Dir = filepath.Dir(configPath)
 	}
@@ -495,13 +493,32 @@ func SocketPath() string {
 // defaultDashboardPort is the TCP port the dashboard listens on by default.
 const defaultDashboardPort = 19800
 
-// DashboardPort returns the dashboard TCP port, honoring the
-// ORBIT_DASHBOARD_PORT env var for isolation in e2e runs.
+// DashboardPort returns the active dashboard port. An explicit
+// ORBIT_DASHBOARD_PORT remains pinned; otherwise a running daemon's selected
+// fallback is read from its ownership record.
 func DashboardPort() int {
+	if port, pinned := dashboardPortFromEnv(); pinned {
+		return port
+	}
+	record := readPIDRecord()
+	if record.PID > 0 && record.DashboardPort > 0 && IsProcessAlive(record.PID) {
+		return record.DashboardPort
+	}
+	return defaultDashboardPort
+}
+
+func dashboardPortFromEnv() (int, bool) {
 	if s := os.Getenv("ORBIT_DASHBOARD_PORT"); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 {
-			return n
+			return n, true
 		}
+	}
+	return defaultDashboardPort, false
+}
+
+func configuredDashboardPortOrDefault() int {
+	if port, pinned := dashboardPortFromEnv(); pinned {
+		return port
 	}
 	return defaultDashboardPort
 }

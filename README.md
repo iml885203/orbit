@@ -226,7 +226,9 @@ Run `orbit open` after the daemon starts. The dashboard provides:
   active environment;
 - traces and request playback.
 
-The dashboard listens locally at <http://localhost:19800>.
+The dashboard normally listens locally at <http://localhost:19800>. If that
+port is already in use, Orbit selects another available port automatically;
+`orbit open` always opens the active address.
 
 ## Documentation
 

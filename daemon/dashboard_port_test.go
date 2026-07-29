@@ -53,6 +53,28 @@ func TestListenDashboard_FailsWhenPortHeld(t *testing.T) {
 	}
 }
 
+func TestSelectDashboardPortUsesAvailableFallbackUnlessPinned(t *testing.T) {
+	holder, port := occupyPort(t)
+	defer func() { _ = holder.Close() }()
+
+	selected, err := selectDashboardPort(port, false)
+	if err != nil {
+		t.Fatalf("select fallback: %v", err)
+	}
+	if selected == port || selected <= 0 {
+		t.Fatalf("selected = %d, want an available fallback after %d", selected, port)
+	}
+	probe, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", selected))
+	if err != nil {
+		t.Fatalf("selected port %d is not available: %v", selected, err)
+	}
+	_ = probe.Close()
+
+	if _, err := selectDashboardPort(port, true); err == nil {
+		t.Fatal("explicit dashboard port conflict was silently reassigned")
+	}
+}
+
 // PID lookup is best-effort — some environments (minimal CI containers
 // without `ss`/`lsof`, or sandboxed sandboxes where `ss` can't see process
 // owners) can't recover it. This test probes that capability first and
