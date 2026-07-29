@@ -1,13 +1,26 @@
 <script lang="ts">
   import { store } from '$lib/stores.svelte'
   import { runDoctorChecks } from '$lib/doctor'
-  import { Check, Info, Minus, TriangleAlert, X } from '@lucide/svelte'
+  import { copyToClipboard } from '$lib/clipboard'
+  import { Check, ChevronDown, ChevronRight, Copy, Info, Minus, TriangleAlert, X } from '@lucide/svelte'
 
   const statusLabels: Record<string, string> = {
     pass: 'passed',
     fail: 'failed',
     warn: 'warning',
     info: 'info',
+  }
+
+  let showOtherChecks = $state(false)
+  const attentionChecks = $derived(
+    store.daemon.doctorChecks.filter((check) => check.status === 'fail' || check.status === 'warn'),
+  )
+  const otherChecks = $derived(
+    store.daemon.doctorChecks.filter((check) => check.status !== 'fail' && check.status !== 'warn'),
+  )
+
+  function commandFromHint(hint?: string): string {
+    return hint?.startsWith('run: ') ? hint.slice('run: '.length).trim() : ''
   }
 </script>
 
@@ -33,7 +46,22 @@
   </div>
 
   {#if store.daemon.doctorChecks.length}
-    {#each store.daemon.doctorChecks as c (c.name)}
+    <div
+      class:ready={attentionChecks.length === 0}
+      class:attention={attentionChecks.length > 0}
+      class="doctor-result"
+      role="status"
+    >
+      {#if attentionChecks.length}
+        <strong>{attentionChecks.length} {attentionChecks.length === 1 ? 'issue needs' : 'issues need'} attention</strong>
+        <span>Follow the remedy below, then run the checks again.</span>
+      {:else}
+        <strong>Environment is ready</strong>
+        <span>Orbit found no setup problems.</span>
+      {/if}
+    </div>
+
+    {#each attentionChecks as c (c.name)}
       <div class="doctor-check">
         <span
           class="doctor-icon {c.status}"
@@ -55,9 +83,72 @@
         <span class="doctor-text">
           <span class="name">{c.name}</span>
           <span class="msg">{c.message}</span>
+          {#if commandFromHint(c.hint)}
+            <span class="doctor-remedy">
+              <span class="remedy-label">Run this in your terminal</span>
+              <span class="command-row">
+                <code>{commandFromHint(c.hint)}</code>
+                <button
+                  type="button"
+                  class="copy-command"
+                  aria-label="Copy remedy command for {c.name}"
+                  onclick={() => copyToClipboard(commandFromHint(c.hint), 'Remedy command copied')}
+                >
+                  <Copy size={13} strokeWidth={2.2} />
+                  Copy
+                </button>
+              </span>
+            </span>
+          {:else if c.hint}
+            <span class="doctor-remedy">
+              <span class="remedy-label">How to fix it</span>
+              <span class="hint">{c.hint}</span>
+            </span>
+          {/if}
         </span>
       </div>
     {/each}
+
+    {#if otherChecks.length}
+      <button
+        type="button"
+        class="other-checks-toggle"
+        aria-expanded={showOtherChecks}
+        onclick={() => { showOtherChecks = !showOtherChecks }}
+      >
+        {#if showOtherChecks}
+          <ChevronDown size={14} />
+          Hide {otherChecks.length} other {otherChecks.length === 1 ? 'check' : 'checks'}
+        {:else}
+          <ChevronRight size={14} />
+          Show {otherChecks.length} other {otherChecks.length === 1 ? 'check' : 'checks'}
+        {/if}
+      </button>
+    {/if}
+
+    {#if showOtherChecks}
+      {#each otherChecks as c (c.name)}
+        <div class="doctor-check doctor-check-secondary">
+          <span
+            class="doctor-icon {c.status}"
+            role="status"
+            aria-label={statusLabels[c.status] ?? c.status}
+          >
+            {#if c.status === 'pass'}
+              <Check size={14} strokeWidth={2.4} />
+            {:else if c.status === 'info'}
+              <Info size={14} strokeWidth={2.2} />
+            {:else}
+              <Minus size={14} strokeWidth={2.2} />
+            {/if}
+          </span>
+          <span class="doctor-text">
+            <span class="name">{c.name}</span>
+            <span class="msg">{c.message}</span>
+          </span>
+        </div>
+      {/each}
+    {/if}
   {:else if !store.daemon.doctorRunning}
     <div class="doctor-empty">No results yet.</div>
   {/if}
@@ -93,6 +184,9 @@
   .doctor-check:first-child {
     border-top: none;
   }
+  .doctor-check-secondary {
+    background: color-mix(in srgb, var(--card) 88%, var(--bg));
+  }
   .doctor-icon {
     display: inline-flex;
     align-items: center;
@@ -105,6 +199,9 @@
   .doctor-icon.warn { color: var(--yellow); }
   .doctor-icon.info { color: var(--dim); }
   .doctor-text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
     font-size: var(--text-md);
   }
   .doctor-text .name {
@@ -113,6 +210,79 @@
   .doctor-text .msg {
     color: var(--dim);
     margin-left: var(--space-2);
+  }
+  .doctor-result {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border);
+  }
+  .doctor-result strong {
+    font-size: var(--text-base);
+  }
+  .doctor-result span {
+    color: var(--dim);
+    font-size: var(--text-md);
+  }
+  .doctor-result.ready strong {
+    color: var(--green);
+  }
+  .doctor-result.attention strong {
+    color: var(--yellow);
+  }
+  .doctor-remedy {
+    flex: 1 0 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+  .remedy-label {
+    color: var(--dim);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .command-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .command-row code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--fg);
+    font-size: var(--text-md);
+  }
+  .copy-command {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 28px;
+    padding: var(--space-1) var(--space-2);
+  }
+  .hint {
+    color: var(--fg);
+  }
+  .other-checks-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-4);
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--dim);
+    text-align: left;
+  }
+  .other-checks-toggle:hover {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--card) 75%, var(--border));
   }
   .doctor-empty {
     padding: var(--space-3) var(--space-4);

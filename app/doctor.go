@@ -108,24 +108,22 @@ func runDoctorWithOptions(options doctorOptions) error {
 		}
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), resp, doctorRecommendedActions(resp))
 	}
-	_, _ = cli.Bold.Println("Checks:")
-	for _, c := range resp.Checks {
-		label, visible := humanDoctorCheck(c, options.showDaemon)
-		if !visible {
-			continue
+	summary := summarizeDoctorForHuman(resp, options.showDaemon)
+	if len(summary.attention) > 0 {
+		_, _ = cli.Bold.Println("Needs attention:")
+		for _, item := range summary.attention {
+			printHumanDoctorCheck(item.label, item.check)
 		}
-		icon := cli.Faint.Sprint("—")
-		switch c.Status {
-		case daemon.CheckPass:
-			icon = cli.Green.Sprint("✓")
-		case daemon.CheckFail:
-			icon = cli.Red.Sprint("✗")
-		case daemon.CheckWarn:
-			icon = cli.Yellow.Sprint("!")
-		}
-		fmt.Printf("  %s %s: %s\n", icon, label, c.Message)
-		if c.Hint != "" && (c.Status == daemon.CheckFail || c.Status == daemon.CheckWarn) {
-			_, _ = cli.Faint.Printf("      → %s\n", c.Hint)
+	} else {
+		_, _ = cli.Green.Println("✓ Environment is ready")
+	}
+	if summary.passed > 0 {
+		_, _ = cli.Faint.Printf("  ✓ %d %s passed\n", summary.passed, pluralize(summary.passed, "check", "checks"))
+	}
+	for _, item := range summary.context {
+		fmt.Printf("  %s %s: %s\n", cli.Faint.Sprint("—"), item.label, item.check.Message)
+		if item.check.Hint != "" {
+			_, _ = cli.Faint.Printf("      → %s\n", item.check.Hint)
 		}
 	}
 	if options.showDaemon && failure == nil {
@@ -136,8 +134,68 @@ func runDoctorWithOptions(options doctorOptions) error {
 	return failure
 }
 
+type humanDoctorItem struct {
+	label string
+	check daemon.DoctorCheck
+}
+
+type humanDoctorSummary struct {
+	attention []humanDoctorItem
+	context   []humanDoctorItem
+	passed    int
+}
+
+func summarizeDoctorForHuman(resp *daemon.DoctorResponse, showDaemon bool) humanDoctorSummary {
+	var summary humanDoctorSummary
+	if resp == nil {
+		return summary
+	}
+	for _, check := range resp.Checks {
+		label, visible := humanDoctorCheck(check, showDaemon)
+		if !visible {
+			continue
+		}
+		item := humanDoctorItem{label: label, check: check}
+		switch check.Status {
+		case daemon.CheckFail, daemon.CheckWarn:
+			summary.attention = append(summary.attention, item)
+		case daemon.CheckPass:
+			summary.passed++
+		default:
+			summary.context = append(summary.context, item)
+		}
+	}
+	return summary
+}
+
+func printHumanDoctorCheck(label string, check daemon.DoctorCheck) {
+	icon := cli.Faint.Sprint("—")
+	switch check.Status {
+	case daemon.CheckPass:
+		icon = cli.Green.Sprint("✓")
+	case daemon.CheckFail:
+		icon = cli.Red.Sprint("✗")
+	case daemon.CheckWarn:
+		icon = cli.Yellow.Sprint("!")
+	}
+	fmt.Printf("  %s %s: %s\n", icon, label, check.Message)
+	if check.Hint != "" {
+		_, _ = cli.Faint.Printf("      → %s\n", check.Hint)
+	}
+}
+
+func pluralize(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}
+
 func humanDoctorCheck(check daemon.DoctorCheck, showDaemon bool) (string, bool) {
 	if check.Name != "Daemon" {
+		if check.Status == daemon.CheckInfo {
+			return "", false
+		}
 		return check.Name, true
 	}
 	if !showDaemon || (check.Status == daemon.CheckInfo && check.Message == "not running") {
