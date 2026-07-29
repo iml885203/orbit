@@ -955,6 +955,7 @@ web
         lastSuccessAt: 0,
         relationEstablishedAt: 0,
       };
+      const demoReadinessTargetMs = 60 * 1000;
       const drillState = {
         baselineStartedAt: 0,
         baselineCompleted: false,
@@ -2098,6 +2099,13 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const serviceReadyText = `服務信號：${serviceSignal} (${snapshot.servicesReady})`;
         const checkoutSignal = snapshot.hasSuccessfulOrder ? '綠' : '未完成';
         const relationSignal = snapshot.hasOrderShipmentRelation ? '綠' : '未關聯';
+        const demoElapsedMs = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation && sessionMetricsState.bootAt
+          ? Math.max(sessionMetricsState.relationEstablishedAt || performance.now(), performance.now()) - sessionMetricsState.bootAt
+          : null;
+        const demoWithinTarget = demoElapsedMs === null ? null : demoElapsedMs <= demoReadinessTargetMs;
+        const demoElapsedText = demoElapsedMs === null
+          ? '尚未到達可 demo'
+          : `${formatElapsed(demoElapsedMs)}（${demoWithinTarget ? '在 60 秒目標內' : '超過 60 秒'}）`;
 
         const lines = [
           'Orbit mini-shop 心智模型簡版報告',
@@ -2105,6 +2113,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           serviceReadyText,
           `交易信號：${checkoutSignal}`,
           `關聯信號：${relationSignal}`,
+          `首次可 demo 耗時：${demoElapsedText}`,
           `訂單：${orderText}`,
           `出貨：${shipmentText}`,
           `checkout：${checkoutText}`,
@@ -2121,9 +2130,17 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       function buildDemoMetricsJSON() {
         const snapshot = buildSignalSnapshot();
         const now = new Date();
+        const nowPerformance = performance.now();
         if (!snapshot.allServiceReady && !snapshot.latestCode && !snapshot.latestOrder) {
           return null;
         }
+        const canDemo = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation;
+        const demoElapsedMs = canDemo && sessionMetricsState.bootAt
+          ? Math.max(sessionMetricsState.relationEstablishedAt || nowPerformance, nowPerformance) - sessionMetricsState.bootAt
+          : null;
+        const demoWithinTarget = Number.isFinite(demoElapsedMs)
+          ? demoElapsedMs <= demoReadinessTargetMs
+          : false;
         const result = {
           version: 'mini-shop-ux-metrics-1',
           generated_at: now.toISOString(),
@@ -2153,9 +2170,12 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             relation_elapsed_ms: sessionMetricsState.relationEstablishedAt && sessionMetricsState.firstSuccessAt
               ? Math.max(0, sessionMetricsState.relationEstablishedAt - sessionMetricsState.firstSuccessAt)
               : null,
+            first_demo_elapsed_ms: demoElapsedMs,
+            boot_to_demo_elapsed_ms: demoElapsedMs,
+            demo_within_60s: demoWithinTarget,
           },
           review: {
-            can_demo: snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation,
+            can_demo: canDemo,
             blocker_count: [
               snapshot.allServiceReady ? null : 'services',
               snapshot.hasSuccessfulOrder ? null : 'checkout_success',
@@ -2363,10 +2383,28 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           ? `目前可 demo 耗時：約 ${readyToDemo}`
           : '尚未可計算';
 
+        const readinessFromServiceReadyMs = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation && sessionMetricsState.serviceReadyAt
+          ? Math.max(sessionMetricsState.relationEstablishedAt || now, now) - sessionMetricsState.serviceReadyAt
+          : null;
+        const readinessFromBootMs = snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation && sessionMetricsState.bootAt
+          ? Math.max(sessionMetricsState.relationEstablishedAt || now, now) - sessionMetricsState.bootAt
+          : null;
+        const readinessWithinTarget = readinessFromServiceReadyMs === null
+          ? null
+          : readinessFromServiceReadyMs <= demoReadinessTargetMs;
+        const readinessTargetText = readinessFromServiceReadyMs === null
+          ? '尚未可計算'
+          : `${readinessWithinTarget ? '已達標' : '未達標'}（目標 ${formatElapsed(demoReadinessTargetMs)} / 實際 ${formatElapsed(readinessFromServiceReadyMs)}）`;
+        const readinessBootText = readinessFromBootMs
+          ? `從啟動到可 demo：${formatElapsed(readinessFromBootMs)}`
+          : '從啟動到可 demo：尚未可計算';
+
         sessionMetricsEl.innerHTML = `
           ${items.join('')}
           <div class="session-metric-line">• 目標可交付：<strong>${snapshot.allServiceReady && snapshot.hasSuccessfulOrder && snapshot.hasOrderShipmentRelation ? '可 demo' : '不可 demo'}</strong></div>
           <div class="session-metric-line">• 回復可見性：${timingDetail}</div>
+          <div class="session-metric-line">• 60 秒目標：${readinessTargetText}</div>
+          <div class="session-metric-line">• 實際可用時間：${readinessBootText}</div>
         `;
       }
 
