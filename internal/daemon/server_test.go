@@ -28,12 +28,12 @@ func newTestServer(t *testing.T, cfg *config.Config) *Server {
 	// Setting HOME is not enough on Windows, where OrbitDir prefers LOCALAPPDATA.
 	t.Setenv("ORBIT_HOME", t.TempDir())
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
-	holder := config.NewHolder(cfg)
-	app, err := engine.NewApp(holder, nil, nil, "orbit-test")
+	app, err := engine.NewApp(cfg, nil, nil, "orbit-test")
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
 	t.Cleanup(func() { _ = app.ContainerMgr.Close() })
+	holder := app.Holder
 
 	settings := LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
 	stateFile := NewStateFile(filepath.Join(t.TempDir(), "state.json"))

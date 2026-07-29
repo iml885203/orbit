@@ -287,9 +287,6 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
-	// The single Holder shared by the engine and the daemon — every reader
-	// Loads immutable snapshots from here, both writers publish through it.
-	holder := config.NewHolder(cfg)
 
 	// Detached edges are scoped per env (basename of the config path
 	// without extension), matching how the daemon handler keys them in
@@ -298,10 +295,23 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	envName := strings.TrimSuffix(filepath.Base(configFile), filepath.Ext(configFile))
 	detachedDeps := settings.GetDetachedEdges(envName)
 
-	app, err := engine.NewApp(holder, settings.GetServiceModes(), detachedDeps, os.Getenv("ORBIT_NAMESPACE"))
+	runtimeReservedPorts := []int{daemon.DashboardPort()}
+	if cfg.TracingPortExplicit() {
+		runtimeReservedPorts = append(runtimeReservedPorts, cfg.TracingOTLPPort())
+	}
+	app, err := engine.NewApp(
+		cfg,
+		settings.GetServiceModes(),
+		detachedDeps,
+		os.Getenv("ORBIT_NAMESPACE"),
+		runtimeReservedPorts...,
+	)
 	if err != nil {
 		return fmt.Errorf("creating app: %w", err)
 	}
+	// The single Holder shared by the engine and the daemon — every reader
+	// Loads immutable snapshots from here, both writers publish through it.
+	holder := app.Holder
 
 	stateFile := daemonsrv.NewStateFile(daemonsrv.DefaultStatePath())
 

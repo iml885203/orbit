@@ -45,12 +45,30 @@ export ORBIT_DASHBOARD_PORT="$((23000 + ($$ % 1000)))"
 cleanup() {
   "$orbit_bin" down --json >/dev/null 2>&1 || true
   "$orbit_bin" daemon stop --json >/dev/null 2>&1 || true
+  if [ -n "${port_guard_pid:-}" ]; then
+    kill "$port_guard_pid" >/dev/null 2>&1 || true
+  fi
   rm -rf "$test_root"
 }
 trap cleanup EXIT
 
 mkdir -p "$test_root/empty-directory"
 cd "$test_root/empty-directory"
+
+python3 -c '
+import socket
+import time
+
+listeners = []
+for port in (26379, 28080):
+    listener = socket.socket()
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", port))
+    listener.listen()
+    listeners.append(listener)
+time.sleep(600)
+' &
+port_guard_pid=$!
 
 "$orbit_bin" init --yes
 if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
@@ -72,8 +90,20 @@ if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   exit 1
 fi
 "$orbit_bin" status --json >"$test_root/status.json"
+demo_url="$(
+  python3 -c '
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))["data"]
+resources = {resource["name"]: resource for resource in payload["resources"]}
+assert resources["redis"]["ports"]["redis"] != 26379
+assert resources["demo-api"]["ports"]["http"] != 28080
+print(resources["demo-api"]["url"])
+' "$test_root/status.json"
+)"
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
-  http://127.0.0.1:28080/health >"$test_root/health.json"
+  "${demo_url%/}/health" >"$test_root/health.json"
 
 python3 -c 'import json, sys; assert json.load(open(sys.argv[1], encoding="utf-8"))["ok"] is True' \
   "$test_root/up.json"

@@ -816,3 +816,59 @@ externals:
 		t.Errorf("Name = %q, want upstream", ext.Name)
 	}
 }
+
+func TestLoadMarksOnlyExplicitAutoPortExpressions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "auto-ports.yaml")
+	source := `version: "2"
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "${ORBIT_AUTO_PORT_CONFIG_TEST_REDIS:-26379}:6379"
+    sidecars:
+      - name: ui
+        image: example/ui
+        ports:
+          ui: "${ORBIT_AUTO_PORT_CONFIG_TEST_UI:-28081}:8080"
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    ports:
+      http: "${ORBIT_AUTO_PORT_CONFIG_TEST_HTTP:-28080}"
+      metrics: 29090
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Containers["redis"].Ports["redis"].IsAuto() {
+		t.Fatal("container auto port was not marked")
+	}
+	if !cfg.Containers["redis"].Sidecars[0].Ports["ui"].IsAuto() {
+		t.Fatal("sidecar auto port was not marked")
+	}
+	if !cfg.Services["api"].Ports["http"].IsAuto() {
+		t.Fatal("service auto port was not marked")
+	}
+	if cfg.Services["api"].Ports["metrics"].IsAuto() {
+		t.Fatal("fixed service port was marked auto")
+	}
+}
+
+func TestValidateAllowsAutoPortPreferencesToOverlapFixedPorts(t *testing.T) {
+	cfg := &Config{
+		Containers: map[string]*Container{
+			"fixed": {Ports: map[string]PortDef{"http": {Host: 28080, Target: 28080}}},
+			"auto":  {Ports: map[string]PortDef{"http": {Host: 28080, Target: 8080, auto: true}}},
+		},
+	}
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("auto preference should resolve at runtime: %v", err)
+	}
+}

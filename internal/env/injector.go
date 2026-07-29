@@ -47,6 +47,34 @@ func BuildEnv(svc *config.Service, containers map[string]*config.Container, togg
 	return env
 }
 
+// InjectServicePorts exposes runtime-selected ports to host services that
+// explicitly opted into automatic port recovery. An explicit value unrelated
+// to the preferred port wins; a value derived from that preference follows the
+// runtime selection.
+func InjectServicePorts(target map[string]string, ports map[string]config.PortDef) {
+	autoPorts := make(map[string]config.PortDef)
+	for label, definition := range ports {
+		if definition.IsAuto() {
+			autoPorts[label] = definition
+		}
+	}
+	for label, definition := range autoPorts {
+		key := strings.ToUpper(strings.ReplaceAll(label, "-", "_")) + "_PORT"
+		value, exists := target[key]
+		if !exists || value == fmt.Sprintf("%d", definition.PreferredHost()) {
+			target[key] = fmt.Sprintf("%d", definition.Host)
+		}
+	}
+	if len(ports) == 1 && len(autoPorts) == 1 {
+		for _, definition := range autoPorts {
+			value, exists := target["PORT"]
+			if !exists || value == fmt.Sprintf("%d", definition.PreferredHost()) {
+				target["PORT"] = fmt.Sprintf("%d", definition.Host)
+			}
+		}
+	}
+}
+
 func buildConnectionStrings(name string, c *config.Container) map[string]string {
 	env := make(map[string]string)
 	upper := strings.ToUpper(strings.ReplaceAll(name, "-", "_"))

@@ -140,6 +140,33 @@ func TestLocalPortChecksDetectIPv4LoopbackOwner(t *testing.T) {
 	}
 }
 
+func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+	path := filepath.Join(t.TempDir(), "env.yaml")
+	source := "version: \"2\"\nservices:\n  api:\n    type: python\n    path: .\n    command: python3 app.py\n    ports:\n      http: \"${ORBIT_AUTO_PORT_DOCTOR_TEST:-" + strconv.Itoa(portNumber) + "}\"\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checks := localPortChecks(cfg)
+	if len(checks) != 1 || checks[0].Status != daemon.CheckInfo {
+		t.Fatalf("checks = %+v", checks)
+	}
+	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
+	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
+		t.Fatalf("auto port produced manual recovery actions: %+v", actions)
+	}
+}
+
 func TestDoctorResolvedPortConflictPointsDirectlyToResourceRetry(t *testing.T) {
 	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{
 		{Name: "Port 28080", Status: daemon.CheckPass, Message: "available (api); previous conflict resolved"},

@@ -145,6 +145,44 @@ containers:
 | `init` | object | no | Typed init hooks (Kafka topics, Mongo replica set) |
 | `sidecars` | list | no | Per-container sidecar containers (web UIs, agents) |
 
+### Ports that may move
+
+Project ports are fixed by default: a conflict remains an error because silently
+moving an API or database can break tools outside Orbit. Portable demos and
+similar disposable environments can opt an individual host port into automatic
+conflict recovery with an `ORBIT_AUTO_PORT_*` fallback:
+
+```yaml
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}:6379"
+    health_check:
+      type: tcp
+      port: ${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}
+
+services:
+  demo-api:
+    type: python
+    path: .
+    command: python3 app.py
+    url: http://localhost:${ORBIT_AUTO_PORT_DEMO_API:-28080}
+    ports:
+      http: "${ORBIT_AUTO_PORT_DEMO_API:-28080}"
+    health_check:
+      type: http
+      path: /health
+      port: ${ORBIT_AUTO_PORT_DEMO_API:-28080}
+```
+
+Orbit keeps the preferred value when it is available. Otherwise it selects an
+available host port, updates the matching health check and loopback URL, and
+injects `<ALIAS>_PORT` into the host service. A service with one port also
+receives the conventional `PORT` variable. `orbit status` and
+`orbit open <service>` always use the selected runtime port. A managed
+container keeps the same selected port across daemon restarts.
+
 ### Infra logos in the dashboard
 
 Graph dashboard nodes and drawer headers show a logo for infra containers. Set `containers.<name>.icon` to an Iconify icon slug when the env needs to control the logo:

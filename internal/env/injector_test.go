@@ -1,6 +1,8 @@
 package env
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
@@ -120,6 +122,38 @@ func TestBuildEnv_ConnectionStrings(t *testing.T) {
 	}
 	if env["ConnectionStrings__mongodb"] != "mongodb://localhost:27018" {
 		t.Errorf("ConnectionStrings__mongodb = %q", env["ConnectionStrings__mongodb"])
+	}
+}
+
+func TestInjectServicePortsAddsConventionalNamesWithoutOverridingExplicitEnv(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "env.yaml")
+	source := `version: "2"
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    ports:
+      http: "${ORBIT_AUTO_PORT_ENV_TEST_HTTP:-28080}"
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpPort := cfg.Services["api"].Ports["http"]
+	httpPort.Host = 28081
+	cfg.Services["api"].Ports["http"] = httpPort
+
+	resolved := map[string]string{"HTTP_PORT": "explicit", "PORT": "28080"}
+	InjectServicePorts(resolved, cfg.Services["api"].Ports)
+	if resolved["PORT"] != "28081" {
+		t.Fatalf("PORT = %q, want 28081", resolved["PORT"])
+	}
+	if resolved["HTTP_PORT"] != "explicit" {
+		t.Fatalf("HTTP_PORT override = %q", resolved["HTTP_PORT"])
 	}
 }
 

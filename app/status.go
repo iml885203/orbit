@@ -620,6 +620,12 @@ func printEnvironmentSelectionRecovery(selection environmentSelection) {
 
 func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {
 	target.State = source.State
+	if source.URL != "" {
+		target.URL = source.URL
+	}
+	if source.Ports != nil {
+		target.Ports = source.Ports
+	}
 	if source.State == "degraded" {
 		target.StateReason = source.StateReason
 		target.FailureEvidence = source.FailureEvidence

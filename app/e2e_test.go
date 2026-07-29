@@ -224,6 +224,16 @@ func reserveLocalPort(t *testing.T) int {
 	return port
 }
 
+func occupyLocalPort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
 func readPIDFile(t *testing.T, path string) int {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -334,8 +344,8 @@ func TestE2E_DaemonRestartThenUpRecoversTheWholeEnvironment(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 
-	servicePort := reserveLocalPort(t)
-	redisPort := reserveLocalPort(t)
+	servicePort := occupyLocalPort(t)
+	redisPort := occupyLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 
 	home, err := os.MkdirTemp("/tmp", "orb-restart-")
@@ -352,9 +362,9 @@ import os
 with open(%q, "w", encoding="utf-8") as pid_file:
     pid_file.write(str(os.getpid()))
 
-server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), http.server.SimpleHTTPRequestHandler)
+server = http.server.ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), http.server.SimpleHTTPRequestHandler)
 server.serve_forever()
-`, pidPath, servicePort)
+`, pidPath)
 	if err := os.WriteFile(appPath, []byte(appSource), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -372,22 +382,22 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis: "%d:6379"
+      redis: "${ORBIT_AUTO_PORT_E2E_RESTART_REDIS:-%d}:6379"
     health_check:
       type: tcp
-      port: %d
+      port: ${ORBIT_AUTO_PORT_E2E_RESTART_REDIS:-%d}
 services:
   api:
     type: python
     path: %q
     command: python3 app.py
     ports:
-      http: %d
+      http: "${ORBIT_AUTO_PORT_E2E_RESTART_API:-%d}"
     depends_on: [redis]
     health_check:
       type: http
       path: /
-      port: %d
+      port: ${ORBIT_AUTO_PORT_E2E_RESTART_API:-%d}
 `, redisPort, redisPort, workspace, servicePort, servicePort)
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
 		t.Fatal(err)
@@ -413,8 +423,30 @@ services:
 	if err != nil {
 		t.Fatalf("initial up: %v\n%s", err, initialUp)
 	}
-	if envelope := parseE2EEnvelope(t, string(initialUp)); !envelope.OK {
-		t.Fatalf("initial up envelope = %+v\n%s", envelope, initialUp)
+	initialEnvelope := parseE2EEnvelope(t, string(initialUp))
+	if !initialEnvelope.OK {
+		t.Fatalf("initial up envelope = %+v\n%s", initialEnvelope, initialUp)
+	}
+	type recoveryUpData struct {
+		Resources []struct {
+			Name  string         `json:"name"`
+			Ports map[string]int `json:"ports"`
+		} `json:"resources"`
+		DegradedResources []string `json:"degraded_resources"`
+		TimedOutResources []string `json:"timed_out_resources"`
+	}
+	var initialData recoveryUpData
+	if err := json.Unmarshal(initialEnvelope.Data, &initialData); err != nil {
+		t.Fatalf("parse initial up data: %v\n%s", err, initialUp)
+	}
+	initialPorts := make(map[string]int)
+	for _, resource := range initialData.Resources {
+		for _, selectedPort := range resource.Ports {
+			initialPorts[resource.Name] = selectedPort
+		}
+	}
+	if initialPorts["redis"] == redisPort || initialPorts["api"] == servicePort {
+		t.Fatalf("occupied preferences were not moved: %+v", initialPorts)
 	}
 
 	containerName := "orbit-" + namespace + "-redis"
@@ -450,15 +482,19 @@ services:
 	if !secondEnvelope.OK {
 		t.Fatalf("second up envelope = %+v\n%s", secondEnvelope, secondUp)
 	}
-	var upData struct {
-		DegradedResources []string `json:"degraded_resources"`
-		TimedOutResources []string `json:"timed_out_resources"`
-	}
+	var upData recoveryUpData
 	if err := json.Unmarshal(secondEnvelope.Data, &upData); err != nil {
 		t.Fatalf("parse second up data: %v\n%s", err, secondUp)
 	}
 	if len(upData.DegradedResources) > 0 || len(upData.TimedOutResources) > 0 {
 		t.Fatalf("restart recovery left unhealthy resources: %+v\n%s", upData, secondUp)
+	}
+	for _, resource := range upData.Resources {
+		for _, selectedPort := range resource.Ports {
+			if initialPorts[resource.Name] != selectedPort {
+				t.Fatalf("%s port changed across daemon restart: before=%d after=%d", resource.Name, initialPorts[resource.Name], selectedPort)
+			}
+		}
 	}
 
 	containerIDAfter, err := exec.Command("docker", "inspect", "--format", "{{.Id}}", containerName).Output()

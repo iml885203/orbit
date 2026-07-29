@@ -178,8 +178,21 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 // PortDef supports both simple (6379) and mapped (8989:8080) port definitions.
 // YAML: `redis: 6379` or `ui: "8989:8080"` (host:container)
 type PortDef struct {
-	Host   int
-	Target int // container-internal port; same as Host if not specified
+	Host      int
+	Target    int // container-internal port; same as Host if not specified
+	auto      bool
+	preferred int
+}
+
+func (p PortDef) IsAuto() bool {
+	return p.auto
+}
+
+func (p PortDef) PreferredHost() int {
+	if p.auto && p.preferred > 0 {
+		return p.preferred
+	}
+	return p.Host
 }
 
 func (p *PortDef) UnmarshalYAML(unmarshal func(any) error) error {

@@ -64,17 +64,40 @@ func (a *App) signalFatal(err error) {
 
 // NewApp creates and wires all components. Caller must call Shutdown when done.
 // detachedDeps is passed through to the orchestrator; pass nil if no edges are detached.
-func NewApp(holder *config.Holder, serviceModes map[string]string, detachedDeps map[string][]string, namespace string) (*App, error) {
+func NewApp(
+	cfg *config.Config,
+	serviceModes map[string]string,
+	detachedDeps map[string][]string,
+	namespace string,
+	runtimeReservedPorts ...int,
+) (*App, error) {
 	containerMgr, err := container.NewManager(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("initializing container manager: %w", err)
+	}
+	resolutions, err := port.ResolveAutoPorts(cfg, func(name string, target int) (int, bool, error) {
+		return containerMgr.ManagedHostPort(context.Background(), name, target)
+	}, runtimeReservedPorts...)
+	if err != nil {
+		_ = containerMgr.Close()
+		return nil, fmt.Errorf("resolving automatic ports: %w", err)
+	}
+	for _, resolution := range resolutions {
+		slog.Info(
+			"selected available port",
+			"component", "orbit",
+			"name", resolution.Resource,
+			"label", resolution.Label,
+			"preferred", resolution.Preferred,
+			"actual", resolution.Actual,
+		)
 	}
 
 	if err := containerMgr.EnsureNetwork(context.Background()); err != nil {
 		slog.Warn("failed to create Docker network", "component", "orbit", "err", err)
 	}
 
-	cfg := holder.Load()
+	holder := config.NewHolder(cfg)
 	processMgr := process.NewManager()
 	processMgr.CancelGrace = cfg.Settings.ShutdownTimeout
 	logs := logging.NewMultiplexer()
@@ -168,6 +191,7 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 			toggleStates = a.GetToggleStates()
 		}
 		envVars := env.BuildEnv(svc, cfg.Containers, toggleStates)
+		env.InjectServicePorts(envVars, svc.Ports)
 		// Hybrid OTEL injection (Aspire-aligned): point services with no OTLP
 		// endpoint of their own at Orbit's receiver, but stand aside for a
 		// service that already sets OTEL_EXPORTER_OTLP_ENDPOINT — it is

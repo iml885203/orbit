@@ -206,16 +206,17 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 	type portEntry struct {
 		port int
 		name string
+		auto bool
 	}
 	var ports []portEntry
 	for name, container := range cfg.Containers {
-		for _, port := range container.Ports {
-			ports = append(ports, portEntry{port: port.Host, name: name})
+		for _, definition := range container.Ports {
+			ports = append(ports, portEntry{port: definition.Host, name: name, auto: definition.IsAuto()})
 		}
 	}
 	for name, service := range cfg.Services {
-		for _, port := range service.Ports {
-			ports = append(ports, portEntry{port: port.Host, name: name})
+		for _, definition := range service.Ports {
+			ports = append(ports, portEntry{port: definition.Host, name: name, auto: definition.IsAuto()})
 		}
 	}
 	sort.Slice(ports, func(i, j int) bool { return ports[i].port < ports[j].port })
@@ -228,6 +229,15 @@ func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
 		}
 		conflicts := port.CheckPorts(map[string][]int{entry.name: {entry.port}})
 		if len(conflicts) > 0 {
+			if entry.auto {
+				check.Status = daemon.CheckInfo
+				check.Message = fmt.Sprintf(
+					"preferred port is occupied (%s); Orbit will choose an available port when it starts",
+					entry.name,
+				)
+				checks = append(checks, check)
+				continue
+			}
 			conflict := port.NewConflictError(conflicts[0])
 			check.Status = daemon.CheckFail
 			check.Message = conflict.Error()

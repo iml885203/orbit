@@ -142,6 +142,43 @@ containers:
 | `init` | object | no | 有型別的 init hook（Kafka topics、Mongo replica set） |
 | `sidecars` | list | no | 隸屬於該 container 的 sidecar container（web UI、agent 等） |
 
+### 可自動調整的 port
+
+專案 port 預設固定；衝突仍會報錯，因為 API 或資料庫偷偷換 port
+可能破壞 Orbit 以外的工具。可攜式 demo 或其他可拋棄環境，可以用
+`ORBIT_AUTO_PORT_*` fallback，明確允許單一 host port 自動避開衝突：
+
+```yaml
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}:6379"
+    health_check:
+      type: tcp
+      port: ${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}
+
+services:
+  demo-api:
+    type: python
+    path: .
+    command: python3 app.py
+    url: http://localhost:${ORBIT_AUTO_PORT_DEMO_API:-28080}
+    ports:
+      http: "${ORBIT_AUTO_PORT_DEMO_API:-28080}"
+    health_check:
+      type: http
+      path: /health
+      port: ${ORBIT_AUTO_PORT_DEMO_API:-28080}
+```
+
+偏好 port 可用時 Orbit 會照常使用；若已被占用，Orbit 會選擇可用的
+host port，同步更新 health check 與 loopback URL，並把
+`<ALIAS>_PORT` 注入 host service。只有一個 port 的 service 也會收到
+慣用的 `PORT` 變數。`orbit status` 與 `orbit open <service>` 永遠使用
+實際選定的 runtime port；daemon 重啟後，既有 managed container
+也會沿用相同 port。
+
 ### Dashboard 上的 infra logo
 
 Graph dashboard 的節點與抽屜 header 會顯示 infra container 的 logo。當 env 需要控制 logo 時，把 `containers.<name>.icon` 設成 Iconify icon slug：

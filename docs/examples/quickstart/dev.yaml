@@ -3,12 +3,12 @@
 #
 #   orbit -c docs/examples/quickstart/dev.yaml up
 #   orbit -c docs/examples/quickstart/dev.yaml status
-#   orbit dashboard
+#   orbit open
 #   orbit -c docs/examples/quickstart/dev.yaml down
 #
-# Host ports use a 2xxxx prefix so they don't collide with anything you
-# already run locally. Each container demonstrates a different health_check
-# type; see docs/configuration.md for the full schema.
+# Preferred host ports use a 2xxxx prefix. ORBIT_AUTO_PORT_* lets Orbit move
+# only these demo ports when one is already occupied; normal project ports
+# remain fixed. Each container demonstrates a different health_check type.
 
 version: "2"
 
@@ -16,15 +16,15 @@ containers:
   redis:
     image: redis:7.4
     ports:
-      redis: "26379:6379"
+      redis: "${ORBIT_AUTO_PORT_QUICKSTART_REDIS:-26379}:6379"
     health_check:
       type: tcp
-      port: 26379
+      port: ${ORBIT_AUTO_PORT_QUICKSTART_REDIS:-26379}
 
   postgres:
     image: postgres:16
     ports:
-      postgres: "25432:5432"
+      postgres: "${ORBIT_AUTO_PORT_QUICKSTART_POSTGRES:-25432}:5432"
     environment:
       POSTGRES_PASSWORD: quickstart
     health_check:
@@ -35,12 +35,12 @@ containers:
     image: nginx:alpine
     kind: frontend
     ports:
-      http: "28080:80"
+      http: "${ORBIT_AUTO_PORT_QUICKSTART_WEB:-28080}:80"
     depends_on: [redis, postgres]
     health_check:
       type: http
       path: /
-      port: 28080
+      port: ${ORBIT_AUTO_PORT_QUICKSTART_WEB:-28080}
 
 # Next step: add your own services (using any locally installed runtime) alongside the
 # containers — see the minimal example in docs/team-adoption.md. Services

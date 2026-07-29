@@ -648,3 +648,32 @@ func TestStatusJSON_ResourcesFromConfigAndRunning(t *testing.T) {
 		t.Errorf("worker entry wrong: %+v", worker)
 	}
 }
+
+func TestStatusJSONPrefersRuntimePortsAndURL(t *testing.T) {
+	cfg := &config.Config{
+		Services: map[string]*config.Service{
+			"api": {
+				URL:   "http://localhost:28080",
+				Ports: map[string]config.PortDef{"http": {Host: 28080, Target: 28080}},
+			},
+		},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"api": {
+			Name:  "api",
+			Kind:  daemon.ResourceKindService,
+			State: "healthy",
+			URL:   "http://localhost:28081",
+			Ports: map[string]int{"http": 28081},
+		},
+	}
+
+	got := renderStatusJSON(t, cfg, running, daemonStatus{Running: true})
+	if len(got.Resources) != 1 {
+		t.Fatalf("resources = %+v", got.Resources)
+	}
+	api := got.Resources[0]
+	if api.URL != "http://localhost:28081" || api.Ports["http"] != 28081 {
+		t.Fatalf("runtime endpoint lost: %+v", api)
+	}
+}
