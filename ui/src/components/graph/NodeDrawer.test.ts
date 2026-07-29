@@ -9,6 +9,9 @@ describe('NodeDrawer', () => {
     store.graph.preview = null
     store.daemon.envs = null
     vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 }),
+    )
   })
 
   it('renders nothing when no node selected', () => {
@@ -106,9 +109,7 @@ describe('NodeDrawer', () => {
       ],
       edges: [{ from: 'api', to: 'redis', kind: 'dependency', detachable: false, detached: false }],
     }
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    )
+    const fetchMock = vi.mocked(globalThis.fetch)
     const { getByRole, queryByRole } = render(NodeDrawer, {
       props: { node, onClose: () => {} },
     })
@@ -180,9 +181,7 @@ describe('NodeDrawer', () => {
       ],
       edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: false, detached: false }],
     }
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    )
+    const fetchMock = vi.mocked(globalThis.fetch)
     const { getByRole, queryByRole } = render(NodeDrawer, {
       props: { node, onClose: () => {} },
     })
