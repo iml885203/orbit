@@ -390,7 +390,7 @@
           <strong>目標</strong>：完成一筆成功 checkout，並在「執行報告」看到「✅ Checkout 成功」。
         </div>
         <ol id="goal-steps" class="step-list">
-          <li id="goal-step-1">等待服務就緒（後端服務 8/8）</li>
+          <li id="goal-step-1">等待服務就緒（後端服務就緒）</li>
           <li id="goal-step-2">選擇客戶</li>
           <li id="goal-step-3">加 1 件商品到購物車</li>
           <li id="goal-step-4">使用 mock_card Checkout 一筆成功訂單</li>
@@ -567,7 +567,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
       <h3>1.0 交付前檢核</h3>
       <p class="hint">如果這三項都綠了，就可以把 demo 視為可交付結果。</p>
       <div id="acceptance-checklist" class="acceptance-checklist">
-      <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>服務全數就緒（8/8）</span></div>
+      <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>服務全數就緒</span></div>
         <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>完成一筆成功 checkout</span></div>
         <div class="acceptance-item warn"><span class="acceptance-dot"></span><span>訂單與出貨關聯成功</span></div>
       </div>
@@ -637,7 +637,7 @@ orbit -c docs/examples/mini-shop/dev.yaml status --json">複製故障演練腳�
     <div class="card">
       <h3>快速導覽（新手友善）</h3>
       <ol>
-        <li>確認服務就緒數（後端服務 8/8）</li>
+        <li>確認服務就緒數（後端服務）</li>
         <li>選客戶與商品</li>
         <li>按 <strong>加入購物車</strong>，再按 <strong>Checkout</strong></li>
         <li>在「訂單」與「出貨」看到關聯結果</li>
@@ -839,9 +839,10 @@ web
       const modeAdvancedBtn = document.getElementById('mode-advanced');
       const modeHelpEl = document.getElementById('mode-help');
       const sessionMetricsEl = document.getElementById('session-metrics');
-      const BACKEND_SERVICE_COUNT = 8;
-      const SERVICE_COUNT = BACKEND_SERVICE_COUNT;
-      const TOTAL_RESOURCE_COUNT = 9;
+      const BASELINE_SERVICE_SET = ['catalog-api', 'inventory-api', 'customer-api', 'cart-api', 'order-api', 'payment-api', 'shipping-api', 'checkout-api'];
+      const ADVANCED_SERVICE_SET = [...BASELINE_SERVICE_SET, 'observability-api', 'notification-api'];
+      const BASELINE_RESOURCE_COUNT = BASELINE_SERVICE_SET.length + 1;
+      const ADVANCED_RESOURCE_COUNT = ADVANCED_SERVICE_SET.length + 1;
       let cartHasItems = false;
       let scenarioRunning = false;
       let latestOrdersPayload = null;
@@ -877,6 +878,44 @@ web
       const goalStepEls = [goalStep1, goalStep2, goalStep3, goalStep4, goalStep5];
       const errorPlaybookEl = document.getElementById('error-playbook');
       const panelAttentionTimers = new Map();
+
+      function getTrackedServiceNames(map, mode = uiMode) {
+        const keys = Object.keys(map || {}).filter(Boolean);
+        const target = mode === 'advanced' ? ADVANCED_SERVICE_SET : BASELINE_SERVICE_SET;
+        const tracked = keys.filter((name) => target.includes(name));
+        if (tracked.length > 0) {
+          return tracked;
+        }
+        if (keys.length > 0) {
+          return keys;
+        }
+        return target;
+      }
+
+      function getTrackedServiceCount(map, mode = uiMode) {
+        return getTrackedServiceNames(map, mode).length;
+      }
+
+      function getTrackedResourceCount(mode = uiMode) {
+        return mode === 'advanced' ? ADVANCED_RESOURCE_COUNT : BASELINE_RESOURCE_COUNT;
+      }
+
+      function getReadyTrackedServiceCount(map, mode = uiMode) {
+        const tracked = getTrackedServiceNames(map, mode);
+        if (!map) {
+          return 0;
+        }
+        return tracked.filter((name) => map[name] && map[name].status === 'ok').length;
+      }
+
+      function getTrackedServiceStatusPayload(map, mode = uiMode) {
+        return {
+          names: getTrackedServiceNames(map, mode),
+          readyCount: getReadyTrackedServiceCount(map, mode),
+          totalCount: getTrackedServiceCount(map, mode),
+        };
+      }
+
       const goalPanelFocusMap = {
         1: ['#service-overview-panel', '#flow-overview-panel'],
         2: ['#customer-panel'],
@@ -1552,9 +1591,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function computeGoalState(allReady, customerSelected, cartReady, hasSuccessfulOrder) {
         if (!allReady) {
+          const serviceCount = getTrackedServiceCount(latestServiceMap);
           return {
             step: 1,
-            text: `正在等待所有服務就緒（後端服務 ${BACKEND_SERVICE_COUNT}/${BACKEND_SERVICE_COUNT}）。建議先保持 5-10 秒，或檢查每個服務是否 ok。`,
+            text: `正在等待所有服務就緒（後端服務 ${serviceCount}/${serviceCount}）。建議先保持 5-10 秒，或檢查每個服務是否 ok。`,
             action: '重新檢查服務狀態',
           };
         }
@@ -1625,10 +1665,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         if (!valueSignalEl) {
           return;
         }
-        const readyCount = map
-          ? Object.values(map).filter((svc) => svc && svc.status === 'ok').length
-          : 0;
-        const serviceReady = Boolean(map && Object.values(map).length && readyCount === SERVICE_COUNT);
+        const readyCount = map ? getReadyTrackedServiceCount(map) : 0;
+        const serviceCount = getTrackedServiceCount(map);
+        const serviceReady = Boolean(map && serviceCount > 0 && readyCount === serviceCount);
         const latestOrder = latestOrdersPayload?.orders?.[0] || null;
         const latestShipment = latestOrder
           ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
@@ -1637,8 +1676,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         const hasRelation = Boolean(hasSuccessfulOrder && latestShipment && latestShipment.order_id === latestOrder.id);
 
         const serviceText = serviceReady
-          ? `後端服務 ${readyCount}/${SERVICE_COUNT} 已就緒`
-          : `後端服務 ${readyCount}/${SERVICE_COUNT} 尚未就緒`;
+          ? `後端服務 ${readyCount}/${serviceCount} 已就緒`
+          : `後端服務 ${readyCount}/${serviceCount} 尚未就緒`;
 
         valueSignalEl.innerHTML = [
           formatValueSignalChip('服務', serviceReady, serviceText),
@@ -1715,8 +1754,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         }
 
         const map = serviceMap || latestServiceMap || {};
-        const readyServices = Object.values(map).filter((svc) => svc && svc.status === 'ok').length;
-        const totalServices = Object.keys(map).length || BACKEND_SERVICE_COUNT;
+        const trackedService = getTrackedServiceStatusPayload(map);
+        const readyServices = trackedService.readyCount;
+        const totalServices = trackedService.totalCount;
         const allServicesReady = totalServices > 0 && readyServices === totalServices;
 
         const orders = ordersPayload?.orders || [];
@@ -1752,6 +1792,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             <h4>服務就緒</h4>
             <div class=\"value\">${serviceValue}</div>
             <div class=\"status\">${allServicesReady ? '服務可運轉' : '等待依賴恢復'}</div>
+            <div class=\"hint\">追蹤服務：${trackedService.names.length ? trackedService.names.join(', ') : '未載入'}</div>
           </div>`,
           `<div class=\"ops-kpi-card ${successfulOrders.length ? 'ok' : 'warn'}\">
             <h4>本輪交易</h4>
@@ -1777,11 +1818,11 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function buildSignalSnapshot() {
         const map = latestServiceMap || {};
-        const entries = Object.entries(map);
-        const serviceTotal = entries.length || BACKEND_SERVICE_COUNT;
-        const readyCount = entries.filter(([, payload]) => payload && payload.status === 'ok').length;
+        const trackedService = getTrackedServiceStatusPayload(map);
+        const serviceTotal = trackedService.totalCount;
+        const readyCount = trackedService.readyCount;
         const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
-        const servicesReady = serviceTotal > 0 ? `${readyCount}/${serviceTotal}` : '0/0';
+        const servicesReady = `${readyCount}/${serviceTotal}`;
 
         const latestOrder = latestOrdersPayload?.orders?.[0] || null;
         const relatedShipment = latestOrder
@@ -1902,9 +1943,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         }
 
         const map = latestServiceMap || {};
-        const entries = Object.entries(map);
-        const serviceTotal = entries.length || 8;
-        const readyCount = entries.filter(([, payload]) => payload && payload.status === 'ok').length;
+        const trackedService = getTrackedServiceStatusPayload(map);
+        const serviceTotal = trackedService.totalCount;
+        const readyCount = trackedService.readyCount;
         const allServiceReady = serviceTotal > 0 && readyCount === serviceTotal;
 
         const latestOrder = latestOrdersPayload?.orders?.[0] || null;
@@ -2477,7 +2518,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         let stage = 0;
         if (!allReady) {
           stage = 1;
-          stateText = `第 1 步：先讓所有服務就緒（目標後端服務 ${BACKEND_SERVICE_COUNT}/${BACKEND_SERVICE_COUNT}）。`;
+          const modeLabel = uiMode === 'advanced' ? '進階服務' : '後端服務';
+          const { readyCount, totalCount } = getTrackedServiceStatusPayload(latestServiceMap);
+          stateText = `第 1 步：先讓所有服務就緒（${modeLabel} ${readyCount}/${totalCount}）。`;
         } else if (!customerSelected) {
           stage = 2;
           stateText = '第 2 步：選一位客戶。';
@@ -2522,11 +2565,14 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       }
 
       function formatActionNotice(map) {
-        const readyCount = Object.values(map).filter((s) => s && s.status === 'ok').length;
-        if (readyCount < SERVICE_COUNT) {
-          const broken = Object.entries(map).find(([, s]) => !s || s.status !== 'ok');
-          const brokenName = broken ? broken[0] : '未知';
-          return `服務就緒度 ${readyCount}/${SERVICE_COUNT}：${brokenName} 未 ready，先等候或重啟該服務`;
+        const { readyCount, totalCount, names } = getTrackedServiceStatusPayload(map);
+        if (readyCount < totalCount) {
+          const brokenName = names.find((name) => {
+            const payload = map?.[name];
+            return !payload || payload.status !== 'ok';
+          }) || '未知';
+          const modeLabel = uiMode === 'advanced' ? '進階服務' : '後端服務';
+          return `${modeLabel}就緒度 ${readyCount}/${totalCount}：${brokenName} 未 ready，先等候或重啟該服務`;
         }
         return '服務已就緒，可以開始流程：選客戶 → 加入購物車 → Checkout。';
       }
@@ -2578,7 +2624,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
       }
 
       function updateActionState(map) {
-        const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+        const trackedService = getTrackedServiceStatusPayload(map);
+        const allReady = trackedService.totalCount > 0 && trackedService.readyCount === trackedService.totalCount;
         const checkoutReady = map['checkout-api']?.status === 'ok';
         const customerSelected = Number(customerEl.value) > 0;
         const cartReady = cartHasItems;
@@ -2588,8 +2635,10 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         checkoutBtn.disabled = !checkoutReady || !cartReady;
         const steps = [];
         if (!allReady) {
-          const first = Object.entries(map).find(([, payload]) => !payload || payload.status !== 'ok');
-          const serviceName = first ? first[0] : 'unknown';
+          const serviceName = trackedService.names.find((name) => {
+            const payload = map?.[name];
+            return !payload || payload.status !== 'ok';
+          }) || 'unknown';
           steps.push(`等待服務 ready：${serviceName}`);
           steps.push('先回到終端機執行 orbit status --json 確認');
           setDiagnostic([
@@ -3178,7 +3227,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         setRunResult('warn', '🧪 情境執行中', [`開始執行情境 ${type}`, '系統會自動引導到可驗證結果']);
         try {
           const map = await checkAll();
-          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          const trackedService = getTrackedServiceStatusPayload(map);
+          const allReady = trackedService.totalCount > 0 && trackedService.readyCount === trackedService.totalCount;
           if (!allReady) {
             setNotice('服務尚未就緒，先等待或啟動服務後再執行情境。', 'warn');
             appendSummary('情境中止：服務尚未就緒');
@@ -3307,7 +3357,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         let flowSuccess = false;
         try {
           const map = await checkAll();
-          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          const trackedService = getTrackedServiceStatusPayload(map);
+          const allReady = trackedService.totalCount > 0 && trackedService.readyCount === trackedService.totalCount;
           if (!allReady) {
             setNotice('尚未就緒：先待服務就緒後再按一次。', 'warn');
             appendSummary('一鍵流程中止：服務尚未 ok。');
@@ -3590,8 +3641,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function setDemoSignalState() {
         const map = latestServiceMap || {};
-        const readyCount = Object.values(map).filter((service) => service && service.status === 'ok').length;
-        const serviceReady = readyCount === SERVICE_COUNT && Object.values(map).length > 0;
+        const { readyCount, totalCount } = getTrackedServiceStatusPayload(map);
+        const serviceReady = totalCount > 0 && readyCount === totalCount;
         const latestOrder = latestOrdersPayload?.orders?.[0] || null;
         const latestShipment = latestOrder
           ? (latestShipmentsPayload?.shipments || []).find((shipment) => shipment.order_id === latestOrder.id)
@@ -3885,9 +3936,11 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
 
       function mapStepToGuideState(allReady, customerSelected, cartReady, hasSuccessfulOrder, hasOrderRelation) {
         if (!allReady) {
+          const modeLabel = uiMode === 'advanced' ? '進階服務' : '後端服務';
+          const { readyCount, totalCount } = getTrackedServiceStatusPayload(latestServiceMap);
           return {
             current: 1,
-            state: '服務還沒就緒，先等後端 8/8 都綠。',
+            state: `服務還沒就緒，先等${modeLabel} ${readyCount}/${totalCount} 都綠。`,
             cta: { label: '重新整理服務狀態', type: 'copy-cmd', payload: 'orbit -c docs/examples/mini-shop/dev.yaml status --json' },
             focus: '#service-overview-panel',
           };
@@ -4054,7 +4107,8 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           goalNextBtn.disabled = true;
           setNotice('正在幫你前往下一步…', 'warn');
           const map = await checkAll();
-          const allReady = Object.values(map).every((s) => s && s.status === 'ok');
+          const trackedService = getTrackedServiceStatusPayload(map);
+          const allReady = trackedService.totalCount > 0 && trackedService.readyCount === trackedService.totalCount;
           const customerSelected = Number(customerEl.value) > 0;
           const cartReady = cartHasItems;
           const hasSuccessfulOrder = hasLatestSuccessfulOrder();
@@ -4198,7 +4252,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         // no-op
       }
 
-      setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${TOTAL_RESOURCE_COUNT} 個資源就緒（含 web）`]);
+      setRunResult('warn', '準備中', ['尚未開始操作', `請先確認 ${getTrackedResourceCount(uiMode)} 個資源就緒（含 web）`]);
       latestFailureErrorCode = '';
       renderQuickFixAction();
       resetSessionMetrics();

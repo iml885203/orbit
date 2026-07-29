@@ -82,7 +82,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 第一次進來先看「快速判斷值（3 秒）」：只要「服務 / 交易 / 關聯」三格都變綠，代表 demo 已能被人看懂、可立即 demo。
 - 再看「一輪 demo 結論」卡片：直接看「可 demo / 不可 demo」的最終判斷，以及缺口是在哪一格。
 - 結論卡還提供一鍵導向按鈕：缺哪一格會直接跳你需要補齊的區塊。
-- 確認前端服務卡上 8/8（含 `checkout-api`）為 `ok`。
+- 確認前端服務卡上基線服務已就緒（含 `checkout-api`）為 `ok`。
 - 先選一個客戶，加入 1 件商品到購物車。
 - 點 `Checkout`，一次看到 `cart -> payment -> order -> shipping` 的結果鏈。
 - 成功後在「訂單」「出貨」區看到同一筆交易的對應資料。
@@ -120,7 +120,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 
 2. 打開頁面，確認：
    - 已顯示 9 個 resource
-   - 服務狀態卡中有 8/8 ready，或至少 `checkout-api` 顯示 `status: ok`
+- 服務狀態卡中基線服務都 ready（進階模式會包含觀察服務），或至少 `checkout-api` 顯示 `status: ok`
    - 先看「下一步（照著做）」與「目前進度（你在第幾步）」卡片，或直接點「重置流程」回到起始狀點
    - 先看「一輪 demo 結論（先看這裡）」卡片，若顯示可 demo，代表可以進到下一步
    - 「一眼看懂進度」會即時顯示服務 / 客戶 / 購物車 / 成功訂單 4 個狀態
@@ -358,7 +358,7 @@ curl http://127.0.0.1:3010/events
 當完成一筆成功 checkout 後，`/insights` 的 `correlation_ratio` 會接近 `1.0`，可直接讓觀察者看到「訂單與出貨關聯」的可觀測結果。
 ### 1.0 前可交付快速檢核（建議每次 release 前）
 
-- [ ] 服務全數就緒（`checkout-api` 及 `web` 相關依賴 8/8 ready）
+- [ ] 服務全數就緒（`checkout-api` 及 `web` 相關依賴基線服務 ready；進階模式再含觀察服務）
 
 ### 近期釋出摘要（內部 review 用）
 
