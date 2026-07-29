@@ -33,10 +33,17 @@ func TestBuildEnvUseJSONData(t *testing.T) {
 
 func TestBuildEnvSyncJSONData(t *testing.T) {
 	got := buildEnvSyncJSONData(envSyncJSONOptions{
-		Source:        "file:///tmp/envs",
-		Destination:   "/tmp/orbit/envs",
-		DryRun:        true,
-		Result:        envsync.Result{Written: []string{"a.yaml", "b.yaml"}},
+		Source:      "file:///tmp/envs",
+		Destination: "/tmp/orbit/envs",
+		DryRun:      true,
+		Result: envsync.Result{
+			Written: []string{"a.yaml", "b.yaml"},
+			Source: envsync.RepositorySource{
+				URL:    "file:///tmp/envs",
+				Ref:    "v1.2.3",
+				Commit: "0123456789abcdef",
+			},
+		},
 		DaemonRunning: true,
 		ApplyAction:   "recommended",
 	})
@@ -55,6 +62,9 @@ func TestBuildEnvSyncJSONData(t *testing.T) {
 	}
 	if len(got.Written) != 2 {
 		t.Fatalf("written = %+v", got.Written)
+	}
+	if got.Reference != "v1.2.3" || got.Commit != "0123456789abcdef" {
+		t.Fatalf("source revision = %q @ %q", got.Reference, got.Commit)
 	}
 	if !got.DaemonRunning {
 		t.Fatal("daemon_running = false, want true")

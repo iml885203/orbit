@@ -108,16 +108,16 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, and recommended follow-up commands. |
-| `orbit status --json` | Returns setup/selection readiness, the selected and available environments, daemon state, and configured resource state in `data.resources`. |
+| `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon state, and configured resource state in `data.resources`. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping services. |
 | `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
-| `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, and exact available environment choices. |
+| `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |
 | `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
-| `orbit env sync --json` | Returns sync source, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
+| `orbit env sync --json` | Returns sync source, requested reference, resolved commit, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
 | `orbit env apply --json` | Applies pending environment changes, then returns the resources that were running, restored, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |

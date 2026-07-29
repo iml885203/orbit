@@ -3,6 +3,7 @@ package envsync
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -23,12 +24,7 @@ func (e *CloneError) Unwrap() error {
 }
 
 func (e *CloneError) DisplayURL() string {
-	parsed, err := url.Parse(e.URL)
-	if err != nil || parsed.User == nil {
-		return e.URL
-	}
-	parsed.User = nil
-	return parsed.String()
+	return displayURL(e.URL)
 }
 
 func (e *CloneError) IsGitHub() bool {
@@ -52,10 +48,56 @@ func (e *CloneError) ReportsAmbiguousGitHubAvailability() bool {
 // Clone performs a shallow clone of url into destDir. destDir must be empty
 // (or nonexistent — git clone creates it).
 func Clone(url, destDir string) error {
-	cmd := exec.Command("git", "clone", "--depth", "1", "--quiet", url, destDir)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return &CloneError{URL: url, Err: err, Output: string(out)}
+	_, err := CloneAt(url, "", destDir)
+	return err
+}
+
+// CloneAt resolves ref to one detached commit so a branch or tag cannot move
+// between fetch and checkout. An empty ref preserves Git's default-branch
+// behavior for user-managed repositories that intentionally track it.
+func CloneAt(url, ref, destDir string) (string, error) {
+	if ref == "" {
+		cmd := exec.Command("git", "clone", "--depth", "1", "--quiet", url, destDir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", &CloneError{URL: url, Err: err, Output: string(out)}
+		}
+		return repositoryCommit(url, destDir)
 	}
-	return nil
+
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("create clone destination: %w", err)
+	}
+	if out, err := gitIn(destDir, "init", "--quiet"); err != nil {
+		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+	}
+	if out, err := gitIn(destDir, "fetch", "--depth", "1", "--quiet", url, ref); err != nil {
+		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+	}
+	if out, err := gitIn(destDir, "checkout", "--detach", "--quiet", "FETCH_HEAD"); err != nil {
+		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+	}
+	return repositoryCommit(url, destDir)
+}
+
+func repositoryCommit(url, dir string) (string, error) {
+	out, err := gitIn(dir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func gitIn(dir string, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	return cmd.CombinedOutput()
+}
+
+func displayURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.User == nil {
+		return raw
+	}
+	parsed.User = nil
+	return parsed.String()
 }

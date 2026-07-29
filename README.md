@@ -152,7 +152,11 @@ project's version files when present.
 environment changed, offers to make it current while restoring the resources
 that were running. Resources that were already stopped stay stopped. For the
 exceptional case where an interruption must be deferred, use `--no-apply`;
-Orbit then prints the exact command to finish later.
+Orbit then prints the exact command to finish later. The official demo is
+pinned to the revision shipped with each Orbit release; `orbit env list` and
+`orbit status` show its repository, requested ref, and resolved commit. Teams
+can get the same reproducibility with
+`orbit init --env-repo <url> --env-ref <tag-or-commit>`.
 
 For configured infrastructure containers, `orbit query redis`,
 `orbit query mongo`, and `orbit query postgres` open the container's native

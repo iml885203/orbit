@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 )
 
-// SyncFromRepo shallow-clones url into a temp directory and copies its
-// envs/ subtree into destDir. The temp clone is removed before returning.
-func SyncFromRepo(url, destDir string, opts Options) (Result, error) {
+// SyncFromRepo resolves ref, shallow-clones that repository state, and copies
+// its envs/ subtree into destDir. The temp clone is removed before returning.
+func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 	tmp, err := os.MkdirTemp("", "orbit-envsync-")
 	if err != nil {
 		return Result{}, fmt.Errorf("mktemp: %w", err)
@@ -16,7 +16,8 @@ func SyncFromRepo(url, destDir string, opts Options) (Result, error) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cloneDir := filepath.Join(tmp, "repo")
-	if err := Clone(url, cloneDir); err != nil {
+	commit, err := CloneAt(url, ref, cloneDir)
+	if err != nil {
 		return Result{}, err
 	}
 
@@ -26,5 +27,19 @@ func SyncFromRepo(url, destDir string, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("repo at %s has no envs/ directory", url)
 	}
 
-	return Sync(envsDir, destDir, opts)
+	result, err := Sync(envsDir, destDir, opts)
+	if err != nil {
+		return Result{}, err
+	}
+	result.Source = RepositorySource{
+		URL:    displayURL(url),
+		Ref:    ref,
+		Commit: commit,
+	}
+	if !opts.DryRun {
+		if err := writeRepositorySource(destDir, result.Source); err != nil {
+			return Result{}, err
+		}
+	}
+	return result, nil
 }

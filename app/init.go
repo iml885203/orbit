@@ -20,6 +20,7 @@ import (
 var (
 	initYes     bool
 	initEnvRepo string
+	initEnvRef  string
 	initEnvName string
 )
 
@@ -27,6 +28,8 @@ type initResult struct {
 	WorkspaceRoot string               `json:"workspace_root,omitempty"`
 	EnvsDir       string               `json:"envs_dir"`
 	EnvRepoURL    string               `json:"env_repo_url,omitempty"`
+	EnvRepoRef    string               `json:"env_repo_ref,omitempty"`
+	EnvRepoCommit string               `json:"env_repo_commit,omitempty"`
 	EnvSource     string               `json:"env_source"`
 	SyncedFiles   []string             `json:"synced_files"`
 	ActiveEnv     string               `json:"active_env,omitempty"`
@@ -97,11 +100,13 @@ for a project workspace only when its selected config actually requires one.
 For non-interactive setup (CI, scripts):
   orbit init --yes                                         # accept all defaults
   orbit init --yes --env-repo <url>                        # use a specific env repo
+  orbit init --yes --env-repo <url> --env-ref <ref>        # pin a branch, tag, or commit
   orbit init --yes --env-repo <url> --env example          # and pick an env`,
 		RunE: runInit,
 	}
 	cmd.Flags().BoolVarP(&initYes, "yes", "y", false, "accept defaults without prompting")
 	cmd.Flags().StringVar(&initEnvRepo, "env-repo", "", "git URL of the env repo (persists to settings, skips prompt)")
+	cmd.Flags().StringVar(&initEnvRef, "env-ref", "", "repository branch, tag, or commit (persists to settings)")
 	cmd.Flags().StringVar(&initEnvName, "env", "", "active env short name (e.g. example); skips the selection prompt")
 	return cmd
 }
@@ -127,17 +132,16 @@ func runInit(_ *cobra.Command, _ []string) error {
 	output.boldln("Step 1: Environment source")
 
 	currentURL := settings.Get(settingKeyEnvRepoURL)
-	repoURL := currentURL
-	if repoURL == "" {
-		repoURL = distribution.EnvRepoURL
-	}
+	currentRef := settings.Get(settingKeyEnvRepoRef)
+	repository := resolveEnvRepository(initEnvRepo, initEnvRef, currentURL, currentRef)
+	repoURL := repository.URL
+	repoRef := repository.Ref
 	cwd, _ := os.Getwd()
 	localEnvsDir := filepath.Join(cwd, "envs")
 	localInfo, localErr := os.Stat(localEnvsDir)
-	useLocalEnvs := localErr == nil && localInfo.IsDir() && initEnvRepo == ""
-	// Persist only what the user explicitly typed (or passed via flag).
-	// Accepting the suggested default with Enter must not pin it into
-	// settings.json — an unpinned default keeps following new releases.
+	useLocalEnvs := localErr == nil && localInfo.IsDir() && initEnvRepo == "" && initEnvRef == ""
+	// Accepting the release default must not copy it into settings.json;
+	// otherwise upgrading Orbit could not advance its compatible demo ref.
 	explicit := false
 	switch {
 	case initEnvRepo != "":
@@ -146,12 +150,20 @@ func runInit(_ *cobra.Command, _ []string) error {
 	case !useLocalEnvs && repoURL == "" && !initYes:
 		if input := prompt(fmt.Sprintf("  Git URL [%s]: ", repoURL)); input != "" {
 			repoURL = input
+			repoRef = initEnvRef
 			explicit = true
 		}
 	}
-	if explicit && repoURL != currentURL {
+	if initEnvRef != "" {
+		repoRef = initEnvRef
+		explicit = true
+	}
+	if explicit && (repoURL != currentURL || repoRef != currentRef) {
 		if err := settings.Set(settingKeyEnvRepoURL, repoURL); err != nil {
 			return fmt.Errorf("saving env repo URL: %w", err)
+		}
+		if err := settings.Set(settingKeyEnvRepoRef, repoRef); err != nil {
+			return fmt.Errorf("saving env repo ref: %w", err)
 		}
 	}
 
@@ -159,7 +171,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 	var syncFailure error
 	var syncWarning string
 	result.EnvsDir = envsDir
-	result.EnvRepoURL = repoURL
 	localWorkspaceRoot := ""
 	if useLocalEnvs {
 		localWorkspaceRoot = cwd
@@ -172,6 +183,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 			output.warnln("  ! Could not sync the local environment files")
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
+			if err := envsync.RemoveRepositorySource(envsDir); err != nil {
+				return err
+			}
 			result.SyncedFiles = syncRes.Written
 			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
 		}
@@ -182,8 +196,14 @@ func runInit(_ *cobra.Command, _ []string) error {
 		output.faintln("    set one later with `orbit env sync --url <git-url>`")
 	} else {
 		result.EnvSource = "remote"
-		output.printf("  Syncing %s → %s\n", repoURL, envsDir)
-		syncRes, err := envsync.SyncFromRepo(repoURL, envsDir, envsync.Options{})
+		result.EnvRepoURL = repoURL
+		result.EnvRepoRef = repoRef
+		sourceLabel := repoURL
+		if repoRef != "" {
+			sourceLabel += " @ " + repoRef
+		}
+		output.printf("  Syncing %s → %s\n", sourceLabel, envsDir)
+		syncRes, err := envsync.SyncFromRepo(repoURL, repoRef, envsDir, envsync.Options{})
 		if err != nil {
 			err = envRepoSyncError(err)
 			syncFailure = err
@@ -192,6 +212,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
 			result.SyncedFiles = syncRes.Written
+			result.EnvRepoCommit = syncRes.Source.Commit
 			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
 		}
 	}

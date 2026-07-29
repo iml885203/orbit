@@ -100,16 +100,16 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 | `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、resource risks，以及建議後續指令。 |
-| `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、daemon，以及 `data.resources` 中的 resource 狀態。 |
+| `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、managed repository URL/ref/commit、daemon，以及 `data.resources` 中的 resource 狀態。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 在停止 services 後回傳最終的 lifecycle 結果。 |
 | `orbit down <resource> --json` | 回傳指定 resource 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
-| `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇，以及可直接切換的 environment 選項。 |
+| `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇、可直接切換的 environment 選項，以及適用時的 managed repository URL/ref/commit。 |
 | `orbit env use <env> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
-| `orbit env sync --json` | 回傳 sync source、destination、dry-run 狀態、寫入檔案、daemon 狀態、套用動作，以及恢復運行的資源。 |
+| `orbit env sync --json` | 回傳 sync source、要求的 ref、實際 commit、destination、dry-run 狀態、寫入檔案、daemon 狀態、套用動作，以及恢復運行的資源。 |
 | `orbit env apply --json` | 套用待處理的環境變更，並回傳原先運行、成功恢復或已從新設定移除的資源。 |
 | `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
 | `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |

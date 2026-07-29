@@ -21,7 +21,11 @@ type Settings struct {
 	// explicitly user-provided URL is stored here; when empty, resolution
 	// falls through to ORBIT_ENV_REPO_URL and the built-in default, so a
 	// default change in a new orbit release reaches users who never overrode.
-	EnvRepoURL   string            `json:"env_repo_url,omitempty"`
+	EnvRepoURL string `json:"env_repo_url,omitempty"`
+	// EnvRepoRef is set only alongside an explicit environment repository
+	// choice; distribution defaults keep their release-owned ref out of user
+	// settings so upgrading Orbit can advance both together.
+	EnvRepoRef   string            `json:"env_repo_ref,omitempty"`
 	EnvToggles   map[string]bool   `json:"env_toggles,omitempty"`
 	ServiceModes map[string]string `json:"service_modes,omitempty"` // "api": "container"
 	UserEnv      map[string]string `json:"user_env,omitempty"`
@@ -60,6 +64,7 @@ type settingsOnDisk struct {
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
 
 	EnvRepoURL   string                     `json:"env_repo_url,omitempty"`
+	EnvRepoRef   string                     `json:"env_repo_ref,omitempty"`
 	EnvToggles   map[string]bool            `json:"env_toggles,omitempty"`
 	ServiceModes map[string]string          `json:"service_modes,omitempty"`
 	UserEnv      map[string]string          `json:"user_env,omitempty"`
@@ -117,6 +122,7 @@ func LoadSettings(path string) *Settings {
 		s.extensionsRaw[name] = blob
 	}
 	s.EnvRepoURL = raw.EnvRepoURL
+	s.EnvRepoRef = raw.EnvRepoRef
 	s.EnvToggles = raw.EnvToggles
 	s.ServiceModes = raw.ServiceModes
 	s.UserEnv = raw.UserEnv
@@ -192,6 +198,7 @@ func (s *Settings) saveLocked() error {
 	disk := settingsOnDisk{
 		WorkspaceRoot: s.WorkspaceRoot,
 		EnvRepoURL:    s.EnvRepoURL,
+		EnvRepoRef:    s.EnvRepoRef,
 		EnvToggles:    s.EnvToggles,
 		ServiceModes:  s.ServiceModes,
 		UserEnv:       s.UserEnv,
@@ -235,6 +242,8 @@ func (s *Settings) Get(key string) string {
 		return s.WorkspaceRoot
 	case "env_repo_url":
 		return s.EnvRepoURL
+	case "env_repo_ref":
+		return s.EnvRepoRef
 	}
 	for _, codec := range s.namespaces {
 		if v, ok := codec.Get(key); ok {
@@ -252,6 +261,8 @@ func (s *Settings) Set(key, value string) error {
 		s.WorkspaceRoot = value
 	case "env_repo_url":
 		s.EnvRepoURL = value
+	case "env_repo_ref":
+		s.EnvRepoRef = value
 	default:
 		handled := false
 		for _, codec := range s.namespaces {

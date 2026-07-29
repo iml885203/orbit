@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/iml885203/orbit/internal/envsync"
 )
 
 func TestBuildEnvListJSONDataExposesUnavailableSelectionAndChoices(t *testing.T) {
@@ -22,6 +24,24 @@ func TestBuildEnvListJSONDataExposesUnavailableSelectionAndChoices(t *testing.T)
 	}
 	if data.Environment.SelectedName != "original" || len(data.Environment.Environments) != 1 {
 		t.Fatalf("data = %+v", data)
+	}
+}
+
+func TestBuildEnvListJSONDataExposesManagedRepositoryRevision(t *testing.T) {
+	data := buildEnvListJSONData(environmentSelection{
+		State: environmentSelectionSelected,
+		ManagedSource: &envsync.RepositorySource{
+			URL:    "https://github.com/example/envs.git",
+			Ref:    "v1.2.3",
+			Commit: "0123456789abcdef",
+		},
+		Environments: []environmentChoice{},
+	})
+
+	source := data.Environment.ManagedSource
+	if source == nil || source.URL != "https://github.com/example/envs.git" ||
+		source.Ref != "v1.2.3" || source.Commit != "0123456789abcdef" {
+		t.Fatalf("managed source = %+v", source)
 	}
 }
 

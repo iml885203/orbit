@@ -137,6 +137,13 @@ resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默�
 `orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的
 project packages。
 
+`orbit env sync` 會更新共享設定；若 active environment 有變更，會詢問是否
+立即套用並恢復原本正在運行的 resources，原先停止的 resources 仍維持停止。
+官方 demo 會固定在每個 Orbit release 對應的 revision；`orbit env list` 與
+`orbit status` 會顯示 repository、要求的 ref 與實際 commit。團隊也可以用
+`orbit init --env-repo <url> --env-ref <tag-or-commit>` 得到相同的可重現性。
+若要延後中斷，使用 `--no-apply`，Orbit 會顯示之後完成套用的確切指令。
+
 若 environment 設定了對應的 infrastructure container，`orbit query redis`、
 `orbit query mongo` 與 `orbit query postgres` 會開啟 container 的原生 client。
 PostgreSQL 會沿用 container 的 `POSTGRES_USER` 與 `POSTGRES_DB`；只有要查其他

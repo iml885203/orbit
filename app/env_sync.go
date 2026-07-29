@@ -15,10 +15,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const settingKeyEnvRepoURL = "env_repo_url"
+const (
+	settingKeyEnvRepoURL = "env_repo_url"
+	settingKeyEnvRepoRef = "env_repo_ref"
+)
 
 var (
 	envSyncURL     string
+	envSyncRef     string
 	envSyncPath    string
 	envSyncDryRun  bool
 	envSyncYes     bool
@@ -44,6 +48,7 @@ Use --dry to preview changed files without downloading or applying them.`,
 		RunE: runEnvSync,
 	}
 	cmd.Flags().StringVar(&envSyncURL, "url", "", "use and remember another environment Git repository")
+	cmd.Flags().StringVar(&envSyncRef, "ref", "", "pin and remember a repository branch, tag, or commit")
 	cmd.Flags().StringVar(&envSyncPath, "path", "", "use a local checkout containing envs/ without remembering it")
 	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview updates without downloading or applying")
 	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "apply updates without prompting")
@@ -69,6 +74,11 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return fmt.Errorf("sync: %w", err)
 		}
+		if !envSyncDryRun {
+			if err := envsync.RemoveRepositorySource(dest); err != nil {
+				return err
+			}
+		}
 		if cli.JSONOutput {
 			return finishEnvSync(envSyncPath, dest, res)
 		}
@@ -78,14 +88,15 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	priorURL := settings.Get(settingKeyEnvRepoURL)
-	url := resolveEnvRepoURL(envSyncURL, priorURL)
-	if url == "" {
+	priorRef := settings.Get(settingKeyEnvRepoRef)
+	repository := resolveEnvRepository(envSyncURL, envSyncRef, priorURL, priorRef)
+	if repository.URL == "" {
 		return fmt.Errorf("no env repo URL configured; pass --url, --path, or run `orbit init`")
 	}
 	if !cli.JSONOutput {
 		fmt.Println("Checking for environment updates...")
 	}
-	res, err := envsync.SyncFromRepo(url, dest, envsync.Options{DryRun: envSyncDryRun})
+	res, err := envsync.SyncFromRepo(repository.URL, repository.Ref, dest, envsync.Options{DryRun: envSyncDryRun})
 	if err != nil {
 		return envRepoSyncError(err)
 	}
@@ -93,17 +104,19 @@ func runEnvSync(_ *cobra.Command, _ []string) error {
 		printSyncResult(res)
 	}
 
-	// Persist only an explicit --url. A URL that resolved from the built-in
-	// default must not be written back: pinning it would freeze the default
-	// into settings.json, and users who never overrode would stop following
-	// default changes shipped in newer releases.
-	if envSyncURL != "" {
-		if err := settings.Set(settingKeyEnvRepoURL, url); err != nil {
+	// Built-in URL/ref pairs remain release-owned defaults rather than user
+	// settings, so upgrading Orbit advances the compatible demo revision.
+	// Either explicit flag turns the resolved pair into a user-owned choice.
+	if envSyncURL != "" || envSyncRef != "" {
+		if err := settings.Set(settingKeyEnvRepoURL, repository.URL); err != nil {
+			return fmt.Errorf("saving settings: %w", err)
+		}
+		if err := settings.Set(settingKeyEnvRepoRef, repository.Ref); err != nil {
 			return fmt.Errorf("saving settings: %w", err)
 		}
 	}
 	if cli.JSONOutput {
-		return finishEnvSync(url, dest, res)
+		return finishEnvSync(repository.URL, dest, res)
 	}
 	return offerEnvironmentApply()
 }
@@ -151,6 +164,8 @@ type envSyncJSONData struct {
 	Destination   string   `json:"destination"`
 	DryRun        bool     `json:"dry_run"`
 	Written       []string `json:"written"`
+	Reference     string   `json:"reference,omitempty"`
+	Commit        string   `json:"commit,omitempty"`
 	DaemonRunning bool     `json:"daemon_running"`
 	ApplyAction   string   `json:"apply_action"`
 	Restored      []string `json:"restored_resources"`
@@ -171,6 +186,8 @@ func buildEnvSyncJSONData(opts envSyncJSONOptions) envSyncJSONData {
 		Destination:   opts.Destination,
 		DryRun:        opts.DryRun,
 		Written:       written,
+		Reference:     opts.Result.Source.Ref,
+		Commit:        opts.Result.Source.Commit,
 		DaemonRunning: opts.DaemonRunning,
 		ApplyAction:   opts.ApplyAction,
 		Restored:      restored,
@@ -304,20 +321,38 @@ func printSyncResult(res envsync.Result) {
 	}
 }
 
-// resolveEnvRepoURL picks flag > setting > ORBIT_ENV_REPO_URL env > the
-// distribution default ("" in an unbranded build — callers report the
-// missing configuration).
-func resolveEnvRepoURL(flag, setting string) string {
-	if flag != "" {
-		return flag
+type envRepository struct {
+	URL string
+	Ref string
+}
+
+func resolveEnvRepository(flagURL, flagRef, settingURL, settingRef string) envRepository {
+	if flagURL != "" {
+		return envRepository{URL: flagURL, Ref: flagRef}
 	}
-	if setting != "" {
-		return setting
+	if settingURL != "" {
+		ref := settingRef
+		if flagRef != "" {
+			ref = flagRef
+		}
+		return envRepository{URL: settingURL, Ref: ref}
 	}
 	if envURL := os.Getenv("ORBIT_ENV_REPO_URL"); envURL != "" {
-		return envURL
+		ref := os.Getenv("ORBIT_ENV_REPO_REF")
+		if flagRef != "" {
+			ref = flagRef
+		}
+		return envRepository{URL: envURL, Ref: ref}
 	}
-	return distribution.EnvRepoURL
+	ref := distribution.EnvRepoRef
+	if flagRef != "" {
+		ref = flagRef
+	}
+	return envRepository{URL: distribution.EnvRepoURL, Ref: ref}
+}
+
+func resolveEnvRepoURL(flag, setting string) string {
+	return resolveEnvRepository(flag, "", setting, "").URL
 }
 
 // envsDestDir returns the local destination for synced envs.

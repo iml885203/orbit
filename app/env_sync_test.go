@@ -79,6 +79,31 @@ func TestResolveEnvRepoURL_DistributionDefault(t *testing.T) {
 	}
 }
 
+func TestResolveEnvRepositoryKeepsURLAndRefFromSameSource(t *testing.T) {
+	setTestDistribution(t, extension.Distribution{
+		EnvRepoURL: "https://example.com/default.git",
+		EnvRepoRef: "v1.2.3",
+	})
+	t.Setenv("ORBIT_ENV_REPO_URL", "")
+	t.Setenv("ORBIT_ENV_REPO_REF", "")
+
+	if got := resolveEnvRepository("", "", "", ""); got != (envRepository{
+		URL: "https://example.com/default.git",
+		Ref: "v1.2.3",
+	}) {
+		t.Fatalf("distribution repository = %+v", got)
+	}
+	if got := resolveEnvRepository("https://example.com/custom.git", "", "", ""); got.Ref != "" {
+		t.Fatalf("custom URL inherited distribution ref: %+v", got)
+	}
+	if got := resolveEnvRepository("", "release", "https://example.com/saved.git", "old"); got != (envRepository{
+		URL: "https://example.com/saved.git",
+		Ref: "release",
+	}) {
+		t.Fatalf("explicit ref did not update saved repository: %+v", got)
+	}
+}
+
 // An unbranded build (no distribution) resolves to "" — the sync
 // command reports the missing configuration instead of cloning.
 func TestResolveEnvRepoURL_Unbranded(t *testing.T) {

@@ -144,10 +144,16 @@ func TestSettings_EnvRepoURL_Persists(t *testing.T) {
 	if err := s.Set("env_repo_url", "http://example.com/envs.git"); err != nil {
 		t.Fatalf("set failed: %v", err)
 	}
+	if err := s.Set("env_repo_ref", "v2.1.0"); err != nil {
+		t.Fatalf("set ref failed: %v", err)
+	}
 
 	s2 := LoadSettings(path)
 	if got := s2.Get("env_repo_url"); got != "http://example.com/envs.git" {
 		t.Errorf("after reload, env_repo_url = %q, want the set URL", got)
+	}
+	if got := s2.Get("env_repo_ref"); got != "v2.1.0" {
+		t.Errorf("after reload, env_repo_ref = %q, want the set ref", got)
 	}
 }
 

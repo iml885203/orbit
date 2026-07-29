@@ -18,6 +18,12 @@ export interface Settings {
    * default change in a new orbit release reaches users who never overrode.
    */
   env_repo_url?: string;
+  /**
+   * EnvRepoRef is set only alongside an explicit environment repository
+   * choice; distribution defaults keep their release-owned ref out of user
+   * settings so upgrading Orbit can advance both together.
+   */
+  env_repo_ref?: string;
   env_toggles?: { [key: string]: boolean};
   service_modes?: { [key: string]: string}; // "api": "container"
   user_env?: { [key: string]: string};

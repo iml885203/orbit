@@ -25,6 +25,7 @@ type Result struct {
 	// Written lists changed relative paths (relative to destDir) that were
 	// written, or would be written in DryRun mode, sorted.
 	Written []string
+	Source  RepositorySource
 }
 
 // Sync copies env files from srcDir into destDir, preserving subdir

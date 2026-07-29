@@ -76,6 +76,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		if daemonRunning {
 			fmt.Println()
 			printEnvironmentHeader(os.Stdout, selection.SelectedName, dstatus)
+			printStatusEnvironmentSource(setup.Selection)
 			_, _, _ = printRunningSnapshot(running)
 		}
 		return nil
@@ -133,6 +134,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		name = daemonsrv.EnvShortName(configFile)
 	}
 	printEnvironmentHeader(os.Stdout, name, dstatus)
+	printStatusEnvironmentSource(setup.Selection)
 
 	// Track state for tips
 	var stoppedInfra bool
@@ -210,6 +212,12 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func printStatusEnvironmentSource(selection environmentSelection) {
+	if source := managedEnvironmentSourceLabel(selection); source != "" {
+		fmt.Printf("  Source: %s\n\n", source)
+	}
 }
 
 func printRunningSnapshot(running map[string]daemon.ResourceStatus) (bool, []string, []string) {

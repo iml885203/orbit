@@ -81,6 +81,10 @@ type Distribution struct {
 	// suggested default in `orbit init`), used when no --url flag,
 	// env_repo_url setting, or ORBIT_ENV_REPO_URL env var overrides it.
 	EnvRepoURL string
+	// EnvRepoRef pins the default repository to the demo revision compatible
+	// with this binary release. Custom repositories remain unpinned unless
+	// their owner selects a ref explicitly.
+	EnvRepoRef string
 	// InstallURL is the install script `orbit update` pipes to
 	// bash, unless ORBIT_INSTALL_URL overrides it.
 	InstallURL string

@@ -189,6 +189,9 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 		}
 		fmt.Printf("%s%s\n", marker, environment.Name)
 	}
+	if source := managedEnvironmentSourceLabel(selection); source != "" {
+		fmt.Printf("\n  Source: %s\n", source)
+	}
 	if selection.State != environmentSelectionSelected {
 		fmt.Println()
 		if len(selection.Environments) == 1 {
@@ -201,6 +204,26 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 		}
 	}
 	return nil
+}
+
+func managedEnvironmentSourceLabel(selection environmentSelection) string {
+	if selection.ManagedSource == nil {
+		return ""
+	}
+	source := selection.ManagedSource
+	revision := source.Ref
+	if revision == "" {
+		revision = source.Commit
+	}
+	commit := source.Commit
+	if len(commit) > 12 {
+		commit = commit[:12]
+	}
+	label := fmt.Sprintf("%s @ %s", source.URL, revision)
+	if source.Ref != "" {
+		label += fmt.Sprintf(" (%s)", commit)
+	}
+	return label
 }
 
 type envListJSONData struct {
