@@ -26,6 +26,18 @@ func staleServer(t *testing.T, configPath string) *Server {
 	return s
 }
 
+func advanceModTime(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := info.ModTime().Add(time.Second)
+	if err := os.Chtimes(path, next, next); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestConfigStale_FreshBaselineIsNotStale(t *testing.T) {
 	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"2\"\n")
 	s := staleServer(t, path)
@@ -40,9 +52,8 @@ func TestConfigStale_FileEdited(t *testing.T) {
 	path := writeTempConfig(t, dir, "dev.yaml", "version: \"2\"\n")
 	s := staleServer(t, path)
 
-	// Backdate-proof: ensure the mtime actually differs before rewriting.
-	time.Sleep(10 * time.Millisecond)
 	writeTempConfig(t, dir, "dev.yaml", "version: \"2\"\npreviewOnly: true\n")
+	advanceModTime(t, path)
 
 	stale, reason := s.configStale()
 	if !stale || reason != "env file edited" {
@@ -57,8 +68,8 @@ func TestConfigStale_TouchWithoutChangeIsNotStale(t *testing.T) {
 	s := staleServer(t, path)
 
 	// Same bytes, new mtime — the hash comparison must absorb the touch.
-	time.Sleep(10 * time.Millisecond)
 	writeTempConfig(t, dir, "dev.yaml", content)
+	advanceModTime(t, path)
 
 	if stale, reason := s.configStale(); stale {
 		t.Fatalf("touch without change reported stale: %s", reason)

@@ -35,7 +35,8 @@ func TestServiceInfo_TransitionHealthyStampsHealthyAtOnceOnly(t *testing.T) {
 	}
 	// A second Healthy transition (e.g., after drift recovery) should
 	// preserve the original timestamp so uptime stays continuous.
-	time.Sleep(time.Millisecond)
+	first = time.Unix(1000, 0)
+	info.HealthyAt = first
 	info.Transition(StateHealthy)
 	if !info.HealthyAt.Equal(first) {
 		t.Errorf("HealthyAt should not be overwritten on subsequent Healthy, got %v want %v", info.HealthyAt, first)

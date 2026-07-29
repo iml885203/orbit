@@ -58,7 +58,12 @@ func TestRecoverHealthy_FlipsHealthyAfterWarmup(t *testing.T) {
 // the flag must be cleared once the loop exits without success, so a ghost
 // Recovering can't make a truly terminal degraded look like still-trying.
 func TestRecoverHealthy_FlagsWhileRunning_ClearsOnExit(t *testing.T) {
+	probed := make(chan struct{}, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case probed <- struct{}{}:
+		default:
+		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
@@ -71,12 +76,13 @@ func TestRecoverHealthy_FlagsWhileRunning_ClearsOnExit(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- checker.RecoverHealthy(ctx, "flagged-svc", 1, hc, nil) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for !checker.Progress("flagged-svc").Recovering {
-		if time.Now().After(deadline) {
-			t.Fatal("Recovering never flagged while probes keep failing")
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-probed:
+	case <-time.After(time.Second):
+		t.Fatal("recovery probe did not start")
+	}
+	if !checker.Progress("flagged-svc").Recovering {
+		t.Fatal("Recovering was not flagged while probes kept failing")
 	}
 
 	cancel()
@@ -89,7 +95,12 @@ func TestRecoverHealthy_FlagsWhileRunning_ClearsOnExit(t *testing.T) {
 }
 
 func TestRecoverHealthy_CancelledContextStopsProbing(t *testing.T) {
+	probed := make(chan struct{}, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case probed <- struct{}{}:
+		default:
+		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
@@ -99,11 +110,15 @@ func TestRecoverHealthy_CancelledContextStopsProbing(t *testing.T) {
 	hc := &config.HealthCheckConfig{Type: "http", Port: portFromURL(t, srv.URL), Retries: 5}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
-	if err := checker.RecoverHealthy(ctx, "never-svc", 1, hc, nil); err != context.Canceled {
+	done := make(chan error, 1)
+	go func() { done <- checker.RecoverHealthy(ctx, "never-svc", 1, hc, nil) }()
+	select {
+	case <-probed:
+	case <-time.After(time.Second):
+		t.Fatal("recovery probe did not start")
+	}
+	cancel()
+	if err := <-done; err != context.Canceled {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }

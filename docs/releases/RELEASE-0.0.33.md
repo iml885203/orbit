@@ -56,6 +56,8 @@ than a moving default branch.
 - Engine and health-check tests now synchronize on real events instead of
   fixed sleeps. Duplicate negative tests were removed and retry timing was
   shortened without weakening the lifecycle and cancellation contracts.
+  Filesystem staleness uses explicit timestamps, and bounded database work
+  uses a barrier that proves the worker cap without scheduler timing.
 
 ## Why it matters
 

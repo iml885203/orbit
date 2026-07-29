@@ -21,14 +21,20 @@ func TestRunBoundedPublish(t *testing.T) {
 	var mu sync.Mutex
 	ran := map[string]bool{}
 	inFlight, maxInFlight := 0, 0
+	release := make(chan struct{})
+	full := make(chan struct{})
+	var fullOnce sync.Once
 	work := func(target publishTargetRef) (string, error) {
 		mu.Lock()
 		inFlight++
 		if inFlight > maxInFlight {
 			maxInFlight = inFlight
 		}
+		if inFlight == 4 {
+			fullOnce.Do(func() { close(full) })
+		}
 		mu.Unlock()
-		time.Sleep(2 * time.Millisecond) // let workers overlap so the bound is observable
+		<-release
 		mu.Lock()
 		ran[target.DB] = true
 		inFlight--
@@ -39,7 +45,17 @@ func TestRunBoundedPublish(t *testing.T) {
 		return "ok", nil
 	}
 
-	err := runBoundedPublish(targets, 4, "published", work)
+	done := make(chan error, 1)
+	go func() {
+		done <- runBoundedPublish(targets, 4, "published", work)
+	}()
+	select {
+	case <-full:
+	case <-time.After(time.Second):
+		t.Fatal("publish workers did not reach the concurrency cap")
+	}
+	close(release)
+	err := <-done
 
 	if len(ran) != 20 {
 		t.Errorf("every target must run; ran %d of 20", len(ran))
@@ -47,8 +63,8 @@ func TestRunBoundedPublish(t *testing.T) {
 	if maxInFlight > 4 {
 		t.Errorf("concurrency bound exceeded: %d workers in flight, cap 4", maxInFlight)
 	}
-	if maxInFlight < 2 {
-		t.Errorf("expected concurrent execution; peak in-flight was %d", maxInFlight)
+	if maxInFlight != 4 {
+		t.Errorf("expected the worker cap to be exercised; peak in-flight was %d", maxInFlight)
 	}
 	if err == nil {
 		t.Fatal("expected an aggregate error for the two failures")
