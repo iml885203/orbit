@@ -13,7 +13,7 @@ func TestFindProjectConfigUsesNearestAncestor(t *testing.T) {
 		t.Fatal(err)
 	}
 	rootConfig := filepath.Join(root, projectConfigName)
-	if err := os.WriteFile(rootConfig, []byte("version: \"2\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(rootConfig, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -22,7 +22,7 @@ func TestFindProjectConfigUsesNearestAncestor(t *testing.T) {
 	}
 
 	appConfig := filepath.Join(root, "apps", projectConfigName)
-	if err := os.WriteFile(appConfig, []byte("version: \"2\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(appConfig, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := findProjectConfig(nested); got != appConfig {
@@ -39,7 +39,7 @@ func TestFindProjectConfigReturnsEmptyWithoutOrbitYAML(t *testing.T) {
 func TestActiveEnvironmentSelectionReportsProjectOverride(t *testing.T) {
 	project := t.TempDir()
 	configPath := filepath.Join(project, projectConfigName)
-	if err := os.WriteFile(configPath, []byte("version: \"2\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	previousDirectory, err := os.Getwd()

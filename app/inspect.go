@@ -485,11 +485,13 @@ func inspectRecommendedActions(
 		}
 		switch mismatch.Kind {
 		case config.SchemaVersionOlder:
-			actions = append(actions, cli.JSONAction{
-				Command:     "orbit env sync --json",
-				Reason:      "Refresh the shared environment file to the supported schema.",
-				Destructive: false,
-			})
+			if cli.IsManagedEnvironmentPath(mismatch.Path) {
+				actions = append(actions, cli.JSONAction{
+					Command:     "orbit env sync --json",
+					Reason:      "Refresh the shared environment file to the supported schema.",
+					Destructive: false,
+				})
+			}
 		case config.SchemaVersionNewer:
 			actions = append(actions, cli.JSONAction{
 				Command:     "orbit update --json",

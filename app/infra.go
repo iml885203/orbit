@@ -341,11 +341,14 @@ func seedCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "seed [containers...]",
 		Short: "Run seed data scripts",
-		Long: `Run seed data scripts for infrastructure containers.
+		Long: `Run configured seed data scripts against running infrastructure containers.
+
+Each seed file is sent to the container command declared in orbit.yaml. Orbit
+tracks the command and file content so unchanged seeds are not applied twice.
 
 Examples:
   orbit seed                    # seed all containers with seed config
-  orbit seed sql-server         # seed only SQL Server
+  orbit seed database           # seed only the named container
   orbit seed --force            # re-run all seeds (even previously executed)`,
 		RunE: runSeed,
 	}
@@ -361,12 +364,25 @@ func runSeed(_ *cobra.Command, args []string) error {
 
 	filter := make(map[string]bool, len(args))
 	for _, a := range args {
+		containerConfig, exists := cfg.Containers[a]
+		if !exists {
+			return fmt.Errorf("unknown container %q", a)
+		}
+		if containerConfig.Seed == nil || len(containerConfig.Seed.Files) == 0 {
+			return fmt.Errorf("container %q has no seed configuration", a)
+		}
 		filter[a] = true
 	}
 
 	anySeeds := false
 	var okCount, failCount, skipCount int
-	for name, c := range cfg.Containers {
+	names := make([]string, 0, len(cfg.Containers))
+	for name := range cfg.Containers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		c := cfg.Containers[name]
 		if len(filter) > 0 && !filter[name] {
 			continue
 		}

@@ -18,12 +18,12 @@ func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 	_ = os.MkdirAll(envsDir, 0755)
 	// Write a minimal but valid env yaml
 	target := filepath.Join(envsDir, "newenv.yaml")
-	if err := os.WriteFile(target, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(target, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	// Also write the "current" env so dirname matches
 	currentEnv := filepath.Join(envsDir, "current.yaml")
-	_ = os.WriteFile(currentEnv, []byte("version: \"2\"\n"), 0644)
+	_ = os.WriteFile(currentEnv, []byte("version: \"3\"\n"), 0644)
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
@@ -57,7 +57,7 @@ func TestHandleEnvSwitch_UnknownEnv(t *testing.T) {
 	envsDir := filepath.Join(tmp, "envs")
 	_ = os.MkdirAll(envsDir, 0755)
 	current := filepath.Join(envsDir, "current.yaml")
-	_ = os.WriteFile(current, []byte("version: \"2\"\n"), 0644)
+	_ = os.WriteFile(current, []byte("version: \"3\"\n"), 0644)
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(current)
@@ -88,11 +88,11 @@ func TestHandleEnvSwitch_NewPath(t *testing.T) {
 	envsDir := filepath.Join(tmp, "envs")
 	_ = os.MkdirAll(envsDir, 0755)
 	target := filepath.Join(envsDir, "newenv.yaml")
-	if err := os.WriteFile(target, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(target, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	currentEnv := filepath.Join(envsDir, "current.yaml")
-	_ = os.WriteFile(currentEnv, []byte("version: \"2\"\n"), 0644)
+	_ = os.WriteFile(currentEnv, []byte("version: \"3\"\n"), 0644)
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
@@ -116,7 +116,7 @@ func TestHandleEnvSwitchRequiresRestartLauncherBeforeMutation(t *testing.T) {
 	current := filepath.Join(tmp, "current.yaml")
 	target := filepath.Join(tmp, "target.yaml")
 	for _, path := range []string{current, target} {
-		if err := os.WriteFile(path, []byte("version: \"2\"\n"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,7 +140,7 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 	current := filepath.Join(tmp, "current.yaml")
 	target := filepath.Join(tmp, "target.yaml")
 	for _, path := range []string{current, target} {
-		if err := os.WriteFile(path, []byte("version: \"2\"\n"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,11 +182,11 @@ func TestHandleEnvSwitch_RejectsPreviewOnly(t *testing.T) {
 	envsDir := filepath.Join(tmp, "envs")
 	_ = os.MkdirAll(envsDir, 0755)
 	currentEnv := filepath.Join(envsDir, "current.yaml")
-	if err := os.WriteFile(currentEnv, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(currentEnv, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	prodEnv := filepath.Join(envsDir, "prod.yaml")
-	if err := os.WriteFile(prodEnv, []byte("version: \"2\"\npreviewOnly: true\n"), 0644); err != nil {
+	if err := os.WriteFile(prodEnv, []byte("version: \"3\"\npreviewOnly: true\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 

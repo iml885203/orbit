@@ -9,7 +9,7 @@ import (
 
 func TestLoadMinimalConfig(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 settings:
   shutdown_timeout: 10s
 containers:
@@ -38,8 +38,8 @@ services:
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	if cfg.Version != "2" {
-		t.Errorf("version = %q, want %q", cfg.Version, "2")
+	if cfg.Version != "3" {
+		t.Errorf("version = %q, want %q", cfg.Version, "3")
 	}
 	if len(cfg.Containers) != 1 {
 		t.Errorf("containers = %d, want 1", len(cfg.Containers))
@@ -94,7 +94,7 @@ func TestApplyDefaultsUpdatesContainerPointersInMap(t *testing.T) {
 // regardless of which field references them.
 func TestLoad_ResolvesRelativeServicePath(t *testing.T) {
 	path := writeOrbitYAML(t, `
-version: "2"
+version: "3"
 services:
   api:
     type: node
@@ -113,13 +113,12 @@ services:
 
 func TestLoad_ResolvesRelativeSeedFiles(t *testing.T) {
 	path := writeOrbitYAML(t, `
-version: "2"
+version: "3"
 containers:
   db:
     image: mongo:8
     seed:
-      type: mongo
-      database: appdb
+      command: mongosh --quiet appdb
       files:
         - ./seeds/001-users.sql
 `)
@@ -141,7 +140,7 @@ func TestEnvVarSubstitution(t *testing.T) {
 	t.Setenv("TEST_ORBIT_VAR", base)
 
 	content := `
-version: "2"
+version: "3"
 services:
   api:
     type: node
@@ -213,7 +212,7 @@ func TestLoad_ExpandsHomeInEveryPathField(t *testing.T) {
 	_ = os.Unsetenv("ORBIT_TEST_MISSING_VAR")
 
 	path := writeOrbitYAML(t, `
-version: "2"
+version: "3"
 services:
   api:
     type: node
@@ -225,8 +224,7 @@ containers:
     volumes:
       - ~/db-data:/var/lib/postgresql
     seed:
-      type: mongo
-      database: appdb
+      command: mongosh --quiet appdb
       files:
         - ~/seeds/001-users.sql
     sidecars:
@@ -271,7 +269,7 @@ func TestLoad_HomeExpansionRunsBeforeRelativeResolution(t *testing.T) {
 		t.Fatalf("UserHomeDir: %v", err)
 	}
 	path := writeOrbitYAML(t, `
-version: "2"
+version: "3"
 containers:
   kafka:
     image: confluentinc/cp-kafka:7.9.0
@@ -369,7 +367,7 @@ func TestLoad_NestedEnvVarFallbackWithSuffix(t *testing.T) {
 	_ = os.Unsetenv("ORBIT_TEST_INNER")
 
 	path := writeOrbitYAML(t, `
-version: "2"
+version: "3"
 services:
   payments:
     type: node
@@ -388,7 +386,7 @@ services:
 
 func TestCycleDetection(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 services:
   a:
     type: node
@@ -417,7 +415,7 @@ services:
 
 func TestCycleDetection_SelfLoop(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 services:
   a:
     type: node
@@ -436,7 +434,7 @@ services:
 
 func TestCycleDetection_DiamondNoCycle(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 services:
   a:
     type: node
@@ -467,7 +465,7 @@ services:
 
 func TestCycleDetection_Disconnected(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 services:
   a:
     type: node
@@ -505,7 +503,7 @@ services:
 
 func TestCycleDetection_MixedServiceContainer(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   db:
     image: postgres:16
@@ -530,7 +528,7 @@ services:
 
 func TestCycleDetection_LongChain(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 services:
   a:
     type: node
@@ -571,7 +569,7 @@ services:
 
 func TestPortConflictDetection(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   redis:
     image: redis:7.4
@@ -596,7 +594,7 @@ services:
 
 func TestDualDefinition_AllowsSameNameInBoth(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   redis:
     image: redis:7.4
@@ -626,7 +624,7 @@ services:
 
 func TestInvalidPullPolicyDetection(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   db:
     image: local/db:dev
@@ -645,7 +643,7 @@ containers:
 
 func TestSidecarPullPolicy(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   kafka:
     image: kafka:dev
@@ -671,7 +669,7 @@ containers:
 
 func TestInvalidSidecarPullPolicyDetection(t *testing.T) {
 	content := `
-version: "2"
+version: "3"
 containers:
   kafka:
     image: kafka:dev
@@ -706,7 +704,7 @@ func TestLoad_ResolvesRelativeTopicsFile(t *testing.T) {
 	if err := os.WriteFile(dataPath, []byte("topics: []\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	yaml := `version: "2"
+	yaml := `version: "3"
 containers:
   kafka:
     image: kafka:latest
@@ -732,7 +730,7 @@ containers:
 }
 
 func TestLoad_UnknownField(t *testing.T) {
-	yamlContent := `version: "2"
+	yamlContent := `version: "3"
 containers:
   sql-server:
     image: foo:latest
@@ -773,13 +771,13 @@ func TestLoad_VersionMismatch(t *testing.T) {
 	}{
 		{
 			name:        "env newer than binary",
-			yaml:        `version: "3"` + "\n",
+			yaml:        `version: "4"` + "\n",
 			wantContain: "Orbit binary is out of date",
 		},
 		{
 			name:        "env older than binary",
-			yaml:        `version: "1"` + "\n",
-			wantContain: "env files are out of date",
+			yaml:        `version: "2"` + "\n",
+			wantContain: "project-local migration guide",
 		},
 		{
 			name:        "missing version",
@@ -808,7 +806,7 @@ func TestLoad_VersionMismatch(t *testing.T) {
 func TestLoad_PopulatesExternalName(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "env.yaml")
-	yamlSrc := `version: "2"
+	yamlSrc := `version: "3"
 externals:
   upstream:
     label: Upstream
@@ -833,7 +831,7 @@ externals:
 
 func TestLoadMarksOnlyExplicitAutoPortExpressions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "auto-ports.yaml")
-	source := `version: "2"
+	source := `version: "3"
 containers:
   redis:
     image: redis:7.4-alpine

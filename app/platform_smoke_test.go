@@ -44,7 +44,7 @@ func TestPlatformSmokeCleanUserJourney(t *testing.T) {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(envsDir, "quickstart.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runPlatformSmokeCommand(t, envRepo, nil, "git", "init")

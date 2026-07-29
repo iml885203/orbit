@@ -39,7 +39,7 @@ func advanceModTime(t *testing.T, path string) {
 }
 
 func TestConfigStale_FreshBaselineIsNotStale(t *testing.T) {
-	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"2\"\n")
+	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"3\"\n")
 	s := staleServer(t, path)
 
 	if stale, reason := s.configStale(); stale {
@@ -49,10 +49,10 @@ func TestConfigStale_FreshBaselineIsNotStale(t *testing.T) {
 
 func TestConfigStale_FileEdited(t *testing.T) {
 	dir := t.TempDir()
-	path := writeTempConfig(t, dir, "dev.yaml", "version: \"2\"\n")
+	path := writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\n")
 	s := staleServer(t, path)
 
-	writeTempConfig(t, dir, "dev.yaml", "version: \"2\"\npreviewOnly: true\n")
+	writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\npreviewOnly: true\n")
 	advanceModTime(t, path)
 
 	stale, reason := s.configStale()
@@ -63,7 +63,7 @@ func TestConfigStale_FileEdited(t *testing.T) {
 
 func TestConfigStale_TouchWithoutChangeIsNotStale(t *testing.T) {
 	dir := t.TempDir()
-	content := "version: \"2\"\n"
+	content := "version: \"3\"\n"
 	path := writeTempConfig(t, dir, "dev.yaml", content)
 	s := staleServer(t, path)
 
@@ -80,8 +80,8 @@ func TestConfigStale_SelectionChanged_OnlyForCurrentBackedDaemons(t *testing.T) 
 	home := t.TempDir()
 	t.Setenv("ORBIT_HOME", home)
 	dir := t.TempDir()
-	loaded := writeTempConfig(t, dir, "development.yaml", "version: \"2\"\n")
-	other := writeTempConfig(t, dir, "sports.yaml", "version: \"2\"\n")
+	loaded := writeTempConfig(t, dir, "development.yaml", "version: \"3\"\n")
+	other := writeTempConfig(t, dir, "sports.yaml", "version: \"3\"\n")
 
 	// Daemon started from the current selection.
 	if err := os.WriteFile(filepath.Join(home, "current"), []byte(loaded+"\n"), 0o644); err != nil {
@@ -101,14 +101,14 @@ func TestConfigStale_SelectionChanged_OnlyForCurrentBackedDaemons(t *testing.T) 
 
 	// A -c daemon (loaded path never matched current) must not false-alarm.
 	explicit := &Server{}
-	explicit.SetConfigPath(writeTempConfig(t, dir, "custom.yaml", "version: \"2\"\n"))
+	explicit.SetConfigPath(writeTempConfig(t, dir, "custom.yaml", "version: \"3\"\n"))
 	if stale, reason := explicit.configStale(); stale {
 		t.Fatalf("-c daemon false-alarmed on selection: %s", reason)
 	}
 }
 
 func TestConfigStale_EngineStaleSticky(t *testing.T) {
-	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"2\"\n")
+	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"3\"\n")
 	s := staleServer(t, path)
 
 	s.engineStale.Store(true)

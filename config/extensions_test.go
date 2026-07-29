@@ -12,7 +12,7 @@ import (
 // strict-decoding regression the spec calls out).
 func TestLoad_UnknownTopLevelKeyStillFails(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "orbit.yaml")
-	yaml := "version: \"2\"\nservcies:\n  api:\n    type: node\n"
+	yaml := "version: \"3\"\nservcies:\n  api:\n    type: node\n"
 	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestLoad_UnknownTopLevelKeyStillFails(t *testing.T) {
 // inline map only absorbs top level.
 func TestLoad_UnknownNestedKeyStillFails(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "orbit.yaml")
-	yaml := "version: \"2\"\ncontainers:\n  redis:\n    image: redis:7.4\n    imagee: typo\n"
+	yaml := "version: \"3\"\ncontainers:\n  redis:\n    image: redis:7.4\n    imagee: typo\n"
 	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}

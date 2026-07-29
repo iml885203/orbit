@@ -1,4 +1,4 @@
-version: "2"
+version: "3"
 
 settings:
   shutdown_timeout: 10s

@@ -67,7 +67,7 @@ func TestQueryContainerSelectionIsPredictable(t *testing.T) {
 
 func TestQueryCommandRejectsAnAmbiguousTargetBeforeDocker(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "orbit.yaml")
-	source := `version: "2"
+	source := `version: "3"
 containers:
   app-db:
     image: postgres:18

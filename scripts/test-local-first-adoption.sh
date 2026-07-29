@@ -76,7 +76,7 @@ mkdir -p "$test_root/project/apps/web"
 cd "$test_root/project/apps/web"
 
 printf '%s\n' \
-  'version: "2"' \
+  'version: "3"' \
   'services:' \
   '  override:' \
   '    type: shell' \

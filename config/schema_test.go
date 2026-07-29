@@ -140,7 +140,7 @@ kafka:
 
 func TestConfig_ExternalsUnmarshal(t *testing.T) {
 	yamlSrc := `
-version: "2"
+version: "3"
 externals:
   upstream:
     label: Upstream
@@ -174,37 +174,37 @@ func TestCheckVersion(t *testing.T) {
 	}{
 		{
 			name:    "matches supported",
-			version: "2",
+			version: "3",
 			path:    "envs/development.yaml",
 			wantErr: false,
 		},
 		{
 			name:        "env older than binary",
-			version:     "1",
+			version:     "2",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", `"1"`, `"2"`, "out of date", "env sync"},
+			wantContain: []string{"envs/development.yaml", `"2"`, `"3"`, "supported schema", "migration guide"},
 		},
 		{
 			name:        "env newer than binary",
-			version:     "3",
+			version:     "4",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", `"3"`, `"2"`, "Orbit binary is out of date", "orbit update"},
+			wantContain: []string{"envs/development.yaml", `"4"`, `"3"`, "Orbit binary is out of date", "orbit update"},
 		},
 		{
 			name:        "missing version",
 			version:     "",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", "missing required field 'version'", `"2"`},
+			wantContain: []string{"envs/development.yaml", "missing required field 'version'", `"3"`},
 		},
 		{
 			name:        "non-numeric version",
 			version:     "beta",
 			path:        "envs/development.yaml",
 			wantErr:     true,
-			wantContain: []string{"envs/development.yaml", `"beta"`, `"2"`},
+			wantContain: []string{"envs/development.yaml", `"beta"`, `"3"`},
 		},
 	}
 	for _, tc := range tests {
@@ -227,39 +227,27 @@ func TestCheckVersion(t *testing.T) {
 	}
 }
 
-func TestValidate_SeedRequiresExplicitExecutorAndCredentials(t *testing.T) {
+func TestValidate_SeedRequiresCommandAndFiles(t *testing.T) {
 	tests := []struct {
 		name string
 		seed *SeedConfig
-		env  map[string]string
 		want string
 	}{
 		{
-			name: "missing type",
+			name: "missing command",
 			seed: &SeedConfig{Files: []string{"seed.sql"}},
-			want: "seed.type is required",
+			want: "seed.command is required",
 		},
 		{
-			name: "unknown type",
-			seed: &SeedConfig{Type: "database", Files: []string{"seed.sql"}},
-			want: "unsupported seed.type",
-		},
-		{
-			name: "sqlserver credential key missing",
-			seed: &SeedConfig{Type: "sqlserver", Username: "sa", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
-			want: "DB_PASSWORD",
-		},
-		{
-			name: "sqlserver username missing",
-			seed: &SeedConfig{Type: "sqlserver", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
-			env:  map[string]string{"DB_PASSWORD": "secret"},
-			want: "seed.username is required",
+			name: "missing files",
+			seed: &SeedConfig{Command: "psql -U app"},
+			want: "seed.files must contain at least one file",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := &Config{Containers: map[string]*Container{
-				"database": {Seed: test.seed, Environment: test.env},
+				"database": {Seed: test.seed},
 			}}
 			err := Validate(cfg)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
@@ -270,12 +258,11 @@ func TestValidate_SeedRequiresExplicitExecutorAndCredentials(t *testing.T) {
 
 	valid := &Config{Containers: map[string]*Container{
 		"database": {
-			Seed:        &SeedConfig{Type: "sqlserver", Username: "sa", PasswordEnv: "DB_PASSWORD", Files: []string{"seed.sql"}},
-			Environment: map[string]string{"DB_PASSWORD": "secret"},
+			Seed: &SeedConfig{Command: "psql -U app", Files: []string{"seed.sql"}},
 		},
 	}}
 	if err := Validate(valid); err != nil {
-		t.Fatalf("valid explicit sqlserver seed: %v", err)
+		t.Fatalf("valid command seed: %v", err)
 	}
 }
 
@@ -336,10 +323,10 @@ func TestConfig_TracingUsesExplicitOptOut(t *testing.T) {
 		source  string
 		enabled bool
 	}{
-		{name: "section absent", source: "version: \"2\"\n", enabled: true},
-		{name: "receiver tuning only", source: "version: \"2\"\ntracing:\n  otlp_port: 5000\n", enabled: true},
-		{name: "explicitly enabled", source: "version: \"2\"\ntracing:\n  enabled: true\n", enabled: true},
-		{name: "explicitly disabled", source: "version: \"2\"\ntracing:\n  enabled: false\n", enabled: false},
+		{name: "section absent", source: "version: \"3\"\n", enabled: true},
+		{name: "receiver tuning only", source: "version: \"3\"\ntracing:\n  otlp_port: 5000\n", enabled: true},
+		{name: "explicitly enabled", source: "version: \"3\"\ntracing:\n  enabled: true\n", enabled: true},
+		{name: "explicitly disabled", source: "version: \"3\"\ntracing:\n  enabled: false\n", enabled: false},
 	}
 
 	for _, tt := range tests {

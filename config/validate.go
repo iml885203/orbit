@@ -59,21 +59,11 @@ func Validate(cfg *Config) error {
 			}
 		}
 		if c.Seed != nil {
-			switch c.Seed.Type {
-			case "mongo":
-			case "sqlserver":
-				if c.Seed.Username == "" {
-					errs = append(errs, fmt.Sprintf("container %q seed.username is required for type sqlserver", name))
-				}
-				if c.Seed.PasswordEnv == "" {
-					errs = append(errs, fmt.Sprintf("container %q seed.password_env is required for type sqlserver", name))
-				} else if strings.TrimSpace(c.Environment[c.Seed.PasswordEnv]) == "" {
-					errs = append(errs, fmt.Sprintf("container %q seed.password_env %q is not present in the container environment", name, c.Seed.PasswordEnv))
-				}
-			case "":
-				errs = append(errs, fmt.Sprintf("container %q seed.type is required (sqlserver or mongo)", name))
-			default:
-				errs = append(errs, fmt.Sprintf("container %q has unsupported seed.type %q (expected sqlserver or mongo)", name, c.Seed.Type))
+			if strings.TrimSpace(c.Seed.Command) == "" {
+				errs = append(errs, fmt.Sprintf("container %q seed.command is required", name))
+			}
+			if len(c.Seed.Files) == 0 {
+				errs = append(errs, fmt.Sprintf("container %q seed.files must contain at least one file", name))
 			}
 		}
 	}

@@ -33,10 +33,19 @@ type SeedResult struct {
 	Message string
 }
 
-var seedStatePath = filepath.Join(os.Getenv("HOME"), ".orbit", "seed-state.json")
+func seedStateFile() string {
+	if home := os.Getenv("ORBIT_HOME"); home != "" {
+		return filepath.Join(home, "seed-state.json")
+	}
+	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
+		return filepath.Join(localApp, "orbit", "seed-state.json")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".orbit", "seed-state.json")
+}
 
 func loadSeedState() *SeedState {
-	data, err := os.ReadFile(seedStatePath)
+	data, err := os.ReadFile(seedStateFile())
 	if err != nil {
 		return &SeedState{Executed: make(map[string]SeedRecord)}
 	}
@@ -55,16 +64,23 @@ func saveSeedState(state *SeedState) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(seedStatePath, data, 0644)
+	path := seedStateFile()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
-func fileHash(path string) (string, error) {
+func seedFingerprint(command, path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	h := sha256.Sum256(data)
-	return hex.EncodeToString(h[:]), nil
+	h := sha256.New()
+	_, _ = h.Write([]byte(command))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write(data)
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // RunSeed executes seed files for a container. Returns results for each file.
@@ -79,7 +95,7 @@ func RunSeed(name string, cfg *config.Container, force bool) []SeedResult {
 	for _, file := range cfg.Seed.Files {
 		key := name + ":" + file
 
-		hash, err := fileHash(file)
+		hash, err := seedFingerprint(cfg.Seed.Command, file)
 		if err != nil {
 			results = append(results, SeedResult{File: file, Status: "failed", Message: err.Error()})
 			continue
@@ -97,25 +113,8 @@ func RunSeed(name string, cfg *config.Container, force bool) []SeedResult {
 			}
 		}
 
-		var execErr error
 		containerName := ContainerName(os.Getenv("ORBIT_NAMESPACE"), name)
-		switch cfg.Seed.Type {
-		case "sqlserver":
-			execErr = seedSQLServer(
-				containerName,
-				cfg.Seed.Username,
-				cfg.Seed.PasswordEnv,
-				file,
-			)
-		case "mongo":
-			db := cfg.Seed.Database
-			execErr = seedMongoDB(containerName, db, file)
-		default:
-			results = append(results, SeedResult{File: file, Status: "failed", Message: "unsupported container type for seeding"})
-			continue
-		}
-
-		if execErr != nil {
+		if execErr := seedWithCommand(containerName, cfg.Seed.Command, file); execErr != nil {
 			results = append(results, SeedResult{File: file, Status: "failed", Message: execErr.Error()})
 			continue
 		}
@@ -132,13 +131,13 @@ func RunSeed(name string, cfg *config.Container, force bool) []SeedResult {
 	return results
 }
 
-func seedSQLServer(containerName, username, passwordEnv, file string) error {
+func seedWithCommand(containerName, command, file string) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", file, err)
 	}
 
-	cmd := exec.Command("docker", sqlServerSeedDockerArgs(containerName, username, passwordEnv)...)
+	cmd := exec.Command("docker", seedDockerArgs(containerName, command)...)
 	cmd.Stdin = strings.NewReader(string(data))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -147,37 +146,9 @@ func seedSQLServer(containerName, username, passwordEnv, file string) error {
 	return nil
 }
 
-func sqlServerSeedDockerArgs(containerName, username, passwordEnv string) []string {
-	const runSQLCmd = `password="$(printenv "$1")"
-if [ -z "$password" ]; then
-  echo "$1 is empty in the SQL Server container" >&2
-  exit 2
-fi
-export SQLCMDPASSWORD="$password"
-exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U "$2" -C -I`
+func seedDockerArgs(containerName, command string) []string {
 	return []string{
 		"exec", "-i", containerName,
-		"/bin/sh", "-c", runSQLCmd,
-		"orbit-seed", passwordEnv, username,
+		"/bin/sh", "-c", command,
 	}
-}
-
-func seedMongoDB(containerName, database, file string) error {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", file, err)
-	}
-
-	args := []string{"exec", "-i", containerName, "mongosh", "--quiet"}
-	if database != "" {
-		args = append(args, database)
-	}
-
-	cmd := exec.Command("docker", args...)
-	cmd.Stdin = strings.NewReader(string(data))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %s", filepath.Base(file), strings.TrimSpace(string(out)))
-	}
-	return nil
 }

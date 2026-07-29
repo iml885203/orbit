@@ -415,7 +415,7 @@ server.serve_forever()
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(envsDir, "restart-recovery.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 settings:
   health_check_interval: 1s
   docker_poll_interval: 1s
@@ -604,7 +604,7 @@ server.serve_forever()
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(workspace, "orbit.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 services:
   api:
     type: python
@@ -816,7 +816,7 @@ http.server.ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Handler)
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(envsDir, "service-url.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 settings:
   health_check_interval: 1s
 services:
@@ -949,7 +949,7 @@ func TestE2E_SwitchWhileStoppedDoesNotCreateAnotherStartupPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(envsDir, "empty.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1004,7 +1004,7 @@ func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 	})
 
 	emptyEnv := filepath.Join(env.home, "envs", "empty.yaml")
-	if err := os.WriteFile(emptyEnv, []byte("version: \"2\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(emptyEnv, []byte("version: \"3\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
 		t.Fatalf("write empty env: %v", err)
 	}
 	env.run(t, "switch", emptyEnv)
@@ -1035,7 +1035,7 @@ func TestE2E_SwitchRejectsInvalidTargetBeforeStoppingCurrentEnvironment(t *testi
 	})
 
 	invalidEnv := filepath.Join(env.home, "envs", "invalid.yaml")
-	if err := os.WriteFile(invalidEnv, []byte("version: \"2\"\nservices:\n  broken: [\n"), 0o644); err != nil {
+	if err := os.WriteFile(invalidEnv, []byte("version: \"3\"\nservices:\n  broken: [\n"), 0o644); err != nil {
 		t.Fatalf("write invalid env: %v", err)
 	}
 
@@ -1118,7 +1118,7 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 		t.Fatalf("redis state = %s after apply, want healthy", state)
 	}
 
-	invalid := bytes.Replace(updated, []byte(`version: "2"`), []byte(`version: "999"`), 1)
+	invalid := bytes.Replace(updated, []byte(`version: "3"`), []byte(`version: "999"`), 1)
 	if err := os.WriteFile(env.envYaml, invalid, 0o644); err != nil {
 		t.Fatalf("write invalid env: %v", err)
 	}
@@ -1279,7 +1279,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 		t.Fatalf("mkdir envs: %v", err)
 	}
 	envYaml := filepath.Join(envsDir, "empty.yaml")
-	if err := os.WriteFile(envYaml, []byte("version: \"2\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(envYaml, []byte("version: \"3\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
 		t.Fatalf("write empty env: %v", err)
 	}
 
@@ -1512,7 +1512,7 @@ func TestE2E_InspectConfiguredEnvironmentBeforeUpPointsOnlyToUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(envsDir, "ready-to-start.yaml")
-	raw := fmt.Sprintf(`version: "2"
+	raw := fmt.Sprintf(`version: "3"
 services:
   demo-api:
     type: shell
@@ -1568,7 +1568,7 @@ func TestE2E_StatusRejectsInvalidSelectedEnvironment(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home := t.TempDir()
 	invalidEnv := filepath.Join(home, "broken.yaml")
-	if err := os.WriteFile(invalidEnv, []byte("version: \"2\"\nservices: [\n"), 0o600); err != nil {
+	if err := os.WriteFile(invalidEnv, []byte("version: \"3\"\nservices: [\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	command := func(args ...string) *exec.Cmd {
@@ -1668,7 +1668,7 @@ func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	workspace := t.TempDir()
 	configPath := filepath.Join(workspace, "port-conflict.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 services:
   occupied-service:
     type: python
@@ -1845,7 +1845,7 @@ server.serve_forever()
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(envsDir, "crash-recovery.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 settings:
   health_check_interval: 1s
 containers:
@@ -2019,7 +2019,7 @@ func TestE2E_StatusExplainsRootFailureAndBlockedDependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(envsDir, "recovery.yaml")
-	configYAML := fmt.Sprintf(`version: "2"
+	configYAML := fmt.Sprintf(`version: "3"
 services:
   api-runtime:
     type: shell
@@ -2288,7 +2288,7 @@ func TestE2E_DoctorDistinguishesMissingNodePackages(t *testing.T) {
 	}
 	envPath := filepath.Join(t.TempDir(), "node.yaml")
 	raw := fmt.Sprintf(`
-version: "2"
+version: "3"
 services:
   web:
     type: node
@@ -2353,7 +2353,7 @@ func TestE2E_SwitchReportsSelectedEnvironmentPrerequisites(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := fmt.Sprintf(`
-version: "2"
+version: "3"
 services:
   web:
     type: node
@@ -2416,7 +2416,7 @@ func TestE2E_SwitchReportsProjectRuntimeVersionMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := fmt.Sprintf(`
-version: "2"
+version: "3"
 services:
   web:
     type: node

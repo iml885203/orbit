@@ -366,11 +366,11 @@ func TestHandleEdgeDetach_LegacyBodyFormRemoved(t *testing.T) {
 func TestHandleGraph_PreviewLoadsOtherEnv(t *testing.T) {
 	tmp := t.TempDir()
 	currentPath := filepath.Join(tmp, "current.yaml")
-	if err := os.WriteFile(currentPath, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(currentPath, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatalf("write current.yaml: %v", err)
 	}
 	previewPath := filepath.Join(tmp, "other.yaml")
-	previewYAML := `version: "2"
+	previewYAML := `version: "3"
 services:
   frontend:
     kind: frontend
@@ -408,7 +408,7 @@ services:
 func TestHandleGraph_PreviewUnknownEnv(t *testing.T) {
 	tmp := t.TempDir()
 	currentPath := filepath.Join(tmp, "current.yaml")
-	if err := os.WriteFile(currentPath, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(currentPath, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatalf("write current.yaml: %v", err)
 	}
 	srv := newTestServer(t, &config.Config{})

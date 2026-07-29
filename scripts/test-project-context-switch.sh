@@ -50,7 +50,7 @@ make_project() {
   mkdir -p "$test_root/$project"
   printf '<h1>%s</h1>\n' "$content" >"$test_root/$project/index.html"
   printf '%s\n' \
-    'version: "2"' \
+    'version: "3"' \
     'services:' \
     "  $resource:" \
     '    type: python' \

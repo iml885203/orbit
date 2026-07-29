@@ -137,7 +137,7 @@ func TestBuildEnv_ConnectionStrings(t *testing.T) {
 
 func TestInjectServicePortsAddsConventionalNamesWithoutOverridingExplicitEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := `version: "2"
+	source := `version: "3"
 services:
   api:
     type: python
@@ -209,7 +209,7 @@ func TestBuildEnvInjectsAutoSelectedDependencyURL(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 	preferred := listener.Addr().(*net.TCPAddr).Port
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := fmt.Sprintf(`version: "2"
+	source := fmt.Sprintf(`version: "3"
 services:
   catalog-api:
     type: python

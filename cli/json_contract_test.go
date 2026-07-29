@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -81,21 +82,26 @@ func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 }
 
 func TestWriteJSONErrorGivesSchemaMismatchOneAdvancingAction(t *testing.T) {
+	orbitHome := t.TempDir()
+	t.Setenv("ORBIT_HOME", orbitHome)
 	tests := []struct {
 		name        string
 		version     string
+		path        string
 		code        string
 		nextCommand string
 	}{
 		{
 			name:        "shared environment is older",
-			version:     "1",
+			version:     "2",
+			path:        filepath.Join(orbitHome, "envs", "team.yaml"),
 			code:        "environment_schema_outdated",
 			nextCommand: "orbit env sync --json",
 		},
 		{
 			name:        "Orbit is older",
-			version:     "3",
+			version:     "4",
+			path:        filepath.Join(t.TempDir(), "orbit.yaml"),
 			code:        "environment_schema_newer",
 			nextCommand: "orbit update --json",
 		},
@@ -103,7 +109,7 @@ func TestWriteJSONErrorGivesSchemaMismatchOneAdvancingAction(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := config.CheckVersion(tc.version, "envs/team.yaml")
+			err := config.CheckVersion(tc.version, tc.path)
 			if writeErr := WriteJSONError(&buf, "orbit up --json", err); writeErr != nil {
 				t.Fatalf("WriteJSONError: %v", writeErr)
 			}
@@ -119,6 +125,21 @@ func TestWriteJSONErrorGivesSchemaMismatchOneAdvancingAction(t *testing.T) {
 				t.Fatalf("actions = %+v, want only %q", got.RecommendedActions, tc.nextCommand)
 			}
 		})
+	}
+}
+
+func TestWriteJSONErrorDoesNotSyncProjectLocalSchema(t *testing.T) {
+	var buf bytes.Buffer
+	err := config.CheckVersion("2", filepath.Join(t.TempDir(), "orbit.yaml"))
+	if writeErr := WriteJSONError(&buf, "orbit up --json", err); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "environment_schema_outdated" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if got.Error.NextCommand != "" || len(got.RecommendedActions) != 0 {
+		t.Fatalf("project-local migration recommended sync: %+v", got)
 	}
 }
 

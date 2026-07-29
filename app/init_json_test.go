@@ -36,7 +36,7 @@ func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
 	if err := os.Mkdir(envsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	config := []byte("version: \"2\"\nservices: {}\n")
+	config := []byte("version: \"3\"\nservices: {}\n")
 	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), config, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace(t *testing.T) {
 	if err := os.Mkdir(envsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), []byte("version: \"2\"\nservices: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), []byte("version: \"3\"\nservices: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	orbitHome := filepath.Join(t.TempDir(), "orbit-home")

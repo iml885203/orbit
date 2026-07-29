@@ -16,7 +16,7 @@ func TestSwitchPrerequisitesLeadWithMissingRuntimeBeforePackages(t *testing.T) {
 	}
 	envPath := filepath.Join(t.TempDir(), "node.yaml")
 	raw := fmt.Sprintf(`
-version: "2"
+version: "3"
 services:
   web:
     type: node

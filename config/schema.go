@@ -253,11 +253,8 @@ type Sidecar struct {
 }
 
 type SeedConfig struct {
-	Type        string   `yaml:"type"`         // sqlserver or mongo
-	Database    string   `yaml:"database"`     // target database (MongoDB)
-	Username    string   `yaml:"username"`     // SQL Server login
-	PasswordEnv string   `yaml:"password_env"` // SQL Server container env key
-	Files       []string `yaml:"files"`        // seed file paths, executed in order
+	Command string   `yaml:"command"` // command inside the container; seed file is provided on stdin
+	Files   []string `yaml:"files"`   // seed file paths, executed in order
 }
 
 type InitConfig struct {
@@ -366,7 +363,11 @@ func (c *Container) ResolveKind() string {
 // v1 → v2: `features:` renamed to `groups:`; `Feature` struct renamed to
 //
 //	`Group`; new optional `color` field on each group.
-const supportedEnvVersion = "2"
+//
+// v2 → v3: database-specific seed fields were replaced by one in-container
+//
+//	command that receives each seed file on standard input.
+const supportedEnvVersion = "3"
 
 type SchemaVersionMismatchKind string
 
@@ -395,7 +396,7 @@ func (e *SchemaVersionMismatchError) Error() string {
 	case SchemaVersionOlder:
 		return fmt.Sprintf(
 			"env file %s: schema version %q but this Orbit binary requires %q. "+
-				"Your env files are out of date — pull the latest env revision or run 'orbit env sync'",
+				"Update this environment file to the supported schema; sync it if it comes from a shared environment repository, or follow the project-local migration guide",
 			e.Path, e.Found, e.Supported,
 		)
 	case SchemaVersionNewer:

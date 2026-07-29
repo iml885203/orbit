@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
@@ -116,6 +118,14 @@ func classify(err error) JSONError {
 	if errors.As(err, &schemaVersion) {
 		switch schemaVersion.Kind {
 		case config.SchemaVersionOlder:
+			if !IsManagedEnvironmentPath(schemaVersion.Path) {
+				return JSONError{
+					Code:      "environment_schema_outdated",
+					Message:   schemaVersion.Error(),
+					Hint:      "Migrate this project-local environment file to the supported schema.",
+					Retryable: false,
+				}
+			}
 			return JSONError{
 				Code:        "environment_schema_outdated",
 				Message:     schemaVersion.Error(),
@@ -375,6 +385,18 @@ func classify(err error) JSONError {
 	}
 }
 
+// IsManagedEnvironmentPath reports whether path belongs to Orbit's synced
+// environment repository. Project-local files require a documented schema
+// edit; recommending env sync for them creates a recovery loop.
+func IsManagedEnvironmentPath(path string) bool {
+	root := filepath.Join(daemon.OrbitDir(), "envs")
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
 func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "json_unsupported_destructive_command" {
 		return nil
@@ -430,8 +452,11 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 		}}
 	}
 	if err.Code == "environment_schema_outdated" {
+		if err.NextCommand == "" {
+			return nil
+		}
 		return []JSONAction{{
-			Command:     "orbit env sync --json",
+			Command:     err.NextCommand,
 			Reason:      "Refresh the shared environment files.",
 			Destructive: false,
 		}}

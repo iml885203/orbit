@@ -105,7 +105,7 @@ func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
 		Containers: map[string]*config.Container{
 			"redis": {
 				Ports: map[string]config.PortDef{"redis": {Host: 6379, Target: 6379}},
-				Seed:  &config.SeedConfig{Files: []string{"users.json"}},
+				Seed:  &config.SeedConfig{Command: "mongosh --quiet app", Files: []string{"users.json"}},
 			},
 		},
 	}

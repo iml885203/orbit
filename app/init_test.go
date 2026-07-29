@@ -73,7 +73,7 @@ func TestConfigureRequiredWorkspaceUsesLocalEnvironmentRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(t.TempDir(), "dev.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
@@ -97,7 +97,7 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	unsetEnvForTest(t, "WORKSPACE_ROOT")
 
 	envPath := filepath.Join(t.TempDir(), "dev.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\nservices:\n  api:\n    type: python\n    path: ${WORKSPACE_ROOT}/api\n    command: python3 app.py\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))

@@ -38,7 +38,7 @@ func TestE2E_StaleDaemonMetadataNeverKillsUnrelatedProcess(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
 
 	configPath := filepath.Join(t.TempDir(), "orbit.yaml")
-	if err := os.WriteFile(configPath, []byte("version: \"2\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dashboardPort := reserveLocalPort(t)

@@ -14,7 +14,7 @@ func TestPreflightExplicitConfigDoesNotRequireSyncedEnvironments(t *testing.T) {
 	t.Setenv("ORBIT_HOME", t.TempDir())
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "orbit.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	previousConfig := configFile
@@ -47,7 +47,7 @@ func TestPreflightBlocksUnsatisfiedPythonRequirementsWithSetupAction(t *testing.
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
-	config := "version: \"2\"\nservices:\n  api:\n    type: python\n    path: " + project + "\n    command: " + interpreter + " app.py\n"
+	config := "version: \"3\"\nservices:\n  api:\n    type: python\n    path: " + project + "\n    command: " + interpreter + " app.py\n"
 	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestPreflightBlocksMissingNodePackagesWithSetupAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
-	config := "version: \"2\"\nservices:\n  api:\n    type: node\n    path: " + project + "\n    command: node server.js\n"
+	config := "version: \"3\"\nservices:\n  api:\n    type: node\n    path: " + project + "\n    command: node server.js\n"
 	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestPreflightBlocksMissingNodePackagesWithSetupAction(t *testing.T) {
 
 func TestInfrastructurePreflightIgnoresHostProjectRequirements(t *testing.T) {
 	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
-	config := "version: \"2\"\nservices:\n  api:\n    type: python\n    path: /missing/project\n    command: python3 app.py\n"
+	config := "version: \"3\"\nservices:\n  api:\n    type: python\n    path: /missing/project\n    command: python3 app.py\n"
 	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
 		t.Fatal(err)
 	}

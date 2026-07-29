@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -51,20 +52,26 @@ func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 }
 
 func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
+	orbitHome := t.TempDir()
+	t.Setenv("ORBIT_HOME", orbitHome)
 	tests := []struct {
 		name    string
 		version string
+		path    string
 		command string
 	}{
-		{name: "older shared environment", version: "1", command: "orbit env sync --json"},
-		{name: "newer environment", version: "3", command: "orbit update --json"},
+		{
+			name: "older shared environment", version: "2",
+			path: filepath.Join(orbitHome, "envs", "team.yaml"), command: "orbit env sync --json",
+		},
+		{name: "newer environment", version: "4", path: "/tmp/orbit.yaml", command: "orbit update --json"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := buildInspectData(inspectBuildOptions{
-				ConfigPath: "/tmp/orbit.yaml",
-				ConfigErr:  config.CheckVersion(tt.version, "/tmp/orbit.yaml"),
+				ConfigPath: tt.path,
+				ConfigErr:  config.CheckVersion(tt.version, tt.path),
 			})
 
 			if got.Readiness.State != inspectReadinessConfigInvalid {

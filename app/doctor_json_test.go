@@ -149,7 +149,7 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 	portNumber := listener.Addr().(*net.TCPAddr).Port
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := "version: \"2\"\nservices:\n  api:\n    type: python\n    path: .\n    command: python3 app.py\n    ports:\n      http: \"${ORBIT_AUTO_PORT_DOCTOR_TEST:-" + strconv.Itoa(portNumber) + "}\"\n"
+	source := "version: \"3\"\nservices:\n  api:\n    type: python\n    path: .\n    command: python3 app.py\n    ports:\n      http: \"${ORBIT_AUTO_PORT_DOCTOR_TEST:-" + strconv.Itoa(portNumber) + "}\"\n"
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestLocalDoctorResponseUnavailableSelectionOffersExactSwitch(t *testing.T) 
 		t.Fatal(err)
 	}
 	available := filepath.Join(envs, "renamed.yaml")
-	if err := os.WriteFile(available, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(available, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	missing := filepath.Join(envs, "original.yaml")
@@ -285,7 +285,7 @@ func TestLocalDoctorResponseUnavailableSelectionKeepsRunningDaemonTruthful(t *te
 		t.Fatal(err)
 	}
 	available := filepath.Join(envs, "renamed.yaml")
-	if err := os.WriteFile(available, []byte("version: \"2\"\n"), 0644); err != nil {
+	if err := os.WriteFile(available, []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	missing := filepath.Join(envs, "original.yaml")
@@ -362,7 +362,7 @@ func TestDoctorFailureClassifiesMissingWorkingDirectory(t *testing.T) {
 func TestLocalDoctorResponse_ExtensionChecks(t *testing.T) {
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "env.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\ncontainers:\n  redis:\n    image: redis:7.4\n    ports:\n      redis: 6399\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\ncontainers:\n  redis:\n    image: redis:7.4\n    ports:\n      redis: 6399\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	prev := configFile
@@ -410,7 +410,7 @@ func TestLocalDoctorResponse_HostOnlyEnvironmentDoesNotRequireDocker(t *testing.
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "env.yaml")
 	if err := os.WriteFile(envPath, []byte(`
-version: "2"
+version: "3"
 services:
   docs:
     type: shell

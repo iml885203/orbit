@@ -74,7 +74,7 @@ func TestConfigWriters_PathAndStalenessCommitWithStore(t *testing.T) {
 	t.Setenv("ORBIT_HOME", t.TempDir())
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "next.yaml")
-	if err := os.WriteFile(envPath, []byte("version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

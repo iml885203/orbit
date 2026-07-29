@@ -7,12 +7,12 @@ import (
 )
 
 func TestHolder_LoadStoreRoundTrip(t *testing.T) {
-	a := &Config{Version: "2"}
+	a := &Config{Version: "3"}
 	h := NewHolder(a)
 	if h.Load() != a {
 		t.Fatal("Load must return the stored snapshot")
 	}
-	b := &Config{Version: "2", PreviewOnly: true}
+	b := &Config{Version: "3", PreviewOnly: true}
 	h.Store(b)
 	if h.Load() != b {
 		t.Fatal("Store must publish the new snapshot")
@@ -57,7 +57,7 @@ func TestHolder_ConcurrentLoadStore(t *testing.T) {
 
 func TestWithContainer_SplicesWithoutMutatingOriginal(t *testing.T) {
 	orig := &Config{
-		Version: "2",
+		Version: "3",
 		Containers: map[string]*Container{
 			"sql-server": {Name: "sql-server", Image: "old"},
 			"redis":      {Name: "redis", Image: "redis:7.4"},

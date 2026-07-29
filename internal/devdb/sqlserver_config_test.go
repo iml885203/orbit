@@ -34,7 +34,7 @@ func validSQLServerConfig() (*SQLServerConfig, *config.Config) {
 func TestLoadSQLServerSectionStrictAndDefaulted(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dev.yaml")
-	raw := []byte(`version: "2"
+	raw := []byte(`version: "3"
 containers:
   database:
     image: example/sqlserver:latest

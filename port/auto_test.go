@@ -14,7 +14,7 @@ func TestResolveAutoPortsMovesOccupiedPreferencesAndUpdatesReadiness(t *testing.
 	occupied := listenOnAvailablePort(t)
 	preferred := occupied.Addr().(*net.TCPAddr).Port
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := fmt.Sprintf(`version: "2"
+	source := fmt.Sprintf(`version: "3"
 containers:
   cache:
     image: redis:7.4-alpine
@@ -75,7 +75,7 @@ func TestResolveAutoPortsPreservesManagedContainerChoice(t *testing.T) {
 	preferredListener := listenOnAvailablePort(t)
 	preferred := preferredListener.Addr().(*net.TCPAddr).Port
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := fmt.Sprintf(`version: "2"
+	source := fmt.Sprintf(`version: "3"
 containers:
   cache:
     image: redis:7.4-alpine

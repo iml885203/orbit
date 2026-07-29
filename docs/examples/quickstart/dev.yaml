@@ -10,7 +10,7 @@
 # only these demo ports when one is already occupied; normal project ports
 # remain fixed. Each container demonstrates a different health_check type.
 
-version: "2"
+version: "3"
 
 containers:
   redis:

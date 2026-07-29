@@ -11,7 +11,7 @@ need an environment Git repository, `orbit init`, or settings under
 Save this as `orbit.yaml` in your project root:
 
 ```yaml
-version: "2"
+version: "3"
 
 containers:
   redis:

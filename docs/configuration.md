@@ -41,7 +41,7 @@ remove the project copy so the shared file is the single source of truth.
 ## Top-level structure
 
 ```yaml
-version: "2"
+version: "3"
 previewOnly: false   # optional: env is inspectable but not activatable here
 settings:            # global timing, poll intervals
 tracing:             # optional built-in OpenTelemetry receiver
@@ -54,7 +54,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 
 | Key | Type | Required | Purpose |
 |---|---|---|---|
-| `version` | string | yes | Schema version. Must be `"2"` — a mismatch fails the load with one action: `orbit env sync` when the shared env is older, or `orbit update` when Orbit is older |
+| `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit env sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
 | `previewOnly` | bool | no | Env can be inspected on the dashboard but not activated on this machine (guards against misclicks; not a security boundary) |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
@@ -69,6 +69,31 @@ Orbit decodes the core schema and registered extension sections strictly.
 Unknown keys and misspelled fields fail before any container or host process
 starts, and the error identifies the offending field and source line. Orbit
 does not silently ignore configuration it cannot understand.
+
+### Migrating schema 2 to 3
+
+Schema 3 replaces database-specific seed fields with one command that runs
+inside the container. No automatic migration edits project files.
+
+```yaml
+# schema 2
+version: "2"
+seed:
+  type: mongo
+  database: app
+  files: [./seed.js]
+
+# schema 3
+version: "3"
+seed:
+  command: mongosh --quiet app
+  files: [./seed.js]
+```
+
+For a shared environment repository, its maintainer commits the schema-3 file
+and users run `orbit env sync`. For a project-local `orbit.yaml`, update the
+file directly using the mapping above. Credentials referenced by the command
+belong in the container's `environment`, not in seed-specific fields.
 
 ## `settings`
 
@@ -277,25 +302,29 @@ for an explicit health-check port only when the endpoint remains ambiguous.
 
 ```yaml
 seed:
-  type: mongo
-  database: PlatformDB
+  command: mongosh --quiet app
   files:
     - envs/seeds/mongo/001-something.js
 ```
 
-Runs each file against the container after it reaches `Healthy`, in order.
-Applied seeds are recorded; re-running `orbit seed` skips them unless you pass
-`--force` (a CLI flag, not a config field). SQL Server seeds are explicit
-about the login and container environment key:
+Running `orbit seed` executes `command` inside the running container, providing
+each file on standard input in order. The command is database-neutral and can
+invoke any client shipped by the image. For example, PostgreSQL can use:
 
 ```yaml
 seed:
-  type: sqlserver
-  username: sa
-  password_env: MSSQL_SA_PASSWORD
+  command: psql -v ON_ERROR_STOP=1 -U app -d app
   files:
-    - envs/seeds/sqlserver/001-something.sql
+    - envs/seeds/postgres/001-schema.sql
+    - envs/seeds/postgres/002-data.sql
 ```
+
+Container environment variables are available to the command, so credentials
+remain in the container environment instead of Orbit seed fields. Applied
+seeds are recorded by command and file content; re-running `orbit seed` skips
+them unless you pass `--force` (a CLI flag, not a config field). Changing the
+command or file causes Orbit to ask for `--force` rather than silently applying
+it to a different target.
 
 ### `init`
 

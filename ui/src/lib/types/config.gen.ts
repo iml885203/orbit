@@ -117,10 +117,7 @@ export interface Sidecar {
   depends_on: string[];
 }
 export interface SeedConfig {
-  type: string; // sqlserver or mongo
-  database: string; // target database (MongoDB)
-  username: string; // SQL Server login
-  password_env: string; // SQL Server container env key
+  command: string; // command inside the container; seed file is provided on stdin
   files: string[]; // seed file paths, executed in order
 }
 export interface InitConfig {

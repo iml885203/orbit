@@ -40,7 +40,7 @@ Orbit 對每個 command 依以下順序選出一份 config：
 ## 最上層結構
 
 ```yaml
-version: "2"
+version: "3"
 previewOnly: false   # optional：此 env 只能檢視、不能在本機啟用
 settings:            # global timing, poll intervals
 tracing:             # optional 內建 OpenTelemetry receiver
@@ -53,7 +53,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 
 | Key | Type | Required | 用途 |
 |---|---|---|---|
-| `version` | string | yes | Schema 版本，必須是 `"2"`；不符時只提供一個動作：共享 env 較舊時執行 `orbit env sync`，Orbit 較舊時執行 `orbit update` |
+| `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit env sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
 | `previewOnly` | bool | no | env 可在 dashboard 檢視但不能在本機啟用（防誤點，非安全邊界） |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
@@ -67,6 +67,31 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 Orbit 會嚴格 decode core schema 與已註冊的 extension sections。未知 key
 或拼錯的 field 會在任何 container 或 host process 啟動前失敗，錯誤也會指出
 有問題的 field 與來源行號；Orbit 不會安靜忽略它無法理解的設定。
+
+### Schema 2 遷移到 3
+
+Schema 3 將資料庫專屬 seed fields 改成一條在 container 內執行的 command。
+Orbit 不會自動修改 project files。
+
+```yaml
+# schema 2
+version: "2"
+seed:
+  type: mongo
+  database: app
+  files: [./seed.js]
+
+# schema 3
+version: "3"
+seed:
+  command: mongosh --quiet app
+  files: [./seed.js]
+```
+
+shared environment repository 由 maintainer commit schema-3 檔案，使用者再執行
+`orbit env sync`。Project-local `orbit.yaml` 則依上方 mapping 直接修改。
+command 引用的 credentials 應放在 container `environment`，而不是
+seed-specific fields。
 
 ## `settings`
 
@@ -269,24 +294,28 @@ Orbit 才要求明確指定 health-check port。
 
 ```yaml
 seed:
-  type: mongo
-  database: PlatformDB
+  command: mongosh --quiet app
   files:
     - envs/seeds/mongo/001-something.js
 ```
 
-當 container 進入 `Healthy` 後，依序套用每個檔案。已套用的 seed 會被記錄；
-之後重跑 `orbit seed` 會跳過，除非加 `--force`（這是 CLI flag，不是 config 欄位）。
-SQL Server seed 必須明確指定登入資訊與 container env key：
+執行 `orbit seed` 時，Orbit 會在已啟動的 container 內執行 `command`，
+並依序把每個檔案送到 standard input。這個模型不綁定資料庫；command
+可以使用 image 內附的任意 client。例如 PostgreSQL：
 
 ```yaml
 seed:
-  type: sqlserver
-  username: sa
-  password_env: MSSQL_SA_PASSWORD
+  command: psql -v ON_ERROR_STOP=1 -U app -d app
   files:
-    - envs/seeds/sqlserver/001-something.sql
+    - envs/seeds/postgres/001-schema.sql
+    - envs/seeds/postgres/002-data.sql
 ```
+
+command 可讀取 container environment，因此 credentials 留在 container
+環境，不需要 Orbit 專屬 seed 欄位。已套用的 seed 會依 command 與檔案內容
+記錄；之後重跑 `orbit seed` 會跳過，除非加 `--force`（這是 CLI flag，
+不是 config 欄位）。command 或檔案改變時，Orbit 會要求 `--force`，不會
+默默把內容套用到不同 target。
 
 ### `init`
 

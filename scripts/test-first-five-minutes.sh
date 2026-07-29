@@ -96,7 +96,7 @@ mkdir -p "$missing_runtime_root/bin" "$missing_runtime_root/project/envs"
 ln -s "$(command -v git)" "$missing_runtime_root/bin/git"
 ln -s "$(command -v docker)" "$missing_runtime_root/bin/docker"
 cat >"$missing_runtime_root/project/envs/quickstart.yaml" <<'YAML'
-version: "2"
+version: "3"
 services:
   demo:
     type: python

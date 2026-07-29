@@ -10,7 +10,7 @@ repository、不需要 `orbit init`，也不需要編輯 `~/.orbit` 底下的設
 在專案根目錄把以下內容存成 `orbit.yaml`：
 
 ```yaml
-version: "2"
+version: "3"
 
 containers:
   redis:
