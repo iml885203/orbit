@@ -64,6 +64,14 @@ The release gate owns these installed-user behaviors:
 - startup failure, dependency blocking, and recovery;
 - release artifacts on supported platforms.
 
+## Cross-platform coverage
+
+Linux CI owns the complete Go and UI suites. The platform matrix compiles the
+full codebase, runs the packages with OS-specific implementations, exercises
+the native installer lifecycle, and drives one clean-user binary smoke test.
+Do not duplicate every database-neutral domain test across all six runners;
+those tests cannot gain platform confidence from another operating system.
+
 ## Running tests
 
 During implementation, run the narrowest sociable test that covers the changed

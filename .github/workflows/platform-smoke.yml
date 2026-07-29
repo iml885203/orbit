@@ -52,8 +52,10 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
       - name: Build dashboard
         run: pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build
-      - name: Run native tests
-        run: go test ./...
+      - name: Compile the full native codebase
+        run: go build ./...
+      - name: Run OS-specific native tests
+        run: go test ./app ./platform
       - name: Exercise install, downgrade, failure, rollback, and uninstall
         if: ${{ !matrix.windows }}
         shell: bash
