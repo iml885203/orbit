@@ -78,10 +78,11 @@ settings:
 | Field | Type | Default | 說明 |
 |---|---|---|---|
 | `shutdown_timeout` | duration | `30s` | graceful stop 最多等多久，超過就 SIGKILL |
-| `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` probe 多久跑一次 |
+| `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` / Docker `healthcheck` probe 多久跑一次 |
 | `docker_poll_interval` | duration | `2s` | container poller 多久呼叫一次 `docker inspect` |
 | `health_check.timeout` | duration | `5s` | 當 `health_check` 沒指定 `timeout` 時，每次 probe 套用的預設逾時 |
-| `health_check.retries` | int | `12` | 當 `health_check` 沒指定 `retries` 時，套用的預設重試次數（以預設 5s interval 計約 1 分鐘）。預算用盡後 orbit 對 `http`/`tcp` 檢查仍會每 10s 持續探測，服務恢復時自動轉回 healthy（其他檢查型別維持 degraded 直到手動 restart）|
+| `health_check.retries` | int | `12` | `health_check` 未指定時套用的啟動重試次數（以預設 5s interval 計約 1 分鐘）。預算用盡後 Orbit 仍會每 10s 探測，資源恢復時自動回到 healthy |
+| `health_check.failure_threshold` | int | `3` | healthy 資源連續幾次 runtime 探測失敗後才轉為 degraded；一次成功即可恢復。`log` 是僅供 readiness 的一次性檢查，不會持續監測 |
 
 Duration 字串使用 Go 格式：`500ms`、`10s`、`2m`、`1h30m`。
 
@@ -223,6 +224,7 @@ health_check:
   interval: 5s          # 輪詢頻率（預設用 settings.health_check_interval）
   timeout: 30s
   retries: 10
+  failure_threshold: 3 # 連續幾次 runtime 失敗後轉為 degraded
 ```
 
 | Type | 語意 |
@@ -230,7 +232,7 @@ health_check:
 | `http` | `GET http://localhost:<port><path>`，任何 2xx 都算通過 |
 | `tcp` | 對該 port 建立一條 TCP 連線 |
 | `exec` | 在 container 內執行 `command`，exit code 0 視為 healthy |
-| `log` | tail container logs 比對 regex（一次成功就 healthy） |
+| `log` | tail container logs 比對 regex（僅為一次性 readiness 訊號，不是 runtime liveness probe） |
 | `healthcheck` | 直接用 image 自己的 `HEALTHCHECK`，由 `docker inspect` 回報 |
 
 ### `seed`

@@ -54,6 +54,9 @@ services:
 	if cfg.Containers["redis"].Icon != "simple-icons:redis" {
 		t.Errorf("container icon = %q, want simple-icons:redis", cfg.Containers["redis"].Icon)
 	}
+	if got := cfg.Containers["redis"].HealthCheck.FailureThreshold; got != DefaultHealthFailureThreshold {
+		t.Errorf("failure threshold = %d, want %d", got, DefaultHealthFailureThreshold)
+	}
 	if cfg.Services["api"].Command != "dotnet watch run" {
 		t.Errorf("dotnet default command not applied, got %q", cfg.Services["api"].Command)
 	}

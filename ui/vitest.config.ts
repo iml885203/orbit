@@ -37,6 +37,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Threads share one Node process and its transformed module cache. The
+    // default fork pool recompiles the Svelte graph in every worker and made
+    // 3 seconds of assertions take roughly 27 seconds on a development Mac.
+    pool: 'threads',
     // An overlay run's extension tests live outside this tree — include
     // them alongside the core's when ORBIT_UI_EXT points there.
     include: [

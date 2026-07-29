@@ -312,6 +312,24 @@ func TestValidate_ExternalWithoutKafka(t *testing.T) {
 	}
 }
 
+func TestValidate_RejectsNegativeRuntimeHealthFailureThreshold(t *testing.T) {
+	cfg := &Config{
+		Services: map[string]*Service{
+			"api": {
+				Name: "api",
+				HealthCheck: &HealthCheckConfig{
+					Type:             "http",
+					FailureThreshold: -1,
+				},
+			},
+		},
+	}
+	err := Validate(cfg)
+	if err == nil || !strings.Contains(err.Error(), "failure_threshold must be at least 1") {
+		t.Fatalf("Validate() = %v, want failure_threshold error", err)
+	}
+}
+
 func TestConfig_TracingThreeState(t *testing.T) {
 	// Absent section → auto-on (Aspire-aligned default).
 	absent := &Config{}

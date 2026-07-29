@@ -146,6 +146,7 @@ function graphDataKey(graph: GraphResponse): string {
       color: n.color ?? '',
       state: n.state,
       stateReason: n.stateReason ?? '',
+      blockedBy: n.blockedBy ?? '',
       portConflict: n.portConflict ?? null,
       logsAvailable: n.logsAvailable ?? false,
       mode: n.mode ?? '',

@@ -330,9 +330,24 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 			}
 			orch.Events() <- Event{Type: EventHealthOK, Service: name, Generation: generation}
 		}
+		onRuntimeResult := func(r health.Result) {
+			if r.Healthy {
+				onProbeResult(r)
+				return
+			}
+			orch.Events() <- Event{
+				Type:       EventHealthFail,
+				Service:    name,
+				Message:    r.Message,
+				Generation: generation,
+			}
+		}
 		go func() {
 			err := checker.WaitForHealthy(ctx, name, hc, onProbeResult)
 			if err == nil {
+				if health.SupportsRecovery(hc) {
+					_ = checker.MonitorHealthy(ctx, name, hc, onRuntimeResult)
+				}
 				return
 			}
 			// Mark recovery BEFORE emitting the fail event: the event flips
@@ -366,6 +381,7 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 					return
 				}
 				slog.Info("service recovered", "component", "health", "name", name)
+				_ = checker.MonitorHealthy(ctx, name, hc, onRuntimeResult)
 			}
 		}()
 		return nil

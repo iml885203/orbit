@@ -111,7 +111,60 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			HealthProgress:       hp,
 		})
 	}
+	applyDependencyImpact(cfg, out)
 	return out
+}
+
+// applyDependencyImpact overlays availability on top of lifecycle truth.
+// A process may still be alive while a required dependency is unavailable;
+// clients need that fact without mutating the orchestrator's lifecycle state.
+func applyDependencyImpact(cfg *config.Config, statuses []ResourceStatus) {
+	index := make(map[string]int, len(statuses))
+	for i := range statuses {
+		index[statuses[i].Name] = i
+	}
+	visited := make(map[string]bool, len(statuses))
+	visiting := make(map[string]bool, len(statuses))
+	var visit func(string)
+	visit = func(name string) {
+		if visited[name] || visiting[name] {
+			return
+		}
+		visiting[name] = true
+		for _, dependency := range cfg.GetDependencies(name) {
+			visit(dependency)
+		}
+		delete(visiting, name)
+		visited[name] = true
+
+		position, ok := index[name]
+		if !ok {
+			return
+		}
+		switch statuses[position].State {
+		case engine.StateHealthy.String(), engine.StateDegraded.String():
+		default:
+			return
+		}
+		for _, dependency := range cfg.GetDependencies(name) {
+			dependencyPosition, exists := index[dependency]
+			if !exists || statuses[dependencyPosition].State == engine.StateHealthy.String() {
+				continue
+			}
+			statuses[position].State = engine.StateDegraded.String()
+			statuses[position].BlockedBy = dependency
+			statuses[position].StateReason = fmt.Sprintf(
+				"dependency %s is %s",
+				dependency,
+				statuses[dependencyPosition].State,
+			)
+			statuses[position].Uptime = ""
+			return
+		}
+	}
+	for name := range index {
+		visit(name)
+	}
 }
 
 func resourceLastRestart(svc *engine.ServiceInfo) *ResourceRestart {

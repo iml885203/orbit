@@ -213,6 +213,10 @@ func expandOne(match string) string {
 // budget runs out. Exported because the health checker's fallback shares it.
 const DefaultHealthRetries = 12
 
+// DefaultHealthFailureThreshold avoids turning one transient runtime probe
+// into a red environment while still surfacing a real outage quickly.
+const DefaultHealthFailureThreshold = 3
+
 func applyDefaults(cfg *Config) {
 	if cfg.Settings.ShutdownTimeout == 0 {
 		cfg.Settings.ShutdownTimeout = 30 * time.Second
@@ -253,6 +257,9 @@ func applyHealthCheckDefaults(hc *HealthCheckConfig, interval time.Duration) {
 	}
 	if hc.Retries == 0 {
 		hc.Retries = DefaultHealthRetries
+	}
+	if hc.FailureThreshold == 0 {
+		hc.FailureThreshold = DefaultHealthFailureThreshold
 	}
 }
 

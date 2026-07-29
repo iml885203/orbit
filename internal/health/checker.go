@@ -62,6 +62,10 @@ func (c *Checker) Check(ctx context.Context, name string, hc *config.HealthCheck
 		return c.checkHTTP(ctx, name, hc, start)
 	case "tcp":
 		return c.checkTCP(ctx, name, hc, start)
+	case "exec":
+		return c.checkExec(ctx, name, hc, start)
+	case "healthcheck":
+		return c.checkContainerHealth(ctx, name, start)
 	default:
 		return Result{Service: name, Healthy: false, Message: fmt.Sprintf("unknown check type: %s", hc.Type)}
 	}
@@ -106,6 +110,43 @@ func (c *Checker) checkTCP(ctx context.Context, name string, hc *config.HealthCh
 		Service: name,
 		Healthy: true,
 		Message: "TCP connection OK",
+		Latency: time.Since(start),
+	}
+}
+
+func (c *Checker) checkExec(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {
+	if c.inspector == nil {
+		return Result{Service: name, Healthy: false, Message: "exec strategy requires a container inspector"}
+	}
+	if len(hc.Command) == 0 {
+		return Result{Service: name, Healthy: false, Message: "exec strategy requires command"}
+	}
+	code, err := c.inspector.ExecInContainer(ctx, name, hc.Command)
+	message := fmt.Sprintf("exec exit=%d", code)
+	if err != nil {
+		message = fmt.Sprintf("exec error: %v", err)
+	}
+	return Result{
+		Service: name,
+		Healthy: err == nil && code == 0,
+		Message: message,
+		Latency: time.Since(start),
+	}
+}
+
+func (c *Checker) checkContainerHealth(ctx context.Context, name string, start time.Time) Result {
+	if c.inspector == nil {
+		return Result{Service: name, Healthy: false, Message: "healthcheck strategy requires a container inspector"}
+	}
+	status, err := c.inspector.HealthStatus(ctx, name)
+	message := fmt.Sprintf("health=%s", status)
+	if err != nil {
+		message = fmt.Sprintf("inspect error: %v", err)
+	}
+	return Result{
+		Service: name,
+		Healthy: err == nil && status == "healthy",
+		Message: message,
 		Latency: time.Since(start),
 	}
 }
@@ -179,13 +220,18 @@ func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.Hea
 var ErrRecoveryUnsupported = errors.New("health check strategy does not support recovery probing")
 
 // SupportsRecovery reports whether RecoverHealthy can probe this check.
-// Only http/tcp participate: Check() implements single probes for those two
-// strategies only. log is event-driven (one-shot by design); exec and
-// healthcheck poll during startup via pollWithProbe but expose no single-
-// probe entry point to reuse here — extending recovery to them is possible
-// follow-up work, not a design constraint.
+// Log checks are readiness signals: after a pattern appears there is no
+// meaningful inverse probe. Every other strategy has a reusable point probe.
 func SupportsRecovery(hc *config.HealthCheckConfig) bool {
-	return hc != nil && (hc.Type == "http" || hc.Type == "tcp")
+	if hc == nil {
+		return false
+	}
+	switch hc.Type {
+	case "http", "tcp", "exec", "healthcheck":
+		return true
+	default:
+		return false
+	}
 }
 
 // RecoverHealthy keeps probing a service after the startup retry budget is
@@ -229,6 +275,55 @@ func (c *Checker) RecoverHealthy(ctx context.Context, name string, generation in
 			return nil
 		}
 		c.recordRecovering(name, generation, errResult(result))
+	}
+}
+
+// MonitorHealthy continuously verifies a resource after startup. A small
+// consecutive-failure budget prevents transient network or scheduler noise
+// from flapping the environment. Once degraded, one successful probe is
+// enough to recover because the probe itself is the recovery evidence.
+func (c *Checker) MonitorHealthy(ctx context.Context, name string, hc *config.HealthCheckConfig, onResult func(Result)) error {
+	if !SupportsRecovery(hc) {
+		return ErrRecoveryUnsupported
+	}
+	interval, _ := intervalRetries(hc)
+	threshold := hc.FailureThreshold
+	if threshold == 0 {
+		threshold = config.DefaultHealthFailureThreshold
+	}
+	failures := 0
+	degraded := false
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+		result := c.Check(ctx, name, hc)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if result.Healthy {
+			failures = 0
+			if degraded {
+				degraded = false
+				if onResult != nil {
+					onResult(result)
+				}
+			}
+			continue
+		}
+		failures++
+		if failures < threshold {
+			continue
+		}
+		degraded = true
+		if onResult != nil {
+			onResult(result)
+		}
 	}
 }
 
@@ -303,18 +398,7 @@ func (c *Checker) waitForExec(ctx context.Context, name string, hc *config.Healt
 		return fmt.Errorf("health check for %s: exec strategy requires command", name)
 	}
 	return c.pollWithProbe(ctx, name, hc, onResult, func(ctx context.Context) Result {
-		start := time.Now()
-		code, err := c.inspector.ExecInContainer(ctx, name, hc.Command)
-		msg := fmt.Sprintf("exec exit=%d", code)
-		if err != nil {
-			msg = fmt.Sprintf("exec error: %v", err)
-		}
-		return Result{
-			Service: name,
-			Healthy: err == nil && code == 0,
-			Message: msg,
-			Latency: time.Since(start),
-		}
+		return c.Check(ctx, name, hc)
 	})
 }
 
@@ -326,18 +410,7 @@ func (c *Checker) waitForHealthcheck(ctx context.Context, name string, hc *confi
 		return fmt.Errorf("health check for %s: healthcheck strategy requires a container inspector", name)
 	}
 	return c.pollWithProbe(ctx, name, hc, onResult, func(ctx context.Context) Result {
-		start := time.Now()
-		status, err := c.inspector.HealthStatus(ctx, name)
-		msg := fmt.Sprintf("health=%s", status)
-		if err != nil {
-			msg = fmt.Sprintf("inspect error: %v", err)
-		}
-		return Result{
-			Service: name,
-			Healthy: err == nil && status == "healthy",
-			Message: msg,
-			Latency: time.Since(start),
-		}
+		return c.Check(ctx, name, hc)
 	})
 }
 

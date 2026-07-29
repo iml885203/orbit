@@ -154,7 +154,8 @@ that binary before returning to the installed `orbit`.
 
 ```bash
 make build      # Build frontend + Go binary
-make test       # Run tests
+make test-fast  # Fast inner loop: Go + dashboard checks in parallel
+make test       # Run the same tests sequentially
 make preflight  # Everything CI gates on (build, tests, vet, verify-types) — run before pushing
 make lint       # Run linter
 make setup      # Install git hooks

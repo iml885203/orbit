@@ -79,10 +79,11 @@ settings:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `shutdown_timeout` | duration | `30s` | Max time to wait for graceful stop before SIGKILL |
-| `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` probes |
+| `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` / Docker `healthcheck` probes |
 | `docker_poll_interval` | duration | `2s` | How often the container poller calls `docker inspect` |
 | `health_check.timeout` | duration | `5s` | Per-probe timeout applied when a `health_check` omits `timeout` |
-| `health_check.retries` | int | `12` | Default retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). When the budget is spent, orbit keeps probing `http`/`tcp` checks every 10s and flips the service back to healthy on recovery (other check types stay degraded until a restart) |
+| `health_check.retries` | int | `12` | Startup retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). After the budget is spent, Orbit keeps probing every 10s and returns the resource to healthy when it recovers |
+| `health_check.failure_threshold` | int | `3` | Consecutive runtime probe failures required before a healthy resource becomes degraded. One successful probe recovers it. `log` checks are readiness-only and are not continuously monitored |
 
 Duration strings accept Go format: `500ms`, `10s`, `2m`, `1h30m`.
 
@@ -228,6 +229,7 @@ health_check:
   interval: 5s          # poll cadence (defaults to settings.health_check_interval)
   timeout: 30s
   retries: 10
+  failure_threshold: 3 # consecutive runtime failures before degraded
 ```
 
 | Type | Semantics |
@@ -235,7 +237,7 @@ health_check:
 | `http` | `GET http://localhost:<port><path>`, accept any 2xx |
 | `tcp` | Open a TCP connection to the port |
 | `exec` | Run `command` inside the container, treat exit 0 as healthy |
-| `log` | Tail container logs for a regex match (one-shot, then healthy) |
+| `log` | Tail container logs for a regex match (one-shot readiness signal; not a runtime liveness probe) |
 | `healthcheck` | Use the image's own `HEALTHCHECK` as reported by `docker inspect` |
 
 ### `seed`

@@ -113,6 +113,12 @@ export interface ResourceStatus {
    */
   pending_dependencies?: string[];
   /**
+   * BlockedBy names the direct dependency that makes an otherwise-running
+   * resource unavailable. The dependency chain remains inspectable without
+   * pretending the dependent process itself stopped.
+   */
+  blocked_by?: string;
+  /**
    * StateReason says why the resource is degraded (crash message, health
    * failure, build failure); empty in every other state.
    */
@@ -324,6 +330,7 @@ export interface ResourceSnapshot {
   type: string;
   state?: string;
   state_reason?: string;
+  blocked_by?: string;
   /**
    * Parent groups a resource under another (database → sql-server,
    * route → tunnel). Empty for top-level resources.

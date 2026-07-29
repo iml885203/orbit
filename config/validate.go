@@ -20,6 +20,9 @@ func Validate(cfg *Config) error {
 
 	// Check dependency references exist
 	for name, s := range cfg.Services {
+		if s.HealthCheck != nil && s.HealthCheck.FailureThreshold < 0 {
+			errs = append(errs, fmt.Sprintf("service %q health_check.failure_threshold must be at least 1", name))
+		}
 		for _, dep := range s.DependsOn {
 			if !known[dep] {
 				errs = append(errs, fmt.Sprintf("service %q depends on unknown %q", name, dep))
@@ -27,6 +30,9 @@ func Validate(cfg *Config) error {
 		}
 	}
 	for name, c := range cfg.Containers {
+		if c.HealthCheck != nil && c.HealthCheck.FailureThreshold < 0 {
+			errs = append(errs, fmt.Sprintf("container %q health_check.failure_threshold must be at least 1", name))
+		}
 		if !isValidPullPolicy(c.PullPolicy) {
 			errs = append(errs, fmt.Sprintf("container %q has invalid pull_policy %q (expected always, if_not_present, or never)", name, c.PullPolicy))
 		}

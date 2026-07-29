@@ -367,6 +367,57 @@ func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
 	}
 }
 
+func TestStatusJSON_RuntimeDependencyFailureTargetsRootCause(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{"inventory": {}},
+		Services: map[string]*config.Service{
+			"orders": {},
+			"shop":   {},
+		},
+	}
+	running := map[string]daemon.ResourceStatus{
+		"inventory": {Name: "inventory", Kind: daemon.ResourceKindContainer, State: "stopped"},
+		"orders": {
+			Name:        "orders",
+			Kind:        daemon.ResourceKindService,
+			State:       "degraded",
+			StateReason: "dependency inventory is stopped",
+			BlockedBy:   "inventory",
+		},
+		"shop": {
+			Name:        "shop",
+			Kind:        daemon.ResourceKindService,
+			State:       "degraded",
+			StateReason: "dependency orders is degraded",
+			BlockedBy:   "orders",
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	if len(envelope.RecommendedActions) != 1 {
+		t.Fatalf("recommended_actions = %+v, want one root-cause action", envelope.RecommendedActions)
+	}
+	action := envelope.RecommendedActions[0]
+	if action.Command != "orbit up inventory --json" {
+		t.Fatalf("recommended action = %q, want targeted inventory start", action.Command)
+	}
+	tips := statusRecoveryTips(running)
+	if len(tips) != 1 || !strings.Contains(tips[0], "orbit up inventory") {
+		t.Fatalf("human recovery tips = %+v, want targeted inventory start", tips)
+	}
+	for _, resource := range envelope.Data.Resources {
+		switch resource.Name {
+		case "orders":
+			if resource.BlockedBy != "inventory" {
+				t.Fatalf("orders blocked_by = %q, want inventory", resource.BlockedBy)
+			}
+		case "shop":
+			if resource.BlockedBy != "orders" {
+				t.Fatalf("shop blocked_by = %q, want orders", resource.BlockedBy)
+			}
+		}
+	}
+}
+
 func TestStatusDetail_ExplainsFailureAndDependencyBlock(t *testing.T) {
 	running := map[string]daemon.ResourceStatus{
 		"api": {

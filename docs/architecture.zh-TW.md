@@ -75,7 +75,7 @@ stateDiagram-v2
     Healthy --> Degraded: HealthFail / ProcessExited / ContainerDrift
     Healthy --> Pending: user restart (從 Pending 重新進入 DAG)
     Healthy --> Stopping: Shutdown / user stop
-    Degraded --> Healthy: HealthOK (recovery probing, http/tcp)
+    Degraded --> Healthy: HealthOK (recovery probing)
     Degraded --> Stopping: Shutdown / user stop
     Stopping --> Stopped
     Stopped --> [*]
@@ -172,6 +172,16 @@ sequenceDiagram
 | `healthcheck` | 直接用 Docker 自己的 `HEALTHCHECK` 結果 | 透過 inspect polling |
 
 Probe 在 per-service 的 goroutine 跑，context 會在 stop 時被 cancel —— 參考 `internal/health/checker.go` 與 `internal/health/` 底下的測試(例如 `checker_test.go`、`recover_test.go`)看完整契約。
+
+啟動完成後，可重複的 probe（`http`、`tcp`、`exec` 與 Docker
+`healthcheck`）都會持續執行。可設定的連續失敗門檻避免單次暫時性失敗讓
+graph 反覆變色；一次成功即可讓 degraded 資源恢復。`log` 仍是一次性的
+readiness 訊號，因為過去曾出現的 log 無法做有意義的反向探測。
+
+Status 組裝會疊加依賴可用性，但不改寫 lifecycle state。若仍在執行的 healthy
+process 依賴 stopped 或 degraded 資源，API view 會以 degraded 和
+`blocked_by` 呈現，並保留可追查的直接依賴鏈。根因依賴恢復後，這層狀態會
+自動消失，仍在執行的下游不需 restart 就能恢復。
 
 ## Daemon server
 

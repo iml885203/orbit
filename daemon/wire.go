@@ -68,6 +68,10 @@ type ResourceStatus struct {
 	// from starting, so clients can distinguish useful waiting from a
 	// terminal dependency failure.
 	PendingDependencies []string `json:"pending_dependencies,omitempty"`
+	// BlockedBy names the direct dependency that makes an otherwise-running
+	// resource unavailable. The dependency chain remains inspectable without
+	// pretending the dependent process itself stopped.
+	BlockedBy string `json:"blocked_by,omitempty"`
 	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
 	StateReason          string                `json:"state_reason,omitempty"`

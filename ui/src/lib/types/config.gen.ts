@@ -162,4 +162,5 @@ export interface HealthCheckConfig {
   interval: number;
   timeout: number;
   retries: number /* int */;
+  failure_threshold: number /* int */;
 }

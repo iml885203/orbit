@@ -320,14 +320,15 @@ func (c *Config) ServiceOrContainerExists(name string) bool {
 }
 
 type HealthCheckConfig struct {
-	Type     string        `yaml:"type"` // http, tcp, log, exec, healthcheck
-	Path     string        `yaml:"path"`
-	Port     int           `yaml:"port"`
-	Pattern  string        `yaml:"pattern"` // regex for "log" type
-	Command  []string      `yaml:"command"` // argv for "exec" type
-	Interval time.Duration `yaml:"interval"`
-	Timeout  time.Duration `yaml:"timeout"`
-	Retries  int           `yaml:"retries"`
+	Type             string        `yaml:"type"` // http, tcp, log, exec, healthcheck
+	Path             string        `yaml:"path"`
+	Port             int           `yaml:"port"`
+	Pattern          string        `yaml:"pattern"` // regex for "log" type
+	Command          []string      `yaml:"command"` // argv for "exec" type
+	Interval         time.Duration `yaml:"interval"`
+	Timeout          time.Duration `yaml:"timeout"`
+	Retries          int           `yaml:"retries"`
+	FailureThreshold int           `yaml:"failure_threshold"`
 }
 
 // validKinds is the closed set of allowed kind values.

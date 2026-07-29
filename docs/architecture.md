@@ -75,7 +75,7 @@ stateDiagram-v2
     Healthy --> Degraded: HealthFail / ProcessExited / ContainerDrift
     Healthy --> Pending: user restart (re-enters the DAG at Pending)
     Healthy --> Stopping: Shutdown / user stop
-    Degraded --> Healthy: HealthOK (recovery probing, http/tcp)
+    Degraded --> Healthy: HealthOK (recovery probing)
     Degraded --> Stopping: Shutdown / user stop
     Stopping --> Stopped
     Stopped --> [*]
@@ -188,6 +188,18 @@ it owns.
 | `healthcheck` | Defer to Docker's own `HEALTHCHECK` result | Polled via inspect |
 
 Probes run in a per-service goroutine with a context cancelled at stop — see `internal/health/checker.go` and the tests under `internal/health/` (e.g. `checker_test.go`, `recover_test.go`) for the contract.
+
+After startup, every repeatable probe (`http`, `tcp`, `exec`, and Docker
+`healthcheck`) keeps running. A configurable consecutive-failure threshold
+prevents one transient miss from flapping the graph; one successful probe
+recovers a degraded resource. `log` remains a one-shot readiness signal
+because a past log match has no meaningful inverse probe.
+
+Status assembly overlays dependency availability without rewriting lifecycle
+state. If a healthy process depends on a stopped or degraded resource, API
+views report it as degraded with `blocked_by`; direct dependencies form an
+inspectable chain. Restoring the root dependency makes the overlay disappear,
+so still-running dependents recover without a restart.
 
 ## Daemon server
 

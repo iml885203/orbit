@@ -125,8 +125,7 @@ func TestClearRecovering_OldOwnerCannotClearNewFlag(t *testing.T) {
 	}
 }
 
-// Strategies without a single-probe entry point (log is event-driven;
-// exec/healthcheck have no Check() implementation) must be rejected with the
+// Strategies without a meaningful repeatable probe must be rejected with the
 // sentinel — a nil here would read as "recovered" at the call site.
 func TestRecoverHealthy_UnsupportedStrategiesReturnSentinel(t *testing.T) {
 	checker := NewChecker(nil, nil)
@@ -135,8 +134,7 @@ func TestRecoverHealthy_UnsupportedStrategiesReturnSentinel(t *testing.T) {
 	for _, hc := range []*config.HealthCheckConfig{
 		nil,
 		{Type: "log", Pattern: "ready"},
-		{Type: "exec", Command: []string{"true"}},
-		{Type: "healthcheck"},
+		{Type: "unknown"},
 	} {
 		if SupportsRecovery(hc) {
 			t.Fatalf("expected SupportsRecovery=false for %+v", hc)
@@ -146,5 +144,91 @@ func TestRecoverHealthy_UnsupportedStrategiesReturnSentinel(t *testing.T) {
 			t.Fatalf("expected ErrRecoveryUnsupported for %+v, got %v", hc, err)
 		}
 		cancel()
+	}
+}
+
+func TestMonitorHealthy_DebouncesFailuresAndRecovers(t *testing.T) {
+	var healthy atomic.Bool
+	healthy.Store(false)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if healthy.Load() {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	hc := &config.HealthCheckConfig{
+		Type:             "http",
+		Port:             portFromURL(t, srv.URL),
+		Interval:         10 * time.Millisecond,
+		FailureThreshold: 3,
+	}
+	results := make(chan Result, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- checker.MonitorHealthy(ctx, "api", hc, func(result Result) {
+			results <- result
+		})
+	}()
+
+	select {
+	case result := <-results:
+		if result.Healthy {
+			t.Fatalf("first verdict = healthy, want degraded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("monitor did not report the third consecutive failure")
+	}
+	healthy.Store(true)
+	select {
+	case result := <-results:
+		if !result.Healthy {
+			t.Fatalf("recovery verdict = unhealthy: %s", result.Message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("monitor did not report recovery")
+	}
+
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("MonitorHealthy() = %v, want context.Canceled", err)
+	}
+}
+
+func TestMonitorHealthy_OneTransientFailureDoesNotFlap(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	hc := &config.HealthCheckConfig{
+		Type:             "http",
+		Port:             portFromURL(t, srv.URL),
+		Interval:         10 * time.Millisecond,
+		FailureThreshold: 3,
+	}
+	results := make(chan Result, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	err := checker.MonitorHealthy(ctx, "api", hc, func(result Result) {
+		results <- result
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("MonitorHealthy() = %v, want deadline exceeded", err)
+	}
+	select {
+	case result := <-results:
+		t.Fatalf("transient failure emitted verdict: %+v", result)
+	default:
 	}
 }

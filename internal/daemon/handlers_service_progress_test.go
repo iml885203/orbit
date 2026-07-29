@@ -100,3 +100,63 @@ func TestHandleStatus_ReportsBufferedLogsWithoutGuessingFromLifecycleState(t *te
 		t.Fatalf("buffered service logs_available = %v, want true", statuses)
 	}
 }
+
+func TestApplyDependencyImpact_PropagatesAndRecoversWithoutChangingRuntime(t *testing.T) {
+	cfg := &config.Config{
+		Containers: map[string]*config.Container{
+			"inventory": {Name: "inventory"},
+		},
+		Services: map[string]*config.Service{
+			"orders": {Name: "orders", DependsOn: []string{"inventory"}},
+			"shop":   {Name: "shop", DependsOn: []string{"orders"}},
+		},
+	}
+	raw := []ResourceStatus{
+		{Name: "inventory", State: "stopped"},
+		{Name: "orders", State: "healthy"},
+		{Name: "shop", State: "healthy"},
+	}
+
+	applyDependencyImpact(cfg, raw)
+	byName := make(map[string]ResourceStatus, len(raw))
+	for _, status := range raw {
+		byName[status.Name] = status
+	}
+	if got := byName["orders"]; got.State != "degraded" || got.BlockedBy != "inventory" {
+		t.Fatalf("orders = %+v, want degraded and blocked by inventory", got)
+	}
+	if got := byName["shop"]; got.State != "degraded" || got.BlockedBy != "orders" {
+		t.Fatalf("shop = %+v, want degraded and blocked by orders", got)
+	}
+
+	// The dependent's own runtime probe will eventually fail too. That
+	// downstream symptom must not replace the known dependency root cause.
+	afterThreshold := []ResourceStatus{
+		{Name: "inventory", State: "stopped"},
+		{Name: "orders", State: "degraded", StateReason: `Get "http://localhost:3000/health": EOF`},
+		{Name: "shop", State: "healthy"},
+	}
+	applyDependencyImpact(cfg, afterThreshold)
+	byName = make(map[string]ResourceStatus, len(afterThreshold))
+	for _, status := range afterThreshold {
+		byName[status.Name] = status
+	}
+	if got := byName["orders"]; got.BlockedBy != "inventory" || got.StateReason != "dependency inventory is stopped" {
+		t.Fatalf("orders after threshold = %+v, want inventory root cause preserved", got)
+	}
+	if got := byName["shop"]; got.BlockedBy != "orders" {
+		t.Fatalf("shop after threshold = %+v, want direct dependency chain", got)
+	}
+
+	recovered := []ResourceStatus{
+		{Name: "inventory", State: "healthy"},
+		{Name: "orders", State: "healthy"},
+		{Name: "shop", State: "healthy"},
+	}
+	applyDependencyImpact(cfg, recovered)
+	for _, status := range recovered {
+		if status.State != "healthy" || status.BlockedBy != "" {
+			t.Fatalf("recovered %s = %+v, want healthy without blocker", status.Name, status)
+		}
+	}
+}

@@ -684,6 +684,7 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 		target.PortConflict = source.PortConflict
 	}
 	target.PendingDependencies = append([]string{}, source.PendingDependencies...)
+	target.BlockedBy = source.BlockedBy
 	target.LogsAvailable = source.LogsAvailable
 	target.StartupTime = source.StartupTime
 	target.Uptime = source.Uptime
@@ -696,6 +697,12 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 }
 
 func statusDependencyBlocker(service daemon.ResourceStatus, running map[string]daemon.ResourceStatus) *daemon.ResourceStatus {
+	if service.BlockedBy != "" {
+		blocker, ok := running[service.BlockedBy]
+		if ok {
+			return &blocker
+		}
+	}
 	if service.State != "pending" || len(service.PendingDependencies) == 0 {
 		return nil
 	}
@@ -709,11 +716,12 @@ func statusDependencyBlocker(service daemon.ResourceStatus, running map[string]d
 func statusRecoveryTargets(running map[string]daemon.ResourceStatus) []string {
 	targets := make(map[string]bool)
 	for _, service := range running {
+		if blocker := terminalRuntimeBlocker(service, running); blocker != nil {
+			targets[blocker.Name] = true
+			continue
+		}
 		if service.State == "degraded" && (service.HealthProgress == nil || !service.HealthProgress.Recovering) {
 			targets[service.Name] = true
-		}
-		if blocker := statusDependencyBlocker(service, running); blocker != nil {
-			targets[blocker.Name] = true
 		}
 	}
 	names := make([]string, 0, len(targets))
@@ -722,6 +730,25 @@ func statusRecoveryTargets(running map[string]daemon.ResourceStatus) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func terminalRuntimeBlocker(service daemon.ResourceStatus, running map[string]daemon.ResourceStatus) *daemon.ResourceStatus {
+	seen := make(map[string]bool, len(running))
+	current := service
+	for {
+		if seen[current.Name] {
+			return nil
+		}
+		seen[current.Name] = true
+		blocker := statusDependencyBlocker(current, running)
+		if blocker == nil {
+			return nil
+		}
+		if blocker.BlockedBy == "" {
+			return blocker
+		}
+		current = *blocker
+	}
 }
 
 func statusRecoveryActions(running map[string]daemon.ResourceStatus) []cli.JSONAction {
@@ -762,6 +789,10 @@ func statusRecoveryTips(running map[string]daemon.ResourceStatus) []string {
 			if service.PortConflict.InspectCommand != "" {
 				tips = append(tips, fmt.Sprintf("%s  inspect port %d owner", service.PortConflict.InspectCommand, service.PortConflict.Port))
 			}
+			continue
+		}
+		if service.State == "stopped" {
+			tips = append(tips, fmt.Sprintf("orbit up %-16s  restore blocked services", name))
 			continue
 		}
 		if service.LogsAvailable {

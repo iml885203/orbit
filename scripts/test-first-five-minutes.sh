@@ -166,4 +166,114 @@ PY
 grep -F \
   "failure added +0 reservations and +0 orders while preserving stock; compensation restored stock" \
   "$test_root/mini-shop-smoke.txt"
-echo "README first five minutes completes a linked checkout before the dashboard"
+
+"$orbit_bin" down shop-inventory-api --json >"$test_root/down-inventory.json"
+for _ in {1..20}; do
+  "$orbit_bin" status --json >"$test_root/runtime-failure.json"
+  if python3 - "$test_root/runtime-failure.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+resources = {resource["name"]: resource for resource in payload["data"]["resources"]}
+assert resources["shop-inventory-api"]["state"] == "stopped"
+assert resources["shop-order-api"]["state"] == "degraded"
+assert resources["shop-order-api"]["blocked_by"] == "shop-inventory-api"
+assert resources["demo-shop"]["state"] == "degraded"
+assert resources["demo-shop"]["blocked_by"] in {"shop-inventory-api", "shop-order-api"}
+assert payload["recommended_actions"] == [{
+    "command": "orbit up shop-inventory-api --json",
+    "reason": "Start shop-inventory-api, which is blocking dependent services.",
+    "destructive": False,
+}]
+PY
+  then
+    break
+  fi
+  sleep 1
+done
+
+python3 - "$test_root/runtime-failure.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+resources = {resource["name"]: resource for resource in payload["data"]["resources"]}
+assert resources["shop-inventory-api"]["state"] == "stopped"
+assert resources["shop-order-api"]["state"] == "degraded"
+assert resources["shop-order-api"]["blocked_by"] == "shop-inventory-api"
+assert resources["demo-shop"]["state"] == "degraded"
+assert resources["demo-shop"]["blocked_by"] in {"shop-inventory-api", "shop-order-api"}
+assert payload["recommended_actions"][0]["command"] == "orbit up shop-inventory-api --json"
+PY
+
+sleep 4
+"$orbit_bin" status --json >"$test_root/runtime-threshold.json"
+python3 - "$test_root/runtime-threshold.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+resources = {resource["name"]: resource for resource in payload["data"]["resources"]}
+assert resources["shop-order-api"]["state"] == "degraded"
+assert resources["shop-order-api"]["blocked_by"] == "shop-inventory-api"
+assert resources["shop-order-api"]["state_reason"] == "dependency shop-inventory-api is stopped"
+assert resources["demo-shop"]["state"] == "degraded"
+assert payload["recommended_actions"] == [{
+    "command": "orbit up shop-inventory-api --json",
+    "reason": "Start shop-inventory-api, which is blocking dependent services.",
+    "destructive": False,
+}]
+PY
+"$orbit_bin" status >"$test_root/runtime-threshold.txt"
+grep -F "orbit up shop-inventory-api" "$test_root/runtime-threshold.txt"
+if grep -F "orbit logs shop-order-api" "$test_root/runtime-threshold.txt" >/dev/null; then
+  echo "runtime status recommends diagnosing a dependent before restoring its known root dependency" >&2
+  exit 1
+fi
+
+dashboard_url="$(
+  python3 -c '
+import json
+import sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["data"]["url"])
+' "$test_root/open-dashboard.json"
+)"
+curl --fail --silent --show-error "${dashboard_url%/}/api/graph" >"$test_root/runtime-graph.json"
+python3 - "$test_root/runtime-graph.json" <<'PY'
+import json
+import sys
+
+nodes = {node["name"]: node for node in json.load(open(sys.argv[1], encoding="utf-8"))["nodes"]}
+assert nodes["shop-order-api"]["state"] == "degraded"
+assert nodes["shop-order-api"]["blockedBy"] == "shop-inventory-api"
+assert nodes["shop-order-api"]["stateReason"] == "dependency shop-inventory-api is stopped"
+assert nodes["demo-shop"]["state"] == "degraded"
+PY
+
+"$orbit_bin" up shop-inventory-api --json >"$test_root/recover-inventory.json"
+for _ in {1..20}; do
+  "$orbit_bin" status --json >"$test_root/runtime-recovered.json"
+  if python3 - "$test_root/runtime-recovered.json" <<'PY'
+import json
+import sys
+
+resources = json.load(open(sys.argv[1], encoding="utf-8"))["data"]["resources"]
+assert all(resource["state"] == "healthy" for resource in resources)
+assert all("blocked_by" not in resource for resource in resources)
+PY
+  then
+    break
+  fi
+  sleep 1
+done
+
+python3 - "$test_root/runtime-recovered.json" <<'PY'
+import json
+import sys
+
+resources = json.load(open(sys.argv[1], encoding="utf-8"))["data"]["resources"]
+assert all(resource["state"] == "healthy" for resource in resources)
+PY
+
+echo "README first five minutes completes a linked checkout and reports runtime dependency failures truthfully"
