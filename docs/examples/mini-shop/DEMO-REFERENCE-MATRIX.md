@@ -36,7 +36,7 @@
   - 服務就緒 -> 加入購物車 -> Checkout -> 關聯驗證。
 
 ### 進階入口（可選）
-- `mini-shop-advanced` 加 `observability-api`（已完成）
+- `mini-shop-advanced` 加 `observability-api` + `notification-api`（已完成）
   - 只做觀測與關聯快照，不改變 baseline 流程。
 
 ### 未來候選（視 1.0 後優先度）

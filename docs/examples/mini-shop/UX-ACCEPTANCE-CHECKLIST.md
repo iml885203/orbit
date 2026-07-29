@@ -14,6 +14,7 @@
   - 服務（backend）
   - 交易（checkout）
   - 關聯（order + shipment）
+- [ ] 進階模式若有 `notification-api`，能看到「關聯事件」包含通知輸出（不必強制要求，但有則可見）。
 
 ### B. 可否 demo 給人（是否有顯性最小價值）
 

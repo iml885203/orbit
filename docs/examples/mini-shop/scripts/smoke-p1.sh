@@ -257,7 +257,7 @@ run_suite() {
   if [[ "$env_type" == "mini" ]]; then
     readiness_targets+=("web|http://$BASE:3000")
   else
-    readiness_targets+=("web|http://$BASE:3000" "observability-api|http://$BASE:3010")
+    readiness_targets+=("web|http://$BASE:3000" "observability-api|http://$BASE:3010" "notification-api|http://$BASE:3009/health")
   fi
 
   local service_name

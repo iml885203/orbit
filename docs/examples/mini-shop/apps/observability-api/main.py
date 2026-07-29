@@ -9,6 +9,7 @@ from typing import Any
 
 ORDER_API_URL = os.environ.get("ORDER_API_URL", "http://127.0.0.1:3002")
 SHIPPING_API_URL = os.environ.get("SHIPPING_API_URL", "http://127.0.0.1:3008")
+NOTIFICATION_API_URL = os.environ.get("NOTIFICATION_API_URL", "").strip()
 REFRESH_INTERVAL_SECONDS = float(os.environ.get("REFRESH_INTERVAL_SECONDS", "1.5"))
 
 
@@ -41,17 +42,27 @@ def fetch_json(url: str, timeout: float = 1.0) -> tuple[dict | list | None, str 
         return None, "unreachable"
 
 
-def service_status(orders_payload: tuple[dict | None, str | None], shipments_payload: tuple[dict | None, str | None]):
+def service_status(
+    orders_payload: tuple[dict | list | None, str | None],
+    shipments_payload: tuple[dict | list | None, str | None],
+    notifications_payload: tuple[dict | list | None, str | None],
+):
     orders_ok = orders_payload[0] is not None
     shipments_ok = shipments_payload[0] is not None
-    if orders_ok and shipments_ok:
+    notifications_ok = notifications_payload[0] is not None or NOTIFICATION_API_URL == ""
+    if orders_ok and shipments_ok and notifications_ok:
         return "ok"
     if orders_ok or shipments_ok:
         return "degraded"
     return "unavailable"
 
 
-def build_insights(orders_payload: dict | list | None, shipments_payload: dict | list | None, request_id: int) -> dict[str, Any]:
+def build_insights(
+    orders_payload: dict | list | None,
+    shipments_payload: dict | list | None,
+    notifications_payload: dict | list | None,
+    request_id: int,
+) -> dict[str, Any]:
     orders = []
     if isinstance(orders_payload, dict):
         orders = orders_payload.get("orders", []) or []
@@ -72,6 +83,12 @@ def build_insights(orders_payload: dict | list | None, shipments_payload: dict |
     latest_order = orders[0] if orders else None
     latest_shipment = shipments[0] if shipments else None
 
+    notifications = []
+    if isinstance(notifications_payload, dict):
+        notifications = notifications_payload.get("notifications", []) or []
+    elif isinstance(notifications_payload, list):
+        notifications = notifications_payload
+
     events = []
     for item in orders[:10]:
         if not isinstance(item, dict):
@@ -90,7 +107,24 @@ def build_insights(orders_payload: dict | list | None, shipments_payload: dict |
             }
         )
 
+    for item in notifications[:10]:
+        if not isinstance(item, dict):
+            continue
+        events.append(
+            {
+                "type": "notification_emitted",
+                "order_id": item.get("order_id", 0),
+                "status": "ok",
+                "customer_id": item.get("customer_id", 0),
+                "title": item.get("title", "notification"),
+                "message": item.get("message", ""),
+                "tracking_no": None,
+                "timestamp": item.get("created_at", now),
+            }
+        )
+
     correlation_ratio = (matched / total_orders) if total_orders > 0 else 1.0
+    notifications_count = len(notifications)
 
     return {
         "service": "observability-api",
@@ -101,11 +135,13 @@ def build_insights(orders_payload: dict | list | None, shipments_payload: dict |
         "totals": {
             "orders": total_orders,
             "shipments": len(shipments),
+            "notifications": notifications_count,
         },
         "correlation": {
             "matched_orders": matched,
             "correlation_ratio": round(correlation_ratio, 4),
         },
+        "notifications": notifications[:10],
         "latest_order": latest_order,
         "latest_shipment": latest_shipment,
         "events": events,
@@ -126,7 +162,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             orders_payload, orders_err = fetch_json(f"{ORDER_API_URL}/orders")
             shipments_payload, shipments_err = fetch_json(f"{SHIPPING_API_URL}/shipments")
-            status = service_status((orders_payload, orders_err), (shipments_payload, shipments_err))
+            if NOTIFICATION_API_URL:
+                notifications_payload, notifications_err = fetch_json(f"{NOTIFICATION_API_URL}/notifications")
+            else:
+                notifications_payload, notifications_err = None, None
+            status = service_status(
+                (orders_payload, orders_err),
+                (shipments_payload, shipments_err),
+                (notifications_payload, notifications_err),
+            )
             http_status = HTTPStatus.OK if status == "ok" else HTTPStatus.SERVICE_UNAVAILABLE
             payload = {
                 "service": "observability-api",
@@ -142,6 +186,12 @@ class Handler(BaseHTTPRequestHandler):
                         "error": shipments_err,
                         "url": SHIPPING_API_URL,
                     },
+                    "notification_api": {
+                        "ready": NOTIFICATION_API_URL == "" or (notifications_payload is not None),
+                        "error": None if NOTIFICATION_API_URL == "" else notifications_err,
+                        "url": NOTIFICATION_API_URL,
+                        "enabled": bool(NOTIFICATION_API_URL),
+                    },
                 },
             }
             headers, body = write_json(payload)
@@ -152,7 +202,17 @@ class Handler(BaseHTTPRequestHandler):
             request_id = int(time.time())
             orders_payload, _ = fetch_json(f"{ORDER_API_URL}/orders")
             shipments_payload, _ = fetch_json(f"{SHIPPING_API_URL}/shipments")
-            payload = build_insights(orders_payload, shipments_payload, request_id)
+            if NOTIFICATION_API_URL:
+                notifications_payload, notifications_err = fetch_json(f"{NOTIFICATION_API_URL}/notifications")
+            else:
+                notifications_payload, notifications_err = None, None
+            _ = notifications_err
+            payload = build_insights(
+                orders_payload=orders_payload,
+                shipments_payload=shipments_payload,
+                notifications_payload=notifications_payload,
+                request_id=request_id,
+            )
             if self.path == "/events":
                 payload = {"request_id": request_id, "events": payload.get("events", [])}
             headers, body = write_json(payload)

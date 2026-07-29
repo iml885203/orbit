@@ -2853,6 +2853,7 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
             ${payload.status === 'ok' ? '✅' : '◯'}
           </div>
           <div class="observability-row">總訂單：${totals.orders || 0}，已關聯：${matched}，匹配率：${ratioText}</div>
+          <div class="observability-row">通知：${totals.notifications || 0} 筆已發送</div>
           <div class="observability-row">request_id：${requestId} / refresh：${payload.refresh_interval_seconds || 'n/a'}s</div>
           <div class="observability-row">最新訂單：${latestOrder ? `#${latestOrder.id}` : '尚未建立'}</div>
           <div class="observability-row">最新出貨：${latestShipment ? `#${latestShipment.id}` : '尚未建立'}</div>
@@ -2866,7 +2867,9 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
         observabilityEventsEl.innerHTML = events
           .map((event) => {
             const statusText = event.status === 'ok' ? '✅' : '◯';
-            return `<div class="observability-event"><div><span class="label">${statusText} ${event.type}</span>｜訂單 #${event.order_id || '-'}｜Shipment #${event.shipment_id || '-'}</div><div class="mono">tracking ${event.tracking_no || '-'} | ts ${event.timestamp || '-'}</div></div>`;
+            const extra = event.title ? `｜${event.title}` : '';
+            const message = event.message ? `｜${event.message}` : '';
+            return `<div class="observability-event"><div><span class="label">${statusText} ${event.type}</span>｜訂單 #${event.order_id || '-'}｜Shipment #${event.shipment_id || '-'}${extra}</div><div class="mono">tracking ${event.tracking_no || '-'} | ts ${event.timestamp || '-'}${message}</div></div>`;
           })
           .join('');
       }

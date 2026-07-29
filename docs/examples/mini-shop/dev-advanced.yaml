@@ -139,7 +139,8 @@ services:
       type: http
       path: /health
       port: 3006
-    env: {}
+    env:
+      NOTIFICATION_API_URL: http://127.0.0.1:3009
   observability-api:
     type: python
     kind: backend
@@ -181,6 +182,23 @@ services:
       PAYMENT_API_URL: http://127.0.0.1:3007
       SHIPPING_API_URL: http://127.0.0.1:3008
       OBSERVABILITY_API_URL: http://127.0.0.1:3010
+      NOTIFICATION_API_URL: http://127.0.0.1:3009
+
+  notification-api:
+    type: python
+    kind: backend
+    path: ./apps/notification-api
+    command: python3 main.py
+    ports:
+      http: 3009
+    depends_on: [checkout-api]
+    health_check:
+      type: http
+      path: /health
+      port: 3009
+    env:
+      DATABASE_PATH: mini_shop_notifications.db
+      DATA_DIR: .
 
 
 
@@ -190,4 +208,4 @@ groups:
     services: [catalog-api, inventory-api, customer-api, order-api, cart-api, payment-api, shipping-api, checkout-api, web]
   mini-shop-advanced:
     enabled: true
-    services: [catalog-api, inventory-api, customer-api, order-api, cart-api, payment-api, shipping-api, checkout-api, observability-api, web]
+    services: [catalog-api, inventory-api, customer-api, order-api, cart-api, payment-api, shipping-api, checkout-api, observability-api, notification-api, web]

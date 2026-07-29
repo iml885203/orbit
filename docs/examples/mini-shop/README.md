@@ -21,10 +21,11 @@
   - `cart-api`（購物車，前端先操作）
   - `order-api`（下單服務，依賴 catalog / inventory / customer / redis）
   - `payment-api`（模擬付款）
-  - `shipping-api`（模擬出貨，建立 tracking）
-  - `checkout-api`（Checkout orchestration：cart->reserve->pay->order->shipment）
-  - `observability-api`（進階模式）：彙整訂單 / 出貨關聯，提供最近事件快照
-  - `web`（前端）
+- `shipping-api`（模擬出貨，建立 tracking）
+- `checkout-api`（Checkout orchestration：cart->reserve->pay->order->shipment）
+- `observability-api`（進階模式）：彙整訂單 / 出貨關聯，提供最近事件快照
+- `notification-api`（進階模式）：訂單完成時記錄通知紀錄，展示「關聯」最後一圈
+- `web`（前端）
 
 ## 快速啟動
 
@@ -85,7 +86,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 成功後在「訂單」「出貨」區看到同一筆交易的對應資料。
 - 在「關聯流程時間軸」看到同一次 checkout 的關鍵節點，失敗時可直接看到失敗發生在哪一段（例如付款失敗）。
 - 在「關聯完整性快檢查」可直接判斷最近 checkout 是否已建立關聯出貨，不用再手動比對。
-- 在進階模式可看「關聯觀測洞察」卡片：一次看到近 10 筆「訂單→出貨」事件是否關聯成功。
+- 在進階模式可看「關聯觀測洞察」卡片：一次看到近 10 筆「訂單→出貨」事件是否關聯成功，也會看到「通知事件」是否同步完成。
 - 在「流程依賴速覽」看見上游與下游服務即時狀態，先知道該先補哪個 service。
 
 ### 用戶心理模型設計（不需要背 service）
