@@ -67,11 +67,11 @@ func TestCheckHostTool_PresentNoProbe(t *testing.T) {
 // version probe does not flip the check to fail — the message should just
 // omit the version suffix.
 func TestCheckHostTool_ProbeFailureStillPasses(t *testing.T) {
+	t.Parallel()
 	dir, bin := fakeBin(t, "tool-bad", "#!/bin/sh\nexit 1\n")
-	t.Setenv("PATH", dir)
 	got := checkHostTool(HostToolCheck{
 		Name:    "Tool",
-		Binary:  bin,
+		Binary:  filepath.Join(dir, bin),
 		Version: versionFromCmd("--version"),
 	})
 	if got.Status != CheckPass {
@@ -85,11 +85,11 @@ func TestCheckHostTool_ProbeFailureStillPasses(t *testing.T) {
 // TestCheckHostTool_ProbeSuccess verifies a successful version probe appends
 // the first output line to the pass message.
 func TestCheckHostTool_ProbeSuccess(t *testing.T) {
+	t.Parallel()
 	dir, bin := fakeBin(t, "tool-ver", "#!/bin/sh\necho 'fake version 1.2.3'\n")
-	t.Setenv("PATH", dir)
 	got := checkHostTool(HostToolCheck{
 		Name:    "Tool",
-		Binary:  bin,
+		Binary:  filepath.Join(dir, bin),
 		Version: versionFromCmd("--version"),
 	})
 	if got.Status != CheckPass {
@@ -103,8 +103,8 @@ func TestCheckHostTool_ProbeSuccess(t *testing.T) {
 // TestDotnetSDKVersion_EmptyIsError verifies --list-sdks returning empty is
 // treated as a probe error (runtime-only install) so callers can warn.
 func TestDotnetSDKVersion_EmptyIsError(t *testing.T) {
+	t.Parallel()
 	dir, bin := fakeBin(t, "dotnet-empty", "#!/bin/sh\nexit 0\n")
-	t.Setenv("PATH", dir)
 	path := filepath.Join(dir, bin)
 	if _, err := dotnetSDKVersion(path); err == nil {
 		t.Error("want error for empty --list-sdks output, got nil")
@@ -123,9 +123,11 @@ func TestCheckNode_MissingFailsWhenRequired(t *testing.T) {
 }
 
 func TestCheckNode_ProjectOwnsVersionPolicy(t *testing.T) {
+	t.Parallel()
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v18.0.0'\n")
-	t.Setenv("PATH", dir)
-	got := checkHostTool(hostToolDefinition("node", []string{"web"}))
+	tool := hostToolDefinition("node", []string{"web"})
+	tool.Binary = filepath.Join(dir, "node")
+	got := checkHostTool(tool)
 	if got.Status != CheckPass {
 		t.Fatalf("Orbit should not override the project's version policy, got %s (%s)", got.Status, got.Message)
 	}
@@ -135,9 +137,11 @@ func TestCheckNode_ProjectOwnsVersionPolicy(t *testing.T) {
 }
 
 func TestCheckNode_ModernVersionPasses(t *testing.T) {
+	t.Parallel()
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v22.3.1'\n")
-	t.Setenv("PATH", dir)
-	got := checkHostTool(hostToolDefinition("node", []string{"web"}))
+	tool := hostToolDefinition("node", []string{"web"})
+	tool.Binary = filepath.Join(dir, "node")
+	got := checkHostTool(tool)
 	if got.Status != CheckPass {
 		t.Fatalf("want CheckPass, got %s (%s)", got.Status, got.Message)
 	}

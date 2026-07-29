@@ -71,6 +71,7 @@ func containsInOrder(got *[]string, want []string) bool {
 }
 
 func TestPreStart_StreamsOutputToServiceLog(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	got, mu := collectOutput(m)
@@ -108,6 +109,7 @@ func TestPreStart_StreamsOutputToServiceLog(t *testing.T) {
 }
 
 func TestPreStart_StreamsInRealTime(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 
@@ -160,6 +162,7 @@ func TestPreStart_StreamsInRealTime(t *testing.T) {
 }
 
 func TestPreStart_FailureWritesExitLine(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	got, mu := collectOutput(m)
@@ -196,6 +199,7 @@ func TestPreStart_FailureWritesExitLine(t *testing.T) {
 }
 
 func TestPreStart_MultipleCommandsRunInOrder(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	got, mu := collectOutput(m)
@@ -233,6 +237,7 @@ func TestPreStart_MultipleCommandsRunInOrder(t *testing.T) {
 }
 
 func TestPreStart_NarrateEventsEmitted(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 

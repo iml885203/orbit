@@ -40,6 +40,7 @@ func pgidMembers(pgid int) []string {
 func pgidHasMembers(pgid int) bool { return len(pgidMembers(pgid)) > 0 }
 
 func TestStart_AbortsWhenCtxAlreadyCancelled(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 
@@ -69,6 +70,7 @@ func writeForkScript(t *testing.T) string {
 }
 
 func TestStart_KillsProcessTreeOnCtxCancel(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	m.CancelGrace = 500 * time.Millisecond // keep test fast
@@ -114,6 +116,7 @@ func TestStart_KillsProcessTreeOnCtxCancel(t *testing.T) {
 }
 
 func TestExplicitStopAndLifecycleCancelShareOneTermination(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	m.CancelGrace = 500 * time.Millisecond
@@ -141,6 +144,7 @@ func TestExplicitStopAndLifecycleCancelShareOneTermination(t *testing.T) {
 }
 
 func TestStopReturnsOnlyAfterReplacementCanBeTracked(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 
@@ -167,6 +171,7 @@ func TestStopReturnsOnlyAfterReplacementCanBeTracked(t *testing.T) {
 }
 
 func TestStartPublishesOwnershipBeforeReturning(t *testing.T) {
+	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 	var callbackPID int
