@@ -895,6 +895,65 @@ services:
 	}
 }
 
+func TestLoadAcceptsReadablePreferredPortMappings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferred-ports.yaml")
+	source := `version: "3"
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis:
+        preferred: 26379
+        target: 6379
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    ports:
+      http:
+        preferred: 28080
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redis := cfg.Containers["redis"].Ports["redis"]
+	if !redis.IsAuto() || redis.PreferredHost() != 26379 || redis.Host != 26379 || redis.Target != 6379 {
+		t.Fatalf("redis port = %+v, want movable 26379:6379", redis)
+	}
+	http := cfg.Services["api"].Ports["http"]
+	if !http.IsAuto() || http.PreferredHost() != 28080 || http.Host != 28080 || http.Target != 28080 {
+		t.Fatalf("http port = %+v, want movable 28080", http)
+	}
+}
+
+func TestLoadRejectsUnknownPreferredPortFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-preferred-port.yaml")
+	source := `version: "3"
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    ports:
+      http:
+        preferred: 28080
+        typo: 28081
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("unknown preferred port field was accepted")
+	}
+}
+
 func TestValidateAllowsAutoPortPreferencesToOverlapFixedPorts(t *testing.T) {
 	cfg := &Config{
 		Containers: map[string]*Container{

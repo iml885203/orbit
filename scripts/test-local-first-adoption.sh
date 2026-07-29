@@ -27,10 +27,19 @@ for guide in docs/local-first.md docs/local-first.zh-TW.md; do
       exit 1
     fi
   done
+
+  if grep -F "ORBIT_AUTO_PORT_" "$guide_path" >/dev/null; then
+    echo "$guide exposes the legacy movable-port expression." >&2
+    exit 1
+  fi
 done
 
 if [ ! -f "$example_config" ]; then
   echo "Local-first example config not found at $example_config." >&2
+  exit 1
+fi
+if grep -F "ORBIT_AUTO_PORT_" "$example_config" >/dev/null; then
+  echo "Local-first example exposes the legacy movable-port expression." >&2
   exit 1
 fi
 
@@ -105,9 +114,13 @@ listeners = []
 for port in (26379, 28080):
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("127.0.0.1", port))
-    listener.listen()
-    listeners.append(listener)
+    try:
+        listener.bind(("127.0.0.1", port))
+    except OSError:
+        listener.close()
+    else:
+        listener.listen()
+        listeners.append(listener)
 pathlib.Path(sys.argv[1]).touch()
 time.sleep(600)
 ' "$test_root/ports-ready" &

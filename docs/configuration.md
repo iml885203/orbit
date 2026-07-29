@@ -182,7 +182,7 @@ containers:
 | `icon` | string | no | Iconify icon slug for graph dashboard infra logo, e.g. `devicon:postgresql` |
 | `platform` | string | no | Platform override (`linux/amd64` for forced emulation) |
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port` |
+| `ports` | map | no | Fixed `alias: "hostPort:containerPort"` or movable `alias: {preferred, target}`. A single endpoint also supplies an omitted `health_check.port` |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings |
 | `command` | list | no | Override the image's default command |
@@ -221,33 +221,33 @@ every database.
 
 ### Ports that may move
 
-Project ports are fixed by default: a conflict remains an error because silently
-moving an API or database can break tools outside Orbit. Portable demos and
-similar disposable environments can opt an individual host port into automatic
-conflict recovery with an `ORBIT_AUTO_PORT_*` fallback:
+Project ports are fixed by default: a conflict remains an error because
+silently moving an API or database can break tools outside Orbit. When callers
+discover an endpoint through Orbit, declare a `preferred` host port instead.
+Orbit keeps it when available and otherwise chooses one that works:
 
 ```yaml
 containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis: "${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}:6379"
+      redis:
+        preferred: 26379
+        target: 6379
     health_check:
       type: tcp
-      port: ${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}
 
 services:
   demo-api:
     type: python
     path: .
     command: python3 app.py
-    url: http://localhost:${ORBIT_AUTO_PORT_DEMO_API:-28080}
     ports:
-      http: "${ORBIT_AUTO_PORT_DEMO_API:-28080}"
+      http:
+        preferred: 28080
     health_check:
       type: http
       path: /health
-      port: ${ORBIT_AUTO_PORT_DEMO_API:-28080}
 ```
 
 Orbit keeps the preferred value when it is available. Otherwise it selects an
@@ -256,6 +256,10 @@ injects `<ALIAS>_PORT` into the host service. A service with one port also
 receives the conventional `PORT` variable. `orbit status` and
 `orbit open <service>` always use the selected runtime port. A managed
 container keeps the same selected port across daemon restarts.
+
+A simple number or `"host:target"` string remains fixed. Environment
+substitution also works inside `preferred` and `target` when a team wants to
+override the preference without changing the file.
 
 ### Infra logos in the dashboard
 
@@ -403,7 +407,7 @@ services:
 | `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
 | `url` | string | no | Canonical URL; `orbit open <service>` uses this. Omit it when an `http` or `https` port already identifies the endpoint |
-| `ports` | map | no | Ports the service listens on. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
+| `ports` | map | no | Fixed numbers or movable `{preferred: port}` entries. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
 | `env` | map | no | Process env. `${VAR}` substituted at load time |
 | `build_env` | map | no | dotnet only: env passed to `dotnet build`, not to the running process |
 | `env_toggles` | map | no | Dashboard-controlled on/off flipping of individual env keys |
@@ -428,9 +432,9 @@ services:
     type: python
     path: ./catalog
     command: python3 main.py
-    url: http://localhost:${ORBIT_AUTO_PORT_CATALOG:-3001}
     ports:
-      http: "${ORBIT_AUTO_PORT_CATALOG:-3001}"
+      http:
+        preferred: 3001
 
   checkout-api:
     type: python

@@ -177,7 +177,7 @@ containers:
 | `icon` | string | no | graph dashboard infra logo 用的 Iconify icon slug，例如 `devicon:postgresql` |
 | `platform` | string | no | Platform 覆寫（`linux/amd64` 用於強制 emulation） |
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
+| `ports` | map | no | 固定的 `alias: "hostPort:containerPort"` 或可移動的 `alias: {preferred, target}`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串 |
 | `command` | list | no | 覆寫 image 預設的 command |
@@ -215,31 +215,31 @@ workflow 擁有 SQL Server Database Project 的 diff、publish 與 reset semanti
 ### 可自動調整的 port
 
 專案 port 預設固定；衝突仍會報錯，因為 API 或資料庫偷偷換 port
-可能破壞 Orbit 以外的工具。可攜式 demo 或其他可拋棄環境，可以用
-`ORBIT_AUTO_PORT_*` fallback，明確允許單一 host port 自動避開衝突：
+可能破壞 Orbit 以外的工具。若 caller 會透過 Orbit 找到 endpoint，請改用
+`preferred` host port。可用時 Orbit 會採用它，否則會選擇可用的 port：
 
 ```yaml
 containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis: "${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}:6379"
+      redis:
+        preferred: 26379
+        target: 6379
     health_check:
       type: tcp
-      port: ${ORBIT_AUTO_PORT_DEMO_REDIS:-26379}
 
 services:
   demo-api:
     type: python
     path: .
     command: python3 app.py
-    url: http://localhost:${ORBIT_AUTO_PORT_DEMO_API:-28080}
     ports:
-      http: "${ORBIT_AUTO_PORT_DEMO_API:-28080}"
+      http:
+        preferred: 28080
     health_check:
       type: http
       path: /health
-      port: ${ORBIT_AUTO_PORT_DEMO_API:-28080}
 ```
 
 偏好 port 可用時 Orbit 會照常使用；若已被占用，Orbit 會選擇可用的
@@ -248,6 +248,10 @@ host port，同步更新 health check 與 loopback URL，並把
 慣用的 `PORT` 變數。`orbit status` 與 `orbit open <service>` 永遠使用
 實際選定的 runtime port；daemon 重啟後，既有 managed container
 也會沿用相同 port。
+
+單純的數字或 `"host:target"` 字串仍代表固定 port。若團隊想在不改檔案的
+情況下覆寫偏好值，也可以在 `preferred` 與 `target` 中使用 environment
+substitution。
 
 ### Dashboard 上的 infra logo
 
@@ -394,7 +398,7 @@ services:
 | `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
 | `url` | string | no | 標準 URL；`orbit open <service>` 會用它。已有 `http` 或 `https` port 時可省略 |
-| `ports` | map | no | service 監聽的 port。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
+| `ports` | map | no | 固定數字或可移動的 `{preferred: port}`。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
 | `env` | map | no | Process env。`${VAR}` 在載入時替換 |
 | `build_env` | map | no | 僅 dotnet：傳給 `dotnet build` 的 env，不進執行中的 process |
 | `env_toggles` | map | no | dashboard 控制的單一 env key 開關 |
@@ -418,9 +422,9 @@ services:
     type: python
     path: ./catalog
     command: python3 main.py
-    url: http://localhost:${ORBIT_AUTO_PORT_CATALOG:-3001}
     ports:
-      http: "${ORBIT_AUTO_PORT_CATALOG:-3001}"
+      http:
+        preferred: 3001
 
   checkout-api:
     type: python

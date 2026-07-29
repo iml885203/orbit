@@ -100,8 +100,8 @@ export interface Container {
   kind: string; // frontend | backend | infra
 }
 /**
- * PortDef supports both simple (6379) and mapped (8989:8080) port definitions.
- * YAML: `redis: 6379` or `ui: "8989:8080"` (host:container)
+ * PortDef supports fixed and movable host ports. A preferred mapping opts into
+ * relocation when another local process already owns that host port.
  */
 export interface PortDef {
   Host: number /* int */;

@@ -167,8 +167,8 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 	return &next
 }
 
-// PortDef supports both simple (6379) and mapped (8989:8080) port definitions.
-// YAML: `redis: 6379` or `ui: "8989:8080"` (host:container)
+// PortDef supports fixed and movable host ports. A preferred mapping opts into
+// relocation when another local process already owns that host port.
 type PortDef struct {
 	Host      int
 	Target    int // container-internal port; same as Host if not specified
@@ -188,19 +188,41 @@ func (p PortDef) PreferredHost() int {
 }
 
 func (p *PortDef) UnmarshalYAML(unmarshal func(any) error) error {
-	// Try int first: `redis: 6379`
 	var single int
 	if err := unmarshal(&single); err == nil {
+		if err := validatePortNumber(single); err != nil {
+			return err
+		}
 		p.Host = single
 		p.Target = single
 		return nil
 	}
-	// Try string: `ui: "8989:8080"`
 	var s string
 	if err := unmarshal(&s); err == nil {
 		return p.parseMapping(s)
 	}
-	return fmt.Errorf("port must be int or \"host:target\" string")
+
+	var movable struct {
+		Preferred int `yaml:"preferred"`
+		Target    int `yaml:"target"`
+	}
+	if err := unmarshal(&movable); err == nil {
+		if err := validatePortNumber(movable.Preferred); err != nil {
+			return fmt.Errorf("preferred %w", err)
+		}
+		if movable.Target == 0 {
+			movable.Target = movable.Preferred
+		}
+		if err := validatePortNumber(movable.Target); err != nil {
+			return fmt.Errorf("target %w", err)
+		}
+		p.Host = movable.Preferred
+		p.Target = movable.Target
+		p.auto = true
+		p.preferred = movable.Preferred
+		return nil
+	}
+	return fmt.Errorf("port must be an int, a \"host:target\" string, or a {preferred, target} mapping")
 }
 
 func (p *PortDef) parseMapping(s string) error {
@@ -236,10 +258,17 @@ func parsePort(s string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("port %q is not a number", s)
 	}
-	if n < 1 || n > 65535 {
-		return 0, fmt.Errorf("port %d out of range (1-65535)", n)
+	if err := validatePortNumber(n); err != nil {
+		return 0, err
 	}
 	return n, nil
+}
+
+func validatePortNumber(port int) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("port %d out of range (1-65535)", port)
+	}
+	return nil
 }
 
 type Sidecar struct {
