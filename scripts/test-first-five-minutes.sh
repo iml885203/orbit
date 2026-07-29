@@ -373,6 +373,7 @@ import sys
 down = json.load(open(sys.argv[1], encoding="utf-8"))
 again = json.load(open(sys.argv[2], encoding="utf-8"))
 assert down["ok"] is True
+assert down["data"]["message"] == "Environment stopped. Orbit is ready for the next 'orbit up'."
 assert again["ok"] is True
 assert again["data"] == {
     "operation": "down",

@@ -58,6 +58,9 @@ than a moving default branch.
   shortened without weakening the lifecycle and cancellation contracts.
   Filesystem staleness uses explicit timestamps, and bounded database work
   uses a barrier that proves the worker cap without scheduler timing.
+- The normal `down` completion contract is now owned by the installed-user
+  journey. Redundant private-predicate tests were removed instead of
+  preserving the implementation shape beneath that behavior.
 
 ## Why it matters
 

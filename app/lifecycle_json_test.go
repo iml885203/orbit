@@ -36,16 +36,6 @@ func TestWriteLogJSONEvent(t *testing.T) {
 	}
 }
 
-func TestDownCompletionExplainsOrbitRemainsReady(t *testing.T) {
-	got := buildLifecycleJSONData(lifecycleJSONOptions{
-		Operation: "down",
-		Message:   downCompletionMessage,
-	})
-	if got.Message != "Environment stopped. Orbit is ready for the next 'orbit up'." {
-		t.Fatalf("message = %q", got.Message)
-	}
-}
-
 func TestLifecycleRecommendedActionsLeadThroughRecovery(t *testing.T) {
 	got := lifecycleRecommendedActions([]string{"worker", "payments", "worker"})
 	want := []string{
@@ -191,32 +181,6 @@ func TestLogsRecoveryActionsKeepRecoveringServiceOnStatus(t *testing.T) {
 	actions := logsRecoveryActions(resource, "")
 	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
 		t.Fatalf("actions = %+v", actions)
-	}
-}
-
-func TestLifecycleServicesDone(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "redis", State: "healthy"},
-			{Name: "kafka", State: "healthy"},
-		},
-	}
-	if !lifecycleServicesDone(status, []string{"redis", "kafka"}, "healthy") {
-		t.Fatal("healthy services should be done")
-	}
-	if lifecycleServicesDone(status, []string{"redis", "missing"}, "healthy") {
-		t.Fatal("missing service should not be done")
-	}
-}
-
-func TestLifecycleServicesDoneStopped(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "redis", State: "stopped"},
-		},
-	}
-	if !lifecycleServicesDone(status, []string{"redis"}, "stopped") {
-		t.Fatal("stopped service should be done")
 	}
 }
 
@@ -436,32 +400,6 @@ func TestLifecycleTerminalErrorAllowsStoppedWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestLifecycleRestartHealthyWaitUsesStoppedAsTerminal(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "worker", State: "stopped"},
-		},
-	}
-	err := lifecycleTerminalError(nil, status, []string{"worker"}, true)
-	if err == nil || err.Error() != "worker stopped before becoming healthy" {
-		t.Fatalf("lifecycleTerminalError = %v, want stopped error", err)
-	}
-}
-
-func TestLifecycleResourceExists(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "worker", State: "healthy"},
-		},
-	}
-	if !lifecycleResourceExists(status, "worker") {
-		t.Fatal("worker should exist")
-	}
-	if lifecycleResourceExists(status, "missing") {
-		t.Fatal("missing service should not exist")
-	}
-}
-
 func TestLifecycleServicesDoneAcceptsPostStopStates(t *testing.T) {
 	for _, state := range []string{"pending", "starting", "building", "healthy", "degraded"} {
 		t.Run(state, func(t *testing.T) {
@@ -474,17 +412,6 @@ func TestLifecycleServicesDoneAcceptsPostStopStates(t *testing.T) {
 				t.Fatalf("state %q should be accepted as past stopped", state)
 			}
 		})
-	}
-}
-
-func TestLifecycleServicesDoneOrPastStillRejectsMissingService(t *testing.T) {
-	status := &daemon.StatusResponse{
-		Resources: []daemon.ResourceStatus{
-			{Name: "worker", State: "healthy"},
-		},
-	}
-	if lifecycleServicesDoneOrPast(status, []string{"missing"}, "stopped", lifecycleRestartPastStopState) {
-		t.Fatal("missing service should not be done")
 	}
 }
 
