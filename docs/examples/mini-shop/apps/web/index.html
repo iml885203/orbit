@@ -192,6 +192,26 @@
         color: #fbbf24;
       }
 
+      .verdict-line {
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: #0b1328;
+        margin-bottom: 6px;
+        color: #cbd5e1;
+      }
+
+      .verdict-line.ok {
+        color: #86efac;
+      }
+
+      .verdict-line.warn {
+        color: #fbbf24;
+      }
+
+      .verdict-line.fail {
+        color: #fb7185;
+      }
+
       .session-metric-line.fail {
         color: #fb7185;
       }
@@ -430,6 +450,14 @@
         <button id="copy-scenario-success" class="small-btn inline-btn quick-start-action">情境 A：成功下單（複製腳本）</button>
         <button id="copy-scenario-decline" class="small-btn inline-btn quick-start-action">情境 B：付款失敗（複製腳本）</button>
         <button id="copy-scenario-stock" class="small-btn inline-btn quick-start-action">情境 C：庫存不足（複製腳本）</button>
+      </div>
+    </div>
+
+    <div id="demo-verdict-card" class="card">
+      <h3>一輪 demo 結論（先看這裡）</h3>
+      <p class="hint">不要猜判斷條件，這裡直接告訴你「可不可以」直接對外 demo。</p>
+      <div id="demo-verdict" class="summary-list">
+        <div class="verdict-line">載入中…</div>
       </div>
     </div>
 
@@ -789,6 +817,7 @@ web
       const singleActionCopyBtn = document.getElementById('single-action-copy');
       const singleActionFeedbackEl = document.getElementById('single-action-feedback');
       const quickFixErrorBtn = document.getElementById('quick-fix-error');
+      const demoVerdictEl = document.getElementById('demo-verdict');
       const beginnerGuideCard = document.getElementById('beginner-guide-card');
       const beginnerGuideState = document.getElementById('beginner-guide-state');
       const beginnerGuideStepEls = {
@@ -1898,12 +1927,56 @@ curl -s "http://$BASE:3006/checkout/$CUSTOMER_ID" \
           + buildChecklistItem(allServiceReady, `服務全數就緒（${readyCount}/${serviceTotal}）`, serviceAction)
           + buildChecklistItem(hasSuccessfulOrder, '完成一筆成功 checkout', checkoutAction)
           + buildChecklistItem(hasOrderShipmentRelation, '訂單與出貨關聯成功', relationAction);
+
+        setDemoVerdict({
+          allServiceReady,
+          hasSuccessfulOrder,
+          hasOrderShipmentRelation,
+          readyCount,
+          serviceTotal,
+        });
+
         setSessionMetrics({
           allServiceReady,
           hasSuccessfulOrder,
           hasOrderShipmentRelation,
         });
         setValueSignal(map);
+      }
+
+      function setDemoVerdict({
+        allServiceReady,
+        hasSuccessfulOrder,
+        hasOrderShipmentRelation,
+        readyCount,
+        serviceTotal,
+      }) {
+        if (!demoVerdictEl) {
+          return;
+        }
+        const canDemo = allServiceReady && hasSuccessfulOrder && hasOrderShipmentRelation;
+        const blockers = [];
+        if (!allServiceReady) {
+          blockers.push(`服務未就緒（${readyCount || 0}/${serviceTotal || 0}）`);
+        }
+        if (!hasSuccessfulOrder) {
+          blockers.push('尚未完成成功 checkout');
+        }
+        if (!hasOrderShipmentRelation) {
+          blockers.push('訂單未關聯出貨');
+        }
+
+        const statusClass = canDemo ? 'ok' : 'warn';
+        const statusText = canDemo
+          ? '✅ 可直接 demo：服務 / 交易 / 關聯三格皆綠'
+          : '⚠️ 尚未可 demo：請按卡片右上「下一步」回到可交付狀態';
+        const detail = canDemo ? '已達成 1.0 交付前條件。' : `缺口：${blockers.join('；')}`;
+
+        demoVerdictEl.innerHTML = [
+          `<div class="verdict-line ${statusClass}">${statusText}</div>`,
+          `<div class="verdict-line ${statusClass}">服務：${allServiceReady ? '就緒' : '未就緒'}，交易：${hasSuccessfulOrder ? '有成功 checkout' : '未完成'}，關聯：${hasOrderShipmentRelation ? '已關聯出貨' : '未關聯'}</div>`,
+          `<div class="verdict-line ${statusClass}">${detail}</div>`,
+        ].join('');
       }
 
       function formatSessionMetric(value, ok, fallback) {

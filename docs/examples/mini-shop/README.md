@@ -80,6 +80,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 ## 你能看到什麼
 
 - 第一次進來先看「快速判斷值（3 秒）」：只要「服務 / 交易 / 關聯」三格都變綠，代表 demo 已能被人看懂、可立即 demo。
+- 再看「一輪 demo 結論」卡片：直接看「可 demo / 不可 demo」的最終判斷，以及缺口是在哪一格。
 - 確認前端服務卡上 8/8（含 `checkout-api`）為 `ok`。
 - 先選一個客戶，加入 1 件商品到購物車。
 - 點 `Checkout`，一次看到 `cart -> payment -> order -> shipping` 的結果鏈。
@@ -120,6 +121,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 已顯示 9 個 resource
    - 服務狀態卡中有 8/8 ready，或至少 `checkout-api` 顯示 `status: ok`
    - 先看「下一步（照著做）」與「目前進度（你在第幾步）」卡片，或直接點「重置流程」回到起始狀點
+   - 先看「一輪 demo 結論（先看這裡）」卡片，若顯示可 demo，代表可以進到下一步
    - 「一眼看懂進度」會即時顯示服務 / 客戶 / 購物車 / 成功訂單 4 個狀態
 
    - 預期這一步看到：`快速判斷值` 服務欄位由紅/灰轉為綠
@@ -135,6 +137,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
    - 看到成功訊息，訂單與出貨皆新增
    - 「快速判斷值」會一起變成綠色（服務、交易、關聯）
    - 在「最近關聯交易」與「關聯流程時間軸」確認同一筆交易是否順利完成
+   - 「一輪 demo 結論」會顯示「可直接 demo」，可直接複製「demo 報告」貼給 reviewer
 
    - 同時可在「當前可驗證結果」確認：最新訂單、對應出貨、最後 checkout 結果是否已出現
 
