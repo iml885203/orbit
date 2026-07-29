@@ -5,11 +5,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 
-if [ ! -x "$orbit_bin" ]; then
-  echo "Orbit binary not found at $orbit_bin; run 'make build' or set ORBIT_BIN." >&2
-  exit 1
-fi
-
 for readme in README.md README.zh-TW.md; do
   first_run_section="$(
     awk '
@@ -35,6 +30,11 @@ done
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
   echo "README first-run commands are location-independent"
   exit 0
+fi
+
+if [ ! -x "$orbit_bin" ]; then
+  echo "Orbit binary not found at $orbit_bin; run 'make build' or set ORBIT_BIN." >&2
+  exit 1
 fi
 
 test_root="$(mktemp -d)"
