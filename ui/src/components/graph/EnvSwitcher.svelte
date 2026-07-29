@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { store, toast, replaceGraphData } from '../../lib/stores.svelte'
+  import { store, toast, replaceGraphData, openLogViewer } from '../../lib/stores.svelte'
   import { opProgress } from '../../lib/opProgress.svelte'
   import { switchEnv, apiPost, fetchGraph } from '../../lib/api'
   import { envShortName } from '../../lib/envName'
-  import { Power, PowerOff, Database } from '@lucide/svelte'
+  import { environmentActionState } from '../../lib/graphActions'
+  import { Power, PowerOff, Database, ExternalLink, ScrollText } from '@lucide/svelte'
   import ConfirmModal from '../ConfirmModal.svelte'
 
   const envs = $derived(store.daemon.envs?.envs ?? [])
@@ -24,6 +25,8 @@
       s => s.state !== 'stopped' && s.state !== 'pending'
     ).length
   )
+  const actionState = $derived(environmentActionState(store.graph.data?.nodes ?? []))
+  const primaryAction = $derived(actionState.primary)
 
   type PendingAction =
     | { kind: 'switch'; env: string }
@@ -113,9 +116,15 @@
   }
 
   async function doDown() {
-    const { ok, data } = await apiPost('/api/down', { all: false })
-    if (ok) opProgress.start('down')
-    else toast(data?.error || 'Failed')
+    if (busy) return
+    busy = true
+    try {
+      const { ok, data } = await apiPost('/api/down', { all: false })
+      if (ok) opProgress.start('down')
+      else toast(data?.error || 'Failed')
+    } finally {
+      busy = false
+    }
   }
 
   function onConfirm() {
@@ -131,12 +140,19 @@
   }
 
   async function upAll() {
-    const { ok, data } = await apiPost('/api/up', {})
-    if (ok) opProgress.start('up')
-    else toast(data?.error || 'Failed')
+    if (busy) return
+    busy = true
+    try {
+      const { ok, data } = await apiPost('/api/up', {})
+      if (ok) opProgress.start('up')
+      else toast(data?.error || 'Failed')
+    } finally {
+      busy = false
+    }
   }
 
   async function downAll() {
+    if (busy) return
     if (running === 0) {
       toast('Nothing running')
       return
@@ -145,9 +161,45 @@
   }
 
   async function infraOnly() {
-    const { ok, data } = await apiPost('/api/up', { infra_only: true })
-    if (ok) opProgress.start('infra')
-    else toast(data?.error || 'Failed')
+    if (busy) return
+    busy = true
+    try {
+      const { ok, data } = await apiPost('/api/up', { infra_only: true })
+      if (ok) opProgress.start('infra')
+      else toast(data?.error || 'Failed')
+    } finally {
+      busy = false
+    }
+  }
+
+  let busy = $state(false)
+  async function runPrimaryAction() {
+    const action = primaryAction
+    if (!action || action.kind === 'busy' || busy) return
+    switch (action.kind) {
+      case 'start':
+        if (action.resource) {
+          busy = true
+          try {
+            const { ok, data } = await apiPost('/api/up', { resources: [action.resource] })
+            if (!ok) toast(data?.error || `Failed to start ${action.resource}`)
+          } finally {
+            busy = false
+          }
+        } else {
+          await upAll()
+        }
+        break
+      case 'logs':
+        openLogViewer(action.resource)
+        break
+      case 'inspect':
+        store.graph.selectedNode = action.resource
+        break
+      case 'open':
+        window.open(action.url, '_blank')
+        break
+    }
   }
 </script>
 
@@ -155,7 +207,11 @@
   {#if store.graph.preview}
     <div class="preview-context"><span>Previewing</span><strong>{store.graph.preview.env}</strong></div>
   {:else}
-    <div class="current-context"><span>Environment</span><strong>{current}</strong></div>
+    <div class="current-context">
+      <span>Environment</span>
+      <strong>{current}</strong>
+      <span class="environment-summary" role="status">{actionState.summary}</span>
+    </div>
   {/if}
   <div class="toolbar">
     {#if store.graph.preview}
@@ -175,9 +231,29 @@
         onclick={() => store.graph.preview = null}
       >Exit preview</button>
     {:else}
-      <button class="toolbar-btn" type="button" title="Start all services in current env" onclick={upAll}><Power size={14} /> Up All</button>
-      <button class="toolbar-btn" type="button" title="Start infra containers only" onclick={infraOnly}><Database size={14} /> Infra Only</button>
-      <button class="toolbar-btn danger" type="button" title="Stop all services and containers" onclick={downAll}><PowerOff size={14} /> Down All</button>
+      {#if primaryAction}
+        <button
+          class="toolbar-btn primary"
+          type="button"
+          disabled={primaryAction.kind === 'busy' || busy}
+          aria-busy={busy}
+          onclick={runPrimaryAction}
+        >
+          {#if primaryAction.kind === 'open'}<ExternalLink size={14} />
+          {:else if primaryAction.kind === 'logs' || primaryAction.kind === 'inspect'}<ScrollText size={14} />
+          {:else}<Power size={14} />{/if}
+          {busy ? 'Working…' : primaryAction.label}
+        </button>
+      {/if}
+      {#if running > 0}
+        <button class="toolbar-btn danger" type="button" title="Stop the current environment" disabled={busy} aria-busy={busy} onclick={downAll}><PowerOff size={14} /> Stop environment</button>
+      {/if}
+      <details class="advanced-actions">
+        <summary>More</summary>
+        <div class="advanced-menu">
+          <button type="button" disabled={busy} aria-busy={busy} onclick={infraOnly}><Database size={14} /> Start infrastructure only</button>
+        </div>
+      </details>
     {/if}
   </div>
 </nav>
@@ -219,6 +295,11 @@
     color: var(--fg);
     font-family: var(--font-mono);
     font-size: var(--text-md);
+  }
+  .environment-summary {
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--border);
+    color: var(--dim);
   }
   .preview-context {
     color: var(--blue);
@@ -278,5 +359,65 @@
     background: color-mix(in srgb, var(--blue) 85%, white);
     border-color: var(--blue);
     color: var(--white);
+  }
+
+  .advanced-actions {
+    position: relative;
+  }
+  .advanced-actions summary {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--dim);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-md);
+    list-style: none;
+  }
+  .advanced-actions summary::-webkit-details-marker {
+    display: none;
+  }
+  .advanced-actions summary:hover {
+    color: var(--fg);
+    border-color: var(--dim);
+  }
+  .advanced-menu {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    right: 0;
+    z-index: 50;
+    min-width: 220px;
+    padding: var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+  .advanced-menu button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    border: 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .env-bar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .toolbar {
+      width: 100%;
+      margin-left: 0;
+      flex-wrap: wrap;
+    }
+    .toolbar-btn.primary {
+      flex: 1 1 auto;
+      justify-content: center;
+    }
   }
 </style>

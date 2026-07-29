@@ -43,6 +43,10 @@ than a moving default branch.
   explained at the shared-environment sync boundary instead of appearing as a
   daily runtime prerequisite; a missing Git installation receives a specific
   install-and-retry explanation.
+- The dashboard now derives one primary environment action from live state:
+  start a stopped environment or root dependency, inspect the degraded root,
+  and open the application once healthy. Stop is secondary and
+  infrastructure-only startup moves behind progressive disclosure.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.
