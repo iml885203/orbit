@@ -232,7 +232,7 @@ status_source = status["data"]["environment"]["managed_source"]
 list_source = env_list["data"]["environment"]["managed_source"]
 assert status_source == list_source
 assert status_source["url"] == "https://github.com/iml885203/orbit-demo.git"
-assert status_source["ref"] == "v0.0.33"
+assert status_source["ref"] == "v0.0.34"
 assert len(status_source["commit"]) == 40
 assert up["recommended_actions"] == [{
     "command": "orbit open demo-shop --json",

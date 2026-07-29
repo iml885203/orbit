@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,6 +29,9 @@ func TestRunSelfUpdateFailsWhenInstallScriptDownloadFails(t *testing.T) {
 }
 
 func TestRunSelfUpdateTargetsTheInvokedBinaryInstallation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows Beta updates use install.ps1")
+	}
 	t.Setenv("ORBIT_HOME", t.TempDir())
 	marker := filepath.Join(t.TempDir(), "install-dir")
 	binDir := t.TempDir()
@@ -59,5 +63,20 @@ func TestRunSelfUpdateTargetsTheInvokedBinaryInstallation(t *testing.T) {
 	}
 	if string(got) != filepath.Dir(exe) {
 		t.Fatalf("installer target = %q, want invoked binary directory %q", got, filepath.Dir(exe))
+	}
+}
+
+func TestRunSelfUpdateExplainsWindowsBetaLimitation(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only contract")
+	}
+	err := runSelfUpdate(context.Background())
+	if err == nil {
+		t.Fatal("runSelfUpdate returned success on Windows Beta")
+	}
+	for _, want := range []string{"Windows Beta limitation", "install.ps1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
 	}
 }

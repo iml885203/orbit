@@ -1,7 +1,7 @@
-# Orbit v0.0.33 — reproducible demo environments
+# Orbit v0.0.34 — reproducible demo environments
 
 Orbit now keeps the environment definition used by a release stable and
-visible. The official demo is fetched from the matching `v0.0.33` tag rather
+visible. The official demo is fetched from the matching `v0.0.34` tag rather
 than a moving default branch.
 
 ## What changed
@@ -68,6 +68,9 @@ than a moving default branch.
 - Preview releases now require version-matched curated notes and publish those
   notes verbatim to GitHub. A release shows the coherent user outcome instead
   of asking reviewers to reconstruct it from commit-generated notes.
+- Windows Beta now reports its documented `install.ps1` update path instead of
+  attempting the unsupported POSIX self-update flow. Native tests accept
+  Windows line endings without weakening pinned-revision verification.
 
 ## Why it matters
 

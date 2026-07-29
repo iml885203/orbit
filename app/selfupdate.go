@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -53,6 +54,12 @@ func selfUpdateCmd() *cobra.Command {
 }
 
 func runSelfUpdate(ctx context.Context) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf(
+			"Windows Beta limitation: automatic update is not supported yet; " +
+				"re-run: irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex",
+		)
+	}
 	installURL := resolveInstallURL()
 	if installURL == "" {
 		return fmt.Errorf("this build has no install URL configured; set ORBIT_INSTALL_URL to your install script")

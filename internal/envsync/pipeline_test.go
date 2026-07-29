@@ -85,7 +85,7 @@ func TestSyncFromRepo_PinnedRefDoesNotFollowMovingDefaultBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "release: one\n" {
+	if strings.TrimSpace(string(data)) != "release: one" {
 		t.Fatalf("pinned sync followed moving branch: %q", data)
 	}
 }
