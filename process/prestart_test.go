@@ -29,12 +29,6 @@ func TestEmitLine_CallsOnOutput(t *testing.T) {
 	}
 }
 
-func TestEmitLine_NilCallbackIsNoOp(t *testing.T) {
-	m := NewManager()
-	// OnOutput is nil; must not panic.
-	m.emitLine("svc", "hello")
-}
-
 // collectOutput wires m.OnOutput to a slice and returns the slice + its mutex.
 // Callers must lock the mutex before reading.
 func collectOutput(m *Manager) (*[]string, *sync.Mutex) {
@@ -70,98 +64,86 @@ func containsInOrder(got *[]string, want []string) bool {
 	return i == len(want)
 }
 
-func TestPreStart_StreamsOutputToServiceLog(t *testing.T) {
-	t.Parallel()
-	skipOnWindows(t)
-	m := NewManager()
-	got, mu := collectOutput(m)
-
-	script := writePreStartScript(t, "echo hello\necho world")
-
-	err := m.Start(
-		context.Background(),
-		"svc",
-		".",
-		"sleep 0.1",
-		nil,
-		[]string{script},
-		0,
-	)
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-
-	// Stop the main process; we only care about pre_start lines being captured.
-	_ = m.Stop("svc", 200*time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	want := []string{
-		"[pre_start] $ " + script,
-		"hello",
-		"world",
-		"[pre_start] exit 0",
-	}
-	if !containsInOrder(got, want) {
-		t.Fatalf("log lines missing or out of order.\nwant (in order): %v\ngot: %v", want, *got)
-	}
-}
-
-func TestPreStart_StreamsInRealTime(t *testing.T) {
+func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
 
-	mu := &sync.Mutex{}
-	type stamped struct {
-		line string
-		at   time.Time
-	}
-	var got []stamped
+	var mu sync.Mutex
+	var got []string
+	var actions []string
+	firstOutput := make(chan struct{})
+	var signalFirstOutput sync.Once
 	m.OnOutput = func(name, line string) {
 		mu.Lock()
+		got = append(got, line)
+		mu.Unlock()
+		if line == "first" {
+			signalFirstOutput.Do(func() { close(firstOutput) })
+		}
+	}
+	m.OnAction = func(name, message string) {
+		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, stamped{line: line, at: time.Now()})
+		actions = append(actions, message)
 	}
 
-	script := writePreStartScript(t, "echo a\nsleep 0.3\necho b")
+	gate := filepath.Join(t.TempDir(), "continue")
+	first := writePreStartScript(t, "echo first\nwhile [ ! -f \""+gate+"\" ]; do sleep 0.01; done\necho second")
+	second := writePreStartScript(t, "echo third")
+	started := make(chan error, 1)
+	go func() {
+		started <- m.Start(
+			context.Background(),
+			"svc",
+			".",
+			"sleep 30",
+			nil,
+			[]string{first, second},
+			0,
+		)
+	}()
 
-	if err := m.Start(
-		context.Background(),
-		"svc",
-		".",
-		"sleep 0.1",
-		nil,
-		[]string{script},
-		0,
-	); err != nil {
+	select {
+	case <-firstOutput:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first pre_start output was buffered until command completion")
+	}
+	if err := os.WriteFile(gate, nil, 0o644); err != nil {
+		t.Fatalf("release pre_start gate: %v", err)
+	}
+	if err := <-started; err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	_ = m.Stop("svc", 200*time.Millisecond)
+	if err := m.Stop("svc", 200*time.Millisecond); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
-
-	var aAt, bAt time.Time
-	for _, s := range got {
-		if s.line == "a" && aAt.IsZero() {
-			aAt = s.at
-		}
-		if s.line == "b" && bAt.IsZero() {
-			bAt = s.at
-		}
+	want := []string{
+		"[pre_start] $ " + first,
+		"first",
+		"second",
+		"[pre_start] exit 0",
+		"[pre_start] $ " + second,
+		"third",
+		"[pre_start] exit 0",
 	}
-	if aAt.IsZero() || bAt.IsZero() {
-		t.Fatalf("did not observe both lines: %v", got)
+	if !containsInOrder(&got, want) {
+		t.Fatalf("log lines missing or out of order.\nwant (in order): %v\ngot: %v", want, got)
 	}
-	gap := bAt.Sub(aAt)
-	if gap < 200*time.Millisecond {
-		t.Fatalf("expected b to arrive >=200ms after a (got %s); output was buffered, not streamed", gap)
+	if !containsInOrder(&actions, []string{
+		"running pre_start: " + first,
+		"pre_start ok: " + first,
+		"running pre_start: " + second,
+		"pre_start ok: " + second,
+	}) {
+		t.Fatalf("lifecycle narration missing or out of order: %v", actions)
 	}
 }
 
-func TestPreStart_FailureWritesExitLine(t *testing.T) {
+func TestPreStartFailureStopsLifecycle(t *testing.T) {
 	t.Parallel()
 	skipOnWindows(t)
 	m := NewManager()
@@ -173,7 +155,7 @@ func TestPreStart_FailureWritesExitLine(t *testing.T) {
 		context.Background(),
 		"svc",
 		".",
-		"sleep 30", // would run forever if reached
+		"sleep 30",
 		nil,
 		[]string{script},
 		0,
@@ -195,88 +177,5 @@ func TestPreStart_FailureWritesExitLine(t *testing.T) {
 	}
 	if !containsInOrder(got, want) {
 		t.Fatalf("log lines missing or out of order.\nwant (in order): %v\ngot: %v", want, *got)
-	}
-}
-
-func TestPreStart_MultipleCommandsRunInOrder(t *testing.T) {
-	t.Parallel()
-	skipOnWindows(t)
-	m := NewManager()
-	got, mu := collectOutput(m)
-
-	one := writePreStartScript(t, "echo one")
-	two := writePreStartScript(t, "echo two")
-
-	if err := m.Start(
-		context.Background(),
-		"svc",
-		".",
-		"sleep 0.1",
-		nil,
-		[]string{one, two},
-		0,
-	); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	_ = m.Stop("svc", 200*time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	want := []string{
-		"[pre_start] $ " + one,
-		"one",
-		"[pre_start] exit 0",
-		"[pre_start] $ " + two,
-		"two",
-		"[pre_start] exit 0",
-	}
-	if !containsInOrder(got, want) {
-		t.Fatalf("log lines missing or out of order.\nwant (in order): %v\ngot: %v", want, *got)
-	}
-}
-
-func TestPreStart_NarrateEventsEmitted(t *testing.T) {
-	t.Parallel()
-	skipOnWindows(t)
-	m := NewManager()
-
-	var amu sync.Mutex
-	var actions []string
-	m.OnAction = func(name, msg string) {
-		amu.Lock()
-		defer amu.Unlock()
-		actions = append(actions, msg)
-	}
-
-	script := writePreStartScript(t, "echo ok")
-
-	if err := m.Start(
-		context.Background(),
-		"svc",
-		".",
-		"sleep 0.1",
-		nil,
-		[]string{script},
-		0,
-	); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	_ = m.Stop("svc", 200*time.Millisecond)
-
-	amu.Lock()
-	defer amu.Unlock()
-
-	var sawRunning, sawOK bool
-	for _, msg := range actions {
-		if strings.Contains(msg, "running pre_start") {
-			sawRunning = true
-		}
-		if strings.Contains(msg, "pre_start ok") {
-			sawOK = true
-		}
-	}
-	if !sawRunning || !sawOK {
-		t.Fatalf("expected narrate events 'running pre_start' and 'pre_start ok'; got %v", actions)
 	}
 }

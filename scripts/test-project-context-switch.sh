@@ -92,6 +92,10 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "http://localhost:$service_port" >"$test_root/page-b.html"
 grep -F "project-b" "$test_root/page-b.html" >/dev/null
 "$orbit_bin" status --json >"$test_root/status-b-after.json"
+"$orbit_bin" inspect --json >"$test_root/inspect-b-after.json"
+"$orbit_bin" doctor --json >"$test_root/doctor-b-after.json"
+"$orbit_bin" logs app-b --json >"$test_root/logs-b-after.json"
+"$orbit_bin" logs app-b >"$test_root/logs-b-after.txt"
 
 python3 - "$test_root" <<'PY'
 import json
@@ -109,6 +113,9 @@ inspect = read("inspect-b.json")
 guard = read("down-b.json")
 up = read("up-b.json")
 after = read("status-b-after.json")
+inspect_after = read("inspect-b-after.json")
+doctor_after = read("doctor-b-after.json")
+logs_after = read("logs-b-after.json")
 
 assert before["ok"] is True
 environment = before["data"]["environment"]
@@ -156,6 +163,20 @@ assert after["data"]["daemon"].get("context_mismatch") is not True
 assert [(item["name"], item["state"]) for item in after["data"]["resources"]] == [
     ("app-b", "healthy")
 ]
+
+assert inspect_after["ok"] is True
+assert inspect_after["data"]["readiness"]["state"] == "ready"
+assert inspect_after["data"]["environment"]["selected_name"] == "project-b"
+assert inspect_after["data"]["environment"]["daemon_env"] == "project-b"
+assert inspect_after["data"]["risks"] == []
+assert inspect_after.get("recommended_actions", []) == []
+
+assert doctor_after["ok"] is True
+assert doctor_after.get("recommended_actions", []) == []
+
+assert logs_after["ok"] is True
+assert logs_after.get("recommended_actions", []) == []
+assert "Next:" not in (root / "logs-b-after.txt").read_text(encoding="utf-8")
 PY
 
 "$orbit_bin" down --json >/dev/null

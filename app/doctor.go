@@ -480,7 +480,7 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	if workingDirectoryFailed {
 		return []cli.JSONAction{}
 	}
-	return []cli.JSONAction{cli.StatusAction()}
+	return nil
 }
 
 func doctorReadyToStart(resp *daemon.DoctorResponse) bool {

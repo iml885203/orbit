@@ -86,26 +86,27 @@ type inspectRisk struct {
 }
 
 type inspectBuildOptions struct {
-	Command         string
-	ConfigPath      string
-	ConfigErr       error
-	SetupRequired   bool
-	ConfigEnvName   string
-	PreviewOnly     bool
-	DaemonEnv       string
-	DaemonRunning   bool
-	PID             int
-	Version         string
-	OnDisk          string
-	OnDiskPath      string
-	UpdateAvailable bool
-	Dashboard       string
-	Status          *daemon.StatusResponse
-	StatusErr       error
-	Configured      []daemon.ResourceStatus
-	Selection       environmentSelection
-	ContextMismatch bool
-	RunningPath     string
+	Command             string
+	ConfigPath          string
+	ConfigErr           error
+	SetupRequired       bool
+	ConfigEnvName       string
+	ConfigMatchesDaemon bool
+	PreviewOnly         bool
+	DaemonEnv           string
+	DaemonRunning       bool
+	PID                 int
+	Version             string
+	OnDisk              string
+	OnDiskPath          string
+	UpdateAvailable     bool
+	Dashboard           string
+	Status              *daemon.StatusResponse
+	StatusErr           error
+	Configured          []daemon.ResourceStatus
+	Selection           environmentSelection
+	ContextMismatch     bool
+	RunningPath         string
 }
 
 func inspectCmd() *cobra.Command {
@@ -150,6 +151,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		if status, err := client.Status(); err == nil {
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
 				opts.Status = status
+				opts.ConfigMatchesDaemon = true
 			} else if usesDiscoveredProjectConfig(configFile) {
 				opts.ContextMismatch = true
 				opts.RunningPath = status.ConfigPath
@@ -204,13 +206,17 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
 	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.ConfigEnvName, opts.Selection)
+	daemonEnv := opts.DaemonEnv
+	if opts.ConfigMatchesDaemon && opts.ConfigEnvName != "" {
+		daemonEnv = opts.ConfigEnvName
+	}
 	environment := inspectEnvSummary{
 		State:        opts.Selection.State,
 		SelectedName: opts.Selection.SelectedName,
 		SelectedPath: opts.Selection.SelectedPath,
 		Environments: opts.Selection.Environments,
 		PreviewOnly:  opts.PreviewOnly,
-		DaemonEnv:    opts.DaemonEnv,
+		DaemonEnv:    daemonEnv,
 	}
 	if opts.ContextMismatch {
 		environment.ContextSwitchRequired = true
@@ -455,6 +461,9 @@ func deriveInspectReadiness(opts inspectBuildOptions, services inspectServiceSum
 }
 
 func inspectEnvMismatch(opts inspectBuildOptions) bool {
+	if opts.ConfigMatchesDaemon {
+		return false
+	}
 	return opts.DaemonRunning && opts.ConfigEnvName != "" && opts.DaemonEnv != "" && opts.ConfigEnvName != opts.DaemonEnv
 }
 
@@ -547,8 +556,6 @@ func inspectRecommendedActions(
 			Reason:      "Start stopped services and then inspect again.",
 			Destructive: false,
 		})
-	default:
-		actions = append(actions, cli.StatusAction())
 	}
 	if inspectHasRisk(risks, "status_unavailable") {
 		actions = append(actions, cli.DoctorAction())

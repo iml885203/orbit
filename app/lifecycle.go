@@ -283,7 +283,7 @@ func noLogsRecoveryActions(resource *daemon.ResourceStatus) []cli.JSONAction {
 
 func logsRecoveryActions(resource *daemon.ResourceStatus, dependencySetup string) []cli.JSONAction {
 	if resource == nil || resource.State != "degraded" {
-		return []cli.JSONAction{cli.StatusAction()}
+		return nil
 	}
 	if resource.PortConflict != nil {
 		if actions := resourcePortConflictActions(resource.PortConflict); len(actions) > 0 {

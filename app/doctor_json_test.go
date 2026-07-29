@@ -37,22 +37,6 @@ func TestHumanDoctorCallsRuntimeHealthEnvironment(t *testing.T) {
 	}
 }
 
-func TestDoctorRecommendedActionsAllPass(t *testing.T) {
-	resp := &daemon.DoctorResponse{
-		Checks: []daemon.DoctorCheck{
-			{Name: "Docker", Status: daemon.CheckPass, Message: "ok"},
-			{Name: "Config", Status: daemon.CheckInfo, Message: "path"},
-		},
-	}
-	got := doctorRecommendedActions(resp)
-	if len(got) != 1 {
-		t.Fatalf("actions count = %d, want 1", len(got))
-	}
-	if got[0].Command != "orbit status --json" {
-		t.Fatalf("command = %q", got[0].Command)
-	}
-}
-
 func TestDoctorReadyEnvironmentPointsDirectlyToUp(t *testing.T) {
 	resp := &daemon.DoctorResponse{
 		Checks: []daemon.DoctorCheck{
@@ -161,10 +145,6 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 	checks := localPortChecks(cfg)
 	if len(checks) != 1 || checks[0].Status != daemon.CheckInfo {
 		t.Fatalf("checks = %+v", checks)
-	}
-	actions := doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
-	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
-		t.Fatalf("auto port produced manual recovery actions: %+v", actions)
 	}
 }
 

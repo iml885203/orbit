@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -69,10 +69,18 @@ test-e2e: build
 # inner loop: they intentionally use real Git repositories, processes, and
 # Docker to prove the product works beyond package boundaries.
 test-journeys: build
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-first-five-minutes.sh
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
+	$(MAKE) -j2 test-journey-first-five-minutes test-journey-project-context-switch
+	$(MAKE) test-journey-local-first-adoption
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency)$$'
+
+test-journey-first-five-minutes:
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-first-five-minutes.sh
+
+test-journey-local-first-adoption:
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
+
+test-journey-project-context-switch:
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
 
 test-install:
 	@./scripts/test-install.sh
