@@ -52,7 +52,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	setup := statusSetupState{Selection: selection}
+	setup := statusSetupState{Selection: activeEnvironmentSelection(selection, configFile)}
 	if environmentSelectionBlocksConfig(selection, configFile) {
 		setup.SelectionRequired = true
 		setup.Message = environmentSelectionMessage(selection)
@@ -115,7 +115,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return writeStatusJSON(os.Stdout, commandString(), cfg, running, dstatus, setup)
 	}
 
-	name := selection.SelectedName
+	name := setup.Selection.SelectedName
 	if name == "" {
 		name = daemonsrv.EnvShortName(configFile)
 	}

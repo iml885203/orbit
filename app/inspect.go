@@ -132,7 +132,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		DaemonRunning: daemonRunning,
 		PID:           pid,
 		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
-		Selection:     selection,
+		Selection:     activeEnvironmentSelection(selection, configFile),
 	}
 	if cfg != nil {
 		opts.PreviewOnly = cfg.PreviewOnly

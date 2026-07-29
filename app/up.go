@@ -55,8 +55,9 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err := validateUpSelection(args); err != nil {
 		return err
 	}
-	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
-	if err := preflightOrAbort(explicitConfig, args); err != nil {
+	configWithoutManagedEnvironment := cmd.Root().PersistentFlags().Changed("config") ||
+		usesDiscoveredProjectConfig(configFile)
+	if err := preflightOrAbort(configWithoutManagedEnvironment, args); err != nil {
 		return err
 	}
 
@@ -592,8 +593,8 @@ func isPostStopState(state string) bool {
 
 // preflightOrAbort runs readiness checks and returns a user-friendly error if
 // any block start-up.
-func preflightOrAbort(explicitConfig bool, resourceNames []string) error {
-	if !explicitConfig {
+func preflightOrAbort(configWithoutManagedEnvironment bool, resourceNames []string) error {
+	if !configWithoutManagedEnvironment {
 		checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
 		var failures []preflight.Check
 		for _, c := range checks {

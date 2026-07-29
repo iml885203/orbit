@@ -139,6 +139,12 @@ Lifecycle payload 全面使用 resource vocabulary：
 host processes 與 containers 放在 `resources`；log payload 與 NDJSON event
 則使用 `resource` 標示來源。
 
+command 找到最近的 project `orbit.yaml` 時，status 會把這份實際啟用的 config
+回報為 `data.environment.source: "project"`，`selected_path` 則指向找到的
+檔案。這個 project context 優先於其他位置選過的 managed environment。
+Agent 應依回傳的 source 與 path 判斷，不要從 `~/.orbit/envs` 猜測 active
+config。
+
 第一次 setup 前，status 仍是成功的狀態查詢，但會回傳
 `data.setup_required: true`、可讀的 `setup_message`，以及唯一的
 `orbit init --yes --json` action。若 environment 檔案存在但內容無效，則回傳

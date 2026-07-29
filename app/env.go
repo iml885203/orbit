@@ -413,13 +413,3 @@ func switchRecommendedActions(checks []daemon.DoctorCheck, ready bool) []cli.JSO
 	}
 	return doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
 }
-
-func resolveConfigFile() string {
-	if path := readCurrentEnv(); path != "" {
-		return path
-	}
-	if distribution.DefaultEnv == "" {
-		return ""
-	}
-	return filepath.Join(envsDestDir(), distribution.DefaultEnv)
-}

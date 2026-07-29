@@ -149,6 +149,13 @@ This is the exact set whose terminal state the command waits for. Status and
 inspect likewise expose mixed host processes and containers under `resources`.
 Log payloads and NDJSON events identify their source with `resource`.
 
+When a command discovers the nearest project `orbit.yaml`, status reports that
+actual active config as `data.environment.source: "project"`, with
+`selected_path` pointing to the discovered file. This project context takes
+precedence over a managed environment selected elsewhere. Agents should use
+the reported source and path rather than infer the active config from
+`~/.orbit/envs`.
+
 Before first setup, status remains a successful state query with
 `data.setup_required: true`, a human-readable `setup_message`, and exactly one
 `orbit init --yes --json` action. A present but invalid environment file is

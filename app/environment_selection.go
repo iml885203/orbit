@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
@@ -24,6 +25,7 @@ type environmentChoice struct {
 
 type environmentSelection struct {
 	State        string              `json:"state"`
+	Source       string              `json:"source,omitempty"`
 	SelectedName string              `json:"selected_name,omitempty"`
 	SelectedPath string              `json:"selected_path,omitempty"`
 	Environments []environmentChoice `json:"environments"`
@@ -111,6 +113,23 @@ func sameFilePath(left, right string) bool {
 	leftAbs, leftErr := filepath.Abs(left)
 	rightAbs, rightErr := filepath.Abs(right)
 	return leftErr == nil && rightErr == nil && filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
+}
+
+func activeEnvironmentSelection(selection environmentSelection, configPath string) environmentSelection {
+	if usesDiscoveredProjectConfig(configPath) {
+		selection.State = environmentSelectionSelected
+		selection.Source = "project"
+		selection.SelectedName = strings.TrimSuffix(filepath.Base(configPath), filepath.Ext(configPath))
+		selection.SelectedPath = configPath
+		for i := range selection.Environments {
+			selection.Environments[i].Selected = false
+		}
+		return selection
+	}
+	if selection.State == environmentSelectionSelected {
+		selection.Source = "managed"
+	}
+	return selection
 }
 
 func environmentSelectionBlocksConfig(selection environmentSelection, configPath string) bool {

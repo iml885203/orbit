@@ -10,11 +10,11 @@ for guide in docs/local-first.md docs/local-first.zh-TW.md; do
   guide_path="$repo_root/$guide"
 
   for command in \
-    "orbit -c ./orbit.yaml doctor" \
-    "orbit -c ./orbit.yaml up" \
-    "orbit -c ./orbit.yaml open app" \
-    "orbit -c ./orbit.yaml logs app" \
-    "orbit -c ./orbit.yaml down"; do
+    "orbit doctor" \
+    "orbit up" \
+    "orbit open app" \
+    "orbit logs app" \
+    "orbit down"; do
     if ! grep -Fx "$command" "$guide_path" >/dev/null; then
       echo "$guide is missing the local-first command: $command" >&2
       exit 1
@@ -72,7 +72,28 @@ trap 'status=$?; cleanup; exit "$status"' EXIT
 mkdir -p "$test_root/project"
 cp "$example_config" "$test_root/project/orbit.yaml"
 printf '<h1>Orbit local-first works</h1>\n' >"$test_root/project/index.html"
-cd "$test_root/project"
+mkdir -p "$test_root/project/apps/web"
+cd "$test_root/project/apps/web"
+
+printf '%s\n' \
+  'version: "2"' \
+  'services:' \
+  '  override:' \
+  '    type: shell' \
+  '    path: .' \
+  '    command: python3 -m http.server 0' \
+  >"$test_root/override.yaml"
+"$orbit_bin" -c "$test_root/override.yaml" status --json \
+  >"$test_root/override-status.json"
+python3 - "$test_root/override-status.json" <<'PY'
+import json
+import pathlib
+import sys
+
+status = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert status["ok"] is True
+assert [resource["name"] for resource in status["data"]["resources"]] == ["override"]
+PY
 
 python3 -c '
 import socket
@@ -89,8 +110,8 @@ time.sleep(600)
 ' &
 port_guard_pid=$!
 
-"$orbit_bin" -c ./orbit.yaml doctor --json >"$test_root/doctor.json"
-if ! "$orbit_bin" -c ./orbit.yaml up --json \
+"$orbit_bin" doctor --json >"$test_root/doctor.json"
+if ! "$orbit_bin" up --json \
   >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   echo "orbit up failed during local-first adoption." >&2
   if [ -s "$test_root/up.json" ]; then
@@ -102,14 +123,14 @@ if ! "$orbit_bin" -c ./orbit.yaml up --json \
     sed 's/^/  /' "$test_root/up.stderr" >&2
   fi
   echo "orbit status after the failure:" >&2
-  "$orbit_bin" -c ./orbit.yaml status --json >&2 || true
+  "$orbit_bin" status --json >&2 || true
   if [ -s "$ORBIT_HOME/daemon.log" ]; then
     echo "daemon log tail:" >&2
     tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
   fi
   exit 1
 fi
-"$orbit_bin" -c ./orbit.yaml status --json >"$test_root/status.json"
+"$orbit_bin" status --json >"$test_root/status.json"
 
 browser_stub_dir="$test_root/browser-stub"
 mkdir -p "$browser_stub_dir"
@@ -117,7 +138,7 @@ printf '#!/bin/sh\nexit 0\n' >"$browser_stub_dir/open"
 cp "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
 chmod +x "$browser_stub_dir/open" "$browser_stub_dir/xdg-open"
 PATH="$browser_stub_dir:$PATH" \
-  "$orbit_bin" -c ./orbit.yaml open app --json >"$test_root/open.json"
+  "$orbit_bin" open app --json >"$test_root/open.json"
 
 app_url="$(
   python3 - "$test_root" <<'PY'
@@ -143,6 +164,9 @@ assert set(resources) == {"app", "redis"}
 assert all(resource["state"] == "healthy" for resource in resources.values())
 assert resources["app"]["ports"]["http"] != 28080
 assert resources["redis"]["ports"]["redis"] != 26379
+environment = status["data"]["environment"]
+assert environment["source"] == "project"
+assert pathlib.Path(environment["selected_path"]) == root / "project" / "orbit.yaml"
 app_url = resources["app"]["url"]
 assert opened["data"] == {
     "url": app_url,
@@ -158,7 +182,7 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "$app_url" >"$test_root/index.html"
 grep -F "Orbit local-first works" "$test_root/index.html" >/dev/null
 
-"$orbit_bin" -c ./orbit.yaml logs app --json >"$test_root/logs.json"
+"$orbit_bin" logs app --json >"$test_root/logs.json"
 python3 - "$test_root/logs.json" <<'PY'
 import json
 import pathlib
@@ -169,8 +193,8 @@ assert payload["ok"] is True
 assert any("GET /" in line for line in payload["data"]["lines"])
 PY
 
-"$orbit_bin" -c ./orbit.yaml down --json >"$test_root/down.json"
-"$orbit_bin" -c ./orbit.yaml status --json >"$test_root/stopped.json"
+"$orbit_bin" down --json >"$test_root/down.json"
+"$orbit_bin" status --json >"$test_root/stopped.json"
 python3 - "$test_root" "$ORBIT_HOME" <<'PY'
 import json
 import pathlib
@@ -206,6 +230,8 @@ git -C "$test_root/team-env" config user.email "acceptance@orbit.invalid"
 git -C "$test_root/team-env" add envs/dev.yaml
 git -C "$test_root/team-env" commit --quiet -m "test: add shared environment"
 
+rm "$test_root/project/orbit.yaml"
+cd "$test_root/project"
 export ORBIT_HOME="$shared_home"
 export ORBIT_NAMESPACE="$shared_namespace"
 printf '\n' | "$orbit_bin" init \

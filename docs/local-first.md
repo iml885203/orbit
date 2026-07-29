@@ -48,17 +48,19 @@ ports therefore require no config edit.
 Run these commands from the project root:
 
 ```bash
-orbit -c ./orbit.yaml doctor
-orbit -c ./orbit.yaml up
-orbit -c ./orbit.yaml open app
-orbit -c ./orbit.yaml logs app
-orbit -c ./orbit.yaml down
+orbit doctor
+orbit up
+orbit open app
+orbit logs app
+orbit down
 ```
 
-`-c ./orbit.yaml` means “use this file for this command.” Orbit validates the
-exact service directory and tools before startup, starts Redis before the host
-process, opens the actual selected URL, and retains logs. It starts its local
-daemon automatically.
+Orbit finds the nearest `orbit.yaml` from the current directory, including
+from a nested directory inside the project. An explicit `-c <path>` still wins
+when you intentionally need another config. Orbit validates the exact service
+directory and tools before startup, starts Redis before the host process, opens
+the actual selected URL, and retains logs. It starts its local daemon
+automatically.
 
 At this point the whole mental model is:
 
@@ -106,7 +108,9 @@ lives in the project. A synced config lives under Orbit's managed environment
 directory; `${WORKSPACE_ROOT}` explicitly points it back to each developer's
 checkout.
 
-Commit and push `envs/dev.yaml`, then initialize from the project checkout:
+Commit and push `envs/dev.yaml`. Remove the project-local `orbit.yaml` after
+the shared copy is safely committed so the team repository becomes the single
+source of truth. Then initialize from the project checkout:
 
 ```bash
 orbit init --env-repo https://github.com/you/your-orbit-env.git --env dev

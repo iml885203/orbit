@@ -2,10 +2,14 @@
 
 [English](./configuration.md) · [繁體中文](./configuration.zh-TW.md)
 
-Full YAML schema for an orbit env file. Files live in `~/.orbit/envs/` and are selected with `orbit switch <name>`. See `envs/example.yaml` for a runnable example.
+Full YAML schema for an Orbit environment file. A project may keep
+`orbit.yaml` beside its code, or a team may distribute files through
+`~/.orbit/envs/` and select one with `orbit switch <name>`. See
+`envs/example.yaml` for a runnable example.
 
 **Contents**
 
+- [Config selection](#config-selection)
 - [Top-level structure](#top-level-structure)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
@@ -18,6 +22,21 @@ Full YAML schema for an orbit env file. Files live in `~/.orbit/envs/` and are s
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [Variable substitution](#variable-substitution)
 - [Per-instance overrides](#per-instance-overrides)
+
+## Config selection
+
+Orbit resolves one config for each command in this order:
+
+1. `--config <path>` / `-c <path>`;
+2. the nearest `orbit.yaml` in the current directory or one of its parents;
+3. the environment selected with `orbit switch`;
+4. the distribution's default environment.
+
+This makes commands run inside a project use that project's intent without a
+repeated flag. `orbit status --json` reports
+`data.environment.source: "project"` and the exact `selected_path` when this
+happens. Once a local file is promoted to a shared environment repository,
+remove the project copy so the shared file is the single source of truth.
 
 ## Top-level structure
 

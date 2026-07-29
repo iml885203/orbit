@@ -73,7 +73,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.SilenceErrors = true
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
-	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides current env)")
+	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides project config and current env)")
 	rootCmd.PersistentFlags().BoolVar(&cli.JSONOutput, "json", false, "output in JSON format")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		// Apply saved settings (workspace root, SQL mode) to env for all commands

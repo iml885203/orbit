@@ -46,16 +46,17 @@ services:
 從專案根目錄執行：
 
 ```bash
-orbit -c ./orbit.yaml doctor
-orbit -c ./orbit.yaml up
-orbit -c ./orbit.yaml open app
-orbit -c ./orbit.yaml logs app
-orbit -c ./orbit.yaml down
+orbit doctor
+orbit up
+orbit open app
+orbit logs app
+orbit down
 ```
 
-`-c ./orbit.yaml` 表示「這次 command 使用這個檔案」。Orbit 會在啟動前檢查
-實際的 service 目錄與工具、先啟動 Redis、再啟動 host process，並開啟真正
-選到的 URL、保留 logs；本機 daemon 會自動啟動。
+Orbit 會從目前目錄往上找到最近的 `orbit.yaml`，所以人在專案子目錄也能直接
+使用。只有刻意要用另一份設定時，才需要用 `-c <path>` 明確覆寫。Orbit 會在
+啟動前檢查實際的 service 目錄與工具、先啟動 Redis、再啟動 host process，
+並開啟真正選到的 URL、保留 logs；本機 daemon 會自動啟動。
 
 此時需要理解的只有：
 
@@ -100,7 +101,9 @@ path: ${WORKSPACE_ROOT}
 同步後的 config 位於 Orbit 管理的 environment directory，
 `${WORKSPACE_ROOT}` 則明確指回每位開發者自己的 checkout。
 
-Commit 並 push `envs/dev.yaml`，接著從 project checkout 初始化：
+Commit 並 push `envs/dev.yaml`。確認共享副本已安全提交後，移除專案內的
+`orbit.yaml`，讓 team repository 成為唯一真相來源，再從 project checkout
+初始化：
 
 ```bash
 orbit init --env-repo https://github.com/you/your-orbit-env.git --env dev

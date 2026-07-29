@@ -2,10 +2,13 @@
 
 [English](./configuration.md) · [繁體中文](./configuration.zh-TW.md)
 
-orbit env 檔案完整的 YAML schema。檔案放在 `~/.orbit/envs/`，透過 `orbit switch <name>` 切換。可參考 `envs/example.yaml` 這個可直接執行的範例。
+Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放在程式碼
+旁；團隊也可以透過 `~/.orbit/envs/` 發布檔案，再用 `orbit switch <name>`
+選擇。可參考 `envs/example.yaml` 這個可直接執行的範例。
 
 **目錄**
 
+- [Config 選擇](#config-選擇)
 - [最上層結構](#最上層結構)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
@@ -18,6 +21,21 @@ orbit env 檔案完整的 YAML schema。檔案放在 `~/.orbit/envs/`，透過 `
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [變數替換](#變數替換)
 - [Per-instance 覆寫](#per-instance-覆寫)
+
+## Config 選擇
+
+Orbit 對每個 command 依以下順序選出一份 config：
+
+1. `--config <path>` / `-c <path>`；
+2. 目前目錄或任一上層目錄中最近的 `orbit.yaml`；
+3. 透過 `orbit switch` 選擇的 environment；
+4. distribution 的預設 environment。
+
+因此在專案內執行 command 時，不必重複輸入 flag，就會使用該專案的 intent。
+此時 `orbit status --json` 會回報
+`data.environment.source: "project"` 與確切的 `selected_path`。將本機檔案
+提升為共享 environment repository 後，請移除專案副本，讓共享檔案成為唯一
+真相來源。
 
 ## 最上層結構
 
