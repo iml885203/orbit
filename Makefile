@@ -111,8 +111,8 @@ dev:
 # Everything the CI pipeline gates on, runnable locally before a push.
 preflight:
 	pnpm --dir ui install --frozen-lockfile
-	$(MAKE) -j2 test-go test-ui
 	$(MAKE) ui
+	$(MAKE) -j2 test-go test-ui
 	go build ./...
 	go vet ./...
 	$(MAKE) test-install
