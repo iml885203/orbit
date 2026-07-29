@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -49,25 +50,114 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 	if daemonRestartDelay > 0 {
 		time.Sleep(daemonRestartDelay)
 	}
-	previousPID, alive := daemon.IsDaemonRunning()
-	stopMethod, pid, running, err := restartDaemon(configFile, previousPID, alive)
+	result, err := restartDaemonPreservingResources(configFile, daemonRestartProgress())
 	if err != nil {
 		return err
 	}
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildDaemonJSONData(daemonJSONOptions{
 			Operation:                "daemon_restart",
-			Running:                  running,
-			PID:                      pid,
-			PreviousPID:              previousPID,
+			Running:                  result.Running,
+			PID:                      result.PID,
+			PreviousPID:              result.PreviousPID,
 			ConfigPath:               configFile,
 			Dashboard:                fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
-			RequestedServiceShutdown: alive,
-			StopMethod:               stopMethod,
+			RequestedServiceShutdown: result.WasRunning,
+			StopMethod:               result.StopMethod,
+			PreviouslyRunning:        result.PreviouslyRunning,
+			RestoredResources:        result.RestoredResources,
 		}), []cli.JSONAction{cli.StatusAction()})
 	}
-	fmt.Printf("Daemon running. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
+	switch len(result.RestoredResources) {
+	case 0:
+		fmt.Printf("Orbit is ready. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
+	case 1:
+		fmt.Printf("Orbit is ready. Restored 1 running resource. Dashboard: http://localhost:%d\n", daemon.DashboardPort())
+	default:
+		fmt.Printf(
+			"Orbit is ready. Restored %d running resources. Dashboard: http://localhost:%d\n",
+			len(result.RestoredResources),
+			daemon.DashboardPort(),
+		)
+	}
 	return nil
+}
+
+type daemonRestartResult struct {
+	WasRunning        bool
+	Running           bool
+	PreviousPID       int
+	PID               int
+	StopMethod        daemonStopMethod
+	PreviouslyRunning []string
+	RestoredResources []string
+}
+
+func restartDaemonPreservingResources(configPath string, report func(string)) (daemonRestartResult, error) {
+	previousPID, alive := daemon.IsDaemonRunning()
+	result := daemonRestartResult{
+		WasRunning:        alive,
+		PreviousPID:       previousPID,
+		PreviouslyRunning: []string{},
+		RestoredResources: []string{},
+	}
+
+	if alive {
+		status, err := daemon.NewClient(daemon.DefaultSocketPath()).Status()
+		if err != nil {
+			return result, fmt.Errorf("checking the running environment before restart: %w", err)
+		}
+		result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
+		if report != nil && len(result.PreviouslyRunning) > 0 {
+			report(fmt.Sprintf(
+				"Restarting Orbit; %d running resource(s) will be restored...",
+				len(result.PreviouslyRunning),
+			))
+		}
+	}
+
+	stopMethod, pid, running, err := restartDaemon(configPath, previousPID, alive)
+	result.StopMethod = stopMethod
+	result.PID = pid
+	result.Running = running
+	if err != nil {
+		return result, err
+	}
+	if len(result.PreviouslyRunning) == 0 {
+		return result, nil
+	}
+
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	status, err := client.Status()
+	if err != nil {
+		return result, fmt.Errorf("checking the restarted environment: %w", err)
+	}
+	result.RestoredResources, _ = restorableEnvironmentResources(result.PreviouslyRunning, status.Resources)
+	if len(result.RestoredResources) == 0 {
+		return result, nil
+	}
+	if report != nil {
+		report(fmt.Sprintf("Restoring %d running resource(s)...", len(result.RestoredResources)))
+	}
+	response, err := client.Up(daemon.UpRequest{Resources: result.RestoredResources})
+	if err != nil {
+		return result, fmt.Errorf("restoring running resources after restart: %w", err)
+	}
+	result.RestoredResources = response.AffectedResources
+	sort.Strings(result.RestoredResources)
+	if _, err := waitForLifecycleJSON(client, result.RestoredResources, "healthy"); err != nil {
+		return result, fmt.Errorf("Orbit restarted, but running resources could not be restored: %w", err)
+	}
+	return result, nil
+}
+
+func daemonRestartProgress() func(string) {
+	if cli.JSONOutput {
+		return nil
+	}
+	return func(message string) {
+		fmt.Println(message)
+	}
 }
 
 func launchDashboardEnvRestart(configPath string) error {
@@ -238,17 +328,21 @@ type daemonJSONOptions struct {
 	Dashboard                string
 	RequestedServiceShutdown bool
 	StopMethod               daemonStopMethod
+	PreviouslyRunning        []string
+	RestoredResources        []string
 }
 
 type daemonJSONData struct {
-	Operation                string `json:"operation"`
-	Running                  bool   `json:"running"`
-	PID                      int    `json:"pid,omitempty"`
-	PreviousPID              int    `json:"previous_pid,omitempty"`
-	ConfigPath               string `json:"config_path,omitempty"`
-	Dashboard                string `json:"dashboard,omitempty"`
-	RequestedServiceShutdown bool   `json:"requested_service_shutdown"`
-	StopMethod               string `json:"stop_method,omitempty"`
+	Operation                string   `json:"operation"`
+	Running                  bool     `json:"running"`
+	PID                      int      `json:"pid,omitempty"`
+	PreviousPID              int      `json:"previous_pid,omitempty"`
+	ConfigPath               string   `json:"config_path,omitempty"`
+	Dashboard                string   `json:"dashboard,omitempty"`
+	RequestedServiceShutdown bool     `json:"requested_service_shutdown"`
+	StopMethod               string   `json:"stop_method,omitempty"`
+	PreviouslyRunning        []string `json:"previously_running,omitempty"`
+	RestoredResources        []string `json:"restored_resources,omitempty"`
 }
 
 func buildDaemonJSONData(opts daemonJSONOptions) daemonJSONData {
@@ -261,6 +355,8 @@ func buildDaemonJSONData(opts daemonJSONOptions) daemonJSONData {
 		Dashboard:                opts.Dashboard,
 		RequestedServiceShutdown: opts.RequestedServiceShutdown,
 		StopMethod:               string(opts.StopMethod),
+		PreviouslyRunning:        opts.PreviouslyRunning,
+		RestoredResources:        opts.RestoredResources,
 	}
 }
 

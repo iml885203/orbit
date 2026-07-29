@@ -129,8 +129,10 @@ orbit daemon restart
 ```
 
 ### After upgrading, Orbit says an update is ready
-The daemon still runs the previous version. Resource mutations pause so they
-cannot cross versions. Apply the update with:
+This normally means the binary was replaced manually; `orbit update` reconnects
+a running environment automatically. Resource mutations pause so they cannot
+cross versions. Apply the manual replacement with the exact command printed by
+`orbit status`, for example:
 
 ```bash
 orbit daemon restart

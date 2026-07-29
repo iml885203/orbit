@@ -112,6 +112,7 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 | `orbit env sync --json` | 回傳 sync source、要求的 ref、實際 commit、destination、dry-run 狀態、寫入檔案、daemon 狀態、套用動作，以及恢復運行的資源。 |
 | `orbit env apply --json` | 套用待處理的環境變更，並回傳原先運行、成功恢復或已從新設定移除的資源。 |
 | `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
+| `orbit update --json` | 更新目前呼叫的 binary；若環境正在執行，會重新連接並回傳 handoff 前後恢復的 resources。`--rollback` 對上一版 binary 使用相同 contract。 |
 | `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |
 | `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
 | `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
@@ -193,6 +194,8 @@ action。
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit update --json` | `update` |
+| `orbit update --rollback --json` | `rollback` |
 | `orbit settings set <key> <value> --json` | `settings_set` |
 | `orbit settings set-env <name> <value> --json` | `settings_set_env` |
 | `orbit settings list --json` | `settings_list` |

@@ -43,17 +43,16 @@ Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
 orbit update
 ```
 
+`orbit update` 會替換目前真正執行的 binary，即使 `PATH` 前面還有另一套
+Orbit。若環境正在執行，指令會用新 binary 重新連接，並恢復更新前正在跑的
+resources；正常更新不需要再執行 daemon 指令或第二次 `orbit up`。
+
 Windows Beta 請重新執行 `install.ps1` 來更新；Windows 無法可靠地原地替換
 正在執行的 `.exe`，因此尚不支援 `orbit update`。
 
-升級後，正在跑的 daemon 可能仍是先前的 build。`orbit status` 會顯示
-`Orbit update ready`，resource mutation 也會先暫停，直到你執行
-`orbit daemon restart`。Restart 一律使用你目前呼叫的 Orbit binary，因此
-另一份安裝不會造成無限 restart。
-
-若 `PATH` 中另一套 Orbit 具有較高優先序，Orbit 會顯示目前 binary 的完整
-restart 指令，而不是有歧義的 `orbit daemon restart`；`orbit doctor` 也會
-指出是哪一套安裝造成遮蔽。
+手動替換 binary 後，`orbit status` 仍可能顯示 `Orbit update ready`；
+resource mutation 會先暫停，避免跨版本操作。請依照它顯示的精確 recovery
+指令處理。`orbit doctor` 也會指出是否有另一套安裝遮蔽目前 binary。
 
 每次 upgrade 會把前一版 binary 保留在 `<path>.prev`（例如 `~/.local/bin/orbit.prev`）。
 Installer 會先驗證 checksum 與下載 binary 回報的版本，確認成功後才碰目前
@@ -64,8 +63,10 @@ Installer 會先驗證 checksum 與下載 binary 回報的版本，確認成功�
 
 ```bash
 orbit update --rollback
-orbit daemon restart
 ```
+
+若環境正在執行，rollback 也會像升級一樣重新連接，並恢復先前正在跑的
+resources。
 
 若要回到指定 release，而不是上一版：
 

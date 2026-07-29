@@ -125,7 +125,9 @@ orbit daemon restart
 ```
 
 ### 升級後 Orbit 顯示 update ready
-daemon 仍執行先前版本；resource mutation 會先暫停，避免跨版本操作。套用更新：
+這通常代表 binary 是手動替換的；`orbit update` 會自動重新連接正在執行的
+環境。resource mutation 會先暫停，避免跨版本操作。請執行 `orbit status`
+顯示的精確指令，例如：
 
 ```bash
 orbit daemon restart

@@ -48,18 +48,20 @@ binary's distribution config provides an install URL:
 orbit update
 ```
 
+`orbit update` replaces the binary that is actually running, even when another
+Orbit installation appears earlier on `PATH`. If an environment is running,
+the command reconnects it with the new binary and restores exactly the
+resources that were running. A normal update therefore needs no separate
+daemon command or second `orbit up`.
+
 On Windows Beta, rerun `install.ps1` to update; replacing a running `.exe`
 in-place is not reliable on Windows, so `orbit update` is not yet supported
 there.
 
-After upgrading, the running daemon may still be the previous build.
-`orbit status` reports `Orbit update ready` and resource mutations pause until
-you run `orbit daemon restart`. The restart always uses the Orbit binary you
-invoked, so another installation cannot cause a restart loop.
-
-When another Orbit installation takes precedence on `PATH`, Orbit prints the
-current binary's absolute restart command instead of the ambiguous bare
-`orbit daemon restart`. `orbit doctor` also reports the shadowing installation.
+After a manual binary replacement, `orbit status` may report
+`Orbit update ready`; resource mutations pause rather than crossing versions.
+Follow the exact recovery command it prints. `orbit doctor` also identifies a
+different installation shadowing the binary you invoked.
 
 Each upgrade keeps the previous binary at `<path>.prev` (e.g. `~/.local/bin/orbit.prev`).
 The installer verifies the checksum and the downloaded binary's reported
@@ -71,8 +73,10 @@ unless the downgrade is explicit.
 
 ```bash
 orbit update --rollback
-orbit daemon restart
 ```
+
+When an environment is running, rollback reconnects it and restores its prior
+running resources just like a forward update.
 
 If orbit itself is broken, the equivalent manual steps are:
 

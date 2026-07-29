@@ -24,6 +24,10 @@ than a moving default branch.
 - Docker polling uses the latest inspect result during startup, preventing a
   container that has already started from being misclassified by an older list
   snapshot.
+- `orbit update` and `orbit update --rollback` now replace the binary actually
+  invoked, reconnect a running environment, and restore its running resources
+  automatically; the normal path no longer asks users to understand daemon
+  lifecycle or run `orbit up` again.
 - The documented testing strategy favors end-to-end journeys and sociable
   domain tests over private-helper and DTO-copy tests, reducing maintenance
   without treating statement coverage as the product goal.

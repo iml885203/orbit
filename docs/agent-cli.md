@@ -120,6 +120,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit env sync --json` | Returns sync source, requested reference, resolved commit, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
 | `orbit env apply --json` | Applies pending environment changes, then returns the resources that were running, restored, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
+| `orbit update --json` | Updates the invoked binary and, when an environment is running, reconnects it and returns the resources restored across the handoff. `--rollback` applies the same contract to the previous binary. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
@@ -206,6 +207,8 @@ Stable `data.operation` values for converted control commands:
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
 | `orbit daemon restart --json` | `daemon_restart` |
+| `orbit update --json` | `update` |
+| `orbit update --rollback --json` | `rollback` |
 | `orbit settings set <key> <value> --json` | `settings_set` |
 | `orbit settings set-env <name> <value> --json` | `settings_set_env` |
 | `orbit settings list --json` | `settings_list` |

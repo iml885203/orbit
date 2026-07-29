@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -249,6 +250,26 @@ func readPIDFile(t *testing.T, path string) int {
 	return pid
 }
 
+func copyExecutable(t *testing.T, source, destination string) {
+	t.Helper()
+	input, err := os.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = input.Close() }()
+	output, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(output, input); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (e *e2eEnv) status(t *testing.T) e2eStatus {
 	t.Helper()
 	out := e.run(t, "status", "--json")
@@ -337,7 +358,7 @@ func TestE2E_RestartAdoptsContainers(t *testing.T) {
 	})
 }
 
-func TestE2E_DaemonRestartThenUpRecoversTheWholeEnvironment(t *testing.T) {
+func TestE2E_DaemonRestartRestoresTheWholeEnvironment(t *testing.T) {
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
@@ -432,6 +453,7 @@ services:
 	type recoveryUpData struct {
 		Resources []struct {
 			Name  string         `json:"name"`
+			State string         `json:"state"`
 			Ports map[string]int `json:"ports"`
 		} `json:"resources"`
 		DegradedResources []string `json:"degraded_resources"`
@@ -467,7 +489,9 @@ services:
 		t.Fatalf("daemon restart envelope = %+v\n%s", restartEnvelope, restartOutput)
 	}
 	var restartData struct {
-		RequestedServiceShutdown bool `json:"requested_service_shutdown"`
+		RequestedServiceShutdown bool     `json:"requested_service_shutdown"`
+		PreviouslyRunning        []string `json:"previously_running"`
+		RestoredResources        []string `json:"restored_resources"`
 	}
 	if err := json.Unmarshal(restartEnvelope.Data, &restartData); err != nil {
 		t.Fatalf("parse daemon restart data: %v\n%s", err, restartOutput)
@@ -475,23 +499,32 @@ services:
 	if !restartData.RequestedServiceShutdown {
 		t.Fatalf("daemon restart did not request service shutdown:\n%s", restartOutput)
 	}
+	if !slices.Equal(restartData.PreviouslyRunning, []string{"api", "redis"}) {
+		t.Fatalf("previously running = %v, want api and redis", restartData.PreviouslyRunning)
+	}
+	if !slices.Equal(restartData.RestoredResources, []string{"api", "redis"}) {
+		t.Fatalf("restored resources = %v, want api and redis", restartData.RestoredResources)
+	}
 
-	secondUp, err := command("up", "--json").Output()
+	statusAfterRestart, err := command("status", "--json").Output()
 	if err != nil {
-		t.Fatalf("up after daemon restart: %v\n%s", err, secondUp)
+		t.Fatalf("status after daemon restart: %v\n%s", err, statusAfterRestart)
 	}
-	secondEnvelope := parseE2EEnvelope(t, string(secondUp))
-	if !secondEnvelope.OK {
-		t.Fatalf("second up envelope = %+v\n%s", secondEnvelope, secondUp)
+	statusEnvelope := parseE2EEnvelope(t, string(statusAfterRestart))
+	if !statusEnvelope.OK {
+		t.Fatalf("status envelope = %+v\n%s", statusEnvelope, statusAfterRestart)
 	}
-	var upData recoveryUpData
-	if err := json.Unmarshal(secondEnvelope.Data, &upData); err != nil {
-		t.Fatalf("parse second up data: %v\n%s", err, secondUp)
+	var statusData recoveryUpData
+	if err := json.Unmarshal(statusEnvelope.Data, &statusData); err != nil {
+		t.Fatalf("parse status data: %v\n%s", err, statusAfterRestart)
 	}
-	if len(upData.DegradedResources) > 0 || len(upData.TimedOutResources) > 0 {
-		t.Fatalf("restart recovery left unhealthy resources: %+v\n%s", upData, secondUp)
+	if len(statusData.DegradedResources) > 0 || len(statusData.TimedOutResources) > 0 {
+		t.Fatalf("restart recovery left unhealthy resources: %+v\n%s", statusData, statusAfterRestart)
 	}
-	for _, resource := range upData.Resources {
+	for _, resource := range statusData.Resources {
+		if resource.State != "healthy" {
+			t.Fatalf("%s state after restart = %q, want healthy\n%s", resource.Name, resource.State, statusAfterRestart)
+		}
 		for _, selectedPort := range resource.Ports {
 			if initialPorts[resource.Name] != selectedPort {
 				t.Fatalf("%s port changed across daemon restart: before=%d after=%d", resource.Name, initialPorts[resource.Name], selectedPort)
@@ -512,6 +545,186 @@ services:
 	}
 	if platform.IsProcessAlive(apiPIDBefore) {
 		t.Fatalf("old host service pid %d survived daemon restart", apiPIDBefore)
+	}
+}
+
+func TestE2E_UpdateReconnectsTheRunningEnvironment(t *testing.T) {
+	binary := findOrbitBinary(t)
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("curl not available")
+	}
+
+	installDir := t.TempDir()
+	installedBinary := filepath.Join(installDir, "orbit")
+	copyExecutable(t, binary, installedBinary)
+
+	home, err := os.MkdirTemp("/tmp", "orb-update-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	workspace := t.TempDir()
+	servicePort := reserveLocalPort(t)
+	dashboardPort := reserveLocalPort(t)
+	pidPath := filepath.Join(workspace, "api.pid")
+	appPath := filepath.Join(workspace, "app.py")
+	appSource := fmt.Sprintf(`import http.server
+import os
+
+with open(%q, "w", encoding="utf-8") as pid_file:
+    pid_file.write(str(os.getpid()))
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", %d), http.server.SimpleHTTPRequestHandler)
+server.serve_forever()
+`, pidPath, servicePort)
+	if err := os.WriteFile(appPath, []byte(appSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(workspace, "orbit.yaml")
+	configYAML := fmt.Sprintf(`version: "2"
+services:
+  api:
+    type: python
+    path: %q
+    command: python3 app.py
+    ports:
+      http: "%d"
+    health_check:
+      type: http
+      path: /
+      port: %d
+`, workspace, servicePort, servicePort)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	installer := `#!/usr/bin/env bash
+set -euo pipefail
+target="$ORBIT_INSTALL_DIR/orbit"
+cp "$ORBIT_UPDATE_TEST_SOURCE" "$target.new"
+chmod +x "$target.new"
+cp "$target" "$target.prev"
+mv -f "$target.new" "$target"
+printf 'Installed: %s\n' "$target"
+`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, installer)
+	}))
+	t.Cleanup(server.Close)
+
+	namespace := "e2e-update-" + randHex(4)
+	command := func(extraEnv []string, args ...string) *exec.Cmd {
+		fullArgs := append([]string{"-c", configPath}, args...)
+		cmd := exec.Command(installedBinary, fullArgs...)
+		cmd.Env = append(os.Environ(),
+			"ORBIT_HOME="+home,
+			"ORBIT_NAMESPACE="+namespace,
+			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
+		)
+		cmd.Env = append(cmd.Env, extraEnv...)
+		return cmd
+	}
+	t.Cleanup(func() {
+		_ = command(nil, "down").Run()
+		_ = command(nil, "daemon", "stop").Run()
+	})
+
+	if output, err := command(nil, "up", "--json").CombinedOutput(); err != nil {
+		t.Fatalf("initial up: %v\n%s", err, output)
+	}
+	daemonPIDBefore := readE2EDaemonPID(t, home)
+	servicePIDBefore := readPIDFile(t, pidPath)
+
+	updateCommand := command([]string{
+		"ORBIT_INSTALL_URL=" + server.URL + "/install.sh",
+		"ORBIT_UPDATE_TEST_SOURCE=" + binary,
+	}, "update", "--json")
+	var updateStderr bytes.Buffer
+	updateCommand.Stderr = &updateStderr
+	updateOutput, err := updateCommand.Output()
+	if err != nil {
+		t.Fatalf("update: %v\nstdout:\n%s\nstderr:\n%s", err, updateOutput, updateStderr.String())
+	}
+	updateEnvelope := parseE2EEnvelope(t, string(updateOutput))
+	var updateData selfUpdateJSONData
+	if err := json.Unmarshal(updateEnvelope.Data, &updateData); err != nil {
+		t.Fatalf("parse update data: %v\n%s", err, updateOutput)
+	}
+	if updateData.Operation != "update" ||
+		!updateData.RunningEnvironmentReconnected ||
+		!slices.Equal(updateData.PreviouslyRunning, []string{"api"}) ||
+		!slices.Equal(updateData.RestoredResources, []string{"api"}) {
+		t.Fatalf("update data = %+v, want one reconnected api", updateData)
+	}
+	if strings.Contains(strings.ToLower(updateStderr.String()), "daemon restart") {
+		t.Fatalf("normal update exposed daemon recovery instructions:\n%s", updateStderr.String())
+	}
+	if !strings.Contains(updateStderr.String(), "Running environment restored (1 resource(s)).") {
+		t.Fatalf("update did not confirm environment restoration:\n%s", updateStderr.String())
+	}
+
+	daemonPIDAfter := readE2EDaemonPID(t, home)
+	if daemonPIDAfter == daemonPIDBefore {
+		t.Fatalf("update kept the old daemon pid %d", daemonPIDAfter)
+	}
+	servicePIDAfter := readPIDFile(t, pidPath)
+	if servicePIDAfter == servicePIDBefore {
+		t.Fatalf("update kept the old service pid %d", servicePIDAfter)
+	}
+	statusOutput, err := command(nil, "status", "--json").Output()
+	if err != nil {
+		t.Fatalf("status after update: %v\n%s", err, statusOutput)
+	}
+	statusEnvelope := parseE2EEnvelope(t, string(statusOutput))
+	var statusData struct {
+		Resources []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"resources"`
+	}
+	if err := json.Unmarshal(statusEnvelope.Data, &statusData); err != nil {
+		t.Fatalf("parse status after update: %v\n%s", err, statusOutput)
+	}
+	if len(statusData.Resources) != 1 ||
+		statusData.Resources[0].Name != "api" ||
+		statusData.Resources[0].State != "healthy" {
+		t.Fatalf("status after update = %+v, want healthy api", statusData.Resources)
+	}
+	if _, err := os.Stat(installedBinary + ".prev"); err != nil {
+		t.Fatalf("update did not preserve rollback binary: %v", err)
+	}
+
+	rollbackOutput, err := command(nil, "update", "--rollback").CombinedOutput()
+	if err != nil {
+		t.Fatalf("rollback: %v\n%s", err, rollbackOutput)
+	}
+	if strings.Contains(strings.ToLower(string(rollbackOutput)), "daemon restart") {
+		t.Fatalf("normal rollback exposed daemon recovery instructions:\n%s", rollbackOutput)
+	}
+	if !strings.Contains(string(rollbackOutput), "Running environment restored (1 resource(s)).") {
+		t.Fatalf("rollback did not confirm environment restoration:\n%s", rollbackOutput)
+	}
+	daemonPIDAfterRollback := readE2EDaemonPID(t, home)
+	if daemonPIDAfterRollback == daemonPIDAfter {
+		t.Fatalf("rollback kept the updated daemon pid %d", daemonPIDAfterRollback)
+	}
+	servicePIDAfterRollback := readPIDFile(t, pidPath)
+	if servicePIDAfterRollback == servicePIDAfter {
+		t.Fatalf("rollback kept the updated service pid %d", servicePIDAfterRollback)
+	}
+	statusAfterRollback, err := command(nil, "status", "--json").Output()
+	if err != nil {
+		t.Fatalf("status after rollback: %v\n%s", err, statusAfterRollback)
+	}
+	rollbackEnvelope := parseE2EEnvelope(t, string(statusAfterRollback))
+	if err := json.Unmarshal(rollbackEnvelope.Data, &statusData); err != nil {
+		t.Fatalf("parse status after rollback: %v\n%s", err, statusAfterRollback)
+	}
+	if len(statusData.Resources) != 1 || statusData.Resources[0].State != "healthy" {
+		t.Fatalf("status after rollback = %+v, want healthy api", statusData.Resources)
 	}
 }
 
