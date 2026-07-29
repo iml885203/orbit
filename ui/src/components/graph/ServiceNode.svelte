@@ -181,7 +181,7 @@
             onclick={makeHandler(doStart)}
           ><Play size={15} strokeWidth={2} /></button>
         {/if}
-        {#if running && !node.portConflict && !node.blockedBy}
+        {#if running && !node.portConflict && !node.blockedBy && node.failureKind !== 'health'}
           <button
             class="action-btn"
             type="button"
@@ -190,6 +190,8 @@
             disabled={busy}
             onclick={makeHandler(doRestart)}
           ><RotateCcw size={15} strokeWidth={2} /></button>
+        {/if}
+        {#if running && !node.portConflict && !node.blockedBy}
           <button
             class="action-btn danger"
             type="button"
@@ -199,7 +201,7 @@
             onclick={makeHandler(doStop)}
           ><Square size={15} strokeWidth={2} fill="currentColor" /></button>
         {/if}
-        {#if node.url}
+        {#if node.url && node.state === 'healthy'}
           <button
             class="action-btn"
             type="button"
@@ -246,10 +248,10 @@
     {#if firstPort}
       <span
         class="port-hint"
-        class:clickable={!!node.url && showActions}
-        role={node.url && showActions ? 'button' : undefined}
-        onclick={node.url && showActions ? openUrl : undefined}
-        use:tooltip={{ content: node.url && showActions ? 'Open in browser' : '' }}
+        class:clickable={!!node.url && node.state === 'healthy' && showActions}
+        role={node.url && node.state === 'healthy' && showActions ? 'button' : undefined}
+        onclick={node.url && node.state === 'healthy' && showActions ? openUrl : undefined}
+        use:tooltip={{ content: node.url && node.state === 'healthy' && showActions ? 'Open in browser' : '' }}
       >:{firstPort[1]}</span>
     {/if}
   </div>

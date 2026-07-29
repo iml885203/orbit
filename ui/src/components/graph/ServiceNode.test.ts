@@ -127,6 +127,25 @@ describe('ServiceNode', () => {
     expect(getByRole('button', { name: /open.*browser/i })).toBeTruthy()
   })
 
+  it('keeps a live health failure on evidence instead of blind retry or open', () => {
+    const node = {
+      ...baseNode,
+      state: 'degraded',
+      failureKind: 'health',
+      logsAvailable: true,
+      url: 'http://localhost:5000',
+    }
+    const { getByRole, queryByRole, getByText } = render(ServiceNode, {
+      props: { data: node, id: 'api' },
+    })
+
+    expect(queryByRole('button', { name: /^restart api$/i })).toBeNull()
+    expect(queryByRole('button', { name: /open.*browser/i })).toBeNull()
+    expect(getByRole('button', { name: /open logs for api/i })).toBeTruthy()
+    expect(getByRole('button', { name: /^stop api$/i })).toBeTruthy()
+    expect(getByText(':5000').getAttribute('role')).toBeNull()
+  })
+
   it('hides action affordances while previewing', () => {
     store.graph.preview = {
       env: 'preview',

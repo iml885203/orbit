@@ -7,7 +7,9 @@ describe('NodeDrawer', () => {
   beforeEach(() => {
     store.graph.data = null
     store.graph.preview = null
+    store.graph.selectedNode = null
     store.daemon.envs = null
+    store.daemon.logModal = { target: null, loading: false }
     vi.restoreAllMocks()
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 }),
@@ -178,7 +180,7 @@ describe('NodeDrawer', () => {
     expect(queryByRole('button', { name: 'Restart' })).toBeNull()
   })
 
-  it('restarts a live but unhealthy root dependency', async () => {
+  it('inspects a live but unhealthy root dependency instead of restarting it', async () => {
     const node = {
       name: 'shop',
       kind: 'frontend' as const,
@@ -196,22 +198,24 @@ describe('NodeDrawer', () => {
           kind: 'backend',
           state: 'degraded',
           stateReason: 'health check returned 503',
+          failureKind: 'health',
+          logsAvailable: true,
         },
       ],
       edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: false, detached: false }],
     }
-    const fetchMock = vi.mocked(globalThis.fetch)
     const { getByRole, queryByRole } = render(NodeDrawer, {
       props: { node, onClose: () => {} },
     })
 
     expect(queryByRole('button', { name: 'Start api' })).toBeNull()
-    await fireEvent.click(getByRole('button', { name: 'Restart api' }))
+    expect(queryByRole('button', { name: 'Restart api' })).toBeNull()
+    await fireEvent.click(getByRole('button', { name: 'Inspect api health' }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/restart/api', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    }))
+    expect(store.graph.selectedNode).toBe('api')
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) =>
+      String(url).includes('/api/restart/'),
+    )).toBe(false)
   })
+
 })

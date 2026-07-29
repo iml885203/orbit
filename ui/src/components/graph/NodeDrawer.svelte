@@ -51,7 +51,13 @@
   // Primary lifecycle CTA for this node. We pick a single dominant
   // action based on state so the drawer header has one obvious button
   // instead of duplicating the six-button strip on the node.
-  type Cta = { label: string; icon: 'play' | 'restart' | 'stop' | null; tone: 'primary' | 'danger' | 'muted'; disabled: boolean; run?: () => Promise<void> }
+  type Cta = {
+    label: string
+    icon: 'play' | 'restart' | 'stop' | 'logs' | null
+    tone: 'primary' | 'danger' | 'muted'
+    disabled: boolean
+    run?: () => void | Promise<void>
+  }
   let busy = $state(false)
   async function withBusy(fn: () => Promise<{ ok: boolean; data?: any }>, failMsg: string) {
     if (!node || busy) return
@@ -71,6 +77,24 @@
     if (blockedByRoot) {
       const blocker = blockedByRoot
       if (blocker.state === 'degraded') {
+        if (blocker.failureKind === 'health') {
+          return {
+            label: `Inspect ${blocker.name} health`,
+            icon: 'logs',
+            tone: 'primary',
+            disabled: busy,
+            run: () => { store.graph.selectedNode = blocker.name },
+          }
+        }
+        if (blocker.logsAvailable) {
+          return {
+            label: `View ${blocker.name} logs`,
+            icon: 'logs',
+            tone: 'primary',
+            disabled: busy,
+            run: () => openLogViewer(blocker.name),
+          }
+        }
         return {
           label: `Restart ${blocker.name}`,
           icon: 'restart',
@@ -105,13 +129,29 @@
           run: () => withBusy(() => apiPost('/api/up', { resources: [name] }), 'Failed to start'),
         }
       case 'healthy':
-      case 'degraded':
         return {
           label: 'Stop',
           icon: 'stop',
           tone: 'danger',
           disabled: busy,
           run: () => withBusy(() => apiPost('/api/stop/' + name), 'Failed to stop'),
+        }
+      case 'degraded':
+        if (node.logsAvailable) {
+          return {
+            label: 'View logs',
+            icon: 'logs',
+            tone: 'primary',
+            disabled: busy,
+            run: openLogs,
+          }
+        }
+        return {
+          label: 'Restart',
+          icon: 'restart',
+          tone: 'primary',
+          disabled: busy,
+          run: doRestart,
         }
       case 'starting':
       case 'building':
@@ -127,6 +167,7 @@
   const firstPort = $derived<[string, number] | null>(
     node?.ports ? (Object.entries(node.ports)[0] ?? null) : null
   )
+  const applicationURL = $derived(node?.state === 'healthy' ? node.url : undefined)
 
   // The "Service" card: mode toggle, timing chips, env toggles. Hide if empty.
   const hasModeToggle = $derived(!!node?.mode)
@@ -307,6 +348,7 @@
             {#if cta.icon === 'play'}<Play size={14} strokeWidth={2.25} />{/if}
             {#if cta.icon === 'restart'}<RotateCcw size={14} strokeWidth={2.25} />{/if}
             {#if cta.icon === 'stop'}<Square size={14} strokeWidth={2.25} fill="currentColor" />{/if}
+            {#if cta.icon === 'logs'}<ScrollText size={14} strokeWidth={2.25} />{/if}
             <span>{cta.label}</span>
           </button>
         {/if}
@@ -362,12 +404,12 @@
             type="button"
             onclick={isPreviewing
               ? () => copyPort(firstPort[1])
-              : (node.url ? openUrl : () => copyPort(firstPort[1]))}
+              : (applicationURL ? openUrl : () => copyPort(firstPort[1]))}
             use:tooltip={{ content: isPreviewing
               ? `Copy port ${firstPort[1]}`
-              : (node.url ? node.url : `Copy port ${firstPort[1]}`) }}
+              : (applicationURL ? applicationURL : `Copy port ${firstPort[1]}`) }}
           >
-            {#if node.url && !isPreviewing}
+            {#if applicationURL && !isPreviewing}
               <ExternalLink size={12} strokeWidth={2.25} />
             {:else}
               <Copy size={12} strokeWidth={2.25} />
