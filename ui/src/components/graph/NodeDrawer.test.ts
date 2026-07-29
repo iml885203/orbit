@@ -157,4 +157,43 @@ describe('NodeDrawer', () => {
     expect(getByRole('button', { name: 'Start redis' })).toBeTruthy()
     expect(queryByRole('button', { name: 'Restart' })).toBeNull()
   })
+
+  it('restarts a live but unhealthy root dependency', async () => {
+    const node = {
+      name: 'shop',
+      kind: 'frontend' as const,
+      state: 'degraded',
+      stateReason: 'dependency api is degraded',
+      blockedBy: 'api',
+    }
+    store.graph.data = {
+      env: 'local',
+      previewOnly: false,
+      nodes: [
+        node,
+        {
+          name: 'api',
+          kind: 'backend',
+          state: 'degraded',
+          stateReason: 'health check returned 503',
+        },
+      ],
+      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: false, detached: false }],
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    )
+    const { getByRole, queryByRole } = render(NodeDrawer, {
+      props: { node, onClose: () => {} },
+    })
+
+    expect(queryByRole('button', { name: 'Start api' })).toBeNull()
+    await fireEvent.click(getByRole('button', { name: 'Restart api' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/restart/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }))
+  })
 })

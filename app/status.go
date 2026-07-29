@@ -341,10 +341,12 @@ func persistedRuntimeStatus(configPath string, cfg *config.Config) map[string]da
 		switch kind {
 		case daemon.ResourceKindContainer:
 			if definition := cfg.Containers[name]; definition != nil {
+				resource.Role = definition.ResolveKind()
 				resource.Ports = configPortNumbers(definition.Ports)
 			}
 		case daemon.ResourceKindService:
 			if definition := cfg.Services[name]; definition != nil {
+				resource.Role = definition.ResolveKind()
 				resource.Ports = configPortNumbers(definition.Ports)
 				resource.URL = definition.URL
 			}
@@ -470,6 +472,7 @@ type statusSetupState struct {
 type jsonService struct {
 	Name                 string                       `json:"name"`
 	Kind                 string                       `json:"kind"`
+	Role                 string                       `json:"role,omitempty"`
 	State                string                       `json:"state"`
 	StateReason          string                       `json:"state_reason,omitempty"`
 	FailureEvidence      string                       `json:"failure_evidence,omitempty"`
@@ -517,6 +520,7 @@ func writeStatusJSON(
 			svc := jsonService{
 				Name:  name,
 				Kind:  string(resource.Kind),
+				Role:  resource.Role,
 				State: resource.State,
 				URL:   resource.URL,
 				Ports: resource.Ports,
@@ -526,7 +530,7 @@ func writeStatusJSON(
 		}
 	} else if cfg != nil {
 		for name, c := range cfg.Containers {
-			svc := jsonService{Name: name, Kind: "container", State: "stopped"}
+			svc := jsonService{Name: name, Kind: "container", Role: c.ResolveKind(), State: "stopped"}
 			ports := make(map[string]int, len(c.Ports))
 			for label, p := range c.Ports {
 				ports[label] = p.Host
@@ -538,7 +542,7 @@ func writeStatusJSON(
 			resources = append(resources, svc)
 		}
 		for name, s := range cfg.Services {
-			svc := jsonService{Name: name, Kind: "service", State: "stopped", URL: s.URL}
+			svc := jsonService{Name: name, Kind: "service", Role: s.ResolveKind(), State: "stopped", URL: s.URL}
 			ports := make(map[string]int, len(s.Ports))
 			for label, p := range s.Ports {
 				ports[label] = p.Host
@@ -672,6 +676,9 @@ func printEnvironmentSelectionRecovery(selection environmentSelection) {
 
 func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, running map[string]daemon.ResourceStatus) {
 	target.State = source.State
+	if source.Role != "" {
+		target.Role = source.Role
+	}
 	if source.URL != "" {
 		target.URL = source.URL
 	}

@@ -50,7 +50,7 @@ func testConfig() *config.Config {
 		},
 		Services: map[string]*config.Service{
 			"api": {Name: "api", Type: "dotnet", DependsOn: []string{"db"}},
-			"web": {Name: "web", Type: "node", DependsOn: []string{"api"}},
+			"web": {Name: "web", Type: "node", Kind: "frontend", DependsOn: []string{"api"}},
 		},
 	}
 }
@@ -114,19 +114,23 @@ func TestHandleStatus_ListsAllServices(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	got := make(map[string]string, len(resp.Resources))
+	type resourceView struct {
+		kind string
+		role string
+	}
+	got := make(map[string]resourceView, len(resp.Resources))
 	for _, svc := range resp.Resources {
-		got[svc.Name] = string(svc.Kind)
+		got[svc.Name] = resourceView{kind: string(svc.Kind), role: svc.Role}
 	}
-	want := map[string]string{
-		"redis": "container",
-		"db":    "container",
-		"api":   "service",
-		"web":   "service",
+	want := map[string]resourceView{
+		"redis": {kind: "container", role: "infra"},
+		"db":    {kind: "container", role: "infra"},
+		"api":   {kind: "service", role: "backend"},
+		"web":   {kind: "service", role: "frontend"},
 	}
-	for name, kind := range want {
-		if got[name] != kind {
-			t.Errorf("service %q kind = %q, want %q", name, got[name], kind)
+	for name, view := range want {
+		if got[name] != view {
+			t.Errorf("service %q = %+v, want %+v", name, got[name], view)
 		}
 	}
 }

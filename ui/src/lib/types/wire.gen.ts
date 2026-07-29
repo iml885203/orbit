@@ -105,6 +105,12 @@ export interface SidecarInfo {
 export interface ResourceStatus {
   name: string;
   kind: ResourceKind;
+  /**
+   * Role describes where the resource sits in the user journey. Unlike Kind,
+   * which distinguishes host services from containers, Role is frontend,
+   * backend, or infra.
+   */
+  role?: string;
   state: string;
   /**
    * PendingDependencies identifies exactly what keeps a pending resource

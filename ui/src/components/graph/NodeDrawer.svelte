@@ -51,7 +51,7 @@
   // Primary lifecycle CTA for this node. We pick a single dominant
   // action based on state so the drawer header has one obvious button
   // instead of duplicating the six-button strip on the node.
-  type Cta = { label: string; icon: 'play' | 'stop' | null; tone: 'primary' | 'danger' | 'muted'; disabled: boolean; run?: () => Promise<void> }
+  type Cta = { label: string; icon: 'play' | 'restart' | 'stop' | null; tone: 'primary' | 'danger' | 'muted'; disabled: boolean; run?: () => Promise<void> }
   let busy = $state(false)
   async function withBusy(fn: () => Promise<{ ok: boolean; data?: any }>, failMsg: string) {
     if (!node || busy) return
@@ -70,6 +70,18 @@
     }
     if (blockedByRoot) {
       const blocker = blockedByRoot
+      if (blocker.state === 'degraded') {
+        return {
+          label: `Restart ${blocker.name}`,
+          icon: 'restart',
+          tone: 'primary',
+          disabled: busy,
+          run: () => withBusy(
+            () => apiPost('/api/restart/' + blocker.name),
+            `Failed to restart ${blocker.name}`,
+          ),
+        }
+      }
       return {
         label: `Start ${blocker.name}`,
         icon: 'play',
@@ -293,6 +305,7 @@
             onclick={() => cta.run?.()}
           >
             {#if cta.icon === 'play'}<Play size={14} strokeWidth={2.25} />{/if}
+            {#if cta.icon === 'restart'}<RotateCcw size={14} strokeWidth={2.25} />{/if}
             {#if cta.icon === 'stop'}<Square size={14} strokeWidth={2.25} fill="currentColor" />{/if}
             <span>{cta.label}</span>
           </button>

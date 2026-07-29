@@ -23,6 +23,20 @@ func getContainerImage(cfg *config.Config, name, kind string) string {
 	return ""
 }
 
+// getResourceRole returns the configured user-journey role for a resource.
+func getResourceRole(cfg *config.Config, name, kind string) string {
+	if kind == "container" {
+		if c, ok := cfg.Containers[name]; ok {
+			return c.ResolveKind()
+		}
+		return ""
+	}
+	if svc, ok := cfg.Services[name]; ok {
+		return svc.ResolveKind()
+	}
+	return ""
+}
+
 // getServicePorts returns host ports for a service/container from config.
 func getServicePorts(cfg *config.Config, name, kind string) map[string]int {
 	ports := make(map[string]int)

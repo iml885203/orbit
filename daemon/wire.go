@@ -61,9 +61,13 @@ type SidecarInfo struct {
 
 // ResourceStatus represents a single container or service.
 type ResourceStatus struct {
-	Name  string       `json:"name"`
-	Kind  ResourceKind `json:"kind"`
-	State string       `json:"state"`
+	Name string       `json:"name"`
+	Kind ResourceKind `json:"kind"`
+	// Role describes where the resource sits in the user journey. Unlike Kind,
+	// which distinguishes host services from containers, Role is frontend,
+	// backend, or infra.
+	Role  string `json:"role,omitempty"`
+	State string `json:"state"`
 	// PendingDependencies identifies exactly what keeps a pending resource
 	// from starting, so clients can distinguish useful waiting from a
 	// terminal dependency failure.

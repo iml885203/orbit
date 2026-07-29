@@ -13,6 +13,7 @@ func TestApplyRuntimeStatusPreservesExternalRestartTruth(t *testing.T) {
 	source := daemon.ResourceStatus{
 		Name:                 "redis",
 		Kind:                 daemon.ResourceKindContainer,
+		Role:                 "infra",
 		State:                "healthy",
 		ExternalRestartCount: 1,
 		LastRestart: &daemon.ResourceRestart{
@@ -26,6 +27,9 @@ func TestApplyRuntimeStatusPreservesExternalRestartTruth(t *testing.T) {
 
 	if target.ExternalRestartCount != 1 {
 		t.Fatalf("ExternalRestartCount = %d, want 1", target.ExternalRestartCount)
+	}
+	if target.Role != "infra" {
+		t.Fatalf("Role = %q, want infra", target.Role)
 	}
 	if target.LastRestart == nil || !target.LastRestart.StartedAt.Equal(startedAt) {
 		t.Fatalf("LastRestart = %#v, want external restart at %s", target.LastRestart, startedAt)

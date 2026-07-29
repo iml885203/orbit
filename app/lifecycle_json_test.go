@@ -194,6 +194,30 @@ func TestLifecycleUpSuccessActionsHaveOnePrimaryNextStep(t *testing.T) {
 	}
 }
 
+func TestLifecycleUpSuccessActionsReturnToOnlyHealthyFrontendAfterBackendRecovery(t *testing.T) {
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "shop", Kind: daemon.ResourceKindService, Role: "frontend", State: "healthy", URL: "http://localhost:3000"},
+		{Name: "inventory-api", Kind: daemon.ResourceKindService, Role: "backend", State: "healthy", URL: "http://localhost:8080"},
+		{Name: "admin", Kind: daemon.ResourceKindService, Role: "backend", State: "healthy", URL: "http://localhost:3001"},
+	}}
+	got := lifecycleUpSuccessActions([]string{"inventory-api"}, status)
+	if len(got) != 1 || got[0].Command != "orbit open shop --json" {
+		t.Fatalf("actions = %+v", got)
+	}
+}
+
+func TestLifecycleUpSuccessActionsDoNotGuessAmongUnrelatedFrontends(t *testing.T) {
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "shop", Kind: daemon.ResourceKindService, Role: "frontend", State: "healthy", URL: "http://localhost:3000"},
+		{Name: "admin", Kind: daemon.ResourceKindService, Role: "frontend", State: "healthy", URL: "http://localhost:3001"},
+		{Name: "inventory-api", Kind: daemon.ResourceKindService, Role: "backend", State: "healthy", URL: "http://localhost:8080"},
+	}}
+	got := lifecycleUpSuccessActions([]string{"inventory-api"}, status)
+	if len(got) != 1 || got[0].Command != "orbit open inventory-api --json" {
+		t.Fatalf("actions = %+v", got)
+	}
+}
+
 func TestLifecycleUpSuccessActionsFallBackToDashboard(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{Name: "redis", Kind: daemon.ResourceKindContainer, State: "healthy"},

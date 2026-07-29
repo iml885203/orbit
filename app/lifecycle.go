@@ -117,27 +117,46 @@ func primaryOpenableResource(resourceNames []string, status *daemon.StatusRespon
 	for _, name := range resourceNames {
 		selected[name] = true
 	}
-	candidates := make([]*daemon.ResourceStatus, 0)
+	frontends := make([]*daemon.ResourceStatus, 0)
+	selectedCandidates := make([]*daemon.ResourceStatus, 0)
 	for i := range status.Resources {
 		resource := &status.Resources[i]
-		if len(selected) > 0 && !selected[resource.Name] {
-			continue
-		}
 		if resource.State != "healthy" || resource.URL == "" {
 			continue
 		}
-		candidates = append(candidates, resource)
-	}
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].Kind != candidates[j].Kind {
-			return candidates[i].Kind == daemon.ResourceKindService
+		if resource.Role == "frontend" {
+			frontends = append(frontends, resource)
 		}
-		return candidates[i].Name < candidates[j].Name
-	})
-	if len(candidates) == 0 {
+		if len(selected) == 0 || selected[resource.Name] {
+			selectedCandidates = append(selectedCandidates, resource)
+		}
+	}
+	sortOpenableResources(frontends)
+	sortOpenableResources(selectedCandidates)
+	for _, resource := range frontends {
+		if selected[resource.Name] {
+			return resource
+		}
+	}
+	if len(frontends) == 1 {
+		return frontends[0]
+	}
+	if len(selectedCandidates) == 0 {
 		return nil
 	}
-	return candidates[0]
+	return selectedCandidates[0]
+}
+
+func sortOpenableResources(resources []*daemon.ResourceStatus) {
+	sort.Slice(resources, func(i, j int) bool {
+		if resources[i].Role != resources[j].Role {
+			return resources[i].Role == "frontend"
+		}
+		if resources[i].Kind != resources[j].Kind {
+			return resources[i].Kind == daemon.ResourceKindService
+		}
+		return resources[i].Name < resources[j].Name
+	})
 }
 
 func lifecycleRecommendedActionsForStatus(serviceNames []string, status *daemon.StatusResponse) []cli.JSONAction {

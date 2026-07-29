@@ -92,6 +92,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		out = append(out, ResourceStatus{
 			Name:                 svc.Name,
 			Kind:                 ResourceKind(svc.Kind),
+			Role:                 getResourceRole(cfg, svc.Name, svc.Kind),
 			State:                svc.State.String(),
 			PendingDependencies:  pendingDependencies,
 			StateReason:          svc.StateReason,

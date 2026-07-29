@@ -203,6 +203,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		tracked[svc.Name] = ResourceStatus{
 			Name:                 svc.Name,
 			Kind:                 ResourceKind(svc.Kind),
+			Role:                 getResourceRole(cfg, svc.Name, svc.Kind),
 			State:                svc.State.String(),
 			StateReason:          svc.StateReason,
 			FailureEvidence:      svc.FailureEvidence,
@@ -235,7 +236,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		sidecars := getSidecarInfos(cfg, name, "container")
 		resp.Resources = append(resp.Resources, ResourceStatus{
 			Name: name, Kind: ResourceKindContainer, State: engine.StateStopped.String(),
-			Ports: ports, Image: c.Image, Sidecars: sidecars,
+			Role: c.ResolveKind(), Ports: ports, Image: c.Image, Sidecars: sidecars,
 		})
 	}
 	for name, svc := range cfg.Services {
@@ -249,7 +250,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 		resp.Resources = append(resp.Resources, ResourceStatus{
 			Name: name, Kind: ResourceKindService, State: engine.StateStopped.String(),
-			Ports: ports, URL: svc.URL,
+			Role: svc.ResolveKind(), Ports: ports, URL: svc.URL,
 		})
 	}
 	return resp
