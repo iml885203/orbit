@@ -209,6 +209,19 @@ func classify(err error) JSONError {
 	var codedErr interface{ ErrorCode() string }
 	if errors.As(err, &codedErr) {
 		switch codedErr.ErrorCode() {
+		case "setup_required":
+			hint := "Set up Orbit before running this command."
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				hint = hintedErr.CLIJSONHint()
+			}
+			return JSONError{
+				Code:        "setup_required",
+				Message:     msg,
+				Hint:        hint,
+				Retryable:   true,
+				NextCommand: "orbit init --yes --json",
+			}
 		case "environment_selection_required":
 			hint := "Select one of the available environments reported by Orbit."
 			var hintedErr interface{ CLIJSONHint() string }
@@ -391,6 +404,13 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	}
 	if err.Code == "environment_selection_required" {
 		return nil
+	}
+	if err.Code == "setup_required" {
+		return []JSONAction{{
+			Command:     "orbit init --yes --json",
+			Reason:      "Set up Orbit before running environment commands.",
+			Destructive: false,
+		}}
 	}
 	if err.Code == "project_context_inactive" {
 		return nil

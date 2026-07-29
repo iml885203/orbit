@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const projectConfigName = "orbit.yaml"
@@ -49,4 +50,8 @@ func findProjectConfig(start string) string {
 func usesDiscoveredProjectConfig(path string) bool {
 	discovered := discoverProjectConfig()
 	return discovered != "" && sameFilePath(discovered, path)
+}
+
+func isProjectConfigPath(path string) bool {
+	return strings.EqualFold(filepath.Base(filepath.Clean(path)), projectConfigName)
 }

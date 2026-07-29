@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -29,6 +30,31 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 
 type doctorOptions struct {
 	showDaemon bool
+}
+
+type setupRequiredError struct{}
+
+func (setupRequiredError) Error() string {
+	return "Orbit setup is required — run 'orbit init'"
+}
+
+func (setupRequiredError) ErrorCode() string {
+	return "setup_required"
+}
+
+func (setupRequiredError) CLIJSONHint() string {
+	return "Set up Orbit before running environment diagnostics."
+}
+
+func setupRequired(selection environmentSelection, path string) bool {
+	if selection.State != environmentSelectionNone || configFileExists(path) {
+		return false
+	}
+	if path == "" {
+		return true
+	}
+	return distribution.DefaultEnv != "" &&
+		sameFilePath(path, filepath.Join(envsDestDir(), distribution.DefaultEnv))
 }
 
 func runDoctorWithOptions(options doctorOptions) error {
@@ -112,6 +138,9 @@ func doctorFailure(resp *daemon.DoctorResponse, showDaemon bool) error {
 	if len(failed) == 1 && failed[0] == "Environment selection" {
 		return newEnvironmentSelectionRequiredError(readEnvironmentSelection())
 	}
+	if len(failed) == 1 && failed[0] == "Setup" {
+		return setupRequiredError{}
+	}
 	if len(failed) == 1 && failed[0] == "Orbit update" {
 		return &daemon.UpdateRequiredError{
 			RestartCommand:     orbitRestartCommand(false),
@@ -174,6 +203,13 @@ func localDoctorResponseWithContext(
 			Status:  daemon.CheckFail,
 			Message: fmt.Sprintf("environment %q is no longer available", selection.SelectedName),
 			Hint:    hint,
+		})
+	} else if setupRequired(selection, configFile) {
+		checks = append(checks, daemon.DoctorCheck{
+			Name:    "Setup",
+			Status:  daemon.CheckFail,
+			Message: "Orbit is not set up yet",
+			Hint:    "run: orbit init",
 		})
 	} else if loaded, err := config.Load(configFile); err != nil {
 		checks = append(checks, daemon.DoctorCheck{Name: "Config", Status: daemon.CheckFail, Message: err.Error()})
@@ -291,6 +327,12 @@ func localPortChecksWithContext(
 func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	if resp != nil {
 		for _, check := range resp.Checks {
+			if check.Name == "Setup" {
+				return []cli.JSONAction{{
+					Command: "orbit init --yes --json",
+					Reason:  "Set up Orbit and select an environment.",
+				}}
+			}
 			if check.Name == "Environment selection" {
 				return environmentSelectionActions(readEnvironmentSelection())
 			}

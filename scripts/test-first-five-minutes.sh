@@ -69,6 +69,7 @@ trap cleanup EXIT
 "$orbit_bin" switch --help >"$test_root/switch-help.txt"
 "$orbit_bin" up --help >"$test_root/up-help.txt"
 "$orbit_bin" down --help >"$test_root/down-help.txt"
+grep -F "add orbit.yaml to the project root" "$test_root/root-help.txt" >/dev/null
 for command in doctor down env init logs open restart status switch uninstall up update version; do
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
 done
@@ -128,6 +129,27 @@ done
 
 mkdir -p "$test_root/empty-directory"
 cd "$test_root/empty-directory"
+
+set +e
+"$orbit_bin" doctor --json >"$test_root/doctor-before-init.json"
+doctor_before_init_status=$?
+set -e
+if [ "$doctor_before_init_status" -eq 0 ]; then
+  echo "orbit doctor unexpectedly accepted a clean home before setup." >&2
+  exit 1
+fi
+python3 - "$test_root/doctor-before-init.json" <<'PY'
+import json
+import pathlib
+import sys
+
+response = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert response["ok"] is False
+assert response["error"]["code"] == "setup_required"
+assert [action["command"] for action in response["recommended_actions"]] == [
+    "orbit init --yes --json"
+]
+PY
 
 python3 -c '
 import socket

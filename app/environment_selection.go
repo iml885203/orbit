@@ -123,7 +123,7 @@ func sameFilePath(left, right string) bool {
 }
 
 func activeEnvironmentSelection(selection environmentSelection, configPath string) environmentSelection {
-	if usesDiscoveredProjectConfig(configPath) {
+	if isProjectConfigPath(configPath) {
 		selection.State = environmentSelectionSelected
 		selection.Source = "project"
 		selection.SelectedName = projectContextName(configPath)

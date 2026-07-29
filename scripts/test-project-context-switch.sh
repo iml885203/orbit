@@ -159,6 +159,30 @@ assert [(item["name"], item["state"]) for item in after["data"]["resources"]] ==
 PY
 
 "$orbit_bin" down --json >/dev/null
+cd "$test_root"
+"$orbit_bin" status --json >"$test_root/status-outside-project.json"
+"$orbit_bin" status >"$test_root/status-outside-project.txt"
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+status = json.loads((root / "status-outside-project.json").read_text(encoding="utf-8"))
+assert status["ok"] is True
+assert status["data"]["environment"]["source"] == "project"
+assert status["data"]["environment"]["selected_name"] == "project-b"
+assert status["data"]["daemon"]["detached_project"] is True
+assert status["data"]["daemon"].get("context_mismatch") is not True
+assert [action["command"] for action in status["recommended_actions"]] == [
+    f"cd {root / 'project-b'} && orbit up --json"
+]
+
+human = (root / "status-outside-project.txt").read_text(encoding="utf-8")
+assert "last project context" in human
+assert "daemon restart" not in human
+assert "quickstart.yaml" not in human
+PY
 "$orbit_bin" daemon stop --json >/dev/null
 
-echo "Project switching keeps resource ownership safe and needs only orbit up"
+echo "Project switching and detached context recovery keep one successful next action"

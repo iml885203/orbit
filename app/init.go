@@ -97,6 +97,9 @@ func initCmd() *cobra.Command {
 The official demo uses its defaults without questions. A custom environment asks
 for a project workspace only when its selected config actually requires one.
 
+An existing project with orbit.yaml does not need init. Run orbit up anywhere
+inside that project and Orbit discovers the nearest orbit.yaml automatically.
+
 For non-interactive setup (CI, scripts):
   orbit init --yes                                         # accept all defaults
   orbit init --yes --env-repo <url>                        # use a specific env repo

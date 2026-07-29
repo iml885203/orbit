@@ -63,9 +63,13 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		}
 	}
 	rootCmd := &cobra.Command{
-		Use:     "orbit",
-		Short:   "Local development orchestration tool",
-		Long:    "Run host services and containers as one local development environment.",
+		Use:   "orbit",
+		Short: "Local development orchestration tool",
+		Long: `Run host services and containers as one local development environment.
+
+In an existing project, add orbit.yaml to the project root and run orbit up.
+Orbit discovers the nearest orbit.yaml automatically; orbit init is only needed
+for the bundled demo or a shared environment repository.`,
 		Version: buildVersion(),
 	}
 	rootCmd.SetVersionTemplate("{{.Version}}\n")

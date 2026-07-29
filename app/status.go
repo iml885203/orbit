@@ -14,6 +14,7 @@ import (
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +38,16 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
+			if cfgErr != nil &&
+				!configFileExists(configFile) &&
+				isProjectConfigPath(status.ConfigPath) &&
+				configFileExists(status.ConfigPath) {
+				configFile = status.ConfigPath
+				cfg, cfgErr = config.Load(configFile)
+				dstatus.DetachedProject = true
+				dstatus.ConfigPath = status.ConfigPath
+				dstatus.RunningEnvironment = projectContextName(status.ConfigPath)
+			}
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
 				if !usesDiscoveredProjectConfig(configFile) {
 					return mismatch
@@ -209,6 +220,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		tips = buildTips(daemonRunning, stoppedInfra, stoppedServices, statusRecoveryTips(running), openableServices)
 	}
 	if len(tips) > 0 {
+		if dstatus.DetachedProject {
+			for i := range tips {
+				tips[i] = projectContextShellCommand(dstatus.ConfigPath, strings.TrimSpace(tips[i]))
+			}
+		}
 		fmt.Println()
 		for _, tip := range tips {
 			_, _ = cli.Faint.Printf("  %s\n", tip)
@@ -510,6 +526,7 @@ type daemonStatus struct {
 	ConfigPath         string `json:"config_path,omitempty"`
 	RunningEnvironment string `json:"running_environment,omitempty"`
 	ContextMismatch    bool   `json:"context_mismatch,omitempty"`
+	DetachedProject    bool   `json:"detached_project,omitempty"`
 	ConfigStale        bool   `json:"config_stale,omitempty"`
 	ConfigStaleReason  string `json:"config_stale_reason,omitempty"`
 }
@@ -619,6 +636,12 @@ func writeStatusJSON(
 			if action, ok := statusPrimaryOpenAction(resources); ok {
 				actions = cli.MergeActions(actions, []cli.JSONAction{action})
 			}
+		}
+	}
+	if dstatus.DetachedProject {
+		for i := range actions {
+			actions[i].Command = projectContextShellCommand(dstatus.ConfigPath, actions[i].Command)
+			actions[i].Reason += " Run it from the project directory."
 		}
 	}
 	setupMessage := ""
@@ -879,7 +902,19 @@ func printEnvironmentHeader(w io.Writer, name string, s daemonStatus) {
 			s.RunningEnvironment,
 		)
 	}
+	if s.DetachedProject {
+		_, _ = fmt.Fprintf(
+			w,
+			"  %s last project context — run commands from %s\n",
+			cli.Faint.Sprint("•"),
+			filepath.Dir(s.ConfigPath),
+		)
+	}
 	_, _ = fmt.Fprintln(w)
+}
+
+func projectContextShellCommand(configPath, command string) string {
+	return "cd " + shellquote.Quote(filepath.Dir(configPath)) + " && " + command
 }
 
 func formatPorts(ports map[string]int) string {
