@@ -246,6 +246,38 @@ print(payload.get('correlation', {}).get('correlation_ratio', 'missing'))
 PY
 )
   log "observability correlation_ratio = $ratio"
+  if [[ "$ratio" == "missing" ]]; then
+    return 1
+  fi
+  return 0
+}
+
+check_notification_signal() {
+  if [[ "$BASE" != "127.0.0.1" ]]; then
+    return 0
+  fi
+
+  local payload
+  if ! payload=$(curl -fsS "http://$BASE:3009/notifications"); then
+    log "advanced 通知 API 無法取得（可能服務未就緒）"
+    return 1
+  fi
+
+  local total
+  total=$(python3 - "$payload" <<'PY'
+import json,sys
+payload = json.loads(sys.argv[1])
+notifications = payload.get("notifications", [])
+print(len(notifications))
+PY
+)
+  if [[ -z "$total" || "$total" == "0" ]]; then
+    log "advanced 通知 API 尚未收到事件：需要至少 1 筆通知作為完整閉環證據"
+    return 1
+  fi
+
+  log "advanced 通知事件數量: $total"
+  return 0
 }
 
 run_suite() {
@@ -276,6 +308,7 @@ run_suite() {
   run_smoke_scenarios "$env_type" || return 1
   if [[ "$env_type" == "advanced" ]]; then
     check_observability
+    check_notification_signal
   fi
 
   log "=== $env_type 套件完成 ==="

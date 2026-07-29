@@ -88,6 +88,7 @@ orbit -c docs/examples/mini-shop/dev.yaml logs cart-api -f
 - 在「關聯完整性快檢查」可直接判斷最近 checkout 是否已建立關聯出貨，不用再手動比對。
 - 在進階模式可看「關聯觀測洞察」卡片：一次看到近 10 筆「訂單→出貨」事件是否關聯成功，也會看到「通知事件」是否同步完成。
 - 在「流程依賴速覽」看見上游與下游服務即時狀態，先知道該先補哪個 service。
+- 進階模式若想驗證「關聯閉環」完整，直接看 `notification-api` 有沒有收到對應事件（`/notifications`）。
 
 ### 用戶心理模型設計（不需要背 service）
 
