@@ -15,11 +15,11 @@ The required tools and build commands are documented in
 ```bash
 pnpm --dir ui install --frozen-lockfile
 make build
-make test-fast
+make test
 ```
 
 During implementation, run the narrowest relevant sociable test. After a
-coherent user-visible change is complete, run `make test-fast`. Run
+coherent user-visible change is complete, run `make test`. Run
 `make preflight` once before committing that complete change; it is the same
 source and contract gate used by CI. `make test-journeys` exercises the built
 binary through real Git, process, and Docker boundaries. Use `make lint` for

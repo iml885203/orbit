@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-fast test-e2e test-journeys test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-install test-docs lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -9,6 +9,9 @@ BUILD_DIR := ./bin
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
+# Go package tests and Vitest run together in `make test`. Capping Go's
+# package fan-out avoids both runners oversubscribing the same machine.
+GO_TEST_PARALLELISM ?= 4
 
 ui:
 	pnpm --dir ui run build
@@ -40,15 +43,13 @@ kafka-producer-image:
 	docker build -f cmd/kafka-producer-sidecar/Dockerfile -t orbit-kafka-producer:local .
 
 test:
-	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
+	$(MAKE) -j2 test-go test-ui-unit
 
 test-go:
-	go test ./...
+	go test -p $(GO_TEST_PARALLELISM) ./...
 
-# Frontend checks — typecheck, lint, unit tests. Part of `make test` so the
-# standard verification path covers the dashboard, not just the Go side.
 test-ui:
-	$(MAKE) -j3 test-ui-check test-ui-lint test-ui-unit
+	$(MAKE) test-ui-unit
 
 test-ui-check:
 	pnpm --dir ui run check
@@ -58,11 +59,6 @@ test-ui-lint:
 
 test-ui-unit:
 	pnpm --dir ui run test
-
-# Fast inner-loop confidence without builds, installer/docs contracts, or
-# release gates. The full preflight remains mandatory before every commit.
-test-fast:
-	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
 
 # End-to-end tests against a real daemon + Docker. Uses the freshly built
 # ./bin/orbit (skips tests if they detect container name collisions).

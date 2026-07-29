@@ -157,17 +157,16 @@ that binary before returning to the installed `orbit`.
 ### Development workflow
 
 ```bash
-make build      # Build frontend + Go binary
-make test-fast  # Fast inner loop: Go + dashboard checks in parallel
-make test       # Run the same tests sequentially
-make preflight  # Full source, installer, and documentation gate — once per coherent commit
+make build         # Build frontend + Go binary
+make test          # Go + dashboard behavior tests
+make preflight     # Full source, static, installer, and documentation gate — once per coherent commit
 make test-journeys # Installed binary through real Git, process, and Docker boundaries
-make lint       # Run linter
-make setup      # Install git hooks
+make lint          # Run linter
+make setup         # Install git hooks
 ```
 
 Keep the edit loop proportional to the change: run the narrowest relevant
-sociable test while editing, `make test-fast` after a coherent product slice,
+sociable test while editing, `make test` after a coherent product slice,
 and `make preflight` once before committing it. Do not create a release for
 each fix. Accumulate related fixes behind one user outcome, review the release
 candidate as a whole, then publish one version.

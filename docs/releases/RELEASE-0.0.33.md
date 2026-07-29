@@ -16,7 +16,7 @@ than a moving default branch.
 - Demo links now point to documentation for the matching Orbit release.
 - Local `make preflight` keeps every existing gate while running independent
   checks concurrently; on the development baseline it dropped from about 61
-  seconds to 38 seconds.
+  seconds to 28 seconds.
 - Installed-user journeys now reuse one build and verify the command surface,
   environment provenance, linked demo behavior, dependency failure, recovery,
   local adoption, and project switching through real process and Docker
@@ -61,6 +61,10 @@ than a moving default branch.
 - The normal `down` completion contract is now owned by the installed-user
   journey. Redundant private-predicate tests were removed instead of
   preserving the implementation shape beneath that behavior.
+- Contributor testing now has three commands to remember: `make test` for
+  behavior, `make test-journeys` for installed cross-process flows, and
+  `make preflight` for the complete commit gate. The duplicate `test-fast`
+  alias and repeated static checks are gone.
 
 ## Why it matters
 

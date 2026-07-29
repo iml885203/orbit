@@ -67,7 +67,7 @@ The release gate owns these installed-user behaviors:
 ## Running tests
 
 During implementation, run the narrowest sociable test that covers the changed
-behavior. Run `make test-fast` after a coherent feature group and
+behavior. Run `make test` after a coherent feature group and
 `make preflight` once before committing that group. Release-only journeys may
 remain slower because they prove installed binaries and real platform behavior.
 

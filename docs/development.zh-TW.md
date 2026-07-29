@@ -144,16 +144,15 @@ orbit init
 
 ```bash
 make build         # Build frontend + Go binary
-make test-fast     # Go 與 dashboard 檢查並行的快速迴圈
-make test          # 依序執行相同測試
-make preflight     # 完整 source、installer、文件 gate；每個完整 commit 跑一次
+make test          # Go 與 dashboard 行為測試
+make preflight     # 完整 source、靜態、installer、文件 gate；每個完整 commit 跑一次
 make test-journeys # 真實 Git、process、Docker 邊界下驗收已 build 的 binary
 make lint          # Run linter
 make setup         # Install git hooks
 ```
 
 修改期間先跑最貼近變更的 sociable test；完成一組連貫的產品改善後跑
-`make test-fast`，commit 前再跑一次 `make preflight`。不要每修一點就發布；
+`make test`，commit 前再跑一次 `make preflight`。不要每修一點就發布；
 先把同一個使用者結果相關的修改集中起來，整體 review release candidate，
 再發布一個版本。
 
