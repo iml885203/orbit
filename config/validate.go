@@ -2,12 +2,25 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
 // Validate checks config for errors: missing refs, cycles, port conflicts.
 func Validate(cfg *Config) error {
 	var errs []string
+	if cfg.Settings.ShutdownTimeout < 0 {
+		errs = append(errs, "settings.shutdown_timeout must be positive")
+	}
+	if cfg.Settings.HealthCheckInterval < 0 {
+		errs = append(errs, "settings.health_check_interval must be positive")
+	}
+	if cfg.Settings.DockerPollInterval < 0 {
+		errs = append(errs, "settings.docker_poll_interval must be positive")
+	}
 
 	known := make(map[string]bool)
 	for name := range cfg.Containers {
@@ -20,15 +33,17 @@ func Validate(cfg *Config) error {
 
 	// Check dependency references exist
 	for name, s := range cfg.Services {
-		if s.HealthCheck != nil && s.HealthCheck.FailureThreshold < 0 {
-			errs = append(errs, fmt.Sprintf("service %q health_check.failure_threshold must be at least 1", name))
-		}
-		if healthCheckRequiresPort(s.HealthCheck) && s.HealthCheck.Port == 0 {
+		if s.Kind != "" && !validKinds[s.Kind] {
 			errs = append(errs, fmt.Sprintf(
-				"service %q health_check.port is required when ports does not identify one endpoint",
+				"service %q has invalid kind %q (expected frontend, backend, or infra)",
 				name,
+				s.Kind,
 			))
 		}
+		if err := validateServiceURL(name, s); err != nil {
+			errs = append(errs, err.Error())
+		}
+		errs = append(errs, validateHealthCheck("service", name, s.HealthCheck, false)...)
 		for _, dep := range s.DependsOn {
 			if !known[dep] {
 				errs = append(errs, fmt.Sprintf("service %q depends on unknown %q", name, dep))
@@ -36,15 +51,14 @@ func Validate(cfg *Config) error {
 		}
 	}
 	for name, c := range cfg.Containers {
-		if c.HealthCheck != nil && c.HealthCheck.FailureThreshold < 0 {
-			errs = append(errs, fmt.Sprintf("container %q health_check.failure_threshold must be at least 1", name))
-		}
-		if healthCheckRequiresPort(c.HealthCheck) && c.HealthCheck.Port == 0 {
+		if c.Kind != "" && !validKinds[c.Kind] {
 			errs = append(errs, fmt.Sprintf(
-				"container %q health_check.port is required when ports does not identify one endpoint",
+				"container %q has invalid kind %q (expected frontend, backend, or infra)",
 				name,
+				c.Kind,
 			))
 		}
+		errs = append(errs, validateHealthCheck("container", name, c.HealthCheck, true)...)
 		if !isValidPullPolicy(c.PullPolicy) {
 			errs = append(errs, fmt.Sprintf("container %q has invalid pull_policy %q (expected always, if_not_present, or never)", name, c.PullPolicy))
 		}
@@ -114,8 +128,87 @@ func Validate(cfg *Config) error {
 	return nil
 }
 
-func healthCheckRequiresPort(check *HealthCheckConfig) bool {
-	return check != nil && (check.Type == "http" || check.Type == "tcp")
+func validateServiceURL(name string, service *Service) error {
+	if strings.TrimSpace(service.URL) == "" {
+		return nil
+	}
+	endpoint, err := url.Parse(service.URL)
+	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return fmt.Errorf("service %q url must be an absolute http or https URL", name)
+	}
+	host := endpoint.Hostname()
+	if host != "localhost" && !net.ParseIP(host).IsLoopback() {
+		return nil
+	}
+	port, ok := service.Ports[endpoint.Scheme]
+	if !ok {
+		return nil
+	}
+	endpointPort := endpoint.Port()
+	if endpointPort == "" {
+		if endpoint.Scheme == "http" {
+			endpointPort = "80"
+		} else {
+			endpointPort = "443"
+		}
+	}
+	if endpointPort != strconv.Itoa(port.Host) {
+		return fmt.Errorf(
+			"service %q url uses port %s but ports.%s declares %d",
+			name,
+			endpointPort,
+			endpoint.Scheme,
+			port.Host,
+		)
+	}
+	return nil
+}
+
+func validateHealthCheck(resourceType, name string, check *HealthCheckConfig, container bool) []string {
+	if check == nil {
+		return nil
+	}
+	prefix := fmt.Sprintf("%s %q health_check", resourceType, name)
+	var errs []string
+	switch check.Type {
+	case "http", "tcp":
+		if check.Port == 0 {
+			errs = append(errs, prefix+".port is required when ports does not identify one endpoint")
+		}
+	case "log":
+		if strings.TrimSpace(check.Pattern) == "" {
+			errs = append(errs, prefix+".pattern is required for type log")
+		} else if _, err := regexp.Compile(check.Pattern); err != nil {
+			errs = append(errs, prefix+".pattern is invalid: "+err.Error())
+		}
+	case "exec":
+		if !container {
+			errs = append(errs, prefix+" type exec is only supported for containers")
+		} else if len(check.Command) == 0 {
+			errs = append(errs, prefix+".command is required for type exec")
+		}
+	case "healthcheck":
+		if !container {
+			errs = append(errs, prefix+" type healthcheck is only supported for containers")
+		}
+	case "":
+		errs = append(errs, prefix+".type is required")
+	default:
+		errs = append(errs, prefix+" has unknown type "+fmt.Sprintf("%q", check.Type))
+	}
+	if check.Interval <= 0 {
+		errs = append(errs, prefix+".interval must be positive")
+	}
+	if check.Timeout <= 0 {
+		errs = append(errs, prefix+".timeout must be positive")
+	}
+	if check.Retries < 1 {
+		errs = append(errs, prefix+".retries must be at least 1")
+	}
+	if check.FailureThreshold < 1 {
+		errs = append(errs, prefix+".failure_threshold must be at least 1")
+	}
+	return errs
 }
 
 func isValidPullPolicy(value string) bool {

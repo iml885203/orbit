@@ -253,6 +253,9 @@ func evaluateRuntimeRequirements(tool HostToolCheck, binaryPath, installed, base
 			continue
 		}
 		compatible, comparable := compatibleVersion(installed, requirement.Requested)
+		if tool.Binary == "go" {
+			compatible, comparable = minimumVersion(installed, requirement.Requested)
+		}
 		if !comparable {
 			unknown = append(unknown, label)
 		} else if !compatible {
@@ -318,6 +321,37 @@ func compatibleVersion(installed, requested string) (bool, bool) {
 	}
 	for i := range requestedParts {
 		if installedParts[i] != requestedParts[i] {
+			return false, true
+		}
+	}
+	return true, true
+}
+
+func minimumVersion(installed, requested string) (bool, bool) {
+	installedParts, ok := numericVersionParts(installed)
+	if !ok {
+		return false, false
+	}
+	requestedParts, ok := numericVersionParts(requested)
+	if !ok {
+		return false, false
+	}
+	width := len(installedParts)
+	if len(requestedParts) > width {
+		width = len(requestedParts)
+	}
+	for i := 0; i < width; i++ {
+		var installedPart, requestedPart int
+		if i < len(installedParts) {
+			installedPart = installedParts[i]
+		}
+		if i < len(requestedParts) {
+			requestedPart = requestedParts[i]
+		}
+		if installedPart > requestedPart {
+			return true, true
+		}
+		if installedPart < requestedPart {
 			return false, true
 		}
 	}

@@ -381,12 +381,10 @@ A service is a dev process Orbit spawns, watches, and can restart.
 ```yaml
 services:
   my-api:
-    type: python                   # dotnet is special; otherwise use a runtime label
-    kind: backend               # frontend | backend | infra — graph node tint
-    path: ./src/MyApi/MyApi.csproj
-    command: pnpm dev           # non-dotnet types: the command to run in `path`
-    watch: false                # dotnet only: use `dotnet watch` instead of build+run
-    url: https://localhost:5001/swagger
+    kind: backend                 # frontend | backend | infra — graph node tint
+    path: ./src/my-api            # defaults to the orbit.yaml directory
+    command: pnpm dev
+    url: https://localhost:5001
     ports:
       http: 5000
       https: 5001
@@ -409,9 +407,9 @@ services:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | string | yes | `dotnet` gets build-then-run handling (or `dotnet watch` with `watch: true`); any other value (`node`, `shell`, …) runs `command` inside `path` |
+| `type` | string | no | Inferred for common Python, Node, Bun, and Go commands. Set `dotnet` explicitly for build-then-run handling (or `dotnet watch` with `watch: true`) |
 | `kind` | string | no | `frontend` \| `backend` (default) \| `infra` — colours the graph node; identity only, never health |
-| `path` | string | yes | Path to `.csproj` (dotnet) or the working directory for `command` |
+| `path` | string | no | Path to `.csproj` (dotnet) or the working directory for `command`; defaults to the directory containing `orbit.yaml` |
 | `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
 | `url` | string | no | Canonical URL; `orbit open <service>` uses this. Omit it when an `http` or `https` port already identifies the endpoint |

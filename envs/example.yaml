@@ -17,9 +17,7 @@ containers:
 
 services:
   app:
-    type: python
     kind: frontend
-    path: .
     command: python3 -m http.server "$PORT"
     ports:
       http:

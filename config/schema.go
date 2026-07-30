@@ -187,9 +187,9 @@ func (p PortDef) PreferredHost() int {
 	return p.Host
 }
 
-func (p *PortDef) UnmarshalYAML(unmarshal func(any) error) error {
+func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
 	var single int
-	if err := unmarshal(&single); err == nil {
+	if err := node.Decode(&single); err == nil {
 		if err := validatePortNumber(single); err != nil {
 			return err
 		}
@@ -198,31 +198,44 @@ func (p *PortDef) UnmarshalYAML(unmarshal func(any) error) error {
 		return nil
 	}
 	var s string
-	if err := unmarshal(&s); err == nil {
+	if err := node.Decode(&s); err == nil {
 		return p.parseMapping(s)
 	}
 
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: port must be an int, a \"host:target\" string, or a {preferred, target} mapping", node.Line)
+	}
+	for i := 0; i < len(node.Content); i += 2 {
+		key := node.Content[i]
+		if key.Value != "preferred" && key.Value != "target" {
+			hint := ""
+			if key.Value == "prefered" {
+				hint = " (did you mean \"preferred\"?)"
+			}
+			return fmt.Errorf("line %d: unknown port field %q%s", key.Line, key.Value, hint)
+		}
+	}
 	var movable struct {
 		Preferred int `yaml:"preferred"`
 		Target    int `yaml:"target"`
 	}
-	if err := unmarshal(&movable); err == nil {
-		if err := validatePortNumber(movable.Preferred); err != nil {
-			return fmt.Errorf("preferred %w", err)
-		}
-		if movable.Target == 0 {
-			movable.Target = movable.Preferred
-		}
-		if err := validatePortNumber(movable.Target); err != nil {
-			return fmt.Errorf("target %w", err)
-		}
-		p.Host = movable.Preferred
-		p.Target = movable.Target
-		p.auto = true
-		p.preferred = movable.Preferred
-		return nil
+	if err := node.Decode(&movable); err != nil {
+		return fmt.Errorf("line %d: invalid port mapping: %w", node.Line, err)
 	}
-	return fmt.Errorf("port must be an int, a \"host:target\" string, or a {preferred, target} mapping")
+	if err := validatePortNumber(movable.Preferred); err != nil {
+		return fmt.Errorf("line %d: preferred %w", node.Line, err)
+	}
+	if movable.Target == 0 {
+		movable.Target = movable.Preferred
+	}
+	if err := validatePortNumber(movable.Target); err != nil {
+		return fmt.Errorf("line %d: target %w", node.Line, err)
+	}
+	p.Host = movable.Preferred
+	p.Target = movable.Target
+	p.auto = true
+	p.preferred = movable.Preferred
+	return nil
 }
 
 func (p *PortDef) parseMapping(s string) error {

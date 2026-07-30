@@ -242,10 +242,44 @@ func applyDefaults(cfg *Config) {
 	}
 
 	for _, s := range cfg.Services {
+		if s.Path == "" {
+			s.Path = "."
+		}
+		if s.Type == "" {
+			s.Type = inferServiceType(s.Command)
+		}
 		applyHealthCheckDefaults(s.HealthCheck, s.Ports, cfg.Settings.HealthCheckInterval)
 		if s.Type == "dotnet" && s.Command == "" {
 			s.Command = "dotnet watch run"
 		}
+	}
+}
+
+func inferServiceType(command string) string {
+	fields := strings.Fields(command)
+	for len(fields) > 0 && strings.Contains(fields[0], "=") {
+		fields = fields[1:]
+	}
+	if len(fields) > 1 && fields[0] == "env" {
+		fields = fields[1:]
+		for len(fields) > 0 && strings.Contains(fields[0], "=") {
+			fields = fields[1:]
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	executable := strings.ToLower(filepath.Base(fields[0]))
+	switch {
+	case strings.HasPrefix(executable, "python"), executable == "uv", executable == "poetry":
+		return "python"
+	case executable == "node", executable == "npm", executable == "npx",
+		executable == "pnpm", executable == "yarn", executable == "bun":
+		return "node"
+	case executable == "go":
+		return "go"
+	default:
+		return ""
 	}
 }
 

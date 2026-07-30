@@ -47,7 +47,7 @@ func TestService_ResolveKind(t *testing.T) {
 		{"explicit backend", Service{Kind: "backend"}, "backend"},
 		{"explicit infra", Service{Kind: "infra"}, "infra"},
 		{"empty falls back to backend", Service{}, "backend"},
-		{"unknown falls back to backend", Service{Kind: "weird"}, "backend"},
+		{"unknown remains defensive backend fallback", Service{Kind: "weird"}, "backend"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestContainer_ResolveKind(t *testing.T) {
 	}{
 		{"explicit infra", Container{Kind: "infra"}, "infra"},
 		{"empty falls back to infra", Container{}, "infra"},
-		{"unknown falls back to infra", Container{Kind: "weird"}, "infra"},
+		{"unknown remains defensive infra fallback", Container{Kind: "weird"}, "infra"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

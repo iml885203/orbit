@@ -951,6 +951,76 @@ services:
 
 	if _, err := Load(path); err == nil {
 		t.Fatal("unknown preferred port field was accepted")
+	} else if !strings.Contains(err.Error(), `line 10: unknown port field "typo"`) {
+		t.Fatalf("error = %q", err)
+	}
+}
+
+func TestLoadTreatsConfigAsAnAuthoringContract(t *testing.T) {
+	tests := []struct {
+		name    string
+		service string
+		want    string
+	}{
+		{
+			name: "invalid URL",
+			service: `    command: python3 app.py
+    url: not-a-url`,
+			want: `service "app" url must be an absolute http or https URL`,
+		},
+		{
+			name: "URL disagrees with declared endpoint",
+			service: `    command: python3 app.py
+    url: http://localhost:28412
+    ports:
+      http: 28411`,
+			want: `service "app" url uses port 28412 but ports.http declares 28411`,
+		},
+		{
+			name: "preferred port typo",
+			service: `    command: python3 app.py
+    ports:
+      http:
+        prefered: 28411`,
+			want: `unknown port field "prefered" (did you mean "preferred"?)`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "orbit.yaml")
+			source := "version: \"3\"\nservices:\n  app:\n" + test.service + "\n"
+			if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Load(path); err == nil {
+				t.Fatal("invalid config was accepted")
+			} else if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestLoadDefaultsServicePathAndInfersRuntime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "orbit.yaml")
+	if err := os.WriteFile(path, []byte(`version: "3"
+services:
+  app:
+    command: python3 app.py
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := cfg.Services["app"]
+	if service.Path != dir {
+		t.Fatalf("path = %q, want %q", service.Path, dir)
+	}
+	if service.Type != "python" {
+		t.Fatalf("type = %q, want python", service.Type)
 	}
 }
 

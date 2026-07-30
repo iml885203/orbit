@@ -228,6 +228,24 @@ func TestCompatibleVersionUsesDeclaredPrecision(t *testing.T) {
 	}
 }
 
+func TestGoVersionRequirementAcceptsNewerToolchain(t *testing.T) {
+	tests := []struct {
+		installed  string
+		requested  string
+		compatible bool
+	}{
+		{installed: "go1.26.5", requested: "1.24", compatible: true},
+		{installed: "go1.24.2", requested: "1.24", compatible: true},
+		{installed: "go1.23.9", requested: "1.24", compatible: false},
+	}
+	for _, test := range tests {
+		compatible, comparable := minimumVersion(test.installed, test.requested)
+		if !comparable || compatible != test.compatible {
+			t.Errorf("minimumVersion(%q, %q) = (%v, %v)", test.installed, test.requested, compatible, comparable)
+		}
+	}
+}
+
 func nodeConfig(project string) *config.Config {
 	return &config.Config{Services: map[string]*config.Service{
 		"web": {Type: "node", Command: "node server.js", Path: project},
