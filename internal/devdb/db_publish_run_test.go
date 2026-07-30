@@ -2,6 +2,7 @@ package devdb
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -47,7 +48,7 @@ func TestRunBoundedPublish(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- runBoundedPublish(targets, 4, "published", work)
+		done <- runBoundedPublish(targets, 4, "published", io.Discard, work)
 	}()
 	select {
 	case <-full:
@@ -80,7 +81,7 @@ func TestRunBoundedPublish(t *testing.T) {
 
 	// All-success returns nil.
 	ok := func(publishTargetRef) (string, error) { return "ok", nil }
-	if err := runBoundedPublish(targets[:3], 2, "published", ok); err != nil {
+	if err := runBoundedPublish(targets[:3], 2, "published", io.Discard, ok); err != nil {
 		t.Errorf("all-success run should return nil; got %v", err)
 	}
 }

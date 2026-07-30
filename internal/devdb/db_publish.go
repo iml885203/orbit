@@ -13,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/internal/dbstate"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/iml885203/orbit/internal/sqlpublish"
 	"github.com/spf13/cobra"
 )
@@ -71,15 +72,8 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 	if !publishAll && !safeArgName.MatchString(args[0]) {
 		return fmt.Errorf("invalid database or project name %q", args[0])
 	}
-	if cli.JSONOutput {
-		// Publish is destructive — unsupported under --json in every mode.
-		// The scope is the raw argument (or --all); resolution happens later.
-		scope := "orbit sqlserver publish --all"
-		if !publishAll {
-			scope = "orbit sqlserver publish " + args[0]
-		}
-		return cli.NewUnsupportedDestructiveJSONCommandError(scope,
-			"Run manually only after confirming schema publish side effects are acceptable.")
+	if err := rejectForcedPublishJSON(args); err != nil {
+		return err
 	}
 
 	client, err := dialDBWorkflow()
@@ -87,8 +81,19 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	out := io.Writer(os.Stdout)
+	if cli.JSONOutput {
+		out = io.Discard
+	}
+
+	var published []string
 	if publishAll {
-		return runDBPublishAll(client)
+		targets, err := runDBPublishAll(client, out)
+		if err != nil {
+			return err
+		}
+		published = publishTargetNames(targets)
+		return writeDBPublishJSON(args, published)
 	}
 
 	// The argument may name a database or a whole project; a project publishes
@@ -98,7 +103,12 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 		return err
 	}
 	if resolved.FromProject() {
-		return runDBPublishProject(client, projects, resolved)
+		targets, err := runDBPublishProject(client, projects, resolved, out)
+		if err != nil {
+			return err
+		}
+		published = publishTargetNames(targets)
+		return writeDBPublishJSON(args, published)
 	}
 	if publishParallel > 0 {
 		return fmt.Errorf("--parallel applies only to --all or a project with multiple databases")
@@ -124,35 +134,99 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 		return nil
 	}
 	// A publish prepares fast reset state for a database it just created.
-	return publishOne(client, opts, true, os.Stdout)
+	if err := publishOne(client, opts, true, out); err != nil {
+		return err
+	}
+	return writeDBPublishJSON(args, []string{dbName})
+}
+
+func writeDBPublishJSON(args, databases []string) error {
+	if !cli.JSONOutput {
+		return nil
+	}
+	return writeDBPublishJSONTo(os.Stdout, args, databases)
+}
+
+func writeDBPublishJSONTo(out io.Writer, args, databases []string) error {
+	return cli.WriteJSONSuccess(out, dbPublishCommand(args, true, false), dbPublishJSONResult{
+		Databases:       databases,
+		Published:       len(databases),
+		DataLossAllowed: false,
+	}, nil)
+}
+
+func rejectForcedPublishJSON(args []string) error {
+	if !cli.JSONOutput || !publishForce {
+		return nil
+	}
+	return cli.NewUnsupportedDestructiveJSONCommandError(
+		dbPublishCommand(args, false, false),
+		"Run manually; Orbit will show the data-loss scope and ask for confirmation.",
+	)
+}
+
+func dbPublishCommand(args []string, jsonOutput, includeYes bool) string {
+	parts := []string{"orbit", "sqlserver", "publish"}
+	if publishAll {
+		parts = append(parts, "--all")
+	} else if len(args) > 0 {
+		parts = append(parts, shellquote.Quote(args[0]))
+	}
+	if publishParallel > 0 {
+		parts = append(parts, fmt.Sprintf("--parallel=%d", publishParallel))
+	}
+	if publishForce {
+		parts = append(parts, "--force")
+	}
+	if includeYes && publishYes {
+		parts = append(parts, "--yes")
+	}
+	if jsonOutput {
+		parts = append(parts, "--json")
+	}
+	return strings.Join(parts, " ")
+}
+
+func publishTargetNames(targets []publishTargetRef) []string {
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, target.DB)
+	}
+	return names
 }
 
 // runDBPublishProject publishes every database a project owns, reusing the
 // same bounded runner as --all but scoped to that project's targets. projects
 // is the list resolveDBArgFromClient already fetched — reused, not re-dialed.
-func runDBPublishProject(client *daemon.Client, projects []DevDBProject, resolved resolvedArg) error {
+func runDBPublishProject(client *daemon.Client, projects []DevDBProject, resolved resolvedArg, out io.Writer) ([]publishTargetRef, error) {
 	targets := publishTargetsForDBs(projects, resolved.DBs)
 	if len(targets) == 0 {
-		return fmt.Errorf("project %q has no resolvable databases — check `orbit sqlserver list`", resolved.Project)
+		return nil, fmt.Errorf("project %q has no resolvable databases — check `orbit sqlserver list`", resolved.Project)
 	}
 	if !authorizeForcedPublish(targets) {
 		fmt.Println("Aborted.")
-		return nil
+		return nil, nil
 	}
-	return runPublishTargets(client, targets, resolved.Project)
+	if err := runPublishTargets(client, targets, resolved.Project, out); err != nil {
+		return nil, err
+	}
+	return targets, nil
 }
 
 // runDBPublishAll publishes every database the project merge knows.
-func runDBPublishAll(client *daemon.Client) error {
+func runDBPublishAll(client *daemon.Client, out io.Writer) ([]publishTargetRef, error) {
 	targets, err := fetchAllPublishTargets(client)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !authorizeForcedPublish(targets) {
 		fmt.Println("Aborted.")
-		return nil
+		return nil, nil
 	}
-	return runPublishTargets(client, targets, "")
+	if err := runPublishTargets(client, targets, "", out); err != nil {
+		return nil, err
+	}
+	return targets, nil
 }
 
 func authorizeForcedPublish(targets []publishTargetRef) bool {
@@ -178,24 +252,24 @@ func forcedPublishPrompt(targets []publishTargetRef) string {
 // (--all and a single project): resolve the base conn, run the bounded
 // publisher, report progress. scope names the project for the project path;
 // empty means every configured project ("all").
-func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string) error {
+func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string, out io.Writer) error {
 	base, err := publishConnOptsFromClient(client, "")
 	if err != nil {
 		return err
 	}
 	base.Force = publishForce
 	if scope == "" {
-		fmt.Printf("Publishing %d databases → %s:%d\n", len(targets), base.Host, base.Port)
+		fmt.Fprintf(out, "Publishing %d databases → %s:%d\n", len(targets), base.Host, base.Port)
 	} else {
-		fmt.Printf("Publishing %s (%d databases) → %s:%d\n", scope, len(targets), base.Host, base.Port)
+		fmt.Fprintf(out, "Publishing %s (%d databases) → %s:%d\n", scope, len(targets), base.Host, base.Port)
 	}
-	if err := publishRun(client, base, targets, "published", true, publishParallel); err != nil {
+	if err := publishRun(client, base, targets, "published", true, publishParallel, out); err != nil {
 		return err
 	}
 	if scope == "" {
-		fmt.Printf("\n%s Published all %d databases\n", cli.Green.Sprint("✓"), len(targets))
+		fmt.Fprintf(out, "\n%s Published all %d databases\n", cli.Green.Sprint("✓"), len(targets))
 	} else {
-		fmt.Printf("\n%s Published %d databases in %s\n", cli.Green.Sprint("✓"), len(targets), scope)
+		fmt.Fprintf(out, "\n%s Published %d databases in %s\n", cli.Green.Sprint("✓"), len(targets), scope)
 	}
 	return nil
 }
@@ -207,13 +281,13 @@ func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope 
 // The daemon's runPublishOp deliberately
 // keeps its own loop: its output sink, event source and failure contract
 // (SSE done frames) all differ.
-func publishSequentially(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool) error {
+func publishSequentially(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, out io.Writer) error {
 	for i, t := range targets {
-		fmt.Printf("\n[%d/%d] %s\n", i+1, len(targets), t.DB)
+		fmt.Fprintf(out, "\n[%d/%d] %s\n", i+1, len(targets), t.DB)
 		opts := base
 		opts.DB = t.DB
 		opts.SQLProj = t.SQLProj
-		if err := publishOne(client, opts, baselineOnCreate, os.Stdout); err != nil {
+		if err := publishOne(client, opts, baselineOnCreate, out); err != nil {
 			return fmt.Errorf("%s failed (%d of %d %s, the rest skipped): %w", t.DB, i, len(targets), failVerb, err)
 		}
 	}
@@ -226,8 +300,8 @@ func publishSequentially(client *daemon.Client, base sqlpublish.Opts, targets []
 // (`--parallel`) and intended for an already prepared server,
 // because concurrent first-time publishes racing to create the same
 // shared (composite) objects can conflict.
-func publishConcurrently(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, concurrency int) error {
-	return runBoundedPublish(targets, concurrency, failVerb, func(t publishTargetRef) (string, error) {
+func publishConcurrently(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, concurrency int, out io.Writer) error {
+	return runBoundedPublish(targets, concurrency, failVerb, out, func(t publishTargetRef) (string, error) {
 		var buf bytes.Buffer
 		opts := base
 		opts.DB = t.DB
@@ -245,7 +319,7 @@ func publishConcurrently(client *daemon.Client, base sqlpublish.Opts, targets []
 // semaphore/WaitGroup/mutex mechanics are unit-testable apart from the
 // real publish. concurrency must be >= 1 (publishRun enforces it before
 // dispatching here).
-func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb string, work func(publishTargetRef) (string, error)) error {
+func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb string, out io.Writer, work func(publishTargetRef) (string, error)) error {
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -258,7 +332,7 @@ func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb str
 		go func(t publishTargetRef) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			out, err := work(t)
+			output, err := work(t)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -268,7 +342,7 @@ func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb str
 				status = cli.Red.Sprint("✗")
 				failures = append(failures, fmt.Sprintf("%s: %v", t.DB, err))
 			}
-			fmt.Printf("\n[%d/%d] %s %s\n%s", done, len(targets), status, t.DB, out)
+			fmt.Fprintf(out, "\n[%d/%d] %s %s\n%s", done, len(targets), status, t.DB, output)
 		}(t)
 	}
 	wg.Wait()
@@ -281,11 +355,11 @@ func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb str
 
 // publishRun dispatches a multi-target publish to the sequential or the
 // bounded-concurrent runner. concurrency <= 0 means sequential.
-func publishRun(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, concurrency int) error {
+func publishRun(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, concurrency int, out io.Writer) error {
 	if concurrency > 0 {
-		return publishConcurrently(client, base, targets, failVerb, baselineOnCreate, concurrency)
+		return publishConcurrently(client, base, targets, failVerb, baselineOnCreate, concurrency, out)
 	}
-	return publishSequentially(client, base, targets, failVerb, baselineOnCreate)
+	return publishSequentially(client, base, targets, failVerb, baselineOnCreate, out)
 }
 
 // publishOne runs one publish and posts the dbstate event — the

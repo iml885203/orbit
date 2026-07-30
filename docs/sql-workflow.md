@@ -53,6 +53,13 @@ container-side tooling, native arm64 on Apple Silicon. It is idempotent:
 an unchanged project converges to a no-op in seconds, and data is always
 preserved (destructive changes are blocked unless `--force`).
 
+Agents and scripts can use `orbit sqlserver publish <db> --json` for this
+ordinary path. Success returns an `orbit.cli.v1` envelope naming every
+published database. A forced publish never runs in JSON mode: the error
+envelope preserves the selected scope and `--force` as a
+`destructive: true` manual action, without `--yes`, so a person still sees the
+confirmation prompt.
+
 The database schema converges to the project: adding, changing, or deleting a
 stored procedure, table, or other project object produces the corresponding
 create, alter, or drop. Drops that could lose data are reported by

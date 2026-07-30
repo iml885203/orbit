@@ -117,6 +117,7 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 | `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
 | `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
 | `orbit uninstall --json` | 預覽 binary artifacts 與 user data 是否保留；只有加上 `--yes` 才會移除。 |
+| `orbit sqlserver publish <database|project> --json` | 執行一般的 data-preserving publish，並回傳 `databases`、`published` 與 `data_loss_allowed: false`。`--all`、`--parallel` 使用相同 envelope。`--force --json` 絕不 publish；它只回傳一個保留 scope 與 `--force`、移除 `--yes` 的人工 `destructive: true` action，讓執行的人仍需確認。 |
 | `orbit trace --json` | 回傳近期 trace summaries 於 `data.traces`，最新在前。 |
 | `orbit trace -f --json` | 串流 NDJSON trace-summary event，一行一個 JSON 物件。 |
 | `orbit trace <id> --json` | 回傳一條完整 trace（summary 欄位 + `spans`）於 `data`。 |

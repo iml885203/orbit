@@ -25,7 +25,9 @@ for required in \
   "orbit restart <resource> --json" \
   "orbit down <resource> --json" \
   "orbit status --json" \
-  "orbit sqlserver diff"
+  "orbit sqlserver diff" \
+  "orbit sqlserver publish <database|project> --json" \
+  "destructive: true"
 do
   if ! grep -F "$required" "$skill" "$workflows" >/dev/null; then
     echo "plugin is missing the supported workflow command: $required" >&2

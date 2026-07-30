@@ -14,6 +14,12 @@ type DevDBProjectsResponse struct {
 	Projects []DevDBProject `json:"projects"`
 }
 
+type dbPublishJSONResult struct {
+	Databases       []string `json:"databases"`
+	Published       int      `json:"published"`
+	DataLossAllowed bool     `json:"data_loss_allowed"`
+}
+
 type DevDBMetaResponse struct {
 	EnvironmentPath string `json:"environment_path"`
 	EnvironmentName string `json:"environment_name"`

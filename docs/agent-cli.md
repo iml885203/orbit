@@ -125,6 +125,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
 | `orbit uninstall --json` | Previews binary artifacts and whether user data is preserved; `--yes` is required before removal. |
+| `orbit sqlserver publish <database|project> --json` | Runs the ordinary data-preserving publish and returns `databases`, `published`, and `data_loss_allowed: false`. `--all` and `--parallel` use the same envelope. `--force --json` never publishes; it returns one manual `destructive: true` action that preserves the scope and `--force` but removes `--yes` so a person still confirms. |
 | `orbit trace --json` | Returns recent trace summaries in `data.traces`, newest first. |
 | `orbit trace -f --json` | Streams NDJSON trace-summary events, one JSON object per line. |
 | `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |

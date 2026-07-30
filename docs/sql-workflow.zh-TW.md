@@ -50,6 +50,12 @@ port——不重建 image、不用 container 內工具,Apple Silicon 上是原�
 冪等:project 沒變時幾秒內收斂為 no-op,資料一律保留(破壞性變更預設擋下,
 `--force` 才放行)。
 
+Agent 與 script 可用 `orbit sqlserver publish <db> --json` 執行這條一般路徑。
+成功時，`orbit.cli.v1` envelope 會列出所有已 publish 的 database。Force
+publish 不會在 JSON mode 執行：error envelope 會保留原本 scope 與
+`--force`，回傳一個 `destructive: true`、不含 `--yes` 的人工操作，確保執行
+的人仍會看到確認提示。
+
 DB schema 會收斂到 project：新增、修改或刪除 stored procedure、table
 或其他 project object，都會產生對應的 create、alter 或 drop。可能造成
 資料遺失的 drop 會顯示在 `orbit sqlserver diff`，publish 預設擋下，直到使用者明確

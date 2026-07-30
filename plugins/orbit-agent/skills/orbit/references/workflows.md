@@ -70,13 +70,19 @@ configured container. Their interactive/native output is not an
 `orbit.cli.v1` envelope.
 
 The SQL Server Database Projects workflow is optional and exists only when the
-environment enables it. `orbit sqlserver diff` and `orbit sqlserver publish` preserve data
-by default. Ask before:
+environment enables it. Use `orbit sqlserver diff <database> --json` to inspect
+schema impact. Use `orbit sqlserver publish <database|project> --json` (or
+`--all --json`) for the ordinary data-preserving path; changes that could lose
+data remain blocked. Ask before:
 
 - `orbit sqlserver reset`
 - `orbit sqlserver publish --force`
 
-State the database target and expected data impact in the confirmation.
+State the database target and expected data impact in the confirmation. A
+forced publish requested with `--json` does not run; its envelope returns one
+`destructive: true` manual command that preserves `--force` and the selected
+scope. Execute that exact command only after approval; Orbit asks for
+confirmation again before publishing.
 
 ## Tunnels
 
