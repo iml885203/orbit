@@ -338,7 +338,7 @@ func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
 	}
 	switch top.Name() {
 	case "down", "restart", "logs", "open", "exec", "query", "topics", "seed",
-		"edge", "service", "db", "tunnel", "trace", "tracing":
+		"edge", "service", "sqlserver", "tunnel", "trace", "tracing":
 		return true
 	default:
 		return false
@@ -351,7 +351,7 @@ func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "restart", "exec", "query", "topics", "seed", "edge", "service", "db", "tunnel":
+	case "restart", "exec", "query", "topics", "seed", "edge", "service", "sqlserver", "tunnel":
 		return true
 	case "env":
 		return cmd.Name() == "toggle"

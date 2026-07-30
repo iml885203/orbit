@@ -15,7 +15,7 @@ Orbit 是團隊中性的本地開發 orchestrator(Go CLI + daemon + Svelte UI)�
 
 ### 先問再動
 - 直接編輯 `~/.orbit/settings.json` —— 改走 UI/CLI 路徑。
-- 破壞性操作：`docker volume rm`、`orbit db reset`（把單一 DB 回復到最新 schema 的乾淨狀態，會丟掉本機資料變更）、`orbit db publish --force`（允許可能造成資料遺失的 schema 變更）。舊的 image-build flow（`orbit db build` 與 container 端 apply）已移除；publish / reset 全程在 host 上執行。
+- 破壞性操作：`docker volume rm`、`orbit sqlserver reset`（把單一 DB 回復到最新 schema 的乾淨狀態，會丟掉本機資料變更）、`orbit sqlserver publish --force`（允許可能造成資料遺失的 schema 變更）。舊的 image-build flow 與 container 端 apply 已移除；publish / reset 全程在 host 上執行。
 
 ### 永遠不要
 - `git push --force`、`git commit --no-verify`。
@@ -45,8 +45,8 @@ orbit status --json           # verify state
 orbit switch <env>            # change env and restart daemon
 orbit logs <service>          # plaintext; -f to stream
 orbit doctor                  # checks setup; prints fixes
-orbit db query "SELECT TOP 5 * FROM Users"
-orbit db publish <dbname>     # fast dev-loop, preserves data
+orbit sqlserver query "SELECT TOP 5 * FROM Users"
+orbit sqlserver publish <dbname> # fast dev-loop, preserves data
 ```
 
 如果 `orbit up` 抱怨缺 env，跑 `orbit init` 或 `orbit env sync`。

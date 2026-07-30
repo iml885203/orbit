@@ -33,11 +33,20 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 }
 
 func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
+	commands := Extensions()[0].Commands()
+	if len(commands) != 3 ||
+		commands[0].Name() != "sqlserver" ||
+		commands[0].Hidden ||
+		commands[1].Name() != "db" ||
+		!commands[1].Hidden {
+		t.Fatalf("SQL Server command surface = %#v", commands)
+	}
+
 	visibility := Extensions()[0].CommandVisibility
 	if visibility == nil {
 		t.Fatal("official command visibility is not configured")
 	}
-	if got := visibility(nil); got["db"] || got["tunnel"] {
+	if got := visibility(nil); got["sqlserver"] || got["tunnel"] {
 		t.Fatalf("optional commands visible without environment: %v", got)
 	}
 
@@ -45,7 +54,7 @@ func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
 		WithExtension("sqlserver", &devdb.SQLServerConfig{}).
 		WithExtension("claim", &tunnel.ClaimConfig{})
 	got := visibility(cfg)
-	if !got["db"] || !got["tunnel"] {
+	if !got["sqlserver"] || !got["tunnel"] {
 		t.Fatalf("configured optional commands hidden: %v", got)
 	}
 }

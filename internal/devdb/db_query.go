@@ -16,8 +16,8 @@ func dbQueryCmd() *cobra.Command {
 		Long: `Run sqlcmd inside the explicitly configured SQL Server target.
 
 Examples:
-  orbit db query "SELECT TOP 5 * FROM Users"
-  orbit db query                              # interactive mode`,
+  orbit sqlserver query "SELECT TOP 5 * FROM Users"
+  orbit sqlserver query                              # interactive mode`,
 		Args: cobra.ArbitraryArgs,
 		RunE: runDBQuery,
 	}

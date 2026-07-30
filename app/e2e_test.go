@@ -1555,7 +1555,7 @@ func TestE2E_DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails(t *
 		{"open"},
 		{"logs", "app"},
 		{"restart", "app"},
-		{"db", "list"},
+		{"sqlserver", "list"},
 		{"trace"},
 	}
 	for _, args := range commands {
@@ -1597,9 +1597,9 @@ func TestE2E_DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails(t *
 	if err := os.WriteFile(filepath.Join(projectDir, "orbit.yaml"), []byte("version: \"3\"\nservices: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	configured, err := command(projectDir, "db", "list").CombinedOutput()
+	configured, err := command(projectDir, "sqlserver", "list").CombinedOutput()
 	if err == nil {
-		t.Fatalf("db list without daemon unexpectedly succeeded:\n%s", configured)
+		t.Fatalf("sqlserver list without daemon unexpectedly succeeded:\n%s", configured)
 	}
 	for _, evidence := range []string{"Orbit is not running.", "orbit up"} {
 		if !bytes.Contains(configured, []byte(evidence)) {

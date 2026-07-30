@@ -195,9 +195,9 @@ containers.
 ### SQL Server Database Projects
 
 ```bash
-orbit db list
-orbit db diff AppDB
-orbit db publish AppDB
+orbit sqlserver list
+orbit sqlserver diff AppDB
+orbit sqlserver publish AppDB
 ```
 
 An environment opts in with a `sqlserver:` section. `publish` applies a schema

@@ -34,7 +34,7 @@ Idempotent: an unchanged project converges to a no-op in seconds. Data is
 preserved; destructive changes are blocked unless --force.
 
 The argument may be a database name or a project name (both appear in
-` + "`orbit db list`" + `); a project publishes each of its databases.
+` + "`orbit sqlserver list`" + `); a project publishes each of its databases.
 
 Projects come from sqlserver.projects in the active environment. Requires the
 host dotnet SDK and sqlpackage
@@ -74,9 +74,9 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 	if cli.JSONOutput {
 		// Publish is destructive — unsupported under --json in every mode.
 		// The scope is the raw argument (or --all); resolution happens later.
-		scope := "orbit db publish --all"
+		scope := "orbit sqlserver publish --all"
 		if !publishAll {
-			scope = "orbit db publish " + args[0]
+			scope = "orbit sqlserver publish " + args[0]
 		}
 		return cli.NewUnsupportedDestructiveJSONCommandError(scope,
 			"Run manually only after confirming schema publish side effects are acceptable.")
@@ -133,7 +133,7 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 func runDBPublishProject(client *daemon.Client, projects []DevDBProject, resolved resolvedArg) error {
 	targets := publishTargetsForDBs(projects, resolved.DBs)
 	if len(targets) == 0 {
-		return fmt.Errorf("project %q has no resolvable databases — check `orbit db list`", resolved.Project)
+		return fmt.Errorf("project %q has no resolvable databases — check `orbit sqlserver list`", resolved.Project)
 	}
 	if !authorizeForcedPublish(targets) {
 		fmt.Println("Aborted.")

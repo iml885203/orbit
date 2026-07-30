@@ -2,6 +2,11 @@
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
+這組 command 命名為 `orbit sqlserver`，因為這個 optional workflow 實作的是
+SQL Server Database Project semantics，不是 Orbit 的 generic database
+abstraction。Redis、MongoDB 與 PostgreSQL 的 client convenience 仍放在
+`orbit query`。
+
 Environment 只有在明確啟用 `sqlserver` 時，才會出現五個 Database Project
 指令：`list`、`diff`、`publish`、`reset`、`query`。其他 environment 不會顯示
 這套 workflow。
@@ -22,24 +27,24 @@ Publish 全程在 host 上進行——用 `dotnet build` 建置 SQL project，�
 
 Orbit 不會自動移除該儲存空間。刪除 volume 或 bind mount 內的資料會永久
 刪除所有本機資料庫；只有一顆 database 需要乾淨資料時，請使用
-`orbit db reset <dbname>`。
+`orbit sqlserver reset <dbname>`。
 
-全新的 volume 一開始是空的；`orbit db publish --all` 會建立並 publish
+全新的 volume 一開始是空的；`orbit sqlserver publish --all` 會建立並 publish
 所有設定好的資料庫。
 
 ## 什麼情境用什麼指令
 
 | 情境 | 指令 | 成本 |
 |---|---|---|
-| 想知道 SQL source 有沒有變更 | `orbit db diff <dbname>` | 通常不到一秒 |
-| 你剛改了一支 stored proc / 一張 table | `orbit db publish <dbname>` | 約 15 秒，冪等，沒有 downtime |
-| 你從 `main` merge 了 schema，想在本地套用 | `orbit db publish <dbname>`（或 `--all`） | 每個 DB 約 15 秒，資料保留 |
-| DB 塞滿不要的測試資料 | `orbit db reset <dbname>` | 幾秒，丟棄本機資料 |
-| 初始化全新的 SQL Server | `orbit db publish --all` | 建立並 publish 所有 DB |
+| 想知道 SQL source 有沒有變更 | `orbit sqlserver diff <dbname>` | 通常不到一秒 |
+| 你剛改了一支 stored proc / 一張 table | `orbit sqlserver publish <dbname>` | 約 15 秒，冪等，沒有 downtime |
+| 你從 `main` merge 了 schema，想在本地套用 | `orbit sqlserver publish <dbname>`（或 `--all`） | 每個 DB 約 15 秒，資料保留 |
+| DB 塞滿不要的測試資料 | `orbit sqlserver reset <dbname>` | 幾秒，丟棄本機資料 |
+| 初始化全新的 SQL Server | `orbit sqlserver publish --all` | 建立並 publish 所有 DB |
 
-## `orbit db publish`:快速通用路徑
+## `orbit sqlserver publish`：日常快速路徑
 
-`orbit db publish <db>` 在 **host 上**建置 SQL project(`dotnet build`),
+`orbit sqlserver publish <db>` 在 **host 上**建置 SQL project(`dotnet build`),
 再用 host 的 `sqlpackage` 把 dacpac 直接發佈到設定 target 的 published
 port——不重建 image、不用 container 內工具,Apple Silicon 上是原生 arm64。
 冪等:project 沒變時幾秒內收斂為 no-op,資料一律保留(破壞性變更預設擋下,
@@ -47,7 +52,7 @@ port——不重建 image、不用 container 內工具,Apple Silicon 上是原�
 
 DB schema 會收斂到 project：新增、修改或刪除 stored procedure、table
 或其他 project object，都會產生對應的 create、alter 或 drop。可能造成
-資料遺失的 drop 會顯示在 `db diff`，publish 預設擋下，直到使用者明確
+資料遺失的 drop 會顯示在 `orbit sqlserver diff`，publish 預設擋下，直到使用者明確
 加上 `--force`。Force publish 會列出所有受影響的 database 並再次要求確認；
 非互動執行時，只有在檢視影響後才使用 `--force --yes`。
 
@@ -72,7 +77,7 @@ sqlserver:
 
 ### 一次整個環境：`--all`
 
-`orbit db publish --all` 依 project merge 順序逐顆 publish 所有資料庫,
+`orbit sqlserver publish --all` 依 project merge 順序逐顆 publish 所有資料庫,
 遇到第一個失敗即停止。加上 `--parallel[=N]` 可同時 publish 最多 N 顆
 (只有在已建置過的 server 上才安全)。Dashboard 的 `Publish all` 按鈕透過
 daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建立缺少的
@@ -82,13 +87,13 @@ daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建�
 `password_env` 指定 target container 裡存放密碼的 key。Orbit 只在 DB
 操作執行時讀取解析後的值，不會在 status、logs 或 JSON output 暴露密碼。
 
-### 乾淨重置：`orbit db reset`
+### 乾淨重置：`orbit sqlserver reset`
 
-`orbit db reset <db>` 會中斷現有連線、丟棄本機資料並套用最新 schema。
+`orbit sqlserver reset <db>` 會中斷現有連線、丟棄本機資料並套用最新 schema。
 不需要先執行任何設定指令。Orbit 有可用的快速還原狀態時會直接使用，否則
 從 SQL project 重建；這個差異不需要使用者處理。
 
-`orbit db query` 刻意只提供 CLI 操作。Dashboard 專注於 project drift、
+`orbit sqlserver query` 刻意只提供 CLI 操作。Dashboard 專注於 project drift、
 publish 與 reset，而不內嵌通用 SQL console。
 
 ## Dashboard visibility

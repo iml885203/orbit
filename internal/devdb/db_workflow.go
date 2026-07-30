@@ -1,4 +1,4 @@
-// Shared preamble of the `orbit db` subcommand family: dialing the daemon
+// Shared preamble of the `orbit sqlserver` subcommand family: dialing the daemon
 // and gating on the DB workflow (see internal/daemon/db_workflow.go for the
 // daemon side of the gate).
 

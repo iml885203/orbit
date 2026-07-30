@@ -19,12 +19,16 @@ func Extensions() []extension.Extension {
 	return []extension.Extension{{
 		Name: "official",
 		Commands: func() []*cobra.Command {
-			return []*cobra.Command{devdb.DBCmd(), tunnel.TunnelCmd()}
+			return []*cobra.Command{
+				devdb.SQLServerCmd(),
+				devdb.DBMigrationCmd(),
+				tunnel.TunnelCmd(),
+			}
 		},
 		CommandVisibility: func(cfg *config.Config) map[string]bool {
 			return map[string]bool{
-				"db":     cfg != nil && devdb.SQLServerFrom(cfg) != nil,
-				"tunnel": cfg != nil && tunnel.ClaimFrom(cfg) != nil,
+				"sqlserver": cfg != nil && devdb.SQLServerFrom(cfg) != nil,
+				"tunnel":    cfg != nil && tunnel.ClaimFrom(cfg) != nil,
 			}
 		},
 		DaemonSetup: officialDaemonSetup,

@@ -10,7 +10,8 @@ for stale in \
   "orbit service stop" \
   "orbit service restart" \
   "orbit daemon start" \
-  "orbit db publish --clean"
+  "orbit db " \
+  "orbit sqlserver publish --clean"
 do
   if grep -F "$stale" "$skill" "$workflows" >/dev/null; then
     echo "plugin teaches unsupported or internal lifecycle command: $stale" >&2
@@ -23,7 +24,8 @@ for required in \
   "orbit up <resource> --json" \
   "orbit restart <resource> --json" \
   "orbit down <resource> --json" \
-  "orbit status --json"
+  "orbit status --json" \
+  "orbit sqlserver diff"
 do
   if ! grep -F "$required" "$skill" "$workflows" >/dev/null; then
     echo "plugin is missing the supported workflow command: $required" >&2

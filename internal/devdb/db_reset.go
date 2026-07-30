@@ -28,7 +28,7 @@ func dbResetCmd() *cobra.Command {
 local data changes (test data, ad-hoc edits) and disconnecting active clients.
 
 The argument may be a database name or a project name (both appear in
-` + "`orbit db list`" + `), but reset acts on one database: a project with
+` + "`orbit sqlserver list`" + `), but reset acts on one database: a project with
 more than one database is rejected — name the specific database.
 
 Destructive: run manually. Requires the host dotnet SDK and sqlpackage.`,
@@ -46,7 +46,7 @@ func runDBReset(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid database or project name %q", args[0])
 	}
 	if cli.JSONOutput {
-		return cli.NewUnsupportedDestructiveJSONCommandError("orbit db reset "+args[0],
+		return cli.NewUnsupportedDestructiveJSONCommandError("orbit sqlserver reset "+args[0],
 			"Discards local data and disconnects clients; run manually.")
 	}
 

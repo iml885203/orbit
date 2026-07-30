@@ -19,7 +19,7 @@ type DevDBMetaResponse struct {
 	EnvironmentName string `json:"environment_name"`
 	SQLServerImage  string `json:"sql_server_image"`
 	// SQLServerPort is the container's published host port — the target
-	// `orbit db publish` connects to from the host.
+	// `orbit sqlserver publish` connects to from the host.
 	SQLServerPort int `json:"sql_server_port,omitempty"`
 	// SQLServerTarget is the publish target's runtime docker name. The
 	// CLI resolves the configured password key by inspecting this container

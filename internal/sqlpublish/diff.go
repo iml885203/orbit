@@ -10,7 +10,7 @@ package sqlpublish
 //   - DiffScript: /Action:Script → the exact T-SQL a publish would run.
 //
 // The report uses the SAME properties a real publish uses, so the diff
-// reflects what `orbit db publish` would actually do. Target-only schema
+// reflects what `orbit sqlserver publish` would actually do. Target-only schema
 // objects are dropped: deleting an object from the project is a real schema
 // change, protected by the same possible-data-loss gate as publish.
 

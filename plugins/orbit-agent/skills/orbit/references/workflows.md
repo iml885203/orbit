@@ -70,11 +70,11 @@ configured container. Their interactive/native output is not an
 `orbit.cli.v1` envelope.
 
 The SQL Server Database Projects workflow is optional and exists only when the
-environment enables it. `orbit db diff` and `orbit db publish` preserve data
+environment enables it. `orbit sqlserver diff` and `orbit sqlserver publish` preserve data
 by default. Ask before:
 
-- `orbit db reset`
-- `orbit db publish --force`
+- `orbit sqlserver reset`
+- `orbit sqlserver publish --force`
 
 State the database target and expected data impact in the confirmation.
 

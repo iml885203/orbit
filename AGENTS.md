@@ -13,7 +13,7 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 
 ### Ask first
 - Editing `~/.orbit/settings.json` directly — use the UI/CLI path instead.
-- Destructive ops: `docker volume rm`, `orbit db reset` (returns one DB to a clean latest-schema state, discarding local data changes), `orbit db publish --force` (allows data-loss schema changes). The old image-build flow (`orbit db build` and container-side apply) has been removed; publish/reset run entirely on the host.
+- Destructive ops: `docker volume rm`, `orbit sqlserver reset` (returns one DB to a clean latest-schema state, discarding local data changes), `orbit sqlserver publish --force` (allows data-loss schema changes). The former image-build flow and container-side apply have been removed; publish/reset run entirely on the host.
 
 ### Never
 - `git push --force`, `git commit --no-verify`.
@@ -43,8 +43,8 @@ orbit status --json           # verify state
 orbit switch <env>            # change env and restart daemon
 orbit logs <service>          # plaintext; -f to stream
 orbit doctor                  # checks setup; prints fixes
-orbit db query "SELECT TOP 5 * FROM Users"
-orbit db publish <dbname>     # fast dev-loop, preserves data
+orbit sqlserver query "SELECT TOP 5 * FROM Users"
+orbit sqlserver publish <dbname> # fast dev-loop, preserves data
 ```
 
 If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.

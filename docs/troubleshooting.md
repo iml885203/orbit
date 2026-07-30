@@ -64,11 +64,11 @@ environment, use `orbit env sync --no-apply`, then apply it when ready.
 
 ## SQL Server
 
-### After `orbit db publish`, DbGate doesn't show the new object
+### After `orbit sqlserver publish`, DbGate doesn't show the new object
 DbGate caches the schema per connection. Right-click the connection → Disconnect → Connect, or click the refresh icon on the database node. Verify the object is really there:
 
 ```bash
-orbit db query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
+orbit sqlserver query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
 ```
 
 ### `publish` fails: `CommonFiles.dacpac could not be resolved`
@@ -77,28 +77,28 @@ the affected project and rebuild:
 
 ```bash
 dotnet clean /path/to/Database.sqlproj
-orbit db publish <dbname>
+orbit sqlserver publish <dbname>
 ```
 
 ### `publish` refuses: "data loss might occur"
 You're narrowing a column, dropping a table, or similar. Either accept the loss:
 
 ```bash
-orbit db publish <dbname> --force     # shows scope and asks for confirmation
+orbit sqlserver publish <dbname> --force     # shows scope and asks for confirmation
 ```
 
 or refactor the change in smaller steps. For an already reviewed
 non-interactive run, use `--force --yes`. To discard local data and apply the
-latest schema, run `orbit db reset <dbname>`.
+latest schema, run `orbit sqlserver reset <dbname>`.
 
 ### My SP disappeared after restarting the configured SQL Server target
 Should not happen after the volume-seeding fix. If it does:
 
 1. Confirm the DB's files live in the volume:
    ```bash
-   orbit db query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
+   orbit sqlserver query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
    ```
-   Paths should start with `/var/opt/mssql/data/` (the persistent volume). If a database is missing entirely, republish it with `orbit db publish <db>` (or use `orbit db publish --all` for every configured database).
+   Paths should start with `/var/opt/mssql/data/` (the persistent volume). If a database is missing entirely, republish it with `orbit sqlserver publish <db>` (or use `orbit sqlserver publish --all` for every configured database).
 2. Check that the volume or bind mount declared by your environment still
    exists and was not recreated recently.
 
@@ -163,7 +163,7 @@ sudo chown -R $(whoami) ~/.orbit
 ### `orbit exec` complains the container name doesn't exist
 Orbit's default naming is `orbit-<service>`. If you set `ORBIT_NAMESPACE=foo`, the name becomes `foo-<service>`. Check `docker ps --format '{{.Names}}'`.
 
-### `orbit db publish` reports unavailable SQL Server credentials
+### `orbit sqlserver publish` reports unavailable SQL Server credentials
 
 Check that `sqlserver.password_env` names a non-empty environment key on the
 configured target container, then restart that target with `orbit restart

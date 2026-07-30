@@ -2,6 +2,11 @@
 
 [English](./sql-workflow.md) · [繁體中文](./sql-workflow.zh-TW.md)
 
+The command family is named `orbit sqlserver` because this optional workflow
+implements SQL Server Database Project semantics; it is not Orbit's generic
+database abstraction. Redis, MongoDB, and PostgreSQL client conveniences remain
+under `orbit query`.
+
 An environment that explicitly enables `sqlserver` gets five Database Project
 commands: `list`, `diff`, `publish`, `reset`, and `query`. Other environments
 do not show this workflow.
@@ -23,25 +28,25 @@ across:
 - `orbit down` followed by `orbit up`
 
 Orbit never removes that storage automatically. Removing its volume or bind
-mount data permanently deletes every local database. Use `orbit db reset
+mount data permanently deletes every local database. Use `orbit sqlserver reset
 <dbname>` when only one database needs clean data.
 
-A fresh volume starts empty; `orbit db publish --all` creates and publishes
+A fresh volume starts empty; `orbit sqlserver publish --all` creates and publishes
 every configured database.
 
 ## When to use which command
 
 | Situation | Command | Cost |
 |---|---|---|
-| Check whether source changed | `orbit db diff <dbname>` | usually under a second |
-| You just changed one stored proc / table | `orbit db publish <dbname>` | ~15s, idempotent, no downtime |
-| You merged schema from `main` and want it locally | `orbit db publish <dbname>` (or `--all`) | ~15s per DB, data preserved |
-| The live DB is full of bad test data | `orbit db reset <dbname>` | seconds, local data discarded |
-| Set up a fresh SQL Server | `orbit db publish --all` | creates and publishes every configured DB |
+| Check whether source changed | `orbit sqlserver diff <dbname>` | usually under a second |
+| You just changed one stored proc / table | `orbit sqlserver publish <dbname>` | ~15s, idempotent, no downtime |
+| You merged schema from `main` and want it locally | `orbit sqlserver publish <dbname>` (or `--all`) | ~15s per DB, data preserved |
+| The live DB is full of bad test data | `orbit sqlserver reset <dbname>` | seconds, local data discarded |
+| Set up a fresh SQL Server | `orbit sqlserver publish --all` | creates and publishes every configured DB |
 
-## `orbit db publish`: the fast generic path
+## `orbit sqlserver publish`: the everyday path
 
-`orbit db publish <db>` builds the SQL project **on the host** (`dotnet
+`orbit sqlserver publish <db>` builds the SQL project **on the host** (`dotnet
 build`) and publishes the dacpac straight to the configured target's published
 port with the host `sqlpackage` — no image rebuild, no
 container-side tooling, native arm64 on Apple Silicon. It is idempotent:
@@ -50,7 +55,8 @@ preserved (destructive changes are blocked unless `--force`).
 
 The database schema converges to the project: adding, changing, or deleting a
 stored procedure, table, or other project object produces the corresponding
-create, alter, or drop. Drops that could lose data are reported by `db diff`
+create, alter, or drop. Drops that could lose data are reported by
+`orbit sqlserver diff`
 and blocked by publish until the user explicitly passes `--force`. A forced
 publish shows every affected database and asks for confirmation; use
 `--force --yes` only after reviewing the impact when running non-interactively.
@@ -76,7 +82,7 @@ container name, directory scan, or separate per-machine allowlist.
 
 ### The whole env at once: `--all`
 
-`orbit db publish --all` publishes every database from the project merge
+`orbit sqlserver publish --all` publishes every database from the project merge
 sequentially, stopping at the first failure. Add `--parallel[=N]` to publish
 up to N databases concurrently (only safe on an already-provisioned server).
 The dashboard's `Publish all` button does the same through the daemon.
@@ -89,14 +95,14 @@ successful databases converge to no-ops.
 reads that resolved value only when a DB operation runs and never exposes it
 in status, logs, or JSON output.
 
-### Clean resets: `orbit db reset`
+### Clean resets: `orbit sqlserver reset`
 
-`orbit db reset <db>` disconnects active clients, discards local data, and
+`orbit sqlserver reset <db>` disconnects active clients, discards local data, and
 applies the latest schema. No setup command is required. Orbit automatically
 chooses a fast restore when available and rebuilds from the SQL project when
 needed.
 
-`orbit db query` is intentionally CLI-only. The dashboard focuses on project
+`orbit sqlserver query` is intentionally CLI-only. The dashboard focuses on project
 drift, publish, and reset operations rather than embedding a general SQL
 console.
 

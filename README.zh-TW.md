@@ -176,9 +176,9 @@ query helper 與下方選用的 SQL Server schema-project workflow 是兩件不�
 ### SQL Server Database Projects
 
 ```bash
-orbit db list
-orbit db diff AppDB
-orbit db publish AppDB
+orbit sqlserver list
+orbit sqlserver diff AppDB
+orbit sqlserver publish AppDB
 ```
 
 Environment 透過 `sqlserver:` section 明確啟用。`publish` 會保留資料並套用

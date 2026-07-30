@@ -39,7 +39,7 @@ func TestPrintDiffSummary_ChangedFilesOffersImpactAnalysis(t *testing.T) {
 			Path:   "AppDB/dbo/Stored Procedures/GetUser.sql",
 		}},
 	})
-	if !strings.Contains(out, "Analyze database impact: orbit db diff AppDB --analyze") {
+	if !strings.Contains(out, "Analyze database impact: orbit sqlserver diff AppDB --analyze") {
 		t.Fatalf("missing impact-analysis next action:\n%s", out)
 	}
 	for _, implementationTerm := range []string{"--deep", "engine", "fingerprint"} {

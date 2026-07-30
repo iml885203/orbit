@@ -68,7 +68,7 @@ func sqlProjForDatabaseOrError(projects []DevDBProject, dbName string) (string, 
 	if proj, ok := sqlProjForDatabase(projects, dbName); ok {
 		return proj, nil
 	}
-	return "", fmt.Errorf("database %q not found — check `orbit db list`", dbName)
+	return "", fmt.Errorf("database %q not found — check `orbit sqlserver list`", dbName)
 }
 
 // publishTargetsForDBs maps a set of database names to their publish targets,

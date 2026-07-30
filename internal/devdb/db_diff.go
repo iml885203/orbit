@@ -1,7 +1,7 @@
 package devdb
 
 // The `db diff` CLI command: show how a database's schema differs from
-// its SQL project — i.e. what `orbit db publish <db>` would change.
+// its SQL project — i.e. what `orbit sqlserver publish <db>` would change.
 // Read-only: it builds the project's dacpac and asks sqlpackage for a
 // deploy report (or, with --script, the T-SQL a publish would run). The
 // database is never touched, so unlike publish/reset/snapshot this
@@ -33,7 +33,7 @@ changes a publish would apply — objects to create, alter, or drop, plus
 any possible-data-loss warnings. Read-only: the database is not modified.
 
 The argument may be a database name or a project name (both appear in
-` + "`orbit db list`" + `); a project diffs each of its databases.
+` + "`orbit sqlserver list`" + `); a project diffs each of its databases.
 
 By default prints a human-readable summary. Use --script to print the
 exact T-SQL a publish would run, or --json for structured output.
@@ -136,7 +136,7 @@ func diffOneDB(client *daemon.Client, projects []DevDBProject, dbName string) er
 			return runErr
 		}
 		if cli.JSONOutput {
-			return cli.WriteJSONSuccess(os.Stdout, "orbit db diff --script",
+			return cli.WriteJSONSuccess(os.Stdout, "orbit sqlserver diff --script",
 				map[string]any{"db": dbName, "script": script}, nil)
 		}
 		fmt.Print(script)
@@ -156,7 +156,7 @@ func diffOneDB(client *daemon.Client, projects []DevDBProject, dbName string) er
 	}
 
 	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(os.Stdout, "orbit db diff", result, nil)
+		return cli.WriteJSONSuccess(os.Stdout, "orbit sqlserver diff", result, nil)
 	}
 	printDiffSummary(result)
 	return nil
@@ -183,7 +183,7 @@ func printDiffSummary(r sqlpublish.DiffResult) {
 		for _, c := range r.FileChanges {
 			fmt.Printf("  %s %-8s %s\n", opMark(c.Action), strings.ToLower(c.Action), c.Path)
 		}
-		fmt.Printf("\nAnalyze database impact: orbit db diff %s --analyze\n", r.DB)
+		fmt.Printf("\nAnalyze database impact: orbit sqlserver diff %s --analyze\n", r.DB)
 		return
 	}
 

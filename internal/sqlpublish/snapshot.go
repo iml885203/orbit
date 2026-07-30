@@ -94,7 +94,7 @@ func RefreshBaseline(ctx context.Context, opts Opts, db string, out io.Writer) e
 		// self-heals (it clears the stale temp and retries the whole
 		// sequence). The temp snapshot is NOT read by any workflow path —
 		// it only preserves this state for manual RESTORE until the rerun.
-		return fmt.Errorf("preparing the clean reset state: %w — rerun `orbit db reset %s`; until then %s preserves the last known clean state (manual recovery: RESTORE DATABASE [%s] FROM DATABASE_SNAPSHOT = '%s')", err, db, tmp, db, tmp)
+		return fmt.Errorf("preparing the clean reset state: %w — rerun `orbit sqlserver reset %s`; until then %s preserves the last known clean state (manual recovery: RESTORE DATABASE [%s] FROM DATABASE_SNAPSHOT = '%s')", err, db, tmp, db, tmp)
 	}
 	if _, err := conn.ExecContext(ctx, "DROP DATABASE IF EXISTS ["+tmp+"]"); err != nil {
 		fmt.Fprintf(out, "[reset] warning: temporary clean state %s was not removed: %v\n", tmp, err)
@@ -156,7 +156,7 @@ func RevertToBaseline(ctx context.Context, opts Opts, db string, out io.Writer) 
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("%w for %q — rerun `orbit db reset %s` to rebuild a clean state", ErrBaselineMissing, db, db)
+		return fmt.Errorf("%w for %q — rerun `orbit sqlserver reset %s` to rebuild a clean state", ErrBaselineMissing, db, db)
 	}
 
 	pool, err := openMasterDB(opts)

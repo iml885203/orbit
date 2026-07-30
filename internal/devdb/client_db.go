@@ -56,7 +56,7 @@ func fetchAllPublishTargets(c *daemon.Client) ([]publishTargetRef, error) {
 	}
 	targets := publishTargetsFrom(projects.Projects)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no databases found — add .sqlproj paths to sqlserver.projects or check `orbit db list`")
+		return nil, fmt.Errorf("no databases found — add .sqlproj paths to sqlserver.projects or check `orbit sqlserver list`")
 	}
 	return targets, nil
 }

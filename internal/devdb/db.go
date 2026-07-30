@@ -4,26 +4,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
-func DBCmd() *cobra.Command {
+func SQLServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "db",
+		Use:   "sqlserver",
 		Short: "Manage SQL Server Database Projects",
 		Long: `Manage SQL Server Database Projects declared by the active environment.
 
 Examples:
-  orbit db list                        # show configured projects and databases
-  orbit db query "SELECT @@VERSION"    # query the configured SQL Server
-  orbit db diff SampleDB               # check pending schema changes
-  orbit db publish SampleDB            # push schema changes, preserving data
-  orbit db reset SampleDB              # discard local data, return to a clean state`,
+  orbit sqlserver list                        # show configured projects and databases
+  orbit sqlserver query "SELECT @@VERSION"    # query the configured SQL Server
+  orbit sqlserver diff SampleDB               # check pending schema changes
+  orbit sqlserver publish SampleDB            # push schema changes, preserving data
+  orbit sqlserver reset SampleDB              # discard local data, return to a clean state`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				return fmt.Errorf("unknown database command %q", args[0])
+				return fmt.Errorf("unknown SQL Server command %q", args[0])
 			}
 			return cmd.Help()
 		},
@@ -34,6 +36,50 @@ Examples:
 	cmd.AddCommand(dbPublishCmd())
 	cmd.AddCommand(dbResetCmd())
 	return cmd
+}
+
+func DBMigrationCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:                "db",
+		Hidden:             true,
+		DisableFlagParsing: true,
+		RunE: func(_ *cobra.Command, args []string) error {
+			next := []string{"orbit", "sqlserver"}
+			for _, arg := range args {
+				next = append(next, shellquote.Quote(arg))
+			}
+			command := strings.Join(next, " ")
+			return dbCommandRenamedError{next: command}
+		},
+	}
+}
+
+type dbCommandRenamedError struct {
+	next string
+}
+
+func (e dbCommandRenamedError) Error() string {
+	return "`orbit db` was renamed to `orbit sqlserver` before 1.0"
+}
+
+func (e dbCommandRenamedError) ErrorCode() string {
+	return "invalid_argument"
+}
+
+func (e dbCommandRenamedError) CLIJSONHint() string {
+	return "Use the provider-specific SQL Server command."
+}
+
+func (e dbCommandRenamedError) CLIHumanNextCommand() string {
+	return e.next
+}
+
+func (e dbCommandRenamedError) CLIJSONReplacementActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     e.next,
+		Reason:      "Use the provider-specific SQL Server command.",
+		Destructive: false,
+	}}
 }
 
 func dbListCmd() *cobra.Command {

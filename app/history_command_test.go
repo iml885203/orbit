@@ -21,8 +21,8 @@ func TestCommandStringQuotesSingleQuotes(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
-	os.Args = []string{"orbit", "db", "query", "SELECT * FROM Users WHERE Name='Logan'"}
-	if got, want := commandString(), "orbit db query 'SELECT * FROM Users WHERE Name='\"'\"'Logan'\"'\"''"; got != want {
+	os.Args = []string{"orbit", "sqlserver", "query", "SELECT * FROM Users WHERE Name='Logan'"}
+	if got, want := commandString(), "orbit sqlserver query 'SELECT * FROM Users WHERE Name='\"'\"'Logan'\"'\"''"; got != want {
 		t.Fatalf("commandString() = %q, want %q", got, want)
 	}
 }

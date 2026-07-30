@@ -12,7 +12,7 @@ func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
 	for _, name := range []string{
 		"down", "restart", "logs", "open", "exec", "query", "topics", "seed",
-		"edge", "service", "db", "tunnel", "trace", "tracing",
+		"edge", "service", "sqlserver", "tunnel", "trace", "tracing",
 	} {
 		parent := &cobra.Command{Use: name}
 		child := &cobra.Command{Use: "child"}
@@ -89,11 +89,11 @@ func TestContextualHelpHidesCommandsWithoutASelectedEnvironment(t *testing.T) {
 	root := commandVisibilityTestRoot()
 	applyContextualCommandVisibility(root, nil, []extension.Extension{{
 		CommandVisibility: func(*config.Config) map[string]bool {
-			return map[string]bool{"db": false, "tunnel": false}
+			return map[string]bool{"sqlserver": false, "tunnel": false}
 		},
 	}})
 
-	for _, name := range []string{"db", "exec", "query", "seed", "topics", "trace", "tunnel"} {
+	for _, name := range []string{"sqlserver", "exec", "query", "seed", "topics", "trace", "tunnel"} {
 		assertCommandHidden(t, root, name, true)
 	}
 	assertCommandHidden(t, root, "up", false)
@@ -111,14 +111,14 @@ func TestContextualHelpShowsOnlyConfiguredCapabilities(t *testing.T) {
 	}
 	applyContextualCommandVisibility(root, cfg, []extension.Extension{{
 		CommandVisibility: func(*config.Config) map[string]bool {
-			return map[string]bool{"db": false, "tunnel": true}
+			return map[string]bool{"sqlserver": true, "tunnel": true}
 		},
 	}})
 
-	for _, name := range []string{"exec", "query", "seed", "trace", "tunnel"} {
+	for _, name := range []string{"sqlserver", "exec", "query", "seed", "trace", "tunnel"} {
 		assertCommandHidden(t, root, name, false)
 	}
-	for _, name := range []string{"db", "topics"} {
+	for _, name := range []string{"topics"} {
 		assertCommandHidden(t, root, name, true)
 	}
 
@@ -145,7 +145,7 @@ func TestContextualHelpShowsQueryForPostgresOnlyEnvironment(t *testing.T) {
 
 func commandVisibilityTestRoot() *cobra.Command {
 	root := &cobra.Command{Use: "orbit"}
-	for _, name := range []string{"db", "exec", "query", "seed", "topics", "trace", "tunnel", "up"} {
+	for _, name := range []string{"sqlserver", "exec", "query", "seed", "topics", "trace", "tunnel", "up"} {
 		root.AddCommand(&cobra.Command{Use: name})
 	}
 	return root

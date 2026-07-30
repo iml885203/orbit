@@ -168,7 +168,7 @@ func TestWriteJSONErrorAlignsNextCommandWithReplacementAction(t *testing.T) {
 
 func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteJSONError(&buf, "orbit db list --json", &daemon.ConfigMismatchError{
+	err := WriteJSONError(&buf, "orbit sqlserver list --json", &daemon.ConfigMismatchError{
 		Requested: "/tmp/selected.yaml",
 		Running:   "/tmp/running.yaml",
 	})
@@ -192,7 +192,7 @@ func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
 
 func TestWriteJSONErrorClassifiesUnknownOlderDaemonConfig(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteJSONError(&buf, "orbit db list --json", &daemon.ConfigMismatchError{
+	err := WriteJSONError(&buf, "orbit sqlserver list --json", &daemon.ConfigMismatchError{
 		Requested: "/tmp/selected.yaml",
 	})
 	if err != nil {
@@ -530,11 +530,11 @@ func TestWriteJSONFailurePreservesChecks(t *testing.T) {
 func TestWriteJSONUnsupportedDestructiveCommandEnvelope(t *testing.T) {
 	var buf bytes.Buffer
 	err := NewUnsupportedDestructiveJSONCommandError(
-		"orbit db publish AppDB",
+		"orbit sqlserver publish AppDB",
 		"Run manually only after confirming local data loss is acceptable.",
 	)
 
-	if writeErr := WriteJSONError(&buf, "orbit db publish AppDB --json", err); writeErr != nil {
+	if writeErr := WriteJSONError(&buf, "orbit sqlserver publish AppDB --json", err); writeErr != nil {
 		t.Fatalf("WriteJSONError: %v", writeErr)
 	}
 
@@ -549,7 +549,7 @@ func TestWriteJSONUnsupportedDestructiveCommandEnvelope(t *testing.T) {
 		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
 	}
 	action := got.RecommendedActions[0]
-	if action.Command != "orbit db publish AppDB" {
+	if action.Command != "orbit sqlserver publish AppDB" {
 		t.Fatalf("recommended command = %q", action.Command)
 	}
 	if !action.Destructive {

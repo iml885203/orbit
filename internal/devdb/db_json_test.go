@@ -28,7 +28,7 @@ func TestDBPublishJSONRejectsInvalidNameBeforeDestructiveRecommendation(t *testi
 	}
 
 	var buf bytes.Buffer
-	if writeErr := cli.WriteJSONError(&buf, "orbit db publish bad;name --json", err); writeErr != nil {
+	if writeErr := cli.WriteJSONError(&buf, "orbit sqlserver publish bad;name --json", err); writeErr != nil {
 		t.Fatalf("cli.WriteJSONError: %v", writeErr)
 	}
 	got := decodeEnvelope(t, buf.Bytes())

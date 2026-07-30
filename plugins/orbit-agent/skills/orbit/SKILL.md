@@ -68,7 +68,7 @@ when implementing or debugging an `orbit.cli.v1` consumer.
 
 ## Safety
 
-- Ask before `orbit db reset` or `orbit db publish --force`; these may discard
+- Ask before `orbit sqlserver reset` or `orbit sqlserver publish --force`; these may discard
   local data.
 - Do not remove Docker volumes unless the user explicitly requests it.
 - Do not edit `~/.orbit/settings.json` directly; use `orbit settings`,

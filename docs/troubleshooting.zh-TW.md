@@ -60,11 +60,11 @@ orbit switch example
 
 ## SQL Server
 
-### `orbit db publish` 之後，DbGate 沒看到新的物件
+### `orbit sqlserver publish` 之後，DbGate 沒看到新的物件
 DbGate 是按連線快取 schema 的。在連線上右鍵 → Disconnect → Connect，或在 database 節點按重新整理。再用下面的指令確認物件真的在：
 
 ```bash
-orbit db query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
+orbit sqlserver query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC"
 ```
 
 ### `publish` 失敗：`CommonFiles.dacpac could not be resolved`
@@ -73,28 +73,28 @@ orbit db query "SELECT name FROM YourDB.sys.procedures ORDER BY create_date DESC
 
 ```bash
 dotnet clean /path/to/Database.sqlproj
-orbit db publish <dbname>
+orbit sqlserver publish <dbname>
 ```
 
 ### `publish` 拒絕執行：「data loss might occur」
 你正在縮欄位、drop table，或類似的破壞性變更。要嘛接受資料遺失：
 
 ```bash
-orbit db publish <dbname> --force     # 顯示影響範圍並再次確認
+orbit sqlserver publish <dbname> --force     # 顯示影響範圍並再次確認
 ```
 
 要嘛把變更拆成更小的步驟。已檢視影響的非互動執行可使用
 `--force --yes`。要丟棄本機資料並套用最新 schema，執行
-`orbit db reset <dbname>`。
+`orbit sqlserver reset <dbname>`。
 
 ### 重新啟動設定指定的 SQL Server target 後，我的 SP 不見了
 在 volume-seeding 那個修法之後不應該再發生。如果還是遇到：
 
 1. 確認 DB 的檔案是放在 volume 裡：
    ```bash
-   orbit db query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
+   orbit sqlserver query "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID('YourDB')"
    ```
-   路徑應該要以 `/var/opt/mssql/data/` 開頭（持久化 volume）。如果某顆資料庫整個不見了，用 `orbit db publish <db>` 重新發佈（或用 `orbit db publish --all` 發佈全部）。
+   路徑應該要以 `/var/opt/mssql/data/` 開頭（持久化 volume）。如果某顆資料庫整個不見了，用 `orbit sqlserver publish <db>` 重新發佈（或用 `orbit sqlserver publish --all` 發佈全部）。
 2. 確認環境設定宣告的 volume 或 bind mount 還存在，而且不是剛剛才被重建。
 
 ### 移除 SQL Server volume 時失敗：「volume is in use」
@@ -155,7 +155,7 @@ sudo chown -R $(whoami) ~/.orbit
 ### `orbit exec` 抱怨 container 名字不存在
 Orbit 預設命名是 `orbit-<service>`。如果你設了 `ORBIT_NAMESPACE=foo`，名字會變成 `foo-<service>`。可以用 `docker ps --format '{{.Names}}'` 確認。
 
-### `orbit db publish` 回報 SQL Server credential unavailable
+### `orbit sqlserver publish` 回報 SQL Server credential unavailable
 
 確認 `sqlserver.password_env` 指向 target container 中非空的環境變數，然後
 執行 `orbit restart <target>`。Orbit 不接受第二組密碼 override，避免悄悄

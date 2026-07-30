@@ -149,7 +149,7 @@ func publishToolchainChecks() []daemon.DoctorCheck {
 	if err != nil {
 		return append(checks, daemon.DoctorCheck{
 			Name: "Publish Toolchain", Status: daemon.CheckWarn,
-			Message: "sqlpackage not found — `orbit db publish` unavailable",
+			Message: "sqlpackage not found — `orbit sqlserver publish` unavailable",
 			Hint:    sqlpublish.InstallHint,
 		})
 	}

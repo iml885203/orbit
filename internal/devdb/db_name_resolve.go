@@ -1,7 +1,7 @@
 package devdb
 
 // The db-workflow CLI takes one positional argument that names *what* to act
-// on. `orbit db list` prints both project names and database names, so users
+// on. `orbit sqlserver list` prints both project names and database names, so users
 // reasonably try either — this resolves whichever they typed to the concrete
 // database(s) the command should operate on.
 //
@@ -81,7 +81,7 @@ func resolveSingleDBArg(projects []DevDBProject, arg string) (string, error) {
 }
 
 // unknownNameError builds a "not found" error that lists the closest
-// candidates so the user can correct a typo without running `orbit db list`.
+// candidates so the user can correct a typo without running `orbit sqlserver list`.
 func unknownNameError(projects []DevDBProject, arg string) error {
 	var names []string
 	for _, p := range projects {
@@ -92,10 +92,10 @@ func unknownNameError(projects []DevDBProject, arg string) error {
 
 	near := closestNames(names, arg, 3)
 	if len(near) > 0 {
-		return fmt.Errorf("no project or database named %q — did you mean %s? (see `orbit db list`)",
+		return fmt.Errorf("no project or database named %q — did you mean %s? (see `orbit sqlserver list`)",
 			arg, strings.Join(near, ", "))
 	}
-	return fmt.Errorf("no project or database named %q — check `orbit db list`", arg)
+	return fmt.Errorf("no project or database named %q — check `orbit sqlserver list`", arg)
 }
 
 // closestNames returns up to max candidate names ranked by edit distance to

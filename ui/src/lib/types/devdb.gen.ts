@@ -66,7 +66,7 @@ export interface DevDBMetaResponse {
   sql_server_image: string;
   /**
    * SQLServerPort is the container's published host port — the target
-   * `orbit db publish` connects to from the host.
+   * `orbit sqlserver publish` connects to from the host.
    */
   sql_server_port?: number /* int */;
   /**
