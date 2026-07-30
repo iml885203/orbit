@@ -3,11 +3,10 @@ package env
 // InjectOTEL points a dev service at Orbit's built-in OTLP/HTTP receiver by
 // setting the standard OTEL_* exporter env vars, mutating env in place.
 //
-// Hybrid policy (Aspire-aligned): a service that already sets
-// OTEL_EXPORTER_OTLP_ENDPOINT is deliberately wired to its own collector, so
-// InjectOTEL leaves ALL OTEL_* vars untouched — overwriting them would silently
-// redirect that service's telemetry to Orbit. A service with no endpoint of its
-// own gets the full set.
+// A service that already sets OTEL_EXPORTER_OTLP_ENDPOINT is deliberately wired
+// to its own collector, so InjectOTEL leaves ALL OTEL_* vars untouched —
+// overwriting them would silently redirect that service's telemetry to Orbit.
+// A service with no endpoint of its own gets the full set.
 //
 // Services that register a parameterless OTLP exporter read these standard
 // OTEL_* vars at startup, so no service code change is needed. We force

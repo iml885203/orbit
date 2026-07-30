@@ -328,9 +328,8 @@ export const ResourceSchemaVersion = 1;
  * knows about: a container, a service, an external system, a database, a
  * rebuild job, a tunnel, a claimed route. Consumers render name / type /
  * state / properties generically without knowing concrete resource kinds —
- * the design that lets a future integration surface its own resources
- * without touching any renderer (see docs/pilot-elastiflix.md and the
- * extension pre-study). This endpoint coexists with the purpose-built
+ * the design that lets an extension surface its own resources without
+ * changing every renderer. This endpoint coexists with the purpose-built
  * /api/status and /api/graph views; it does not replace them.
  */
 export interface ResourceSnapshot {

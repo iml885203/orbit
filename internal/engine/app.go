@@ -197,11 +197,10 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 		}
 		envVars := env.BuildEnv(svc, cfg, toggleStates)
 		env.InjectServicePorts(envVars, svc.Ports)
-		// Hybrid OTEL injection (Aspire-aligned): point services with no OTLP
-		// endpoint of their own at Orbit's receiver, but stand aside for a
-		// service that already sets OTEL_EXPORTER_OTLP_ENDPOINT — it is
-		// deliberately wired to an external collector, and silently overwriting
-		// that would redirect its telemetry. env.InjectOTEL applies that policy.
+		// Point services with no OTLP endpoint of their own at Orbit's receiver,
+		// but stand aside for a service that already sets
+		// OTEL_EXPORTER_OTLP_ENDPOINT — silently overwriting it would redirect
+		// telemetry intended for an external collector.
 		if a.TracingEndpoint != nil {
 			if endpoint := a.TracingEndpoint(); endpoint != "" {
 				env.InjectOTEL(envVars, name, endpoint)

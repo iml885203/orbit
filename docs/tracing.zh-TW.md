@@ -10,17 +10,18 @@ Orbit 可以擷取已具備 OpenTelemetry instrumentation 的本機服務 traces
 
 ## 預設開啟
 
-Tracing **預設就是開的** —— Orbit 零設定就會收集本地 trace，跟 .NET Aspire
-dashboard 一樣。daemon 會在 `127.0.0.1:4318` 跑一個 OTLP/HTTP receiver，並對
-每個 dev service 注入標準的 `OTEL_*` 環境變數。已設定 OTLP exporter 讀取這些
-變數的 service 會自動接上 receiver。
+Tracing **預設就是開的** —— Orbit 零設定就會收集本地 trace。daemon 會在
+`127.0.0.1:4318` 跑一個 OTLP/HTTP receiver，並對每個 dev service 注入標準的
+`OTEL_*` 環境變數。已設定 OTLP exporter 讀取這些變數的 service 會自動接上
+receiver。
 
 **Hybrid injection。** 已經自己設了 `OTEL_EXPORTER_OTLP_ENDPOINT` 的 service
 （刻意接到外部 collector）會被保留不動 —— Orbit 讓路、不去改它的 telemetry
 去向，因此那個 service 的 span 不會出現在 Orbit 裡。其餘每個 service 都會被
 指向 Orbit 的 receiver。
 
-**逐 env 關掉**（很少需要）：在 env YAML 加上明確的 opt-out，然後重啟 daemon：
+**逐 env 關掉**（很少需要）：在 env YAML 加上明確的 opt-out，然後重新執行
+一般啟動指令：
 
 ```yaml
 tracing:
@@ -28,8 +29,10 @@ tracing:
 ```
 
 ```bash
-orbit down && orbit up   # 重啟 daemon 生效
+orbit up
 ```
+
+Orbit 會在中斷既有環境前先驗證修改，接著套用並恢復原先正在運行的 resources。
 
 參數（`otlp_port`、`max_traces`）見
 [configuration.zh-TW.md](configuration.zh-TW.md#tracing)。

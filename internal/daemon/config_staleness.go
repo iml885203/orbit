@@ -2,7 +2,7 @@
 // startup (or the last API env switch), while the user keeps editing env
 // files and switching selections. This file answers "does what I loaded
 // still match reality?" so status can offer a safe environment apply
-// instead of silently serving stale state (the Elastiflix pilot's M4).
+// instead of silently serving stale state.
 
 package daemon
 

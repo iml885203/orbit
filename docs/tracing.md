@@ -11,19 +11,18 @@ A trace is a path through the dependency graph; Orbit's logs already carry the
 
 ## On by default
 
-Tracing is **on by default** — Orbit collects local traces with zero config, the
-same way the .NET Aspire dashboard does. The daemon runs an OTLP/HTTP receiver on
-`127.0.0.1:4318` and injects the standard `OTEL_*` env vars into every dev
-service. Services with an OTLP exporter configured to read those variables pick
-the receiver up automatically.
+Tracing is **on by default** — Orbit collects local traces with zero config. The
+daemon runs an OTLP/HTTP receiver on `127.0.0.1:4318` and injects the standard
+`OTEL_*` env vars into every dev service. Services with an OTLP exporter
+configured to read those variables pick the receiver up automatically.
 
 **Hybrid injection.** A service that already sets `OTEL_EXPORTER_OTLP_ENDPOINT`
 itself (deliberately wired to an external collector) is left untouched — Orbit
 stands aside rather than redirect its telemetry, and that service's spans won't
 appear in Orbit. Every other service is pointed at Orbit's receiver.
 
-**Turn it off per env** (rarely needed) by adding an explicit opt-out to the env
-YAML, then restarting the daemon:
+**Turn it off per env** (rarely needed) by adding an explicit opt-out, then
+running the normal start command again:
 
 ```yaml
 tracing:
@@ -31,8 +30,11 @@ tracing:
 ```
 
 ```bash
-orbit down && orbit up   # restart the daemon to apply
+orbit up
 ```
+
+Orbit validates the edit before interrupting the running environment, applies
+it, and restores the resources that were already running.
 
 See [configuration.md](configuration.md#tracing) for the knobs (`otlp_port`,
 `max_traces`).

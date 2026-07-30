@@ -212,11 +212,10 @@ func expandOne(match string) string {
 
 // DefaultHealthRetries sizes the startup probe budget at roughly one minute
 // with the default 5s interval. The old default of 3 (≈15s) was routinely
-// spent before a source-run service finished its first-request warm-up
-// (measured 45s for a Flask app in the Elastiflix pilot — see
-// docs/pilot-elastiflix.md). For http/tcp checks exhaustion is no longer
-// terminal either way: health recovery probing keeps watching after the
-// budget runs out. Exported because the health checker's fallback shares it.
+// spent before a source-run service finished its first-request warm-up. For
+// http/tcp checks exhaustion is no longer terminal either way: health recovery
+// probing keeps watching after the budget runs out. Exported because the
+// health checker's fallback shares it.
 const DefaultHealthRetries = 12
 
 // DefaultHealthFailureThreshold avoids turning one transient runtime probe
