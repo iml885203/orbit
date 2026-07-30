@@ -1,25 +1,35 @@
 # Orbit workflows
 
-## Inspect
+## Normal entry
 
 ```bash
-orbit status --json
-orbit doctor --json
 orbit inspect --json
-orbit history --json
 ```
+
+Inspect is the single agent entry point. It reports readiness, selected
+environment, resource state, risks, and the next useful actions. Run
+`orbit doctor --json` only when inspect identifies setup or runtime
+prerequisites. Use `orbit history --json` only for an audit trail.
+On a fresh install, execute inspect's exact setup action
+(`orbit init --yes --json`) directly; do not insert doctor first.
 
 ## Start and stop
 
 ```bash
-orbit up --infra --json
 orbit up --json
-orbit service restart <name> --json
+orbit up <resource> --json
+orbit restart <resource> --json
+orbit down <resource> --json
 orbit down --json
 ```
 
 Use the narrowest command that achieves the requested change. Verify state
-afterward with `orbit status --json`.
+afterward with `orbit status --json`. `orbit up` automatically starts Orbit's
+daemon and converges pending config edits, so neither daemon management nor a
+separate apply step belongs in the normal startup path.
+
+Use `orbit up --infra --json` only when the user explicitly requests
+containers without host services.
 
 ## Environments
 
@@ -29,15 +39,38 @@ orbit switch <name> --json
 orbit env list --json
 ```
 
-An environment switch may require a daemon restart. Follow the response's
-recommended action rather than restarting preemptively.
+Sync applies changed active configuration by default while restoring the
+resources that were running; resources that were stopped remain stopped.
+`--no-apply` deliberately defers that interruption. A switch handles the daemon
+handoff itself; follow its response rather than restarting Orbit preemptively.
+
+For a project-local `orbit.yaml`, edit the file and run `orbit up --json`.
+Use `orbit env apply --json` only when the config must change while every
+resource that was stopped remains stopped.
+
+## Failures
+
+Follow the relevant JSON `recommended_actions` entry. Do not insert
+an intermediate `status`, another `inspect`, `doctor`, or a daemon command
+unless the response asks for it. The one final `orbit status --json`
+verification still applies after a state change.
+
+For a failed resource, reuse the initial inspect snapshot and read
+`orbit logs <resource> --json`. After fixing the cause, execute the response's
+targeted retry action; do not choose a broader command from prose. Dependencies
+recover through normal lifecycle behavior.
 
 ## Database workflow
 
-`orbit db diff` and `orbit db publish` preserve data by default. Ask before:
+Native Redis, MongoDB, and PostgreSQL query commands use the client inside the
+configured container. Their interactive/native output is not an
+`orbit.cli.v1` envelope.
+
+The SQL Server Database Projects workflow is optional and exists only when the
+environment enables it. `orbit db diff` and `orbit db publish` preserve data
+by default. Ask before:
 
 - `orbit db reset`
-- `orbit db publish --clean`
 - `orbit db publish --force`
 
 State the database target and expected data impact in the confirmation.

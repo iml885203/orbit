@@ -8,13 +8,23 @@ description: Operate and diagnose local development environments with the Orbit 
 Use Orbit as the control plane for the local environment. Prefer its structured
 CLI over invoking Docker, databases, or service processes directly.
 
-## Start every task
+## Core loop
 
-1. Run `orbit status --json`.
-2. If setup or configuration looks unhealthy, run `orbit doctor --json`.
-3. Inspect the active environment before changing state.
-4. Use `--json` for every command that supports it. Human output is not a
-   stable parsing contract.
+1. Run `orbit inspect --json` once to get readiness, environment/resource
+   state, risks, and recommended actions.
+2. If blocked, follow the one applicable `recommended_actions` entry after
+   checking its scope and `destructive` flag. Do not invent an intermediate
+   diagnostic command.
+3. Make the requested change with the narrowest lifecycle command.
+4. Verify the result with `orbit status --json`.
+
+Use `--json` whenever the command supports it. Human output is not a stable
+parsing contract. `orbit up` starts the daemon when needed and safely applies
+pending config edits; do not manage the daemon preemptively.
+
+Agent and advanced commands such as `inspect`, `history`, and `env apply` are
+intentionally omitted from contextual human help. Invoke them as documented;
+do not treat absence from `orbit --help` as proof that a command is unavailable.
 
 Read [references/workflows.md](references/workflows.md) for command selection
 and destructive-operation rules. Read the repository's `docs/agent-cli.md`
@@ -22,26 +32,36 @@ when implementing or debugging an `orbit.cli.v1` consumer.
 
 ## State changes
 
-- Use `orbit up --infra` for containers only and `orbit up` for services.
-- Use `orbit service start|stop|restart <name> --json` for one service.
+- Use `orbit up --json` for the environment, or
+  `orbit up <resource> --json` for one resource and its dependencies.
+- Use `orbit restart <resource> --json` and
+  `orbit down <resource> --json` for targeted lifecycle changes.
+- Use `orbit up --infra --json` only when the user explicitly wants
+  containers without host services.
 - Use `orbit env sync --json` to refresh shared configuration and
   `orbit switch <name> --json` to select it.
-- Verify changes with `orbit status --json`; do not infer success solely from
-  a zero exit code when the response provides structured state.
+- After editing the active config, normal `orbit up --json` validates before
+  interruption, restores resources that were running, then performs the
+  requested startup selection. Use `orbit env apply --json` when the edit must
+  apply without starting any resource that was already stopped.
 
 ## Diagnostics
 
-- Prefer `orbit logs <service>` over reading process files directly.
-- Use `orbit inspect --json`, `orbit history --json`, and trace commands to
-  correlate failures.
-- Follow `recommended_actions` in JSON responses after confirming their
-  destructive flag and scope.
-- Use `orbit doctor --json` before changing user settings or installing tools.
+- Reuse the initial inspect snapshot; do not run inspect again inside the same
+  recovery flow.
+- Use `orbit doctor --json` only when a recommended action asks for it or when
+  runtime/setup checks need more detail.
+- Prefer `orbit logs <resource> --json` over reading process files directly;
+  use `-f --json` only when an NDJSON stream is useful.
+- Use history and trace commands only when the task needs correlation or an
+  audit trail; they are not startup prerequisites.
+- Treat the JSON envelope's final state and actions as authoritative rather
+  than inferring success from exit code or transport state.
 
 ## Safety
 
-- Ask before `orbit db reset`, `orbit db publish --clean`, or
-  `orbit db publish --force`; these may discard local data.
+- Ask before `orbit db reset` or `orbit db publish --force`; these may discard
+  local data.
 - Do not remove Docker volumes unless the user explicitly requests it.
 - Do not edit `~/.orbit/settings.json` directly; use `orbit settings`,
   `orbit init`, or `orbit env sync`.

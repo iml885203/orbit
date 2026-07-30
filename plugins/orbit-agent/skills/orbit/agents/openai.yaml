@@ -1,4 +1,4 @@
 interface:
   display_name: "Orbit"
-  short_description: "Operate local development environments with Orbit."
-  default_prompt: "Use Orbit to inspect or operate this local development environment safely."
+  short_description: "Operate local environments with Orbit."
+  default_prompt: "Use $orbit to inspect or operate this local development environment safely."

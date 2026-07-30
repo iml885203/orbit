@@ -13,7 +13,7 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 
 ### Ask first
 - Editing `~/.orbit/settings.json` directly — use the UI/CLI path instead.
-- Destructive ops: `docker volume rm`, `orbit db reset` / `orbit db publish --clean` (reverts the DB to its baseline snapshot, discarding data changes since the baseline), `orbit db publish --force` (allows data-loss schema changes). The old image-build flow (`orbit db build` and container-side apply) has been removed; publish/reset run entirely on the host.
+- Destructive ops: `docker volume rm`, `orbit db reset` (returns one DB to a clean latest-schema state, discarding local data changes), `orbit db publish --force` (allows data-loss schema changes). The old image-build flow (`orbit db build` and container-side apply) has been removed; publish/reset run entirely on the host.
 
 ### Never
 - `git push --force`, `git commit --no-verify`.
