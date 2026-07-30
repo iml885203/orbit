@@ -178,6 +178,7 @@ for the bundled demo or a shared environment repository.`,
 	configureContextualRootHelp(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
+		err = contextualizeUnknownFlag(rootCmd, err)
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
@@ -774,16 +775,26 @@ func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, name
 		if err != nil {
 			return cli.WithJSONActions(err, lifecycleRecommendedActions(affected))
 		}
+		impacted := lifecycleDownImpacts(finalStatus, affected)
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 			Operation:          "down",
-			Message:            resp.Message,
+			Message:            lifecycleDownResultMessage(resp.Message, impacted),
 			RequestedResources: affected,
+			RelatedResources:   impacted,
 			InfraOnly:          infraOnly,
 			FinalStatus:        finalStatus,
-		}), nil)
+		}), lifecycleDownImpactActions(finalStatus, impacted))
 	}
 	fmt.Println(resp.Message)
-	return waitForServicesStopped(client, affected, false)
+	if err := waitForServicesStopped(client, affected, false); err != nil {
+		return err
+	}
+	finalStatus, err := client.Status()
+	if err != nil {
+		return fmt.Errorf("status after down: %w", err)
+	}
+	printLifecycleDownImpacts(finalStatus, lifecycleDownImpacts(finalStatus, affected))
+	return nil
 }
 
 func runRestart(_ *cobra.Command, args []string) error {

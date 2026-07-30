@@ -92,16 +92,33 @@ for help_file in open switch up down; do
 done
 
 "$orbit_bin" down --json >"$test_root/down-before-setup.json"
-python3 - "$test_root/down-before-setup.json" <<'PY'
+if "$orbit_bin" up --grop mini-shop --json >"$test_root/flag-typo.json"; then
+  echo "unknown flag unexpectedly succeeded." >&2
+  exit 1
+fi
+python3 - "$test_root/down-before-setup.json" "$test_root/flag-typo.json" <<'PY'
 import json
 import sys
 
 result = json.load(open(sys.argv[1], encoding="utf-8"))
+flag_typo = json.load(open(sys.argv[2], encoding="utf-8"))
 assert result["ok"] is True
 assert result["data"]["message"] == "Nothing is running because Orbit is not set up yet."
 assert result["recommended_actions"] == [{
     "command": "orbit init --yes --json",
     "reason": "Set up Orbit before starting an environment.",
+    "destructive": False,
+}]
+assert flag_typo["error"] == {
+    "code": "invalid_argument",
+    "message": "unknown flag: --grop (did you mean --group?)",
+    "hint": "Retry with the closest supported flag.",
+    "retryable": False,
+    "next_command": "orbit up --group mini-shop --json",
+}
+assert flag_typo["recommended_actions"] == [{
+    "command": "orbit up --group mini-shop --json",
+    "reason": "Retry with the supported flag --group.",
     "destructive": False,
 }]
 PY
@@ -356,6 +373,26 @@ grep -F \
   "$test_root/mini-shop-smoke.txt"
 
 "$orbit_bin" down shop-inventory-api --json >"$test_root/down-inventory.json"
+python3 - "$test_root/down-inventory.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+resources = {resource["name"]: resource for resource in payload["data"]["resources"]}
+assert payload["ok"] is True
+assert set(resources) == {"shop-inventory-api", "shop-order-api", "demo-shop"}
+assert resources["shop-inventory-api"]["state"] == "stopped"
+assert resources["shop-order-api"]["state"] == "degraded"
+assert resources["shop-order-api"]["blocked_by"] == "shop-inventory-api"
+assert resources["demo-shop"]["state"] == "degraded"
+assert set(payload["data"]["degraded_resources"]) == {"shop-order-api", "demo-shop"}
+assert "now need a stopped dependency" in payload["data"]["message"]
+assert payload["recommended_actions"] == [{
+    "command": "orbit up shop-inventory-api --json",
+    "reason": "Restore shop-inventory-api, which now blocks demo-shop, shop-order-api.",
+    "destructive": False,
+}]
+PY
 for _ in {1..20}; do
   "$orbit_bin" status --json >"$test_root/runtime-failure.json"
   if python3 - "$test_root/runtime-failure.json" <<'PY'

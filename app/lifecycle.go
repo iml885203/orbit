@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/iml885203/orbit/cli"
@@ -19,6 +20,7 @@ type lifecycleJSONOptions struct {
 	Operation          string
 	Message            string
 	RequestedResources []string
+	RelatedResources   []string
 	InfraOnly          bool
 	FinalStatus        *daemon.StatusResponse
 	TimedOutResources  []string
@@ -52,12 +54,19 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 	for _, name := range requestedResources {
 		requested[name] = true
 	}
-	resources := make([]daemon.ResourceStatus, 0, len(requested))
+	included := make(map[string]bool, len(requested)+len(opts.RelatedResources))
+	for name := range requested {
+		included[name] = true
+	}
+	for _, name := range opts.RelatedResources {
+		included[name] = true
+	}
+	resources := make([]daemon.ResourceStatus, 0, len(included))
 	degraded := []string{}
 	if opts.FinalStatus != nil {
 		for i := range opts.FinalStatus.Resources {
 			svc := &opts.FinalStatus.Resources[i]
-			if len(requested) > 0 && !requested[svc.Name] {
+			if len(requested) > 0 && !included[svc.Name] {
 				continue
 			}
 			resources = append(resources, *svc)
@@ -77,6 +86,93 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 		ContextSwitch:      opts.ContextSwitch,
 		EnvironmentChanges: opts.EnvironmentChanges,
 	}
+}
+
+func lifecycleDownImpacts(status *daemon.StatusResponse, stopped []string) []string {
+	if status == nil {
+		return nil
+	}
+	stoppedSet := make(map[string]bool, len(stopped))
+	for _, name := range stopped {
+		stoppedSet[name] = true
+	}
+	byName := make(map[string]daemon.ResourceStatus, len(status.Resources))
+	for _, resource := range status.Resources {
+		byName[resource.Name] = resource
+	}
+	var impacted []string
+	for _, resource := range status.Resources {
+		if stoppedSet[resource.Name] || (resource.State != "degraded" && resource.State != "pending") {
+			continue
+		}
+		blocker := terminalRuntimeBlocker(resource, byName)
+		if blocker != nil && stoppedSet[blocker.Name] {
+			impacted = append(impacted, resource.Name)
+		}
+	}
+	sort.Strings(impacted)
+	return impacted
+}
+
+func lifecycleDownImpactActions(status *daemon.StatusResponse, impacted []string) []cli.JSONAction {
+	if status == nil || len(impacted) == 0 {
+		return nil
+	}
+	byName := make(map[string]daemon.ResourceStatus, len(status.Resources))
+	for _, resource := range status.Resources {
+		byName[resource.Name] = resource
+	}
+	dependentsByBlocker := make(map[string][]string)
+	for _, name := range impacted {
+		resource, exists := byName[name]
+		if !exists {
+			continue
+		}
+		if blocker := terminalRuntimeBlocker(resource, byName); blocker != nil {
+			dependentsByBlocker[blocker.Name] = append(dependentsByBlocker[blocker.Name], name)
+		}
+	}
+	blockers := sortedKeys(dependentsByBlocker)
+	actions := make([]cli.JSONAction, 0, len(blockers))
+	for _, blocker := range blockers {
+		dependents := dependentsByBlocker[blocker]
+		sort.Strings(dependents)
+		actions = append(actions, cli.JSONAction{
+			Command: "orbit up " + blocker + " --json",
+			Reason: fmt.Sprintf(
+				"Restore %s, which now blocks %s.",
+				blocker,
+				strings.Join(dependents, ", "),
+			),
+		})
+	}
+	return actions
+}
+
+func printLifecycleDownImpacts(status *daemon.StatusResponse, impacted []string) {
+	if len(impacted) == 0 {
+		return
+	}
+	_, _ = cli.Yellow.Printf(
+		"%s now %s a stopped dependency.\n",
+		strings.Join(impacted, ", "),
+		pluralize(len(impacted), "needs", "need"),
+	)
+	for _, action := range lifecycleDownImpactActions(status, impacted) {
+		fmt.Println("Next: " + strings.TrimSuffix(action.Command, " --json"))
+	}
+}
+
+func lifecycleDownResultMessage(message string, impacted []string) string {
+	if len(impacted) == 0 {
+		return message
+	}
+	return fmt.Sprintf(
+		"%s %s now %s a stopped dependency.",
+		message,
+		strings.Join(impacted, ", "),
+		pluralize(len(impacted), "needs", "need"),
+	)
 }
 
 func lifecycleEnvironmentChanges(

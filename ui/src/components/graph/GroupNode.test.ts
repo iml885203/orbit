@@ -50,4 +50,27 @@ describe('GroupNode', () => {
     expect(stopped.getByRole('button', { name: 'Start app group' })).toBeEnabled()
     expect(stopped.getByRole('button', { name: 'Stop app group' })).toBeDisabled()
   })
+
+  it('locks both lifecycle directions while the group is changing', () => {
+    store.graph.data = {
+      env: 'local',
+      previewOnly: false,
+      groups: [{ name: 'app', services: ['api', 'worker'] }],
+      nodes: [
+        { name: 'api', kind: 'backend', state: 'starting' },
+        { name: 'worker', kind: 'backend', state: 'pending' },
+      ],
+      edges: [],
+    }
+    const view = render(GroupNode, {
+      props: { data: { name: 'app', serviceCount: 2 } },
+    })
+
+    const start = view.getByRole('button', { name: 'Start app group' })
+    const stop = view.getByRole('button', { name: 'Stop app group' })
+    expect(start).toBeDisabled()
+    expect(stop).toBeDisabled()
+    expect(start).toHaveAttribute('aria-busy', 'true')
+    expect(stop).toHaveAttribute('aria-busy', 'true')
+  })
 })

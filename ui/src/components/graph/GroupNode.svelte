@@ -30,10 +30,13 @@
   const groupNodes = $derived(
     (store.graph.active?.nodes ?? []).filter(node => services.includes(node.name)),
   )
-  const canStart = $derived(
-    groupNodes.some(node => node.state === 'stopped' || node.state === 'pending'),
+  const groupChanging = $derived(
+    groupNodes.some(node => ['starting', 'building', 'stopping', 'restarting'].includes(node.state)),
   )
-  const canStop = $derived(groupNodes.some(node => isRunning(node.state)))
+  const canStart = $derived(
+    !groupChanging && groupNodes.some(node => node.state === 'stopped' || node.state === 'pending'),
+  )
+  const canStop = $derived(!groupChanging && groupNodes.some(node => isRunning(node.state)))
   // Hidden in preview-only / hover-preview envs (the daemon rejects mutations).
   const showActions = $derived(!mutationsDisabled() && services.length > 0)
 
@@ -79,7 +82,7 @@
         <button
           class="gbtn"
           disabled={busy || !canStart}
-          aria-busy={busy}
+          aria-busy={busy || groupChanging}
           aria-label="Start {data.name} group"
           use:tooltip={{ content: 'Start group' }}
           onclick={onStart}
@@ -89,7 +92,7 @@
         <button
           class="gbtn"
           disabled={busy || !canStop}
-          aria-busy={busy}
+          aria-busy={busy || groupChanging}
           aria-label="Stop {data.name} group"
           use:tooltip={{ content: 'Stop group' }}
           onclick={onStop}

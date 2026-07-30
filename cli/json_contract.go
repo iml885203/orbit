@@ -263,6 +263,18 @@ func classify(err error) JSONError {
 				Hint:      "Choose one of the available groups reported by Orbit, then retry.",
 				Retryable: false,
 			}
+		case "invalid_argument":
+			hint := "Correct the conflicting or unknown command selection, then retry."
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				hint = hintedErr.CLIJSONHint()
+			}
+			return JSONError{
+				Code:      "invalid_argument",
+				Message:   msg,
+				Hint:      hint,
+				Retryable: false,
+			}
 		case "unknown_resource":
 			hint := "Run 'orbit status --json' to list configured resources."
 			var hintedErr interface{ CLIJSONHint() string }
