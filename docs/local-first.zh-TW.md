@@ -24,9 +24,7 @@ containers:
 
 services:
   app:
-    type: python
     kind: frontend
-    path: .
     command: python3 -m http.server "$PORT"
     ports:
       http:
@@ -38,7 +36,10 @@ services:
 ```
 
 這個例子會用 Python 提供目前專案目錄，並先啟動 Redis；只使用公開 demo
-已經需要的 Python 3 與 Docker。`preferred` 表示「可用時採用這個 port，否則
+已經需要的 Python 3 與 Docker。Orbit 會從 command 推斷 Python，並在
+`orbit.yaml` 所在目錄執行；常見 Node、Bun 與 Go command 也採用相同規則。
+只有 command 無法表達預期 runtime 或 working directory 時，才需要加入
+`type` 或 `path`。`preferred` 表示「可用時採用這個 port，否則
 選擇可用的 port」。Orbit 會把實際選定的 application port 注入為 `PORT`，
 因此發生衝突時不需要修改 config。每個 endpoint 只宣告一次，Orbit 會把它
 同時用於 health check、`orbit open` 與 dependency URL。
@@ -73,7 +74,7 @@ your-project/
 ├── 你的程式碼
 └── orbit.yaml          這次本機試用的 environment intent
         │
-        ├── app         host process，path 為 "."
+        ├── app         與這個檔案放在一起的 host process
         └── redis       Docker container
 
 ~/.orbit/               Orbit 管理的 runtime state；不要直接編輯
@@ -93,20 +94,15 @@ your-orbit-env/
     └── dev.yaml
 ```
 
-複製前，把 service path 從：
-
-```yaml
-path: .
-```
-
-改成：
+複製後，替 service 加上這個 path：
 
 ```yaml
 path: ${WORKSPACE_ROOT}
 ```
 
 相對 path 會跟著 config file；`orbit.yaml` 位於專案內時，`.` 是正確位置。
-同步後的 config 位於 Orbit 管理的 environment directory，
+省略 `path` 時，這也是預設值。同步後的 config 位於 Orbit 管理的
+environment directory，
 `${WORKSPACE_ROOT}` 則明確指回每位開發者自己的 checkout。
 
 Commit 並 push `envs/dev.yaml`。確認共享副本已安全提交後，移除專案內的

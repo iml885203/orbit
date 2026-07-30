@@ -42,6 +42,12 @@ if grep -F "ORBIT_AUTO_PORT_" "$example_config" >/dev/null; then
   echo "Local-first example exposes the legacy movable-port expression." >&2
   exit 1
 fi
+for redundant_field in "type: python" "path: ."; do
+  if grep -F "$redundant_field" "$example_config" >/dev/null; then
+    echo "Local-first example teaches redundant service config: $redundant_field" >&2
+    exit 1
+  fi
+done
 
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
   echo "Local-first guides preserve the five-command trial and promotion path"
@@ -250,7 +256,12 @@ git -C "$test_root/project" config user.name "Orbit Acceptance"
 git -C "$test_root/project" config user.email "acceptance@orbit.invalid"
 
 mkdir -p "$test_root/team-env/envs"
-sed 's#path: \.#path: ${WORKSPACE_ROOT}#' \
+awk '{
+  print
+  if ($0 == "  app:") {
+    print "    path: ${WORKSPACE_ROOT}"
+  }
+}' \
   "$example_config" >"$test_root/team-env/envs/dev.yaml"
 git -C "$test_root/team-env" init --quiet
 git -C "$test_root/team-env" config user.name "Orbit Acceptance"

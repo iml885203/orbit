@@ -371,12 +371,10 @@ Service 是 Orbit 拉起、監看、可重啟的 dev process。
 ```yaml
 services:
   my-api:
-    type: python                   # dotnet 有特殊行為；其他值是 runtime label
-    kind: backend               # frontend | backend | infra — graph 節點色調
-    path: ./src/MyApi/MyApi.csproj
-    command: pnpm dev           # 非 dotnet type：在 `path` 下執行的指令
-    watch: false                # 僅 dotnet：改用 `dotnet watch` 而非 build+run
-    url: https://localhost:5001/swagger
+    kind: backend                 # frontend | backend | infra — graph 節點色調
+    path: ./src/my-api            # 預設為 orbit.yaml 所在目錄
+    command: pnpm dev
+    url: https://localhost:5001
     ports:
       http: 5000
       https: 5001
@@ -399,9 +397,9 @@ services:
 
 | Field | Type | Required | 說明 |
 |---|---|---|---|
-| `type` | string | yes | `dotnet` 走 build-then-run（`watch: true` 則 `dotnet watch`）；其他值（`node`、`shell`…）在 `path` 下執行 `command` |
+| `type` | string | no | 常見 Python、Node、Bun 與 Go command 會自動推斷。要使用 build-then-run（`watch: true` 則 `dotnet watch`）時明確設定 `dotnet` |
 | `kind` | string | no | `frontend` \| `backend`（預設）\| `infra` — 決定 graph 節點顏色；只表身分，不表健康 |
-| `path` | string | yes | `.csproj` 路徑（dotnet）或 `command` 的工作目錄 |
+| `path` | string | no | `.csproj` 路徑（dotnet）或 `command` 的工作目錄；預設為 `orbit.yaml` 所在目錄 |
 | `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
 | `url` | string | no | 標準 URL；`orbit open <service>` 會用它。已有 `http` 或 `https` port 時可省略 |

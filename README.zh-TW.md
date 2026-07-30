@@ -79,7 +79,9 @@ orbit down
 準備套用到真實 checkout 時，從[一份 project-local
 `orbit.yaml`](docs/local-first.zh-TW.md) 開始。這條十分鐘路徑不需要
 environment repository、不需要 `orbit init`，也不需要手動編輯 `~/.orbit`
-設定；驗證完成後，文件會再說明何時、如何升級為團隊共享 environment。
+設定。Host service 只需 command 與 port；Orbit 會推斷常見 runtime，並以
+config directory 作為 working directory。驗證完成後，文件會再說明何時、
+如何升級為團隊共享 environment。
 
 需要更多細節時：
 

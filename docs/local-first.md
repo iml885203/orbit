@@ -25,9 +25,7 @@ containers:
 
 services:
   app:
-    type: python
     kind: frontend
-    path: .
     command: python3 -m http.server "$PORT"
     ports:
       http:
@@ -40,6 +38,10 @@ services:
 
 This example serves the current project directory with Python and starts Redis
 first. It uses tools already required by the public demo: Python 3 and Docker.
+Orbit infers Python from the command and runs it from the directory containing
+`orbit.yaml`; common Node, Bun, and Go commands work the same way. Add `type`
+or `path` only when the command alone cannot express the intended runtime or
+working directory.
 `preferred` means “use this port when available, otherwise choose one that
 works.” Orbit injects the selected application port as `PORT`, so a conflict
 requires no config edit. Each endpoint is declared once: Orbit reuses it for
@@ -79,7 +81,7 @@ your-project/
 ├── your code
 └── orbit.yaml          environment intent for this local trial
         │
-        ├── app         host process, path "."
+        ├── app         host process beside this file
         └── redis       Docker container
 
 ~/.orbit/               Orbit-managed runtime state; do not edit it
@@ -101,22 +103,16 @@ your-orbit-env/
     └── dev.yaml
 ```
 
-Before copying it, change the service path from:
-
-```yaml
-path: .
-```
-
-to:
+After copying it, add this service path:
 
 ```yaml
 path: ${WORKSPACE_ROOT}
 ```
 
 Relative paths follow the config file, so `.` is correct while `orbit.yaml`
-lives in the project. A synced config lives under Orbit's managed environment
-directory; `${WORKSPACE_ROOT}` explicitly points it back to each developer's
-checkout.
+lives in the project—and is the default when `path` is omitted. A synced config
+lives under Orbit's managed environment directory; `${WORKSPACE_ROOT}`
+explicitly points it back to each developer's checkout.
 
 Commit and push `envs/dev.yaml`. Remove the project-local `orbit.yaml` after
 the shared copy is safely committed so the team repository becomes the single

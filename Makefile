@@ -70,7 +70,7 @@ test-e2e: build
 # Docker to prove the product works beyond package boundaries.
 test-journeys: build
 	$(MAKE) -j2 test-journey-first-five-minutes test-journey-project-context-switch
-	$(MAKE) -j3 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness
+	$(MAKE) -j4 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness test-journey-runtime-adoption
 
 test-journey-first-five-minutes:
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-first-five-minutes.sh
@@ -86,6 +86,9 @@ test-journey-recovery:
 
 test-journey-startup-readiness:
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh
+
+test-journey-runtime-adoption:
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-runtime-adoption.sh
 
 test-install:
 	@./scripts/test-install.sh

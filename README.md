@@ -85,8 +85,10 @@ orbit down
 Ready to try Orbit on a real checkout?
 [Start with one project-local `orbit.yaml`](docs/local-first.md). The
 ten-minute path needs no environment repository, no `orbit init`, and no
-manual `~/.orbit` settings; it also shows when and how to promote the proven
-file into a shared team environment.
+manual `~/.orbit` settings. A host service starts with its command and port;
+Orbit infers common runtimes and uses the config directory as its working
+directory. The guide also shows when and how to promote the proven file into a
+shared team environment.
 
 When you need more detail:
 
