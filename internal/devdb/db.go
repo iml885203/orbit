@@ -46,6 +46,9 @@ func DBMigrationCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			next := []string{"orbit", "sqlserver"}
 			for _, arg := range args {
+				if arg == "--json" || arg == "--json=true" {
+					cli.JSONOutput = true
+				}
 				next = append(next, shellquote.Quote(arg))
 			}
 			command := strings.Join(next, " ")

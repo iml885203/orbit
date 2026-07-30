@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -39,16 +40,23 @@ func TestSQLServerCommandExposesOnlyProviderWorkflow(t *testing.T) {
 }
 
 func TestDBMigrationCommandPointsToProviderSpecificName(t *testing.T) {
+	originalJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = originalJSON })
+	cli.JSONOutput = false
+
 	cmd := DBMigrationCmd()
 	if !cmd.Hidden {
 		t.Fatal("migration guard must not appear in help")
 	}
-	err := cmd.RunE(cmd, []string{"diff", "Sample DB"})
+	err := cmd.RunE(cmd, []string{"diff", "Sample DB", "--json"})
 	renamed, ok := err.(dbCommandRenamedError)
 	if !ok {
 		t.Fatalf("migration error = %T, want dbCommandRenamedError", err)
 	}
-	if got, want := renamed.CLIHumanNextCommand(), "orbit sqlserver diff 'Sample DB'"; got != want {
+	if !cli.JSONOutput {
+		t.Fatal("migration guard did not preserve JSON output")
+	}
+	if got, want := renamed.CLIHumanNextCommand(), "orbit sqlserver diff 'Sample DB' --json"; got != want {
 		t.Fatalf("next command = %q, want %q", got, want)
 	}
 	actions := renamed.CLIJSONReplacementActions()
