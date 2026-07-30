@@ -105,10 +105,10 @@ Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
 PATH。
 
 `orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
-environment repository 或 project workspace。從 Orbit source checkout
-還可以執行[擴充版 mini-shop](docs/examples/mini-shop/README.md)，查看供
-contributors 使用的八 API 版本。`docs/examples/` 底下使用
-repository-relative path 的命令不屬於上方的安裝使用者路徑。
+environment repository 或 project workspace。完成五分鐘體驗後，可以另外
+clone [擴充版 mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop)，
+用相同的 project-local `orbit up` 流程執行獨立的八 API 專案；完整應用程式
+範例不放在 Orbit source repository 內。
 Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
 environment 需要的工具，並在啟動前偵測未滿足的 Python
 `requirements.txt`。

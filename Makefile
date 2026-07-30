@@ -92,7 +92,9 @@ test-docs:
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-first-five-minutes.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-local-first-adoption.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
-	@./scripts/test-mini-shop-example.sh
+	@test ! -d docs/examples/mini-shop
+	@grep -F 'https://github.com/iml885203/orbit-examples/tree/main/mini-shop' README.md >/dev/null
+	@grep -F 'https://github.com/iml885203/orbit-examples/tree/main/mini-shop' README.zh-TW.md >/dev/null
 
 test-release:
 	@version="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' plugins/orbit-agent/.codex-plugin/plugin.json)"; \

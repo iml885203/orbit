@@ -114,10 +114,11 @@ current PowerShell process and the user PATH.
 Upgrade, rollback, uninstall, manual downloads, and testing unreleased `main`
 are documented in [Installation and development](docs/development.md).
 
-From an Orbit source checkout,
-[the extended mini-shop](docs/examples/mini-shop/README.md) provides a larger
-eight-API variant for contributors. Repository-relative commands under
-`docs/examples/` are not part of the installed-user path above.
+For a larger environment after the five-minute trial,
+[the extended mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop)
+provides an independent eight-API project. Clone it separately and use the
+same project-local `orbit up` workflow; complete application examples do not
+live in the Orbit source repository.
 
 `orbit init` accepts those distribution defaults without asking about an
 environment repository or project workspace the demo does not use.
