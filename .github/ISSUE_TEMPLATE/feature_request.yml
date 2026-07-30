@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a user outcome that would make local development simpler
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Orbit optimizes for a small mental model. Describe the user problem and desired outcome before proposing configuration or commands.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What local-development task is difficult today, and who encounters it?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the simplest successful workflow from the user's perspective.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: What commands, scripts, or manual steps are required today?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples or related tools without including private project information.

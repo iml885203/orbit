@@ -8,6 +8,9 @@ Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
 - GitHub private 演練版從 `v0.0.1` 開始。
 - Source repository 已在 1.0 產品打磨期間先行公開；所有 `0.x` release
   都是 preview，可能包含 breaking changes。
+- GitHub 上的 `0.x` title 統一為 `Orbit vX.Y.Z (Preview)`。它仍是 repository
+  可安裝的 latest release，讓預設 installer 與 `orbit update` 永遠取得最新
+  支援的 preview，不要求使用者理解或選擇 release channel。
 - 第一個 stable release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
   已有文件與測試，並已準備好提供外部使用者使用。
 - Release tag 不可修改；修正必須發布成新版本。

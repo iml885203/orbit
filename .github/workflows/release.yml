@@ -194,7 +194,11 @@ jobs:
           RELEASE_VERSION: ${{ inputs.tag }}
           RELEASE_NOTES: ${{ inputs.notes }}
         run: |
+          release_title="Orbit $RELEASE_VERSION"
+          if [[ "$RELEASE_VERSION" =~ ^v0\. ]]; then
+            release_title="$release_title (Preview)"
+          fi
           gh release create "$RELEASE_VERSION" dist/* \
             --verify-tag \
             --notes "$RELEASE_NOTES" \
-            --title "$RELEASE_VERSION"
+            --title "$release_title"

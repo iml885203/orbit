@@ -8,6 +8,10 @@ Orbit and the bundled `plugins/orbit-agent` plugin use the same
 - Private GitHub rehearsal releases began at `v0.0.1`.
 - The source repository became public during the pre-1.0 product-hardening
   phase. All `0.x` releases are previews and may contain breaking changes.
+- GitHub titles `0.x` releases as `Orbit vX.Y.Z (Preview)`. They remain the
+  repository's installable latest release so the default installer and
+  `orbit update` always resolve the newest supported preview without requiring
+  users to choose a release channel.
 - The first stable release is `v1.0.0`. Publishing that tag means the
   compatibility contracts below are documented, tested, and ready for external
   users.

@@ -1,0 +1,71 @@
+name: Bug report
+description: Report an Orbit behavior that is incorrect or hard to recover from
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Orbit. Do not include credentials, private repository URLs, customer data, or unredacted environment variables and logs.
+        For a security vulnerability, use private vulnerability reporting instead of this form.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the behavior and its impact on your local development loop.
+      placeholder: I ran …, Orbit reported …, and I could not …
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the shortest command sequence and a minimal, redacted orbit.yaml when relevant.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should Orbit have done, including the recovery action you expected?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Orbit version
+      description: Paste the output of `orbit version --json`.
+      placeholder: '{"schema_version":"orbit.cli.v1", …}'
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS arm64
+        - macOS amd64
+        - Linux arm64
+        - Linux amd64
+        - Windows arm64 (Beta)
+        - Windows amd64 (Beta)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste redacted output from `orbit doctor --json` and, when setup completed, `orbit status --json`.
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, tokens, private URLs, customer data, and sensitive environment values.
+          required: true
