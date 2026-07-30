@@ -24,9 +24,31 @@ func requireDBWorkflow(client *daemon.Client) error {
 		return fmt.Errorf("checking db workflow availability: %w", err)
 	}
 	if !meta.WorkflowConfigured() {
-		return cli.NewNotConfiguredError(ErrMsgDBNotConfigured)
+		return sqlServerNotConfiguredError{configPath: meta.EnvironmentPath}
 	}
 	return nil
+}
+
+const sqlServerConfigurationGuide = "https://github.com/iml885203/orbit/blob/main/docs/configuration.md#sqlserver"
+
+type sqlServerNotConfiguredError struct {
+	configPath string
+}
+
+func (e sqlServerNotConfiguredError) Error() string {
+	location := "the active environment"
+	if e.configPath != "" {
+		location = fmt.Sprintf("%q", e.configPath)
+	}
+	return fmt.Sprintf("SQL Server workflow is not enabled for %s — choose an environment that enables it or add sqlserver.target and sqlserver.projects to its source config; see %s", location, sqlServerConfigurationGuide)
+}
+
+func (e sqlServerNotConfiguredError) Unwrap() error {
+	return cli.ErrNotConfigured
+}
+
+func (e sqlServerNotConfiguredError) CLIJSONHint() string {
+	return "Choose an environment that enables SQL Server, or edit its source config using the linked schema guide."
 }
 
 // dialDBWorkflow is the shared preamble of every daemon-backed db

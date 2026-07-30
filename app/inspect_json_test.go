@@ -32,6 +32,26 @@ func TestBuildInspectServiceSummaryGroupsStates(t *testing.T) {
 	assertStringSlice(t, got.Stopped, []string{"payments"})
 }
 
+func TestInspectRejectsPretendResourceTargetWithOneCorrectedCommand(t *testing.T) {
+	originalJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = originalJSON })
+	cli.JSONOutput = true
+
+	cmd := inspectCmd()
+	err := cmd.Args(cmd, []string{"api"})
+	targetErr, ok := err.(inspectTargetError)
+	if !ok {
+		t.Fatalf("error = %T, want inspectTargetError", err)
+	}
+	if got, want := targetErr.CLIHumanNextCommand(), "orbit inspect --json"; got != want {
+		t.Fatalf("next command = %q, want %q", got, want)
+	}
+	actions := targetErr.CLIJSONReplacementActions()
+	if len(actions) != 1 || actions[0].Command != "orbit inspect --json" {
+		t.Fatalf("replacement actions = %+v", actions)
+	}
+}
+
 func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 	got := buildInspectData(inspectBuildOptions{
 		ConfigPath: "/tmp/missing.yaml",

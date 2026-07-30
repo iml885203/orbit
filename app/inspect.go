@@ -115,8 +115,50 @@ func inspectCmd() *cobra.Command {
 		Use:    "inspect",
 		Short:  "Show an agent-ready Orbit state snapshot",
 		Hidden: true,
-		RunE:   runInspect,
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return nil
+			}
+			return inspectTargetError{target: args[0], json: cli.JSONOutput}
+		},
+		RunE: runInspect,
 	}
+}
+
+type inspectTargetError struct {
+	target string
+	json   bool
+}
+
+func (e inspectTargetError) Error() string {
+	return fmt.Sprintf("inspect reports the whole environment; it does not accept resource %q", e.target)
+}
+
+func (e inspectTargetError) ErrorCode() string {
+	return "invalid_argument"
+}
+
+func (e inspectTargetError) CLIJSONHint() string {
+	return "Omit the resource argument to inspect the whole environment."
+}
+
+func (e inspectTargetError) nextCommand() string {
+	if e.json {
+		return "orbit inspect --json"
+	}
+	return "orbit inspect"
+}
+
+func (e inspectTargetError) CLIHumanNextCommand() string {
+	return e.nextCommand()
+}
+
+func (e inspectTargetError) CLIJSONReplacementActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     e.nextCommand(),
+		Reason:      "Inspect the whole environment without a resource argument.",
+		Destructive: false,
+	}}
 }
 
 func runInspect(_ *cobra.Command, _ []string) error {

@@ -556,3 +556,22 @@ func TestWriteJSONUnsupportedDestructiveCommandEnvelope(t *testing.T) {
 		t.Fatal("recommended action destructive = false, want true")
 	}
 }
+
+func TestWriteJSONNotConfiguredRequiresAnEditInsteadOfDiagnosticLoop(t *testing.T) {
+	var buf bytes.Buffer
+	err := NewNotConfiguredError("feature is not enabled; edit the active configuration")
+	if writeErr := WriteJSONError(&buf, "orbit feature list --json", err); writeErr != nil {
+		t.Fatalf("WriteJSONError: %v", writeErr)
+	}
+
+	var got JSONEnvelope
+	if decodeErr := json.Unmarshal(buf.Bytes(), &got); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if got.Error == nil || got.Error.Code != "not_configured" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if got.Error.NextCommand != "" || len(got.RecommendedActions) != 0 {
+		t.Fatalf("not-configured edit invented diagnostic actions: error=%+v actions=%+v", got.Error, got.RecommendedActions)
+	}
+}

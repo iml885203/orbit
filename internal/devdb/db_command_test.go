@@ -1,6 +1,7 @@
 package devdb
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -62,6 +63,23 @@ func TestDBMigrationCommandPointsToProviderSpecificName(t *testing.T) {
 	actions := renamed.CLIJSONReplacementActions()
 	if len(actions) != 1 || actions[0].Command != renamed.CLIHumanNextCommand() {
 		t.Fatalf("replacement actions = %+v", actions)
+	}
+}
+
+func TestSQLServerNotConfiguredErrorNamesSourceConfigAndGuide(t *testing.T) {
+	err := sqlServerNotConfiguredError{configPath: "/workspace/envs/local.yaml"}
+	if !errors.Is(err, cli.ErrNotConfigured) {
+		t.Fatalf("error does not classify as not configured: %v", err)
+	}
+	for _, evidence := range []string{
+		`"/workspace/envs/local.yaml"`,
+		"sqlserver.target",
+		"sqlserver.projects",
+		sqlServerConfigurationGuide,
+	} {
+		if !strings.Contains(err.Error(), evidence) {
+			t.Errorf("error missing %q: %v", evidence, err)
+		}
 	}
 }
 

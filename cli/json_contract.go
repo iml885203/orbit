@@ -446,6 +446,9 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	if err.Code == "invalid_argument" {
 		return nil
 	}
+	if err.Code == "not_configured" {
+		return nil
+	}
 	if err.Code == "environment_selection_required" {
 		return nil
 	}
