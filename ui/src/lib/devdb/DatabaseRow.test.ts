@@ -113,11 +113,32 @@ describe('DatabaseRow reset flow', () => {
   })
 
   it('disables reset and marks not-published for a database that does not exist', () => {
-    render(DatabaseRow, { props: { database: 'WalletDB', resetState: { exists: false }, onPublish: vi.fn(), onReset: vi.fn(), onViewLog: vi.fn(), onDiff: vi.fn() } })
+    render(DatabaseRow, { props: { database: 'WalletDB', resetState: { exists: false, hasBaseline: false }, onPublish: vi.fn(), onReset: vi.fn(), onViewLog: vi.fn(), onDiff: vi.fn() } })
 
     expect(screen.getByRole('button', { name: 'Reset…' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent('Not published')
     expect(screen.getByText('Publish creates this database.')).toBeInTheDocument()
+  })
+
+  it('explains and confirms the first reset as a database recreation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+    render(DatabaseOperationsList, {
+      props: {
+        project,
+        states: {},
+        resetStates: { WalletDB: { exists: true, hasBaseline: false } },
+        operation: null,
+      },
+    })
+
+    expect(screen.getByText('No reset point yet.')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset…' }))
+
+    expect(screen.getByRole('dialog', { name: 'Reset WalletDB by recreating it?' })).toBeInTheDocument()
+    expect(screen.getByText(/save a reset point for next time/)).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: 'Recreate database' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/db/reset', expect.objectContaining({ body: JSON.stringify({ db: 'WalletDB', acknowledgeDataLoss: true }) })))
   })
 
 })

@@ -99,7 +99,9 @@ SQL Server 頁面會在進入或回到視窗時檢查 source 變更。每顆資�
 ### 從 dashboard 執行 publish
 
 SQL Server 頁面為每個 db 提供 Publish 與 Reset，並提供 Publish all。
-Publish 的串流輸出顯示在 log panel；Reset 丟棄資料前一定會要求確認。
+Publish 的串流輸出顯示在 log panel；Reset 丟棄資料前一定會要求確認。尚未有
+reset point 時，頁面會先說明第一次 reset 將重建資料庫，並為之後保存 reset
+point。
 
 整個 daemon 一次只能跑一個 db operation —— 當另一個 op 進行中時按鈕
 都會停用。Publish 偵測到可能資料遺失時會先阻擋；使用者檢視警告並明確

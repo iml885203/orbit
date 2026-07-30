@@ -109,7 +109,8 @@ shows whether it is in sync and provides Check, Publish, and Reset actions.
 
 The SQL Server page has per-db Publish and Reset buttons plus Publish all.
 Publish streams its output in a log panel; Reset always prompts before
-discarding local data.
+discarding local data. When no reset point exists yet, the page explains
+beforehand that the first reset recreates the database and saves one for later.
 
 Only one db operation can run at a time across the daemon — the buttons disable
 while another op is in flight. When publish detects possible data loss, it is

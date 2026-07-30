@@ -214,11 +214,12 @@ export interface DBPublishRequest {
  */
 export const CodeResetRequiresConfirmation = "reset_requires_confirmation";
 /**
- * DBResetState is the per-database reset readiness the UI needs to render
- * ahead of a click. A missing DB cannot be reset; publish creates it.
+ * DBResetState lets clients explain the reset path before asking for
+ * destructive confirmation. A database without a baseline must be recreated.
  */
 export interface DBResetState {
   exists: boolean;
+  hasBaseline: boolean;
 }
 /**
  * DBResetStateResponse maps each known database to its reset readiness.

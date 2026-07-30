@@ -35,10 +35,11 @@ func registerDBResetHandler(mux *http.ServeMux, f *dbFeature) {
 	})
 }
 
-// DBResetState is the per-database reset readiness the UI needs to render
-// ahead of a click. A missing DB cannot be reset; publish creates it.
+// DBResetState lets clients explain the reset path before asking for
+// destructive confirmation. A database without a baseline must be recreated.
 type DBResetState struct {
-	Exists bool `json:"exists"`
+	Exists      bool `json:"exists"`
+	HasBaseline bool `json:"hasBaseline"`
 }
 
 // DBResetStateResponse maps each known database to its reset readiness.
@@ -72,7 +73,15 @@ func (f *dbFeature) handleDBResetState(w http.ResponseWriter, r *http.Request) {
 			// falls back to the server-authoritative 409 gate on click.
 			continue
 		}
-		states[t.DB] = DBResetState{Exists: exists}
+		if !exists {
+			states[t.DB] = DBResetState{Exists: false}
+			continue
+		}
+		hasBaseline, err := sqlpublish.BaselineExists(ctx, opts, t.DB)
+		if err != nil {
+			continue
+		}
+		states[t.DB] = DBResetState{Exists: true, HasBaseline: hasBaseline}
 	}
 	daemon.WriteJSON(w, http.StatusOK, DBResetStateResponse{States: states})
 }

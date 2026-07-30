@@ -22,7 +22,19 @@
   // pendingForce holds the database whose blocked publish awaits the
   // "publish anyway" (data-loss) confirmation.
   let pendingForce = $state<string | null>(null)
-  // TODO(reset-display-state): The persistent legacy notice and pre-click missing-DB state require a GET reset-state endpoint; operation timestamps cannot identify either safely.
+  const resetRequiresRecreate = $derived(
+    !!pendingReset
+      && resetStates[pendingReset]?.exists === true
+      && resetStates[pendingReset]?.hasBaseline === false,
+  )
+  const resetConfirmationTitle = $derived(
+    resetRequiresRecreate ? `Reset ${pendingReset} by recreating it?` : `Reset ${pendingReset}?`,
+  )
+  const resetConfirmationMessage = $derived(
+    resetRequiresRecreate
+      ? 'No reset point exists yet. Orbit will recreate this database from its SQL project, discard all local data, and save a reset point for next time. This cannot be undone.'
+      : 'This disconnects database clients, discards local data, and applies the latest schema. This cannot be undone.',
+  )
   let logOpen = $state(false)
   const elapsed = createElapsed(() => operation)
   const allFailed = $derived(!!operation?.all && !!operation.done && !operation.ok)
@@ -73,7 +85,7 @@
 </section>
 
 {#if pendingForce}<ConfirmModal open title={`Publish ${pendingForce} despite data loss?`} message="The analyzed schema changes may discard data (such as dropped columns or tables). Publishing anyway applies the latest schema and lets that data go. This cannot be undone." confirmLabel="Publish anyway" danger onConfirm={confirmForcePublish} onCancel={() => pendingForce = null} />{/if}
-{#if pendingReset}<ConfirmModal open title={`Reset ${pendingReset}?`} message="This disconnects database clients, discards local data, and applies the latest schema. This cannot be undone." confirmLabel="Reset database" danger onConfirm={confirmReset} onCancel={cancelReset} />{/if}
+{#if pendingReset}<ConfirmModal open title={resetConfirmationTitle} message={resetConfirmationMessage} confirmLabel={resetRequiresRecreate ? 'Recreate database' : 'Reset database'} danger onConfirm={confirmReset} onCancel={cancelReset} />{/if}
 {#if logOpen && operation}<LogModal service={`${operation.op} ${dbOpLabel(operation)}`} lines={operation.lines} onClose={() => logOpen = false} />{/if}
 
 <style>

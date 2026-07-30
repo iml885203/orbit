@@ -31,6 +31,7 @@
   // A DB known not to exist can't be reset because publish creates it.
   // Undefined means unknown, so the server remains authoritative.
   const notExists = $derived(resetState?.exists === false)
+  const resetRequiresRecreate = $derived(resetState?.exists === true && resetState?.hasBaseline === false)
   const resetDisabled = $derived(disabled || notExists)
   const resetTitle = $derived(notExists ? 'Publish this database before resetting it' : disabledReason)
   const diffLabel = $derived(
@@ -79,6 +80,9 @@
   {#if running}<div class="running-label"><Loader2 size={14} class="spin" aria-hidden="true" />{operation?.op === 'reset' ? 'Resetting' : 'Publishing'}… {elapsedSeconds}s</div>
   {:else if dataLossBlocked}<div class="failure" role="alert">Publish was blocked: it would discard data (see the log for exactly what). If the change is intentional, publish anyway.<button class="danger inline" type="button" disabled={disabled} onclick={onForcePublish}><TriangleAlert size={13} aria-hidden="true" /> Publish anyway…</button></div>
   {:else if failed}<div class="failure" role="alert">{operation?.err ?? `${operation?.op === 'reset' ? 'Reset' : 'Publish'} could not complete.`} View the log for details.</div>{/if}
+  {#if resetRequiresRecreate && !running}
+    <div class="reset-notice" role="status"><TriangleAlert size={14} aria-hidden="true" /><span><strong>No reset point yet.</strong> The first reset recreates this database from its SQL project; later resets reuse the saved reset point.</span></div>
+  {/if}
   <div class="action-line">
     <span class="helper">{notExists ? 'Publish creates this database.' : 'Apply schema changes and keep local data.'}</span>
     {#if disabledReason}<span class="disabled-reason">{disabledReason}</span>{/if}
@@ -104,6 +108,8 @@
   .running-label { color: var(--blue); font-size: var(--text-sm); display: flex; align-items: center; gap: var(--space-1); }
   .failure { color: var(--red); font-size: var(--text-sm); }
   .failure button.inline { margin-left: var(--space-2); vertical-align: middle; }
+  .reset-notice { display: flex; align-items: flex-start; gap: var(--space-2); color: var(--yellow); font-size: var(--text-sm); }
+  .reset-notice strong { color: var(--fg); }
   .action-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
   .helper, .disabled-reason { color: var(--dim); font-size: var(--text-sm); }
   .disabled-reason { color: var(--text-secondary); }
