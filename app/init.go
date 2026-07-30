@@ -104,13 +104,13 @@ For non-interactive setup (CI, scripts):
   orbit init --yes                                         # accept all defaults
   orbit init --yes --env-repo <url>                        # use a specific env repo
   orbit init --yes --env-repo <url> --env-ref <ref>        # pin a branch, tag, or commit
-  orbit init --yes --env-repo <url> --env example          # and pick an env`,
+  orbit init --yes --env-repo <url> --env dev              # and pick an env`,
 		RunE: runInit,
 	}
 	cmd.Flags().BoolVarP(&initYes, "yes", "y", false, "accept defaults without prompting")
 	cmd.Flags().StringVar(&initEnvRepo, "env-repo", "", "git URL of the env repo (persists to settings, skips prompt)")
 	cmd.Flags().StringVar(&initEnvRef, "env-ref", "", "repository branch, tag, or commit (persists to settings)")
-	cmd.Flags().StringVar(&initEnvName, "env", "", "active env short name (e.g. example); skips the selection prompt")
+	cmd.Flags().StringVar(&initEnvName, "env", "", "active env short name (e.g. dev); skips the selection prompt")
 	return cmd
 }
 
