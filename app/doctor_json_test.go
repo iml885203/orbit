@@ -178,7 +178,7 @@ func TestOtherProjectDoctorPointsDirectlyToUp(t *testing.T) {
 	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
 		Name:    "Daemon",
 		Status:  daemon.CheckInfo,
-		Message: "shop-a is running; orbit up switches to shop-b",
+		Message: "shop-a has 1 running resource; orbit up switches to shop-b",
 		Hint:    "run: orbit up",
 	}}}
 	if got := doctorStartCommand(resp); got != "orbit up" {

@@ -127,16 +127,7 @@ func upCompletionMessage(args []string) string {
 }
 
 func validateUpSelection(args []string) error {
-	switch {
-	case infraOnly && len(args) > 0:
-		return cli.NewInvalidArgumentError("service names and --infra cannot be used together")
-	case infraOnly && len(groups) > 0:
-		return cli.NewInvalidArgumentError("--group and --infra cannot be used together")
-	case len(args) > 0 && len(groups) > 0:
-		return cli.NewInvalidArgumentError("service names and --group cannot be used together")
-	default:
-		return nil
-	}
+	return validateLifecycleSelection(args, groups, infraOnly)
 }
 
 func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {

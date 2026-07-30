@@ -236,6 +236,63 @@ func TestHandleUp_SelectedGroupReportsActualDependencies(t *testing.T) {
 	}
 }
 
+func TestHandleDown_UsesTheSameSelectionModesAsUp(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  DownRequest
+		affected string
+		message  string
+	}{
+		{
+			name:     "resources",
+			request:  DownRequest{Resources: []string{"web", "api"}},
+			affected: "api,web",
+			message:  "Stopping 2 requested resources.",
+		},
+		{
+			name:     "group members without shared dependencies",
+			request:  DownRequest{Groups: []string{"frontend"}},
+			affected: "web",
+			message:  "Stopping group frontend (1 resource).",
+		},
+		{
+			name:     "infrastructure",
+			request:  DownRequest{InfraOnly: true},
+			affected: "db,redis",
+			message:  "Stopping infrastructure (2 containers).",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testConfig()
+			cfg.Groups = map[string]config.Group{
+				"frontend": {Services: []string{"web"}},
+			}
+			s := newTestServer(t, cfg)
+			body, _ := json.Marshal(tt.request)
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/down", bytes.NewReader(body))
+			s.handleDown(rr, req)
+			s.waitForBackground()
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+			}
+			var response APIResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if got := strings.Join(response.AffectedResources, ","); got != tt.affected {
+				t.Fatalf("affected resources = %q, want %q", got, tt.affected)
+			}
+			if response.Message != tt.message {
+				t.Fatalf("message = %q, want %q", response.Message, tt.message)
+			}
+		})
+	}
+}
+
 func TestHandleUp_MessageDescribesSelectionIntent(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -152,6 +152,10 @@ func (c *Client) Down(all bool) (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{All: all})
 }
 
+func (c *Client) StopSelection(req DownRequest) (*APIResponse, error) {
+	return c.postJSON("/api/down", req)
+}
+
 // DownAndWait stops every service and container before returning.
 func (c *Client) DownAndWait() (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{Wait: true})

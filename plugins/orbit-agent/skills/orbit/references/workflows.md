@@ -20,6 +20,9 @@ orbit up --json
 orbit up <resource> --json
 orbit restart <resource> --json
 orbit down <resource> --json
+orbit down <resource> <resource> --json
+orbit down --group <name> --json
+orbit down --infra --json
 orbit down --json
 ```
 

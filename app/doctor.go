@@ -47,9 +47,7 @@ func runDoctorWithOptions(options doctorOptions) error {
 				configFile = status.ConfigPath
 				detachedStatus = status
 			} else if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-				if !usesDiscoveredProjectConfig(configFile) {
-					return mismatch
-				}
+				detachedStatus = status
 			}
 		}
 	}
@@ -290,17 +288,27 @@ func localDoctorResponseWithContext(
 	}
 	daemonCheck := daemon.DoctorCheck{Name: "Daemon", Status: daemon.CheckInfo, Message: daemonMessage}
 	if runningStatus != nil {
+		runningResources := runningEnvironmentResources(runningStatus.Resources)
+		contextState := fmt.Sprintf("%s is selected and stopped", projectContextName(runningStatus.ConfigPath))
+		if len(runningResources) > 0 {
+			contextState = fmt.Sprintf(
+				"%s has %d running %s",
+				projectContextName(runningStatus.ConfigPath),
+				len(runningResources),
+				pluralize(len(runningResources), "resource", "resources"),
+			)
+		}
 		if sameFilePath(configFile, runningStatus.ConfigPath) {
 			daemonCheck.Message = fmt.Sprintf(
-				"%s is still active; run commands from %s or pass --config %s",
-				projectContextName(runningStatus.ConfigPath),
+				"%s; run commands from %s or pass --config %s",
+				contextState,
 				filepath.Dir(runningStatus.ConfigPath),
 				shellquote.Quote(runningStatus.ConfigPath),
 			)
 		} else {
 			daemonCheck.Message = fmt.Sprintf(
-				"%s is running; orbit up switches to %s",
-				projectContextName(runningStatus.ConfigPath),
+				"%s; orbit up switches to %s",
+				contextState,
 				projectContextName(configFile),
 			)
 			daemonCheck.Hint = "run: orbit up"

@@ -1,0 +1,53 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte'
+import GroupNode from './GroupNode.svelte'
+import { store } from '../../lib/stores.svelte'
+import type { GraphResponse } from '../../lib/types.gen'
+
+function groupGraph(state: string): GraphResponse {
+  return {
+    env: 'local',
+    previewOnly: false,
+    groups: [{ name: 'app', services: ['api'] }],
+    nodes: [{ name: 'api', kind: 'backend', state }],
+    edges: [],
+  }
+}
+
+describe('GroupNode', () => {
+  afterEach(() => {
+    cleanup()
+    store.graph.data = null
+    store.graph.preview = null
+    store.daemon.envs = null
+    vi.restoreAllMocks()
+  })
+
+  it('offers only the useful lifecycle action and stops the group as one request', async () => {
+    store.graph.data = groupGraph('healthy')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    )
+    const running = render(GroupNode, {
+      props: { data: { name: 'app', serviceCount: 1 } },
+    })
+
+    expect(running.getByRole('button', { name: 'Start app group' })).toBeDisabled()
+    const stop = running.getByRole('button', { name: 'Stop app group' })
+    expect(stop).toBeEnabled()
+    await fireEvent.click(stop)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/down', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: ['app'] }),
+    }))
+
+    running.unmount()
+    store.graph.data = groupGraph('stopped')
+    const stopped = render(GroupNode, {
+      props: { data: { name: 'app', serviceCount: 1 } },
+    })
+    expect(stopped.getByRole('button', { name: 'Start app group' })).toBeEnabled()
+    expect(stopped.getByRole('button', { name: 'Stop app group' })).toBeDisabled()
+  })
+})

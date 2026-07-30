@@ -35,7 +35,8 @@ when implementing or debugging an `orbit.cli.v1` consumer.
 - Use `orbit up --json` for the environment, or
   `orbit up <resource> --json` for one resource and its dependencies.
 - Use `orbit restart <resource> --json` and
-  `orbit down <resource> --json` for targeted lifecycle changes.
+  `orbit down <resource> --json` (or multiple resource names), `--group`, or `--infra` for targeted
+  lifecycle changes; `up` and `down` use the same selection modes.
 - Use `orbit up --infra --json` only when the user explicitly wants
   containers without host services.
 - Use `orbit env sync --json` to refresh shared configuration and

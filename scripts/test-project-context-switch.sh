@@ -51,6 +51,11 @@ make_project() {
   printf '<h1>%s</h1>\n' "$content" >"$test_root/$project/index.html"
   printf '%s\n' \
     'version: "3"' \
+    'groups:' \
+    '  app:' \
+    '    enabled: true' \
+    '    services:' \
+    "      - $resource" \
     'services:' \
     "  $resource:" \
     '    type: python' \
@@ -68,6 +73,15 @@ make_project() {
 
 make_project "project-a" "app-a" "project-a"
 make_project "project-b" "app-b" "project-b"
+mkdir -p "$test_root/candidate"
+printf '%s\n' \
+  'version: "3"' \
+  'services:' \
+  '  broken-app:' \
+  '    type: shell' \
+  '    path: .' \
+  '    command: orbit-command-that-does-not-exist' \
+  >"$test_root/candidate/orbit.yaml"
 
 cd "$test_root/project-a"
 "$orbit_bin" up --json >"$test_root/up-a.json"
@@ -79,6 +93,11 @@ cd "$test_root/project-b"
 "$orbit_bin" status --json >"$test_root/status-b-before.json"
 "$orbit_bin" doctor --json >"$test_root/doctor-b.json"
 "$orbit_bin" inspect --json >"$test_root/inspect-b.json"
+if "$orbit_bin" --config "$test_root/candidate/orbit.yaml" doctor --json \
+  >"$test_root/doctor-candidate.json"; then
+  echo "orbit doctor unexpectedly accepted a missing candidate executable." >&2
+  exit 1
+fi
 if "$orbit_bin" down --json >"$test_root/down-b.json"; then
   echo "orbit down unexpectedly controlled the other project." >&2
   exit 1
@@ -113,6 +132,8 @@ if "$orbit_bin" open app-b --json >"$test_root/open-stopped-b.json"; then
   exit 1
 fi
 "$orbit_bin" up app-b --json >"$test_root/restore-b-after.json"
+"$orbit_bin" down --group app --json >"$test_root/stop-group-b.json"
+"$orbit_bin" up --group app --json >"$test_root/restore-group-b.json"
 
 python3 - "$test_root" <<'PY'
 import json
@@ -127,6 +148,7 @@ def read(name):
 before = read("status-b-before.json")
 doctor = read("doctor-b.json")
 inspect = read("inspect-b.json")
+candidate = read("doctor-candidate.json")
 guard = read("down-b.json")
 up = read("up-b.json")
 after = read("status-b-after.json")
@@ -137,6 +159,8 @@ restart_after = read("restart-b-after.json")
 stop_after = read("stop-b-after.json")
 open_stopped = read("open-stopped-b.json")
 restore_after = read("restore-b-after.json")
+stop_group = read("stop-group-b.json")
+restore_group = read("restore-group-b.json")
 
 assert before["ok"] is True
 environment = before["data"]["environment"]
@@ -165,6 +189,16 @@ assert inspect["data"]["risks"][0]["code"] == "project_context_inactive"
 assert [action["command"] for action in inspect["recommended_actions"]] == [
     "orbit up --json"
 ]
+
+assert candidate["ok"] is False
+assert candidate["error"]["code"] == "checks_failed"
+assert any(
+    check["name"] == "Command (broken-app)"
+    and check["status"] == "fail"
+    and "orbit-command-that-does-not-exist" in check["message"]
+    for check in candidate["data"]["checks"]
+)
+assert "daemon restart" not in json.dumps(candidate)
 
 assert guard["ok"] is False
 assert guard["error"]["code"] == "project_context_inactive"
@@ -231,6 +265,18 @@ assert [action["command"] for action in open_stopped["recommended_actions"]] == 
 
 assert restore_after["ok"] is True
 assert restore_after["data"]["resources"][0]["state"] == "healthy"
+
+assert stop_group["ok"] is True
+assert stop_group["data"]["message"] == "Stopping group app (1 resource)."
+assert [(item["name"], item["state"]) for item in stop_group["data"]["resources"]] == [
+    ("app-b", "stopped")
+]
+assert stop_group.get("recommended_actions", []) == []
+
+assert restore_group["ok"] is True
+assert [(item["name"], item["state"]) for item in restore_group["data"]["resources"]] == [
+    ("app-b", "healthy")
+]
 PY
 
 "$orbit_bin" down --json >/dev/null
@@ -276,10 +322,10 @@ assert doctor["ok"] is True
 environment_check = next(
     check for check in doctor["data"]["checks"] if check["name"] == "Daemon"
 )
-assert "project-b is still active" in environment_check["message"]
+assert "project-b is selected and stopped" in environment_check["message"]
 assert str(root / "project-b") in environment_check["message"]
 doctor_human = (root / "doctor-outside-project.txt").read_text(encoding="utf-8")
-assert "project-b is still active" in doctor_human
+assert "project-b is selected and stopped" in doctor_human
 assert "daemon restart" not in doctor_human
 assert "quickstart.yaml" not in doctor_human
 
@@ -291,6 +337,8 @@ assert explicit["ok"] is False
 assert explicit["error"]["code"] == "env_mismatch"
 PY
 "$orbit_bin" down --json >"$test_root/down-outside-project.json"
+cd "$test_root/project-a"
+"$orbit_bin" doctor --json >"$test_root/doctor-after-down.json"
 python3 - "$test_root/down-outside-project.json" <<'PY'
 import json
 import pathlib
@@ -300,6 +348,22 @@ down = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert down["ok"] is True
 assert all(resource["state"] == "stopped" for resource in down["data"]["resources"])
 assert "quickstart.yaml" not in json.dumps(down)
+PY
+python3 - "$test_root/doctor-after-down.json" <<'PY'
+import json
+import pathlib
+import sys
+
+doctor = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert doctor["ok"] is True
+environment = next(
+    check for check in doctor["data"]["checks"] if check["name"] == "Daemon"
+)
+assert "project-b is selected and stopped" in environment["message"]
+assert "project-b is running" not in environment["message"]
+assert [action["command"] for action in doctor["recommended_actions"]] == [
+    "orbit up --json"
+]
 PY
 "$orbit_bin" daemon stop --json >/dev/null
 

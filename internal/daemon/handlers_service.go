@@ -333,20 +333,8 @@ func (s *Server) resolveServicesFromRequest(req UpRequest) ([]string, error) {
 		return s.resolveExplicitServices(req.Resources)
 	}
 	cfg := s.holder.Load()
-	unknown := make([]string, 0, len(req.Groups))
-	for _, name := range req.Groups {
-		if _, exists := cfg.Groups[name]; !exists {
-			unknown = append(unknown, name)
-		}
-	}
-	if len(unknown) > 0 {
-		sort.Strings(unknown)
-		message := strings.Join(unknown, ", ")
-		available := sortedKeys(cfg.Groups)
-		if len(available) == 0 {
-			return nil, fmt.Errorf("%w: %s; this environment defines no groups", errUnknownGroup, message)
-		}
-		return nil, fmt.Errorf("%w: %s; available groups: %s", errUnknownGroup, message, strings.Join(available, ", "))
+	if err := validateRequestedGroups(cfg, req.Groups); err != nil {
+		return nil, err
 	}
 	detached := s.settings.GetDetachedEdges(s.currentEnvName())
 	enabled := engine.FilterEnabledServicesWithDetached(cfg, req.Groups, detached)
@@ -355,6 +343,25 @@ func (s *Server) resolveServicesFromRequest(req UpRequest) ([]string, error) {
 		names = append(names, name)
 	}
 	return names, nil
+}
+
+func validateRequestedGroups(cfg *config.Config, groups []string) error {
+	unknown := make([]string, 0, len(groups))
+	for _, name := range groups {
+		if _, exists := cfg.Groups[name]; !exists {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	message := strings.Join(unknown, ", ")
+	available := sortedKeys(cfg.Groups)
+	if len(available) == 0 {
+		return fmt.Errorf("%w: %s; this environment defines no groups", errUnknownGroup, message)
+	}
+	return fmt.Errorf("%w: %s; available groups: %s", errUnknownGroup, message, strings.Join(available, ", "))
 }
 
 func (s *Server) resolveExplicitServices(services []string) ([]string, error) {
@@ -427,6 +434,33 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if downRequestHasSelection(req) {
+		names, err := s.resolveStopSelection(req)
+		if err != nil {
+			code := ""
+			status := http.StatusBadRequest
+			switch {
+			case errors.Is(err, errUnknownGroup):
+				code = "unknown_group"
+			case errors.Is(err, errUnknownResource):
+				code = apiCodeUnknownResource
+				status = http.StatusNotFound
+			}
+			writeJSON(w, status, APIResponse{Error: err.Error(), Code: code})
+			return
+		}
+		s.startBackground(func() {
+			s.app.StopServices(names)
+			s.PersistState()
+		})
+		writeJSON(w, http.StatusOK, APIResponse{
+			OK:                true,
+			Message:           downStopMessage(req, names),
+			AffectedResources: names,
+		})
+		return
+	}
+
 	// Stop all services and containers in parallel through the canonical
 	// StopService lifecycle. Status pollers (orbit down's progress
 	// renderer) see real stopping → stopped transitions instead of a
@@ -437,6 +471,78 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 		s.stateFile.Remove()
 	})
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: "stopping all services and containers"})
+}
+
+func downRequestHasSelection(req DownRequest) bool {
+	return len(req.Resources) > 0 || len(req.Groups) > 0 || req.InfraOnly
+}
+
+func (s *Server) resolveStopSelection(req DownRequest) ([]string, error) {
+	selectedModes := 0
+	for _, selected := range []bool{len(req.Resources) > 0, len(req.Groups) > 0, req.InfraOnly} {
+		if selected {
+			selectedModes++
+		}
+	}
+	if selectedModes > 1 {
+		return nil, fmt.Errorf("resource names, --group, and --infra are separate selection modes")
+	}
+
+	cfg := s.holder.Load()
+	selected := make(map[string]bool)
+	switch {
+	case len(req.Resources) > 0:
+		for _, name := range req.Resources {
+			if !cfg.ServiceOrContainerExists(name) {
+				return nil, unknownResourceError(name)
+			}
+			selected[name] = true
+		}
+	case len(req.Groups) > 0:
+		if err := validateRequestedGroups(cfg, req.Groups); err != nil {
+			return nil, err
+		}
+		for _, groupName := range req.Groups {
+			for _, name := range cfg.Groups[groupName].Services {
+				selected[name] = true
+			}
+		}
+	case req.InfraOnly:
+		for name := range cfg.Containers {
+			selected[name] = true
+		}
+	}
+	names := make([]string, 0, len(selected))
+	for name := range selected {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func downStopMessage(req DownRequest, affected []string) string {
+	if len(affected) == 0 {
+		switch {
+		case req.InfraOnly:
+			return "No containers are configured for this environment."
+		case len(req.Groups) > 0:
+			return fmt.Sprintf("No resources match the selected groups: %s.", strings.Join(req.Groups, ", "))
+		default:
+			return "No resources were selected."
+		}
+	}
+	switch {
+	case req.InfraOnly:
+		return fmt.Sprintf("Stopping infrastructure (%s).", countNoun(len(affected), "container"))
+	case len(req.Resources) == 1:
+		return fmt.Sprintf("Stopping %s.", req.Resources[0])
+	case len(req.Resources) > 1:
+		return fmt.Sprintf("Stopping %s.", countNoun(len(affected), "requested resource"))
+	case len(req.Groups) == 1:
+		return fmt.Sprintf("Stopping group %s (%s).", req.Groups[0], countNoun(len(affected), "resource"))
+	default:
+		return fmt.Sprintf("Stopping %s (%s).", countNoun(len(req.Groups), "group"), countNoun(len(affected), "resource"))
+	}
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {

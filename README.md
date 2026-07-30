@@ -151,6 +151,11 @@ intentionally want containers without host services. To narrow startup, choose
 either resource names or one or more `--group` flags; Orbit rejects combinations
 instead of silently ignoring part of the command.
 
+`orbit down` uses the same selectors: no selector stops the environment,
+resource names stop only those resources, `--group` stops the selected groups,
+and `--infra` stops only containers. You do not need a second selection model
+for shutdown.
+
 After editing the active `orbit.yaml`, run `orbit up` again. Orbit validates the
 new config before interrupting anything, applies it, restores the resources that
 were already running, and then starts the resources requested by the command.

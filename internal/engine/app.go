@@ -512,19 +512,28 @@ func (a *App) ShutdownServices() {
 // Blocks until every goroutine returns.
 func (a *App) StopServicesOnly() {
 	services := a.Orchestrator.GetAllServices()
-	var wg sync.WaitGroup
+	names := make([]string, 0, len(services))
 	for i := range services {
 		if services[i].Kind != "service" {
 			continue
 		}
-		name := services[i].Name
+		names = append(names, services[i].Name)
+	}
+	a.StopServices(names)
+}
+
+// StopServices gives every selected resource its own shutdown deadline so one
+// slow process cannot consume the budget of otherwise independent resources.
+func (a *App) StopServices(names []string) {
+	var wg sync.WaitGroup
+	for _, name := range names {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), a.Holder.Load().Settings.ShutdownTimeout)
 			defer cancel()
 			if err := a.StopService(ctx, name); err != nil {
-				slog.Error("stop failed", "component", "stop-services", "name", name, "err", err)
+				slog.Error("stop failed", "component", "stop-selected", "name", name, "err", err)
 			}
 		}(name)
 	}
@@ -567,20 +576,11 @@ func (a *App) StopService(ctx context.Context, name string) error {
 // goroutine returns.
 func (a *App) StopAllServices() {
 	services := a.Orchestrator.GetAllServices()
-	var wg sync.WaitGroup
+	names := make([]string, 0, len(services))
 	for i := range services {
-		name := services[i].Name
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), a.Holder.Load().Settings.ShutdownTimeout)
-			defer cancel()
-			if err := a.StopService(ctx, name); err != nil {
-				slog.Error("stop failed", "component", "stop-all", "name", name, "err", err)
-			}
-		}(name)
+		names = append(names, services[i].Name)
 	}
-	wg.Wait()
+	a.StopServices(names)
 
 	// Safety net: sweep any orbit-managed containers in this namespace that
 	// the orchestrator does not track (e.g. orphaned sidecars from a prior

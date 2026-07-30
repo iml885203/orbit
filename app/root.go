@@ -561,20 +561,24 @@ Resource names, --infra, and --group are separate selection modes and cannot be 
 }
 
 func downCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "down [resource]",
-		Short: "Stop one resource, or everything if omitted",
-		Long: `Stop one resource, or all containers and host services when no resource is given.
+	cmd := &cobra.Command{
+		Use:   "down [resources...]",
+		Short: "Stop resources (or all if no selection is given)",
+		Long: `Stop containers and host services using the same selection modes as orbit up.
 
+Examples:
+  orbit down                    # stop everything
+  orbit down api redis          # stop specific resources
+  orbit down --group frontend   # stop one configured group
+  orbit down --infra            # stop only containers
+
+Resource names, --infra, and --group are separate selection modes and cannot be combined.
 Orbit remains ready for the next 'orbit up'.`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				return runStop(cmd, args)
-			}
-			return runDown(cmd, args)
-		},
+		RunE: runDown,
 	}
+	cmd.Flags().StringSliceVar(&groups, "group", nil, "stop specific groups (comma-separated)")
+	cmd.Flags().BoolVar(&infraOnly, "infra", false, "stop only infrastructure containers")
+	return cmd
 }
 
 func restartCmd() *cobra.Command {
@@ -664,7 +668,10 @@ func daemonCmd() *cobra.Command {
 // Command implementations
 // ============================================================
 
-func runDown(_ *cobra.Command, _ []string) error {
+func runDown(_ *cobra.Command, args []string) error {
+	if err := validateLifecycleSelection(args, groups, infraOnly); err != nil {
+		return err
+	}
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if err := client.Health(); err != nil {
 		if cli.JSONOutput {
@@ -683,6 +690,9 @@ func runDown(_ *cobra.Command, _ []string) error {
 	status, err := client.Status()
 	if err != nil {
 		return fmt.Errorf("status: %w", err)
+	}
+	if len(args) > 0 || len(groups) > 0 || infraOnly {
+		return runStopSelection(client, status, args)
 	}
 	names := make([]string, 0, len(status.Resources))
 	for i := range status.Resources {
@@ -714,6 +724,54 @@ func runDown(_ *cobra.Command, _ []string) error {
 	}
 	fmt.Println(downCompletionMessage)
 	return nil
+}
+
+func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, names []string) error {
+	for index, name := range names {
+		if lifecycleResourceExists(status, name) {
+			continue
+		}
+		return newResourceNameError(status, name, func(suggestion string) string {
+			corrected := append([]string{}, names...)
+			corrected[index] = suggestion
+			return "orbit down " + strings.Join(corrected, " ")
+		})
+	}
+	resp, err := client.StopSelection(daemon.DownRequest{
+		Resources: names,
+		Groups:    groups,
+		InfraOnly: infraOnly,
+	})
+	if err != nil {
+		return fmt.Errorf("down failed: %w", err)
+	}
+	affected := resp.AffectedResources
+	if len(affected) == 0 {
+		if cli.JSONOutput {
+			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
+				Operation: "down",
+				Message:   resp.Message,
+				InfraOnly: infraOnly,
+			}), nil)
+		}
+		fmt.Println(resp.Message)
+		return nil
+	}
+	if cli.JSONOutput {
+		finalStatus, err := waitForLifecycleJSON(client, affected, "stopped")
+		if err != nil {
+			return cli.WithJSONActions(err, lifecycleRecommendedActions(affected))
+		}
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
+			Operation:          "down",
+			Message:            resp.Message,
+			RequestedResources: affected,
+			InfraOnly:          infraOnly,
+			FinalStatus:        finalStatus,
+		}), nil)
+	}
+	fmt.Println(resp.Message)
+	return waitForServicesStopped(client, affected, false)
 }
 
 func runRestart(_ *cobra.Command, args []string) error {

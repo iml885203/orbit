@@ -483,14 +483,15 @@ groups:
     services: [api, web, db]
 ```
 
-`orbit up --group back_office` starts only that group's services (plus their
-dependencies). A group with `enabled: false` is skipped unless explicitly
-requested on the command line.
+`orbit up --group back_office` starts that group's resources plus their
+dependencies. `orbit down --group back_office` stops the group's own resources
+and leaves shared dependencies available to other groups. A group with
+`enabled: false` is skipped unless explicitly requested on the command line.
 
-Group names are validated before startup. An unknown name fails with the
-available groups instead of becoming a successful no-op. Service names,
-`--group`, and `--infra` are separate `up` selection modes and cannot be
-combined.
+Group names are validated before a lifecycle action. An unknown name fails
+with the available groups instead of becoming a successful no-op. Resource
+names, `--group`, and `--infra` are the same separate selection modes for both
+`up` and `down`; they cannot be combined.
 
 ## `externals`
 

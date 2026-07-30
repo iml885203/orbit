@@ -470,12 +470,14 @@ groups:
     services: [api, web, db]
 ```
 
-`orbit up --group back_office` 只啟動該 group 的 service（以及它們的相依）。
-`enabled: false` 的 group 預設會被跳過，除非在 command line 明確指定。
+`orbit up --group back_office` 會啟動該 group 的 resources 與其相依；
+`orbit down --group back_office` 只停止該 group 自己的 resources，讓其他
+groups 仍可使用共享相依。`enabled: false` 的 group 預設會被跳過，除非在
+command line 明確指定。
 
-Orbit 會在啟動前驗證 group 名稱；未知名稱會失敗並列出可用 groups，不會變成
-看似成功的 no-op。Service names、`--group` 與 `--infra` 是互斥的 `up`
-選取模式，不能混用。
+Orbit 會在 lifecycle action 前驗證 group 名稱；未知名稱會失敗並列出可用
+groups，不會變成看似成功的 no-op。Resource names、`--group` 與 `--infra`
+在 `up` 與 `down` 都使用同一套互斥選取模式，不能混用。
 
 ## `externals`
 

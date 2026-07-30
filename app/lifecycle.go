@@ -159,6 +159,19 @@ type lifecycleJSONOptions struct {
 	EnvironmentChanges *lifecycleEnvironmentChangesJSON
 }
 
+func validateLifecycleSelection(resources, selectedGroups []string, selectedInfra bool) error {
+	switch {
+	case selectedInfra && len(resources) > 0:
+		return cli.NewInvalidArgumentError("resource names and --infra cannot be used together")
+	case selectedInfra && len(selectedGroups) > 0:
+		return cli.NewInvalidArgumentError("--group and --infra cannot be used together")
+	case len(resources) > 0 && len(selectedGroups) > 0:
+		return cli.NewInvalidArgumentError("resource names and --group cannot be used together")
+	default:
+		return nil
+	}
+}
+
 type lifecycleEnvironmentChangesJSON struct {
 	PreviouslyRunning    []string `json:"previously_running"`
 	RestoredResources    []string `json:"restored_resources"`

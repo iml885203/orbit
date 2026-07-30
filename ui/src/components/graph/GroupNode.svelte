@@ -10,7 +10,7 @@
   // Either way the same value drives both border and background via two
   // CSS custom properties exposed inline.
   import { hashHue } from '../../lib/hash'
-  import { store, toast, mutationsDisabled } from '../../lib/stores.svelte'
+  import { store, toast, mutationsDisabled, isRunning } from '../../lib/stores.svelte'
   import { apiPost } from '../../lib/api'
   import { Play, Square } from '@lucide/svelte'
   import { tooltip } from '../../lib/tooltip.svelte'
@@ -27,6 +27,13 @@
   const services = $derived(
     store.graph.active?.groups?.find(g => g.name === data.name)?.services ?? [],
   )
+  const groupNodes = $derived(
+    (store.graph.active?.nodes ?? []).filter(node => services.includes(node.name)),
+  )
+  const canStart = $derived(
+    groupNodes.some(node => node.state === 'stopped' || node.state === 'pending'),
+  )
+  const canStop = $derived(groupNodes.some(node => isRunning(node.state)))
   // Hidden in preview-only / hover-preview envs (the daemon rejects mutations).
   const showActions = $derived(!mutationsDisabled() && services.length > 0)
 
@@ -45,17 +52,13 @@
     }
   }
 
-  // Stop only this group's own services (not shared deps, which other groups
-  // may still need). No batch endpoint, so fan out one stop per service.
+  // Shared dependencies stay alive because another group may still need them.
   async function doStop() {
     if (busy) return
     busy = true
     try {
-      const results = await Promise.all(
-        services.map(s => apiPost('/api/stop/' + encodeURIComponent(s))),
-      )
-      const failed = results.filter(r => !r.ok).length
-      if (failed) toast(`Failed to stop ${failed}/${services.length} in ${data.name}`)
+      const { ok, data: resp } = await apiPost('/api/down', { groups: [data.name] })
+      if (!ok) toast(resp?.error || `Failed to stop ${data.name}`)
     } finally {
       busy = false
     }
@@ -75,7 +78,7 @@
       <span class="group-actions">
         <button
           class="gbtn"
-          disabled={busy}
+          disabled={busy || !canStart}
           aria-busy={busy}
           aria-label="Start {data.name} group"
           use:tooltip={{ content: 'Start group' }}
@@ -85,7 +88,7 @@
         </button>
         <button
           class="gbtn"
-          disabled={busy}
+          disabled={busy || !canStop}
           aria-busy={busy}
           aria-label="Stop {data.name} group"
           use:tooltip={{ content: 'Stop group' }}

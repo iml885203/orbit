@@ -63,6 +63,9 @@ export interface UpRequest {
  * DownRequest is the body for POST /api/down.
  */
 export interface DownRequest {
+  resources: string[];
+  infra_only: boolean;
+  groups: string[];
   all: boolean;
   wait: boolean;
 }

@@ -139,6 +139,10 @@ orbit down                   # 停止環境
 services 時，才使用 `orbit up --infra`。需要縮小啟動範圍時，請選擇指定
 resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
 
+`orbit down` 使用完全相同的選擇方式：不指定範圍會停止整個環境、resource
+names 只停止指定資源、`--group` 停止指定群組，而 `--infra` 只停止
+containers。關閉環境不需要再記另一套選擇模型。
+
 編輯 active `orbit.yaml` 後，再執行一次 `orbit up` 即可。Orbit 會先驗證新
 設定，再套用變更、恢復原本正在運行的 resources，最後啟動這次指令指定的
 resources，不會先中斷可用環境。只有想套用待處理變更、但不想額外啟動原先
