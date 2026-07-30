@@ -316,7 +316,7 @@ func buildInspectServiceSummary(services []daemon.ResourceStatus) inspectService
 }
 
 func buildInspectRisks(opts inspectBuildOptions, services inspectServiceSummary) []inspectRisk {
-	var risks []inspectRisk
+	risks := make([]inspectRisk, 0, 1+len(opts.ReadinessChecks))
 	if risk, ok := inspectBlockingRisk(opts); ok {
 		risks = append(risks, risk)
 	} else {

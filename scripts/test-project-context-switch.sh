@@ -223,7 +223,7 @@ assert inspect_after["ok"] is True
 assert inspect_after["data"]["readiness"]["state"] == "ready"
 assert inspect_after["data"]["environment"]["selected_name"] == "project-b"
 assert inspect_after["data"]["environment"]["daemon_env"] == "project-b"
-assert inspect_after["data"]["risks"] == []
+assert inspect_after["data"]["risks"] == [], inspect_after["data"]["risks"]
 assert inspect_after.get("recommended_actions", []) == []
 
 assert doctor_after["ok"] is True
