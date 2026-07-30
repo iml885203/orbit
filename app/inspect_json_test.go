@@ -52,6 +52,33 @@ func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 	}
 }
 
+func TestBuildInspectDataIncludesNonBlockingDependencyReadinessRisk(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:    "/tmp/orbit.yaml",
+		ConfigEnvName: "local",
+		DaemonRunning: false,
+		ReadinessChecks: []daemon.DoctorCheck{{
+			Name:    "Readiness (database)",
+			Status:  daemon.CheckWarn,
+			Message: "api depends on database, but Orbit cannot infer when database is ready",
+			Hint:    "Add containers.database.health_check so dependents wait for a real readiness signal",
+		}},
+	})
+
+	if len(got.Risks) != 2 {
+		t.Fatalf("risks = %+v, want stopped and dependency-readiness risks", got.Risks)
+	}
+	risk := got.Risks[1]
+	if risk.Code != "dependency_readiness_ambiguous" ||
+		risk.Severity != "medium" ||
+		!strings.Contains(risk.Message, "containers.database.health_check") {
+		t.Fatalf("readiness risk = %+v", risk)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v, want normal startup action", got.RecommendedActions)
+	}
+}
+
 func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
 	orbitHome := t.TempDir()
 	t.Setenv("ORBIT_HOME", orbitHome)

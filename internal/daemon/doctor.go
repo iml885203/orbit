@@ -103,6 +103,7 @@ func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	tools := requiredHostTools(cfg)
 	results := ServiceWorkingDirectoryChecks(cfg, nil)
 	results = append(results, configuredServiceCommandChecks(cfg)...)
+	results = append(results, DependencyReadinessChecks(cfg)...)
 	toolOffset := len(results)
 	results = append(results, make([]DoctorCheck, len(tools))...)
 
@@ -118,6 +119,70 @@ func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 
 	results = append(results, projectDependencyChecks(cfg)...)
 	return results
+}
+
+// DependencyReadinessChecks remains non-blocking because some containers only
+// need to be started, not ready, before their dependents launch.
+func DependencyReadinessChecks(cfg *config.Config) []DoctorCheck {
+	if cfg == nil {
+		return nil
+	}
+	dependents := make(map[string][]string)
+	for name, service := range cfg.Services {
+		for _, dependency := range service.DependsOn {
+			dependents[dependency] = append(dependents[dependency], name)
+		}
+	}
+	for name, container := range cfg.Containers {
+		for _, dependency := range container.DependsOn {
+			dependents[dependency] = append(dependents[dependency], name)
+		}
+	}
+
+	names := make([]string, 0, len(dependents))
+	for name := range dependents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var checks []DoctorCheck
+	for _, name := range names {
+		var healthCheck *config.HealthCheckConfig
+		var ports map[string]config.PortDef
+		var configPath string
+		if service, ok := cfg.Services[name]; ok {
+			healthCheck = service.HealthCheck
+			ports = service.Ports
+			configPath = "services." + name + ".health_check"
+			if healthCheck == nil && len(ports) == 0 {
+				continue
+			}
+		} else if container, ok := cfg.Containers[name]; ok {
+			healthCheck = container.HealthCheck
+			ports = container.Ports
+			configPath = "containers." + name + ".health_check"
+		}
+		if healthCheck != nil || readinessEndpointIsUnambiguous(ports) {
+			continue
+		}
+		users := append([]string(nil), dependents[name]...)
+		sort.Strings(users)
+		checks = append(checks, DoctorCheck{
+			Name:    "Readiness (" + name + ")",
+			Status:  CheckWarn,
+			Message: fmt.Sprintf("%s depends on %s, but Orbit cannot infer when %s is ready", strings.Join(users, ", "), name, name),
+			Hint:    "Add " + configPath + " so dependents wait for a real readiness signal",
+		})
+	}
+	return checks
+}
+
+func readinessEndpointIsUnambiguous(ports map[string]config.PortDef) bool {
+	if len(ports) == 1 {
+		return true
+	}
+	_, ok := ports["http"]
+	return ok
 }
 
 func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []DoctorCheck {

@@ -234,8 +234,6 @@ containers:
       redis:
         preferred: 26379
         target: 6379
-    health_check:
-      type: tcp
 
 services:
   demo-api:
@@ -302,13 +300,17 @@ For `http` and `tcp`, omit `port` when the resource declares one port. An
 `http` check also selects the `http` alias when other ports exist. Orbit asks
 for an explicit health-check port only when the endpoint remains ambiguous.
 
-A host service with no explicit `health_check` gets a TCP readiness check when
-it declares one port, or an `http` port among several. Dependents wait until
-that endpoint is actually listening, so a missing probe cannot turn process
-spawn into a false “healthy” result. Use an explicit HTTP, log, or exec check
-when listening alone is not sufficient proof. A portless worker must remain
-running through a short startup stabilization window before Orbit releases its
-dependents.
+A resource with no explicit `health_check` gets a TCP readiness check when it
+declares one port, or an `http` port among several. This applies equally to
+host services and containers: declaring the endpoint is enough for Orbit to
+wait before releasing dependents. Use an explicit HTTP, log, `exec`, or image
+`healthcheck` probe when listening alone is not sufficient proof. A portless
+host worker must remain running through a short startup stabilization window
+before Orbit releases its dependents; a portless container that needs a
+readiness guarantee must declare an explicit probe. When another resource
+depends on a container with no probe and Orbit cannot choose one endpoint,
+`orbit doctor` warns with the exact `health_check` path to add instead of
+silently implying readiness.
 
 ### `seed`
 

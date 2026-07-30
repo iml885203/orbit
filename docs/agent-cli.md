@@ -317,7 +317,7 @@ The inspect payload contains:
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `environment` | The same `state`, `selected_name`, `selected_path`, and `environments` selection object used by status and env list, plus preview/daemon details when available. |
 | `resources` | Bounded resource summary grouped by state. |
-| `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `orbit_update_pending`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `resource_degraded`, `resource_converging`, and `resource_stopped`. |
+| `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `orbit_update_pending`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `dependency_readiness_ambiguous`, `resource_degraded`, `resource_converging`, and `resource_stopped`. A dependency-readiness risk is advisory config evidence and can accompany a blocking lifecycle risk. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
 Stable `readiness.state` values:

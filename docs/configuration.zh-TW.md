@@ -226,8 +226,6 @@ containers:
       redis:
         preferred: 26379
         target: 6379
-    health_check:
-      type: tcp
 
 services:
   demo-api:
@@ -294,12 +292,15 @@ health_check:
 時，`http` check 仍會優先選擇 `http` alias；只有 endpoint 仍有歧義時，
 Orbit 才要求明確指定 health-check port。
 
-Host service 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個
-port 中包含 `http`，Orbit 會自動使用 TCP readiness check。Dependent 會等到
-endpoint 真的開始 listening 才啟動，不會把 process 剛 spawn 就誤判成
-「healthy」。若「能連線」仍不足以代表應用程式 ready，請明確使用 HTTP、
-log 或 exec check。沒有 port 的 worker 則必須通過一小段 startup
-stabilization window，Orbit 才會放行 dependent。
+Resource 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個 port
+中包含 `http`，Orbit 會自動使用 TCP readiness check。Host service 與
+container 採用同一規則：宣告 endpoint 就足以讓 Orbit 等到它可用再放行
+dependent。若「能連線」仍不足以代表應用程式 ready，請明確使用 HTTP、
+log、`exec` 或 image `healthcheck` probe。沒有 port 的 host worker 會先
+通過一小段 startup stabilization window；沒有 port 的 container 若需要
+readiness 保證，則必須宣告明確 probe。當其他 resource 依賴一個沒有 probe、
+且 Orbit 無法選定單一 endpoint 的 container 時，`orbit doctor` 會直接警告
+並指出應補上的 `health_check` path，不會默默暗示它已經 ready。
 
 ### `seed`
 

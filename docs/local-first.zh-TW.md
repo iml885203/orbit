@@ -19,8 +19,6 @@ containers:
       redis:
         preferred: 26379
         target: 6379
-    health_check:
-      type: tcp
 
 services:
   app:
@@ -30,9 +28,6 @@ services:
       http:
         preferred: 28080
     depends_on: [redis]
-    health_check:
-      type: http
-      path: /
 ```
 
 這個例子會用 Python 提供目前專案目錄，並先啟動 Redis；只使用公開 demo
@@ -41,8 +36,11 @@ services:
 只有 command 無法表達預期 runtime 或 working directory 時，才需要加入
 `type` 或 `path`。`preferred` 表示「可用時採用這個 port，否則
 選擇可用的 port」。Orbit 會把實際選定的 application port 注入為 `PORT`，
-因此發生衝突時不需要修改 config。每個 endpoint 只宣告一次，Orbit 會把它
-同時用於 health check、`orbit open` 與 dependency URL。
+因此發生衝突時不需要修改 config。每個 endpoint 只宣告一次；資源只有一個
+endpoint（或有名為 `http` 的 endpoint）時，Orbit 會先等它可用再啟動
+dependents，並將它重用於 `orbit open` 與 dependency URL。只有 port 已經
+listening 仍不足以證明 application ready 時，才需要明確加入
+`health_check`。
 
 ## 2. 證明本機開發迴圈
 

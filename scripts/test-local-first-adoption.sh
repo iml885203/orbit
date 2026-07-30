@@ -110,6 +110,44 @@ assert status["ok"] is True
 assert [resource["name"] for resource in status["data"]["resources"]] == ["override"]
 PY
 
+printf '%s\n' \
+  'version: "3"' \
+  'containers:' \
+  '  database:' \
+  '    image: postgres:18-alpine' \
+  '    ports:' \
+  '      primary: "25432:5432"' \
+  '      admin: "25433:5433"' \
+  'services:' \
+  '  api:' \
+  '    command: python3 -m http.server 0' \
+  '    depends_on: [database]' \
+  >"$test_root/ambiguous-readiness.yaml"
+"$orbit_bin" -c "$test_root/ambiguous-readiness.yaml" doctor --json \
+  >"$test_root/ambiguous-readiness.json"
+"$orbit_bin" -c "$test_root/ambiguous-readiness.yaml" inspect --json \
+  >"$test_root/ambiguous-readiness-inspect.json"
+python3 - \
+  "$test_root/ambiguous-readiness.json" \
+  "$test_root/ambiguous-readiness-inspect.json" <<'PY'
+import json
+import pathlib
+import sys
+
+doctor = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+checks = {check["name"]: check for check in doctor["data"]["checks"]}
+readiness = checks["Readiness (database)"]
+assert readiness["status"] == "warn"
+assert readiness["hint"] == (
+    "Add containers.database.health_check so dependents wait for a real readiness signal"
+)
+
+inspect = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+risks = {risk["code"]: risk for risk in inspect["data"]["risks"]}
+assert risks["dependency_readiness_ambiguous"]["severity"] == "medium"
+assert "containers.database.health_check" in risks["dependency_readiness_ambiguous"]["message"]
+PY
+
 python3 -c '
 import pathlib
 import socket

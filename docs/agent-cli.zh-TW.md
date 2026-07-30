@@ -291,7 +291,7 @@ Inspect payload 包含：
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `environment` | 與 status、env list 共用 `state`、`selected_name`、`selected_path`、`environments` selection object，另包含可用時的 preview/daemon 資訊。 |
 | `resources` | 依 state 分組的 resource 摘要。 |
-| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`orbit_update_pending`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`resource_degraded`、`resource_converging`、`resource_stopped`。 |
+| `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`orbit_update_pending`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`dependency_readiness_ambiguous`、`resource_degraded`、`resource_converging`、`resource_stopped`。Dependency-readiness risk 是 advisory config evidence，因此可以與 blocking lifecycle risk 同時出現。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
 穩定的 `readiness.state` 值：

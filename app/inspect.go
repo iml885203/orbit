@@ -104,6 +104,7 @@ type inspectBuildOptions struct {
 	Status              *daemon.StatusResponse
 	StatusErr           error
 	Configured          []daemon.ResourceStatus
+	ReadinessChecks     []daemon.DoctorCheck
 	Selection           environmentSelection
 	ContextMismatch     bool
 	RunningPath         string
@@ -146,6 +147,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	if cfg != nil {
 		opts.PreviewOnly = cfg.PreviewOnly
 		opts.Configured = configuredInspectServices(cfg)
+		opts.ReadinessChecks = daemonsrv.DependencyReadinessChecks(cfg)
 	}
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
@@ -314,10 +316,24 @@ func buildInspectServiceSummary(services []daemon.ResourceStatus) inspectService
 }
 
 func buildInspectRisks(opts inspectBuildOptions, services inspectServiceSummary) []inspectRisk {
+	var risks []inspectRisk
 	if risk, ok := inspectBlockingRisk(opts); ok {
-		return []inspectRisk{risk}
+		risks = append(risks, risk)
+	} else {
+		risks = append(risks, inspectServiceRisks(services)...)
 	}
-	return inspectServiceRisks(services)
+	for _, check := range opts.ReadinessChecks {
+		message := check.Message
+		if check.Hint != "" {
+			message += ". " + check.Hint
+		}
+		risks = append(risks, inspectRisk{
+			Code:     "dependency_readiness_ambiguous",
+			Severity: "medium",
+			Message:  message,
+		})
+	}
+	return risks
 }
 
 func inspectBlockingRisk(opts inspectBuildOptions) (inspectRisk, bool) {

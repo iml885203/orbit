@@ -308,19 +308,14 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 		// startup poll, zombie checks and recovery probing all read the
 		// config the service was started with.
 		cfg := holder.Load()
-		var hc *config.HealthCheckConfig
-		if c, ok := cfg.Containers[name]; ok {
-			hc = c.HealthCheck
-		} else if s, ok := cfg.Services[name]; ok {
-			hc = serviceReadinessCheck(s, cfg.Settings.HealthCheckInterval)
-		}
+		info, _ := a.Orchestrator.GetServiceInfo(name)
+		hc := readinessCheckForResource(cfg, name, info.Kind)
+		managedProcess := info.Kind != "container"
 		onProbeResult := func(r health.Result) {
 			if !r.Healthy {
 				return
 			}
-			// For services (not containers), verify the process is actually alive.
-			// A zombie process may hold the port and pass health checks.
-			if _, isSvc := cfg.Services[name]; isSvc {
+			if managedProcess {
 				if !a.ProcessMgr.IsAlive(name) {
 					slog.Warn("port responds but process is dead — zombie detected", "component", "health", "name", name)
 					orch.Events() <- Event{
@@ -406,18 +401,44 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 	}
 }
 
-func serviceReadinessCheck(service *config.Service, interval time.Duration) *config.HealthCheckConfig {
-	if service == nil || service.HealthCheck != nil {
-		if service == nil {
-			return nil
+func readinessCheckForResource(
+	cfg *config.Config,
+	name string,
+	kind string,
+) *config.HealthCheckConfig {
+	if kind == "container" {
+		if container, ok := cfg.Containers[name]; ok {
+			return resourceReadinessCheck(
+				container.HealthCheck,
+				container.Ports,
+				cfg.Settings.HealthCheckInterval,
+			)
 		}
-		return service.HealthCheck
+		return nil
+	}
+	if service, ok := cfg.Services[name]; ok {
+		return resourceReadinessCheck(
+			service.HealthCheck,
+			service.Ports,
+			cfg.Settings.HealthCheckInterval,
+		)
+	}
+	return nil
+}
+
+func resourceReadinessCheck(
+	explicit *config.HealthCheckConfig,
+	ports map[string]config.PortDef,
+	interval time.Duration,
+) *config.HealthCheckConfig {
+	if explicit != nil {
+		return explicit
 	}
 	port := 0
-	if endpoint, ok := service.Ports["http"]; ok {
+	if endpoint, ok := ports["http"]; ok {
 		port = endpoint.Host
-	} else if len(service.Ports) == 1 {
-		for _, endpoint := range service.Ports {
+	} else if len(ports) == 1 {
+		for _, endpoint := range ports {
 			port = endpoint.Host
 		}
 	}

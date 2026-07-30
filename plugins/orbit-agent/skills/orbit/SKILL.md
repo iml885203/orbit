@@ -52,6 +52,9 @@ when implementing or debugging an `orbit.cli.v1` consumer.
   recovery flow.
 - Use `orbit doctor --json` only when a recommended action asks for it or when
   runtime/setup checks need more detail.
+- Treat `dependency_readiness_ambiguous` as a configuration-authoring risk,
+  not proof that startup failed. Tell the user which `health_check` path Orbit
+  could not infer; do not invent a probe or edit project intent without scope.
 - Prefer `orbit logs <resource> --json` over reading process files directly;
   use `-f --json` only when an NDJSON stream is useful.
 - Use history and trace commands only when the task needs correlation or an

@@ -20,8 +20,6 @@ containers:
       redis:
         preferred: 26379
         target: 6379
-    health_check:
-      type: tcp
 
 services:
   app:
@@ -31,9 +29,6 @@ services:
       http:
         preferred: 28080
     depends_on: [redis]
-    health_check:
-      type: http
-      path: /
 ```
 
 This example serves the current project directory with Python and starts Redis
@@ -44,8 +39,10 @@ or `path` only when the command alone cannot express the intended runtime or
 working directory.
 `preferred` means “use this port when available, otherwise choose one that
 works.” Orbit injects the selected application port as `PORT`, so a conflict
-requires no config edit. Each endpoint is declared once: Orbit reuses it for
-health checks, `orbit open`, and dependency URLs.
+requires no config edit. Each endpoint is declared once: with one endpoint (or
+an endpoint named `http`), Orbit waits for it before starting dependents and
+reuses it for `orbit open` and dependency URLs. Add an explicit `health_check`
+only when a listening port is not enough to prove application readiness.
 
 ## 2. Prove the local loop
 
