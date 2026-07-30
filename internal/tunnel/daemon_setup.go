@@ -8,13 +8,8 @@ import (
 	"github.com/iml885203/orbit/extension"
 )
 
-// SetupDaemon wires the Tunlease tunnel feature into the daemon:
-// construction of the access-log hub, tunnel manager, and tunnel
-// feature, plus the /api/tunnel handlers and the resource contributor.
-// Split out of the branded daemon-setup closure so the brand
-// composition root (cmd/orbit) merges this neutral half with devdb's
-// (repo-split S26). Runs once during route setup, before any listener
-// serves.
+// SetupDaemon wires tunnel routes, resources, events, and shutdown cleanup
+// before the daemon listener starts.
 func SetupDaemon(host extension.Host, mux *http.ServeMux) extension.DaemonHooks {
 	hooks := extension.DaemonHooks{}
 

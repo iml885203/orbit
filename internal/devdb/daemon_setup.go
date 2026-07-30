@@ -9,12 +9,7 @@ import (
 	"github.com/iml885203/orbit/internal/dbstate"
 )
 
-// SetupDaemon wires the DB workflow (publish/snapshot, db-state) into
-// the daemon: construction of all feature state moved here from
-// NewServer when the feature became extension-owned (spec B6), then
-// split from the tunnel half when the DB workflow dissolved into a
-// neutral package (repo-split S25). Runs once during route setup,
-// before any listener serves.
+// SetupDaemon wires the DB workflow into the daemon before the listener starts.
 func SetupDaemon(host extension.Host, mux *http.ServeMux) extension.DaemonHooks {
 	hooks := extension.DaemonHooks{}
 

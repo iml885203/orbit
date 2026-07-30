@@ -25,10 +25,8 @@ packages:
       - "validate_test.go"
   - path: "github.com/iml885203/orbit/daemon"
     output_path: "ui/src/lib/types/wire.gen.ts"
-    # The public daemon package: the wire contract (status/doctor/envs/
-    # resources/settings responses) that moved out of internal/daemon in
-    # the repo split (spec D3). Client/lifecycle/host plumbing excluded —
-    # not wire data.
+    # Only daemon wire contracts belong in the generated UI types.
+    # Client, lifecycle, and host plumbing are not wire data.
     type_mappings:
       time.Time: "string"
       time.Duration: "number"

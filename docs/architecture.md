@@ -255,7 +255,9 @@ actions, and cross-machine tunnel claims remain in their domain endpoints.
 
 ## Extension points
 
-Common changes and where they land. A branded overlay (e.g. the ExampleTeam overlay) wires its own feature set — extra commands, daemon routes, dashboard panels — through the `extension` package rather than editing these files; the points below are for changes to the core itself.
+Common changes and where they land. Optional features wire commands, daemon
+routes, and dashboard panels through the `extension` package; the points below
+cover changes to the core itself.
 
 ### Add a new service `type`
 1. Extend the `Service.Type` discriminator in `config/schema.go`.

@@ -133,16 +133,3 @@ func FindFree() (int, error) {
 	defer func() { _ = ln.Close() }()
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }
-
-// KillPortOwner attempts to kill the process using a given port.
-func KillPortOwner(port int) error {
-	pid, _, inUse := isPortInUse(port)
-	if !inUse {
-		return nil
-	}
-	if pid == "?" {
-		return fmt.Errorf("cannot determine PID for port %d", port)
-	}
-
-	return platform.KillProcess(pid)
-}

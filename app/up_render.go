@@ -125,9 +125,6 @@ type progressRenderer interface {
 	// commit promotes a transition into permanent output (above any
 	// in-place region).
 	commit(line string)
-	// detach is called when the user sends SIGINT — freezes any
-	// in-place region, prints a goodbye line.
-	detach()
 	// finalize wraps the run. success=true clears live region; success=false
 	// freezes it for scrollback debug.
 	finalize(success bool)
@@ -152,10 +149,6 @@ func (r *appendRenderer) render(_ map[string]progressSnapshot, _ map[string]*dae
 
 func (r *appendRenderer) commit(line string) {
 	_, _ = fmt.Fprintln(r.out, line)
-}
-
-func (r *appendRenderer) detach() {
-	_, _ = fmt.Fprintln(r.out, "Startup continues in the background — use 'orbit status' to check progress.")
 }
 
 func (r *appendRenderer) finalize(success bool) {
@@ -205,12 +198,6 @@ func (r *liveRenderer) commit(line string) {
 	r.clearRegion()
 	r.lastLineCount = 0
 	_, _ = fmt.Fprintln(r.out, line)
-}
-
-func (r *liveRenderer) detach() {
-	// Leave the in-place region as-is; print goodbye on the next line.
-	_, _ = fmt.Fprintln(r.out)
-	_, _ = fmt.Fprintln(r.out, "Startup continues in the background — use 'orbit status' to check progress.")
 }
 
 func (r *liveRenderer) finalize(success bool) {

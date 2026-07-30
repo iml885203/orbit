@@ -254,7 +254,7 @@ describe('groupErrors', () => {
       '[23:52:48.462 ERR] Middleware default exception {...} System.InvalidOperationException: intentional 500 test',
       '   at Worker.EndPoints.Vip.VipEndPoint.GetSetting(...) in /Users/example/...:line 27',
       '   at lambda_method469(Closure, EndpointFilterInvocationContext)',
-      '   at ExampleTeam.Core.Filters.ModelValidation.InvokeAsync(...)',
+      '   at DemoApp.Core.Filters.ModelValidation.InvokeAsync(...)',
       '   at Microsoft.AspNetCore.Http.RequestDelegateFactory.<ExecuteValueTaskOfObject>g__ExecuteAwaited|128_0(...)',
       '   at Worker.Middlewares.ExceptionMiddleware.InvokeAsync(...) in /Users/example/...:line 18',
       '[23:52:48.465 INF] AlertService (Console): "🚨 Middleware default exception" {...}',

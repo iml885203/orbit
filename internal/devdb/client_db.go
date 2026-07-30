@@ -1,9 +1,5 @@
 package devdb
 
-// DB-workflow client calls moved from the daemon client when the feature
-// became extension-owned (spec B6). Raw bodies are verbatim ports — their
-// error semantics predate GetDecode and stay byte-identical.
-
 import (
 	"encoding/json"
 	"fmt"
@@ -83,23 +79,6 @@ func fetchDevDBMeta(c *daemon.Client) (*DevDBMetaResponse, error) {
 		return nil, fmt.Errorf("decoding devdb meta: %w", err)
 	}
 	return &result, nil
-}
-
-// fetchDBState returns the current db-state snapshot from the daemon.
-func fetchDBState(c *daemon.Client) (*dbstate.Snapshot, error) {
-	resp, err := c.Get("/api/db-state")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-	var snap dbstate.Snapshot
-	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
-		return nil, err
-	}
-	return &snap, nil
 }
 
 // postDBStateEvent best-effort notifies the daemon of a CLI-driven

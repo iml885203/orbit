@@ -145,7 +145,7 @@ func runTracesFollow(client *daemon.Client) error {
 // The trace client calls live here rather than on the public
 // daemon.Client: their signatures name core-internal tracing types that
 // an external module couldn't even spell, so they build on the client's
-// exported primitives instead of widening its API (spec D9).
+// exported primitives instead of widening its API.
 
 // getJSON replicates the deleted Client methods' error contract exactly
 // (the moved helpers must not change CLI-visible error text): transport

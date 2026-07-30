@@ -1,9 +1,5 @@
 package devdb
 
-// The DB-workflow doctor group — moved from the core doctor when the
-// feature became extension-owned (spec B6); registered via
-// daemon.DoctorRegistrar in daemonSetup.
-
 import (
 	"context"
 	"fmt"

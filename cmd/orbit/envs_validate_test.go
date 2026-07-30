@@ -9,12 +9,8 @@ import (
 	"github.com/iml885203/orbit/config"
 )
 
-// Every shipped ExampleTeam env must load and validate against the core
-// config schema this overlay pins. The core repo only validates its own
-// example env — the real envs live here, so their regression coverage
-// lives here too (moved from the core's old TestLoad_RealEnvFiles, then
-// from internal/example when the last of that package dissolved into
-// this composition root — repo-split S26).
+// Every shipped environment must load and validate against the current
+// configuration schema.
 func TestShippedEnvsLoad(t *testing.T) {
 	envsDir := "../../envs"
 	entries, err := os.ReadDir(envsDir)

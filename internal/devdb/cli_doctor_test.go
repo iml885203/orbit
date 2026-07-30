@@ -6,9 +6,8 @@ import (
 	"github.com/iml885203/orbit/config"
 )
 
-// Regression (moved from the old cmd/orbit doctor test): the offline
-// doctor's DB-workflow gate — an env without a sqlserver section
-// stays silent instead of exposing an irrelevant feature concept.
+// An environment without a sqlserver section stays silent instead of
+// exposing an irrelevant feature concept.
 func TestCLIDoctorChecks_UnconfiguredEnvIsSilent(t *testing.T) {
 	cfg := &config.Config{
 		Containers: map[string]*config.Container{

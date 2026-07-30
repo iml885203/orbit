@@ -334,11 +334,8 @@ func TestDoctorFailureClassifiesMissingWorkingDirectory(t *testing.T) {
 	}
 }
 
-// Regression: the daemon-down doctor fallback (used by doctor --json)
-// consults the injected extensions' CLIDoctor hooks with the loaded
-// config — and skips them entirely when the config failed to load. The
-// feature-specific gate content (the ExampleTeam DB-workflow skip) is the
-// extension's own concern, tested in its package.
+// The daemon-down doctor fallback consults extension hooks only after the
+// configuration loads successfully.
 func TestLocalDoctorResponse_ExtensionChecks(t *testing.T) {
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, "env.yaml")

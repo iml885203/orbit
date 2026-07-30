@@ -52,12 +52,6 @@ func FilterEnabledServicesWithDetached(cfg *config.Config, groupOverrides []stri
 	return enabled
 }
 
-// AddDeps walks the dependency tree and adds every transitive dependency of
-// the entries already in `enabled` to the same set.
-func AddDeps(cfg *config.Config, enabled map[string]bool) {
-	AddDepsWithDetached(cfg, enabled, nil)
-}
-
 // AddDepsWithDetached is AddDeps but skips edges listed in detached.
 // detached is keyed by the "from" service name.
 func AddDepsWithDetached(cfg *config.Config, enabled map[string]bool, detached map[string][]string) {

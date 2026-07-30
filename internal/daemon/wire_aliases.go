@@ -1,11 +1,7 @@
 package daemon
 
-// The wire contract and host-capability types moved to the public daemon
-// package (repo-split spec D3): the server implements the contract, the
-// contract does not depend on the server. These aliases keep the
-// server-side handlers on their original spellings — they ARE the same
-// types, re-exported here for the internal package's convenience, and
-// they disappear when the handlers move to internal/server in S2.
+// The server uses the public daemon package as its wire contract and
+// host-capability boundary.
 
 import (
 	pub "github.com/iml885203/orbit/daemon"
@@ -36,7 +32,6 @@ type (
 	EnvToggleUpdateRequest = pub.EnvToggleUpdateRequest
 	SettingsResponse       = pub.SettingsResponse
 	Settings               = pub.Settings
-	SettingsNamespaceCodec = pub.SettingsNamespaceCodec
 	SettingsChange         = pub.SettingsChange
 	SettingsPUTHook        = pub.SettingsPUTHook
 	ResourceSnapshot       = pub.ResourceSnapshot

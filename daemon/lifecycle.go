@@ -241,7 +241,7 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 
 	// Pre-validate config before forking. A schema/parse error here would
 	// otherwise kill the daemon child in its first 100ms and leave the
-	// CLI staring at a 30s WaitForReady timeout with no on-screen reason.
+	// CLI waiting through the readiness timeout with no on-screen reason.
 	if _, err := config.Load(configPath); err != nil {
 		return nil, fmt.Errorf("%w %s: %w", ErrInvalidConfig, configPath, err)
 	}
@@ -362,24 +362,6 @@ func StartDaemon(configPath string, features []string) (int, error) {
 	_ = logFile.Close()
 
 	return pid, nil
-}
-
-// WaitForReady polls the daemon's health endpoint until it responds OK.
-func WaitForReady(client *Client, timeout time.Duration) error {
-	deadline := time.After(timeout)
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-deadline:
-			return fmt.Errorf("daemon did not become ready within %s", timeout)
-		case <-ticker.C:
-			if err := client.Health(); err == nil {
-				return nil
-			}
-		}
-	}
 }
 
 // waitForReadyOrDeath polls health and process liveness in lockstep so a

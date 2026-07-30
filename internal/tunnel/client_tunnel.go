@@ -1,10 +1,5 @@
 package tunnel
 
-// Tunnel client calls moved from the daemon client when the tunnel
-// feature became extension-owned (spec B6): they build on the exported
-// Client primitives (PostJSON / GetDecode) so the core client stays
-// feature-free.
-
 import (
 	"errors"
 	"fmt"

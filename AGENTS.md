@@ -60,4 +60,4 @@ If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.
 - [README.md](README.md) — entry point
 - [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) — full coding standards
 - [architecture.md](docs/architecture.md) — state machine and event model
-- [docs/troubleshooting.md](docs/troubleshooting.md) — generic and ExampleTeam DB-workflow errors
+- [docs/troubleshooting.md](docs/troubleshooting.md) — runtime and optional DB-workflow errors

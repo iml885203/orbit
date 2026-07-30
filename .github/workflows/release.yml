@@ -11,6 +11,10 @@ on:
         description: Type RELEASE followed by the tag, for example RELEASE v1.0.0
         required: true
         type: string
+      notes:
+        description: User-facing release notes
+        required: true
+        type: string
 
 permissions:
   checks: read
@@ -29,6 +33,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.tag }}
           RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          RELEASE_NOTES: ${{ inputs.notes }}
         run: |
           set -euo pipefail
           if [ "$RELEASE_CONFIRMATION" != "RELEASE $RELEASE_VERSION" ]; then
@@ -39,6 +44,12 @@ jobs:
             echo "tag is not a semantic version: $RELEASE_VERSION" >&2
             exit 1
           fi
+          for section in "## What changed" "## Why it matters"; do
+            if ! grep -Fqx "$section" <<<"$RELEASE_NOTES"; then
+              echo "release notes are missing: $section" >&2
+              exit 1
+            fi
+          done
           ./scripts/verify-release-candidate.sh "$RELEASE_VERSION"
           git fetch --force origin main "refs/tags/$RELEASE_VERSION:refs/tags/$RELEASE_VERSION"
           tag_commit="$(git rev-list -n 1 "$RELEASE_VERSION")"
@@ -181,9 +192,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.tag }}
+          RELEASE_NOTES: ${{ inputs.notes }}
         run: |
-          notes_file="docs/releases/RELEASE-${RELEASE_VERSION#v}.md"
           gh release create "$RELEASE_VERSION" dist/* \
             --verify-tag \
-            --notes-file "$notes_file" \
+            --notes "$RELEASE_NOTES" \
             --title "$RELEASE_VERSION"

@@ -1,9 +1,5 @@
 package devdb
 
-// CLI commands for the generic publish path (internal/sqlpublish).
-// The legacy container-side apply flow was retired in P4 — publish owns
-// schema convergence; the build/reset image flow coexists untouched.
-
 import (
 	"bytes"
 	"context"

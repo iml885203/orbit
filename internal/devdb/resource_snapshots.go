@@ -1,8 +1,5 @@
 package devdb
 
-// DB-workflow resource contributions (databases under sql-server) —
-// moved from the core aggregation (spec B6).
-
 import (
 	"context"
 	"fmt"

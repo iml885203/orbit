@@ -6,7 +6,7 @@ Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
 ## 發布順序
 
 - GitHub private 演練版從 `v0.0.1` 開始。
-- Source repository 會在 1.0 產品打磨期間先行公開；所有 `0.x` release
+- Source repository 已在 1.0 產品打磨期間先行公開；所有 `0.x` release
   都是 preview，可能包含 breaking changes。
 - 第一個 stable release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
   已有文件與測試，並已準備好提供外部使用者使用。
@@ -23,12 +23,12 @@ Preview batch 依照下列順序 freeze：
 
 1. 完成相關 implementation，以及實務上最強的 journey 驗證。
 2. 一次 review 相較於前一版的完整使用者差異。
-3. 決定下一個版本，並一起更新 Orbit、兩份 plugin manifest、release notes
-   與配對的 demo tag。
-4. 執行 candidate 與 platform gates，再手動 approve 發布。
+3. 決定下一個版本，並一起更新 Orbit、兩份 plugin manifest 與配對的 demo tag。
+4. 準備並 review 對使用者說明的 release notes。
+5. 執行 candidate 與 platform gates，再手動 approve 發布。
 
-這讓每個 release 都有足夠內容可供 review，同時避免每個 implementation commit
-都變成一個版本。Release notes 先描述整個 batch 的使用者成果，個別修正則作為
+Release notes 在 approve release workflow 時輸入，保留於 GitHub Releases，
+不再累積在 source tree。內容先描述整個 batch 的使用者成果，個別修正則作為
 支援細節。
 
 1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：

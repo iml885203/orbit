@@ -102,12 +102,6 @@ func FindPortHolderPIDs(port int) []int {
 	return pids
 }
 
-// KillProcess forcefully kills the process with the given PID string.
-func KillProcess(pid string) error {
-	_, err := runWithTimeout("kill", "-9", pid)
-	return err
-}
-
 // OpenBrowser opens the given URL in the default browser. No timeout — the
 // helper forks the browser and we must not kill it after spawning.
 func OpenBrowser(url string) error {

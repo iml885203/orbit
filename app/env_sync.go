@@ -365,10 +365,6 @@ func resolveEnvRepository(flagURL, flagRef, settingURL, settingRef string) envRe
 	return envRepository{URL: distribution.EnvRepoURL, Ref: ref}
 }
 
-func resolveEnvRepoURL(flag, setting string) string {
-	return resolveEnvRepository(flag, "", setting, "").URL
-}
-
 // envsDestDir returns the local destination for synced envs.
 func envsDestDir() string {
 	return daemonsrv.DefaultEnvsDir()

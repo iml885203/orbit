@@ -62,4 +62,4 @@ orbit db publish <dbname>     # fast dev-loop, preserves data
 - [README.zh-TW.md](README.zh-TW.md) —— 入口
 - [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) —— 完整 coding 規範
 - [architecture.zh-TW.md](docs/architecture.zh-TW.md) —— state machine 與 event model
-- [docs/troubleshooting.zh-TW.md](docs/troubleshooting.zh-TW.md) —— 通用與 ExampleTeam DB workflow 錯誤
+- [docs/troubleshooting.zh-TW.md](docs/troubleshooting.zh-TW.md) —— runtime 與 optional DB workflow 錯誤

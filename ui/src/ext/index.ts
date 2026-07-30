@@ -1,8 +1,4 @@
-// The extension UI module — the dashboard counterpart of the Go-side
-// branded root (cmd/orbit's Extensions() in extensions.go). The core
-// imports this through the $ext vite alias; an out-of-tree overlay build
-// could point ORBIT_UI_EXT at its own entry. This is the ExampleTeam feature
-// wiring; the neutral pages it mounts live in $lib/devdb and $lib/tunnel.
+// The core imports optional dashboard features through the $ext Vite alias.
 import type { Component } from 'svelte'
 import type { RouteDefinition } from 'svelte-spa-router'
 import DevDBPage from '$lib/devdb/DevDBPage.svelte'
@@ -32,9 +28,7 @@ export const routes: RouteDefinition = {
   '/tunnel': TunnelPage,
 }
 
-// onAppMount starts the feature SSE streams; returns the combined
-// cleanup. Mirrors the daemon's DaemonSetup: construction happens here,
-// the core only invokes.
+// onAppMount starts feature SSE streams and returns their combined cleanup.
 export function onAppMount(): () => void {
   const cleanups = [startDBStateStream(), startDBOpStream(), startTunnelAccessStream()]
   // Early devMeta fetch, in parallel with the core's settings fetch:
@@ -44,10 +38,7 @@ export function onAppMount(): () => void {
   return () => cleanups.forEach((fn) => fn())
 }
 
-// onDaemonState runs whenever the core refetches daemon-derived state
-// (startup and daemon-epoch changes). The overlay currently derives no
-// state from raw settings — the SQL image is a deploy-time env config,
-// not a runtime toggle — but the seam stays for future needs.
+// onDaemonState runs whenever the core refetches daemon-derived state.
 export function onDaemonState(_settings: SettingsWire) {}
 
 // onEnvChanged keeps the DB-workflow gate in sync when the live graph

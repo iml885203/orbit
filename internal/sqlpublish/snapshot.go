@@ -1,7 +1,7 @@
 package sqlpublish
 
-// SQL Server database-snapshot lifecycle — the P2 half of the generic
-// publish path. One baseline snapshot per database (<db>_baseline);
+// SQL Server database-snapshot lifecycle. One baseline snapshot per database
+// (<db>_baseline);
 // reverting to it is a seconds-scale replacement for image-based
 // resets. The invariant callers must hold: the baseline is only
 // created/refreshed when the database contents are known clean

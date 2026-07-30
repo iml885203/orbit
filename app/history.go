@@ -73,7 +73,7 @@ func historyCmd() *cobra.Command {
 // daemon.Client: their signatures name core-internal types
 // (history.Filter/Record, gaps.Gap) that an external module couldn't
 // even spell, so they build on the client's exported primitives instead
-// of widening its API (spec D9).
+// of widening its API.
 
 func historyList(c *daemon.Client, filter history.Filter) ([]history.Record, error) {
 	path := fmt.Sprintf("/api/history/list?limit=%d", 100)

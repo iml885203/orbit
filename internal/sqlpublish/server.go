@@ -7,12 +7,9 @@ package sqlpublish
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"io"
 	"net"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // openMasterDB connects to the instance's master database — snapshot
@@ -45,28 +42,4 @@ func DatabaseExists(ctx context.Context, opts Opts) (bool, error) {
 		return false, err
 	}
 	return id.Valid, nil
-}
-
-// WaitReady blocks until the server accepts master-database queries or
-// ctx expires — freshly started SQL Server containers listen on the
-// port well before logins succeed, and bootstrap must not race that.
-func WaitReady(ctx context.Context, opts Opts, out io.Writer) error {
-	conn, err := openMasterDB(opts)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	fmt.Fprintf(out, "[wait] waiting for SQL Server at %s:%d\n", opts.Host, opts.Port)
-	for {
-		var one int
-		if err := conn.QueryRowContext(ctx, "SELECT 1").Scan(&one); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("SQL Server at %s:%d not ready: %w", opts.Host, opts.Port, ctx.Err())
-		case <-time.After(2 * time.Second):
-		}
-	}
 }

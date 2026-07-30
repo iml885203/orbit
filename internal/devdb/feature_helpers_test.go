@@ -2,7 +2,6 @@ package devdb
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"testing"
 
@@ -61,13 +60,6 @@ func newTestDBFeature(t *testing.T, cfg *config.Config) *dbFeature {
 		pm:       process.NewManager(),
 	}
 	return &dbFeature{host: host, dbOps: newDBOpsManager(), drift: newDriftCache()}
-}
-
-func newTestDBFeatureWithRejectedConfigUpdate(t *testing.T, cfg *config.Config) *dbFeature {
-	t.Helper()
-	f := newTestDBFeature(t, cfg)
-	f.host.(*fakeDaemonHost).updateErr = errors.New("config update rejected by test host")
-	return f
 }
 
 func testConfig() *config.Config {

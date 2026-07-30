@@ -1,9 +1,5 @@
 package devdb
 
-// The offline `orbit doctor` contribution — moved from cmd/orbit when
-// the neutral CLI became core-bound (repo-split S1b). The daemon-running
-// path contributes through DoctorRegistrar in daemonSetup instead.
-
 import (
 	"fmt"
 	"os"

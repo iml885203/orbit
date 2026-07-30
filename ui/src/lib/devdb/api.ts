@@ -95,7 +95,4 @@ export async function fetchDBState(): Promise<DBStateSnapshot | null> {
   return getJSON('/api/db-state')
 }
 
-// Feature-owned settings keys ride flat on the wire (the daemon merges
-// registered namespaces into the GET payload) — typed here as an
-// intersection alongside the core Settings shape.
 export type SettingsWire = Settings

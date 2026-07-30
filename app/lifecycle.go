@@ -681,10 +681,6 @@ func terminalDependencyBlocker(status *daemon.StatusResponse, pendingDependencie
 	return find(pendingDependencies)
 }
 
-func lifecycleServicesDone(status *daemon.StatusResponse, names []string, wantState string) bool {
-	return lifecycleServicesDoneOrPast(status, names, wantState, nil)
-}
-
 func lifecycleResourceExists(status *daemon.StatusResponse, name string) bool {
 	return lifecycleResourceStatus(status, name) != nil
 }

@@ -87,11 +87,6 @@ func findProcessName(pid string) string {
 	return "?"
 }
 
-// KillProcess forcefully kills the process with the given PID string.
-func KillProcess(pid string) error {
-	return exec.Command("taskkill", "/F", "/PID", pid).Run()
-}
-
 // OpenBrowser opens the given URL in the default browser.
 func OpenBrowser(url string) error {
 	return exec.Command("cmd", "/c", "start", url).Start()

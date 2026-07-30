@@ -42,24 +42,13 @@ type Settings struct {
 
 	mu   sync.RWMutex
 	path string
-	// namespaces are the registered feature-owned key sets (one fresh
-	// codec instance per Settings — see RegisterSettingsNamespace). All
-	// access happens under mu via the Settings methods.
-	namespaces map[string]SettingsNamespaceCodec
-	// extensionsRaw carries extension namespaces this binary doesn't own
-	// (anything under extensions.* without a registered codec) across
-	// load/save.
-	// Scope is honest, not absolute: namespaces present at load time are
-	// preserved; a namespace written by another process AFTER this one
-	// loaded is lost on the next save — the same last-writer-wins
-	// snapshot semantics the whole settings file has always had. Guarded
-	// by mu.
+	// extensionsRaw preserves extension data written by another Orbit version.
+	// Like the rest of the settings snapshot, concurrent external writes remain
+	// last-writer-wins. Guarded by mu.
 	extensionsRaw map[string]json.RawMessage
 }
 
-// settingsOnDisk is the persisted shape. It differs from the wire shape /api/settings
-// marshals: extension-owned keys nest under extensions.<name> on disk but
-// stay flat in memory and on the wire.
+// settingsOnDisk preserves extension data that this binary does not interpret.
 type settingsOnDisk struct {
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
 
@@ -89,10 +78,7 @@ func DefaultSettingsPath() string {
 }
 
 func LoadSettings(path string) *Settings {
-	// Namespace codecs exist even for a fresh (or unreadable) file:
-	// Get/Set on feature keys must route the same way regardless of
-	// whether anything was on disk yet.
-	s := &Settings{path: path, namespaces: newNamespaceCodecs()}
+	s := &Settings{path: path}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return s
@@ -101,21 +87,11 @@ func LoadSettings(path string) *Settings {
 	var raw settingsOnDisk
 	if err := json.Unmarshal(data, &raw); err != nil {
 		slog.Error("failed to parse settings", "component", "settings", "path", path, "err", err)
-		return &Settings{path: path, namespaces: newNamespaceCodecs()}
+		return &Settings{path: path}
 	}
 
 	s.WorkspaceRoot = raw.WorkspaceRoot
-	// Registered namespaces hydrate their own keys; everything unregistered
-	// is carried opaquely so saves don't drop it.
-	for name, codec := range s.namespaces {
-		if blob, ok := raw.Extensions[name]; ok {
-			codec.Hydrate(blob)
-		}
-	}
 	for name, blob := range raw.Extensions {
-		if _, registered := s.namespaces[name]; registered {
-			continue
-		}
 		if s.extensionsRaw == nil {
 			s.extensionsRaw = make(map[string]json.RawMessage)
 		}
@@ -190,10 +166,7 @@ func (s *Settings) Save() error {
 	return s.saveLocked()
 }
 
-// saveLocked writes settings atomically in the on-disk shape: neutral keys
-// flat, extension-owned keys nested under extensions.<name>. The in-memory
-// struct (and the /api/settings wire shape that marshals it) stays flat —
-// disk is the only place the namespace exists. Caller must hold s.mu.
+// saveLocked writes settings atomically. Caller must hold s.mu.
 func (s *Settings) saveLocked() error {
 	disk := settingsOnDisk{
 		WorkspaceRoot: s.WorkspaceRoot,
@@ -210,16 +183,6 @@ func (s *Settings) saveLocked() error {
 			return err
 		}
 		disk.RawDetachedEdges = de
-	}
-	for name, codec := range s.namespaces {
-		blob := codec.ToDisk()
-		if blob == nil {
-			continue
-		}
-		if disk.Extensions == nil {
-			disk.Extensions = make(map[string]json.RawMessage, len(s.namespaces)+len(s.extensionsRaw))
-		}
-		disk.Extensions[name] = blob
 	}
 	for name, blob := range s.extensionsRaw {
 		if disk.Extensions == nil {
@@ -245,11 +208,6 @@ func (s *Settings) Get(key string) string {
 	case "env_repo_ref":
 		return s.EnvRepoRef
 	}
-	for _, codec := range s.namespaces {
-		if v, ok := codec.Get(key); ok {
-			return v
-		}
-	}
 	return ""
 }
 
@@ -264,23 +222,9 @@ func (s *Settings) Set(key, value string) error {
 	case "env_repo_ref":
 		s.EnvRepoRef = value
 	default:
-		handled := false
-		for _, codec := range s.namespaces {
-			ok, err := codec.Set(key, value)
-			if err != nil {
-				return err
-			}
-			if ok {
-				handled = true
-				break
-			}
-		}
-		if !handled {
-			// A typo'd key used to be silently dropped (then persisted as a
-			// no-op save) — that's how env_repo_url went unpersisted for
-			// months. Fail loudly instead.
-			return fmt.Errorf("unknown settings key %q", key)
-		}
+		// A typo'd key used to be silently dropped (then persisted as a
+		// no-op save). Fail loudly instead.
+		return fmt.Errorf("unknown settings key %q", key)
 	}
 	return s.saveLocked()
 }
@@ -317,14 +261,6 @@ func (s *Settings) ApplyToEnv() {
 	defer s.mu.RUnlock()
 	if s.WorkspaceRoot != "" {
 		_ = os.Setenv("WORKSPACE_ROOT", s.WorkspaceRoot)
-	}
-	for _, codec := range s.namespaces {
-		if codec.EnvExports == nil {
-			continue
-		}
-		for k, v := range codec.EnvExports() {
-			_ = os.Setenv(k, v)
-		}
 	}
 	for k, v := range s.UserEnv {
 		_ = os.Setenv(k, v)
@@ -477,30 +413,4 @@ func (s *Settings) GetDetachedEdges(env string) map[string][]string {
 		out[from] = cp
 	}
 	return out
-}
-
-// MarshalJSON keeps the /api/settings wire shape flat: the neutral
-// struct fields plus every registered namespace's keys merged at top
-// level — the wire predates the on-disk namespace and must not change.
-func (s *Settings) MarshalJSON() ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	type wireSettings Settings // method-free alias: avoids marshal recursion
-	base, err := json.Marshal((*wireSettings)(s))
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(base, &m); err != nil {
-		return nil, err
-	}
-	for _, codec := range s.namespaces {
-		if codec.WireFlat == nil {
-			continue
-		}
-		for k, v := range codec.WireFlat() {
-			m[k] = v
-		}
-	}
-	return json.Marshal(m)
 }

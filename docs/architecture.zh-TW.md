@@ -236,7 +236,8 @@ Snapshot 不取代 domain-specific API。Streams、graph presentation、actions
 
 ## Extension points
 
-常見改動與對應位置。Branded overlay(例如 ExampleTeam overlay)會透過 `extension` package 接上自己的 feature set —— 額外 commands、daemon routes、dashboard panels —— 而不是修改這些檔案;以下各點適用於 core 本身的變更。
+常見改動與對應位置。Optional feature 透過 `extension` package 接上 commands、
+daemon routes 與 dashboard panels；以下各點適用於 core 本身的變更。
 
 ### 新增一種 service `type`
 1. 在 `config/schema.go` 擴充 `Service.Type` discriminator。
