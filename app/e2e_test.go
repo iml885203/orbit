@@ -1468,6 +1468,79 @@ func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {
 	}
 }
 
+func TestE2E_DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails(t *testing.T) {
+	binary := findOrbitBinary(t)
+	home := t.TempDir()
+	command := func(dir string, args ...string) *exec.Cmd {
+		cmd := exec.Command(binary, args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home)
+		return cmd
+	}
+
+	emptyDir := t.TempDir()
+	commands := [][]string{
+		{"open"},
+		{"logs", "app"},
+		{"restart", "app"},
+		{"db", "list"},
+		{"trace"},
+	}
+	for _, args := range commands {
+		t.Run(strings.Join(args, "_")+"_before_setup", func(t *testing.T) {
+			human, err := command(emptyDir, args...).CombinedOutput()
+			if err == nil {
+				t.Fatalf("%v unexpectedly succeeded:\n%s", args, human)
+			}
+			for _, evidence := range []string{"Orbit is not set up yet.", "Next: orbit init"} {
+				if !bytes.Contains(human, []byte(evidence)) {
+					t.Fatalf("%v missing %q:\n%s", args, evidence, human)
+				}
+			}
+			for _, internal := range []string{"orbit up", "daemon start", "dial unix", home} {
+				if bytes.Contains(human, []byte(internal)) {
+					t.Fatalf("%v exposed invalid or internal recovery %q:\n%s", args, internal, human)
+				}
+			}
+
+			jsonArgs := append(append([]string{}, args...), "--json")
+			output, err := command(emptyDir, jsonArgs...).CombinedOutput()
+			if err == nil {
+				t.Fatalf("%v --json unexpectedly succeeded:\n%s", args, output)
+			}
+			envelope := parseE2EEnvelope(t, string(output))
+			if envelope.Error == nil ||
+				envelope.Error.Code != "setup_required" ||
+				envelope.Error.NextCommand != "orbit init --yes --json" {
+				t.Fatalf("%v envelope = %+v:\n%s", args, envelope, output)
+			}
+			if len(envelope.RecommendedActions) != 1 ||
+				envelope.RecommendedActions[0].Command != "orbit init --yes --json" {
+				t.Fatalf("%v actions = %+v", args, envelope.RecommendedActions)
+			}
+		})
+	}
+
+	projectDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectDir, "orbit.yaml"), []byte("version: \"3\"\nservices: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configured, err := command(projectDir, "db", "list").CombinedOutput()
+	if err == nil {
+		t.Fatalf("db list without daemon unexpectedly succeeded:\n%s", configured)
+	}
+	for _, evidence := range []string{"Orbit is not running.", "orbit up"} {
+		if !bytes.Contains(configured, []byte(evidence)) {
+			t.Fatalf("configured command missing %q:\n%s", evidence, configured)
+		}
+	}
+	for _, internal := range []string{"daemon start", "dial unix", home} {
+		if bytes.Contains(configured, []byte(internal)) {
+			t.Fatalf("configured command exposed %q:\n%s", internal, configured)
+		}
+	}
+}
+
 func TestE2E_InspectBeforeInitMatchesStatusSetupGuidance(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home := t.TempDir()
@@ -2181,9 +2254,21 @@ healthFailureObserved:
 	}
 	healthLogsEnvelope := parseE2EEnvelope(t, string(healthLogsOutput))
 	if len(healthLogsEnvelope.RecommendedActions) != 1 ||
-		healthLogsEnvelope.RecommendedActions[0].Command != "orbit restart api --json" ||
-		!strings.Contains(healthLogsEnvelope.RecommendedActions[0].Reason, "does not repair") {
+		healthLogsEnvelope.RecommendedActions[0].Command != "orbit status --json" ||
+		!strings.Contains(healthLogsEnvelope.RecommendedActions[0].Reason, "recovers automatically") {
 		t.Fatalf("health recovery action = %+v", healthLogsEnvelope.RecommendedActions)
+	}
+	humanHealthLogs, err := command("logs", "api").CombinedOutput()
+	if err != nil {
+		t.Fatalf("human health failure logs: %v\n%s", err, humanHealthLogs)
+	}
+	for _, evidence := range []string{"Health check is still failing:", "recover automatically", "Next: orbit status"} {
+		if !bytes.Contains(humanHealthLogs, []byte(evidence)) {
+			t.Fatalf("human health logs missing %q:\n%s", evidence, humanHealthLogs)
+		}
+	}
+	if bytes.Contains(humanHealthLogs, []byte("Next: orbit restart")) {
+		t.Fatalf("human health logs prescribed a restart loop:\n%s", humanHealthLogs)
 	}
 	if err := os.Remove(healthFailurePath); err != nil {
 		t.Fatalf("clear health failure: %v", err)

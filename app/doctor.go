@@ -38,31 +38,6 @@ type doctorOptions struct {
 	explicitConfig bool
 }
 
-type setupRequiredError struct{}
-
-func (setupRequiredError) Error() string {
-	return "Orbit setup is required — run 'orbit init'"
-}
-
-func (setupRequiredError) ErrorCode() string {
-	return "setup_required"
-}
-
-func (setupRequiredError) CLIJSONHint() string {
-	return "Set up Orbit before running environment diagnostics."
-}
-
-func setupRequired(selection environmentSelection, path string) bool {
-	if selection.State != environmentSelectionNone || configFileExists(path) {
-		return false
-	}
-	if path == "" {
-		return true
-	}
-	return distribution.DefaultEnv != "" &&
-		sameFilePath(path, filepath.Join(envsDestDir(), distribution.DefaultEnv))
-}
-
 func runDoctorWithOptions(options doctorOptions) error {
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	var detachedStatus *daemon.StatusResponse

@@ -427,17 +427,17 @@ func logsRecoveryActions(resource *daemon.ResourceStatus, dependencySetup string
 	if resource.HealthProgress != nil && resource.HealthProgress.Recovering {
 		return []cli.JSONAction{cli.StatusAction()}
 	}
+	if resource.FailureKind == string(engine.FailureKindHealth) {
+		return []cli.JSONAction{{
+			Command:     "orbit status --json",
+			Reason:      "Orbit recovers automatically when the health endpoint is healthy; restarting only retries the same startup.",
+			Destructive: false,
+		}}
+	}
 	if dependencySetup != "" {
 		return []cli.JSONAction{{
 			Command:     dependencySetup + " && orbit restart " + resource.Name + " --json",
 			Reason:      "Install the declared project dependencies, then retry only " + resource.Name + ".",
-			Destructive: false,
-		}}
-	}
-	if resource.FailureKind == string(engine.FailureKindHealth) {
-		return []cli.JSONAction{{
-			Command:     "orbit restart " + resource.Name + " --json",
-			Reason:      "Retry the health probe after addressing its cause; restarting does not repair a persistent health failure.",
 			Destructive: false,
 		}}
 	}

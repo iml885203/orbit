@@ -16,6 +16,7 @@ import (
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/history"
 	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
@@ -99,6 +100,10 @@ for the bundled demo or a shared environment repository.`,
 			if client.Health() == nil {
 				if status, err := client.Status(); err == nil {
 					if requiresMatch {
+						explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
+							configFile = status.ConfigPath
+						}
 						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
 							if usesDiscoveredProjectConfig(configFile) {
 								return projectContextInactive(configFile, status.ConfigPath)
@@ -169,11 +174,26 @@ for the bundled demo or a shared environment repository.`,
 	configureContextualRootHelp(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
+		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+}
+
+// contextualizeDaemonUnavailable keeps every daemon-backed command on the
+// same recovery path. Before setup the user must initialize; with a selected
+// project or environment, starting it is the next step. The underlying socket
+// error is an implementation detail on both paths.
+func contextualizeDaemonUnavailable(err error) error {
+	if !errors.Is(err, daemon.ErrDaemonUnreachable) {
+		return err
+	}
+	if setupRequired(readEnvironmentSelection(), configFile) {
+		return setupRequiredError{}
+	}
+	return cli.NewOrbitNotRunningError()
 }
 
 func configureContextualRootHelp(root *cobra.Command) {
@@ -840,6 +860,10 @@ func runLogs(_ *cobra.Command, args []string) error {
 	}
 	for _, line := range resp.Lines {
 		fmt.Println(line)
+	}
+	if resource.FailureKind == string(engine.FailureKindHealth) {
+		fmt.Printf("Health check is still failing: %s\n", resource.StateReason)
+		fmt.Println("Orbit will recover automatically when the endpoint is healthy; restarting only retries the same startup.")
 	}
 	if len(actions) == 1 {
 		fmt.Println("Next: " + strings.TrimSuffix(actions[0].Command, " --json"))

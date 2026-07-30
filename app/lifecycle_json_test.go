@@ -152,7 +152,7 @@ func TestLogsRecoveryActionsLeadFromCrashOutputToTargetedRestart(t *testing.T) {
 	}
 }
 
-func TestLogsRecoveryActionsDescribeHealthRestartAsRetry(t *testing.T) {
+func TestLogsRecoveryActionsWaitForHealthEndpointRecovery(t *testing.T) {
 	resource := &daemon.ResourceStatus{
 		Name:          "api",
 		State:         "degraded",
@@ -161,10 +161,10 @@ func TestLogsRecoveryActionsDescribeHealthRestartAsRetry(t *testing.T) {
 		LogsAvailable: true,
 	}
 	actions := logsRecoveryActions(resource, "")
-	if len(actions) != 1 || actions[0].Command != "orbit restart api --json" {
+	if len(actions) != 1 || actions[0].Command != "orbit status --json" {
 		t.Fatalf("actions = %+v", actions)
 	}
-	if !strings.Contains(actions[0].Reason, "does not repair") ||
+	if !strings.Contains(actions[0].Reason, "recovers automatically") ||
 		strings.Contains(actions[0].Reason, "exit output") {
 		t.Fatalf("reason = %q", actions[0].Reason)
 	}

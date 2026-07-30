@@ -242,6 +242,7 @@ cd "$test_root"
 "$orbit_bin" status >"$test_root/status-outside-project.txt"
 "$orbit_bin" doctor --json >"$test_root/doctor-outside-project.json"
 "$orbit_bin" doctor >"$test_root/doctor-outside-project.txt"
+"$orbit_bin" logs app-b --json >"$test_root/logs-outside-project.json"
 if "$orbit_bin" --config "$ORBIT_HOME/envs/quickstart.yaml" status --json \
   >"$test_root/explicit-managed-status.json"; then
   echo "explicit managed config unexpectedly controlled the active project." >&2
@@ -255,6 +256,7 @@ import sys
 root = pathlib.Path(sys.argv[1])
 status = json.loads((root / "status-outside-project.json").read_text(encoding="utf-8"))
 doctor = json.loads((root / "doctor-outside-project.json").read_text(encoding="utf-8"))
+logs = json.loads((root / "logs-outside-project.json").read_text(encoding="utf-8"))
 explicit = json.loads((root / "explicit-managed-status.json").read_text(encoding="utf-8"))
 assert status["ok"] is True
 assert status["data"]["environment"]["source"] == "project"
@@ -281,8 +283,23 @@ assert "project-b is still active" in doctor_human
 assert "daemon restart" not in doctor_human
 assert "quickstart.yaml" not in doctor_human
 
+assert logs["ok"] is True
+assert logs["data"]["resource"] == "app-b"
+assert "quickstart.yaml" not in json.dumps(logs)
+
 assert explicit["ok"] is False
 assert explicit["error"]["code"] == "env_mismatch"
+PY
+"$orbit_bin" down --json >"$test_root/down-outside-project.json"
+python3 - "$test_root/down-outside-project.json" <<'PY'
+import json
+import pathlib
+import sys
+
+down = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert down["ok"] is True
+assert all(resource["state"] == "stopped" for resource in down["data"]["resources"])
+assert "quickstart.yaml" not in json.dumps(down)
 PY
 "$orbit_bin" daemon stop --json >/dev/null
 

@@ -82,7 +82,7 @@ test-journey-project-context-switch:
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
 
 test-journey-recovery:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency)$$'
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency)$$'
 
 test-install:
 	@./scripts/test-install.sh
