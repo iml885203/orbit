@@ -1151,6 +1151,77 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 	}
 }
 
+func TestE2E_UpAppliesChangedConfigAndPreservesRunningIntent(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	env.run(t, "up", "redis")
+
+	original, err := os.ReadFile(env.envYaml)
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	updated := bytes.Replace(
+		original,
+		[]byte("shutdown_timeout: 10s"),
+		[]byte("shutdown_timeout: 11s"),
+		1,
+	)
+	if bytes.Equal(updated, original) {
+		t.Fatal("test fixture no longer contains the expected shutdown timeout")
+	}
+	if err := os.WriteFile(env.envYaml, updated, 0o644); err != nil {
+		t.Fatalf("update env: %v", err)
+	}
+
+	previousPID := readE2EDaemonPID(t, env.home)
+	output := env.run(t, "up", "redis", "--json")
+	envelope := parseE2EEnvelope(t, output)
+	if !envelope.OK {
+		t.Fatalf("up did not converge changed config: %+v\n%s", envelope.Error, output)
+	}
+	var lifecycle lifecycleJSONData
+	if err := json.Unmarshal(envelope.Data, &lifecycle); err != nil {
+		t.Fatalf("parse up data: %v\n%s", err, output)
+	}
+	changes := lifecycle.EnvironmentChanges
+	if changes == nil ||
+		!slices.Equal(changes.PreviouslyRunning, []string{"redis"}) ||
+		!slices.Equal(changes.RestoredResources, []string{"redis"}) ||
+		len(changes.UnavailableResources) != 0 {
+		t.Fatalf("environment changes = %+v", changes)
+	}
+	if currentPID := readE2EDaemonPID(t, env.home); currentPID == previousPID {
+		t.Fatalf("daemon pid remained %d after orbit up applied the changed config", currentPID)
+	}
+	if state := env.serviceState(t, "redis"); state != "healthy" {
+		t.Fatalf("redis state = %s after up convergence, want healthy", state)
+	}
+
+	invalid := bytes.Replace(
+		updated,
+		[]byte(`version: "3"`),
+		[]byte(`version: "999"`),
+		1,
+	)
+	if err := os.WriteFile(env.envYaml, invalid, 0o644); err != nil {
+		t.Fatalf("write invalid env: %v", err)
+	}
+	previousPID = readE2EDaemonPID(t, env.home)
+	output, err = env.runNoFail(t, "up", "redis", "--json")
+	if err == nil {
+		t.Fatalf("up accepted invalid changed config:\n%s", output)
+	}
+	if currentPID := readE2EDaemonPID(t, env.home); currentPID != previousPID {
+		t.Fatalf("daemon pid changed from %d to %d after invalid config", previousPID, currentPID)
+	}
+	if err := os.WriteFile(env.envYaml, updated, 0o644); err != nil {
+		t.Fatalf("restore valid env after rejected change: %v", err)
+	}
+	if state := env.serviceState(t, "redis"); state != "healthy" {
+		t.Fatalf("redis state = %s after rejected config, want healthy", state)
+	}
+}
+
 func readE2EDaemonPID(t *testing.T, home string) int {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(home, "orbit.pid"))

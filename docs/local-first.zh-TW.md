@@ -81,7 +81,9 @@ your-project/
 ```
 
 確認這個迴圈可用後，再把範例的 `command`、health check 與 dependency 換成
-真實專案內容。所有欄位請見[設定參考](configuration.zh-TW.md)。
+真實專案內容。所有欄位請見[設定參考](configuration.zh-TW.md)。環境運行中
+修改 `orbit.yaml` 後，只要再執行 `orbit up`；Orbit 會在停止任何 resource
+前先驗證新檔案，接著套用變更並恢復原本正在運行的 resources。
 
 ## 3. 分享已驗證的 environment
 

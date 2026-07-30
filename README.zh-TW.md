@@ -139,6 +139,11 @@ orbit down                   # 停止環境
 services 時，才使用 `orbit up --infra`。需要縮小啟動範圍時，請選擇指定
 resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
 
+編輯 active `orbit.yaml` 後，再執行一次 `orbit up` 即可。Orbit 會先驗證新
+設定，再套用變更、恢復原本正在運行的 resources，最後啟動這次指令指定的
+resources，不會先中斷可用環境。只有想套用待處理變更、但不想額外啟動原先
+停止的 resources 時，才需要使用 `orbit env apply`。
+
 使用團隊自己的 environment 時，請把 `demo-shop` 與 `quickstart` 換成
 `orbit status` 和 `orbit env list` 顯示的名稱。切換後，Orbit 會在
 `orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的

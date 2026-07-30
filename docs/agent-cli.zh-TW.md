@@ -103,7 +103,7 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 | `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、managed repository URL/ref/commit、daemon，以及 `data.resources` 中的 resource 狀態。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
-| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
+| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。套用待處理的 config 編輯時，`data.environment_changes` 會回報 handoff 前後保留的 running intent。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
 | `orbit down --json` | 停止 resources 後回傳最終 lifecycle 結果。Orbit 已停止時會以空陣列成功 no-op，並只建議下一個正常的 `orbit up`。 |
 | `orbit down <resource> --json` | 回傳指定 resource 的最終 lifecycle 結果。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
@@ -135,6 +135,9 @@ Lifecycle payload 全面使用 resource vocabulary：
 - `resources` 帶有該集合觀察到的最終狀態。
 - `degraded_resources` 與 `timed_out_resources` 直接指出未成功的結果，不再
   把 container 稱為 service。
+- `environment_changes` 只在啟動前發生 config handoff 時出現，包含
+  `previously_running`、`restored_resources`、`started_dependencies` 與
+  `unavailable_resources`。
 
 指令只會等待這個集合進入 terminal state。Status 與 inspect 同樣把混合的
 host processes 與 containers 放在 `resources`；log payload 與 NDJSON event

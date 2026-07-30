@@ -111,7 +111,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon state, and configured resource state in `data.resources`. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
-| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. An environment with no enabled resources succeeds immediately with empty arrays. |
+| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping resources. It is a successful no-op with empty arrays when Orbit is already stopped, and recommends only the next normal `orbit up`. |
 | `orbit down <resource> --json` | Returns the final lifecycle result for the requested resource. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
@@ -145,6 +145,9 @@ Lifecycle payloads use resource vocabulary consistently:
 - `resources` contains the observed final state for that set.
 - `degraded_resources` and `timed_out_resources` identify unsuccessful
   outcomes without treating containers as services.
+- `environment_changes`, when present, contains `previously_running`,
+  `restored_resources`, `started_dependencies`, and `unavailable_resources`
+  from the config handoff performed before startup.
 
 This is the exact set whose terminal state the command waits for. Status and
 inspect likewise expose mixed host processes and containers under `resources`.

@@ -346,7 +346,7 @@ func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "up", "restart", "exec", "query", "topics", "seed", "edge", "service", "db", "tunnel":
+	case "restart", "exec", "query", "topics", "seed", "edge", "service", "db", "tunnel":
 		return true
 	case "env":
 		return cmd.Name() == "toggle"

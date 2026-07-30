@@ -151,6 +151,12 @@ intentionally want containers without host services. To narrow startup, choose
 either resource names or one or more `--group` flags; Orbit rejects combinations
 instead of silently ignoring part of the command.
 
+After editing the active `orbit.yaml`, run `orbit up` again. Orbit validates the
+new config before interrupting anything, applies it, restores the resources that
+were already running, and then starts the resources requested by the command.
+Use `orbit env apply` only when you want to apply pending changes without
+starting additional stopped resources.
+
 For a team environment, replace `demo-shop` and `quickstart` with names shown by
 `orbit status` and `orbit env list`. After a switch, Orbit reports any runtime
 version or project-package setup required before `orbit up`, using the

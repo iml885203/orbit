@@ -66,6 +66,17 @@ func runEnvApply(_ *cobra.Command, _ []string) error {
 }
 
 func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(report, false)
+}
+
+func applyEnvironmentChangesKnownPending(report func(string)) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(report, true)
+}
+
+func applyEnvironmentChangesWithEvidence(
+	report func(string),
+	knownPending bool,
+) (environmentApplyResult, error) {
 	result := emptyEnvironmentApplyResult()
 	previousPID, alive := daemon.IsDaemonRunning()
 	result.DaemonRunning = alive
@@ -79,8 +90,8 @@ func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error
 	if err != nil {
 		return result, fmt.Errorf("checking environment changes: %w", err)
 	}
-	result.ChangesPending = status.ConfigStale
-	if !status.ConfigStale {
+	result.ChangesPending = status.ConfigStale || knownPending
+	if !result.ChangesPending {
 		result.PID = previousPID
 		result.FinalStatus = status
 		return result, nil

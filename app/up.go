@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -73,6 +74,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
+	client, appliedChanges, err := convergeEnvironmentChangesForUp(
+		client,
+		environmentApplyProgress(),
+	)
+	if err != nil {
+		return err
+	}
 	if err := validateUpResourceNames(client, args); err != nil {
 		return err
 	}
@@ -83,7 +91,12 @@ func runUp(cmd *cobra.Command, args []string) error {
 		Groups:    groups,
 	}
 
-	resp, err := client.Up(req)
+	client, resp, appliedChanges, err := startWithEnvironmentConvergence(
+		client,
+		req,
+		appliedChanges,
+		environmentApplyProgress(),
+	)
 	if err != nil {
 		return fmt.Errorf("up failed: %w", err)
 	}
@@ -131,11 +144,20 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
+	client, appliedChanges, err := convergeEnvironmentChangesForUp(client, nil)
+	if err != nil {
+		return err
+	}
 	if err := validateUpResourceNames(client, args); err != nil {
 		return err
 	}
 	req := daemon.UpRequest{Resources: args, InfraOnly: infraOnly, Groups: groups}
-	resp, err := client.Up(req)
+	client, resp, appliedChanges, err := startWithEnvironmentConvergence(
+		client,
+		req,
+		appliedChanges,
+		nil,
+	)
 	if err != nil {
 		return fmt.Errorf("up failed: %w", err)
 	}
@@ -151,7 +173,46 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		InfraOnly:          infraOnly,
 		FinalStatus:        finalStatus,
 		ContextSwitch:      contextSwitch,
+		EnvironmentChanges: lifecycleEnvironmentChanges(appliedChanges),
 	}), lifecycleUpSuccessActions(names, finalStatus))
+}
+
+func convergeEnvironmentChangesForUp(
+	client *daemon.Client,
+	report func(string),
+) (*daemon.Client, environmentApplyResult, error) {
+	result, err := applyEnvironmentChanges(report)
+	if err != nil {
+		return client, result, err
+	}
+	if result.Applied {
+		client = daemon.NewClient(daemon.DefaultSocketPath())
+	}
+	return client, result, nil
+}
+
+func startWithEnvironmentConvergence(
+	client *daemon.Client,
+	request daemon.UpRequest,
+	applied environmentApplyResult,
+	report func(string),
+) (*daemon.Client, *daemon.APIResponse, environmentApplyResult, error) {
+	response, err := client.Up(request)
+	var stale *daemon.ConfigStaleError
+	if !errors.As(err, &stale) {
+		return client, response, applied, err
+	}
+
+	applied, err = applyEnvironmentChangesKnownPending(report)
+	if err != nil {
+		return client, nil, applied, err
+	}
+	client = daemon.NewClient(daemon.DefaultSocketPath())
+	if err := validateUpResourceNames(client, request.Resources); err != nil {
+		return client, nil, applied, err
+	}
+	response, err = client.Up(request)
+	return client, response, applied, err
 }
 
 func validateUpResourceNames(client *daemon.Client, names []string) error {

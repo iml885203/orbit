@@ -156,17 +156,26 @@ type lifecycleJSONOptions struct {
 	FinalStatus        *daemon.StatusResponse
 	TimedOutResources  []string
 	ContextSwitch      *projectContextSwitch
+	EnvironmentChanges *lifecycleEnvironmentChangesJSON
+}
+
+type lifecycleEnvironmentChangesJSON struct {
+	PreviouslyRunning    []string `json:"previously_running"`
+	RestoredResources    []string `json:"restored_resources"`
+	StartedDependencies  []string `json:"started_dependencies"`
+	UnavailableResources []string `json:"unavailable_resources"`
 }
 
 type lifecycleJSONData struct {
-	Operation          string                  `json:"operation"`
-	Message            string                  `json:"message,omitempty"`
-	RequestedResources []string                `json:"requested_resources"`
-	InfraOnly          bool                    `json:"infra_only,omitempty"`
-	Resources          []daemon.ResourceStatus `json:"resources"`
-	DegradedResources  []string                `json:"degraded_resources"`
-	TimedOutResources  []string                `json:"timed_out_resources"`
-	ContextSwitch      *projectContextSwitch   `json:"context_switch,omitempty"`
+	Operation          string                           `json:"operation"`
+	Message            string                           `json:"message,omitempty"`
+	RequestedResources []string                         `json:"requested_resources"`
+	InfraOnly          bool                             `json:"infra_only,omitempty"`
+	Resources          []daemon.ResourceStatus          `json:"resources"`
+	DegradedResources  []string                         `json:"degraded_resources"`
+	TimedOutResources  []string                         `json:"timed_out_resources"`
+	ContextSwitch      *projectContextSwitch            `json:"context_switch,omitempty"`
+	EnvironmentChanges *lifecycleEnvironmentChangesJSON `json:"environment_changes,omitempty"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
@@ -199,6 +208,21 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 		DegradedResources:  degraded,
 		TimedOutResources:  timedOutResources,
 		ContextSwitch:      opts.ContextSwitch,
+		EnvironmentChanges: opts.EnvironmentChanges,
+	}
+}
+
+func lifecycleEnvironmentChanges(
+	result environmentApplyResult,
+) *lifecycleEnvironmentChangesJSON {
+	if !result.Applied {
+		return nil
+	}
+	return &lifecycleEnvironmentChangesJSON{
+		PreviouslyRunning:    append([]string{}, result.PreviouslyRunning...),
+		RestoredResources:    append([]string{}, result.RestoredResources...),
+		StartedDependencies:  append([]string{}, result.StartedDependencies...),
+		UnavailableResources: append([]string{}, result.UnavailableResources...),
 	}
 }
 

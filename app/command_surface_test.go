@@ -44,14 +44,14 @@ func TestMutationsRequireReconciledDaemon(t *testing.T) {
 	root.AddCommand(up, restart, status, down, env)
 	env.AddCommand(toggle, apply, list)
 
-	for _, cmd := range []*cobra.Command{up, restart, toggle} {
+	for _, cmd := range []*cobra.Command{restart, toggle} {
 		if !commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s did not require a reconciled daemon", cmd.CommandPath())
 		}
 	}
-	for _, cmd := range []*cobra.Command{status, down, apply, list} {
+	for _, cmd := range []*cobra.Command{up, status, down, apply, list} {
 		if commandRequiresReconciledDaemon(cmd) {
-			t.Errorf("%s should remain available during reconciliation", cmd.CommandPath())
+			t.Errorf("%s should remain available or converge during reconciliation", cmd.CommandPath())
 		}
 	}
 }
