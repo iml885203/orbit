@@ -62,7 +62,7 @@ func TestCLIInitAggregation(t *testing.T) {
 	}
 }
 
-func TestConfigureRequiredWorkspaceUsesLocalEnvironmentRoot(t *testing.T) {
+func TestConfigureRequiredWorkspaceUsesSavedWorkspaceRoot(t *testing.T) {
 	previousYes := initYes
 	initYes = true
 	t.Cleanup(func() { initYes = previousYes })
@@ -77,8 +77,11 @@ func TestConfigureRequiredWorkspaceUsesLocalEnvironmentRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
+	if err := settings.Set("workspace_root", root); err != nil {
+		t.Fatal(err)
+	}
 
-	configured, got, err := configureRequiredWorkspace(initPrinter{}, settings, envPath, root)
+	configured, got, err := configureRequiredWorkspace(initPrinter{}, settings, envPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +105,7 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	}
 	settings := daemon.LoadSettings(filepath.Join(t.TempDir(), "settings.json"))
 
-	configured, root, err := configureRequiredWorkspace(initPrinter{}, settings, envPath, "")
+	configured, root, err := configureRequiredWorkspace(initPrinter{}, settings, envPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -127,7 +127,15 @@ for expected in \
   fi
 done
 
-mkdir -p "$test_root/empty-directory"
+mkdir -p "$test_root/empty-directory/envs"
+cat >"$test_root/empty-directory/envs/trap.yaml" <<'YAML'
+version: "3"
+services:
+  trap:
+    type: python
+    path: /path/that/must/not/be-used
+    command: python3 trap.py
+YAML
 cd "$test_root/empty-directory"
 
 set +e
@@ -174,6 +182,11 @@ for expected in "Step 1: Quickstart" "Preparing the Orbit demo" "Demo environmen
     exit 1
   fi
 done
+if grep -F "trap" "$test_root/init.txt" >/dev/null; then
+  echo "default init was hijacked by an incidental cwd/envs directory." >&2
+  cat "$test_root/init.txt" >&2
+  exit 1
+fi
 if grep -E 'Environment source|https://github.com/|@[[:space:]]+v[0-9]|/envs' \
   "$test_root/init.txt" >/dev/null; then
   echo "default init exposed environment-repository mechanics." >&2

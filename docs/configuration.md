@@ -302,6 +302,14 @@ For `http` and `tcp`, omit `port` when the resource declares one port. An
 `http` check also selects the `http` alias when other ports exist. Orbit asks
 for an explicit health-check port only when the endpoint remains ambiguous.
 
+A host service with no explicit `health_check` gets a TCP readiness check when
+it declares one port, or an `http` port among several. Dependents wait until
+that endpoint is actually listening, so a missing probe cannot turn process
+spawn into a false “healthy” result. Use an explicit HTTP, log, or exec check
+when listening alone is not sufficient proof. A portless worker must remain
+running through a short startup stabilization window before Orbit releases its
+dependents.
+
 ### `seed`
 
 ```yaml

@@ -137,10 +137,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 	repository := resolveEnvRepository(initEnvRepo, initEnvRef, currentURL, currentRef)
 	repoURL := repository.URL
 	repoRef := repository.Ref
-	cwd, _ := os.Getwd()
-	localEnvsDir := filepath.Join(cwd, "envs")
-	localInfo, localErr := os.Stat(localEnvsDir)
-	useLocalEnvs := localErr == nil && localInfo.IsDir() && initEnvRepo == "" && initEnvRef == ""
 	// Accepting the release default must not copy it into settings.json;
 	// otherwise upgrading Orbit could not advance its compatible demo ref.
 	explicit := false
@@ -148,7 +144,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	case initEnvRepo != "":
 		repoURL = initEnvRepo
 		explicit = true
-	case !useLocalEnvs && repoURL == "" && !initYes:
+	case repoURL == "" && !initYes:
 		if input := prompt(fmt.Sprintf("  Git URL [%s]: ", repoURL)); input != "" {
 			repoURL = input
 			repoRef = initEnvRef
@@ -167,8 +163,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("saving env repo ref: %w", err)
 		}
 	}
-	defaultQuickstart := !useLocalEnvs &&
-		!explicit &&
+	defaultQuickstart := !explicit &&
 		currentURL == "" &&
 		currentRef == "" &&
 		distribution.DefaultEnv != "" &&
@@ -184,25 +179,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	var syncFailure error
 	var syncWarning string
 	result.EnvsDir = envsDir
-	localWorkspaceRoot := ""
-	if useLocalEnvs {
-		localWorkspaceRoot = cwd
-		result.EnvSource = "local"
-		output.printf("  Syncing local %s → %s\n", localEnvsDir, envsDir)
-		syncRes, err := envsync.Sync(localEnvsDir, envsDir, envsync.Options{})
-		if err != nil {
-			syncFailure = err
-			syncWarning = "env sync failed: " + err.Error()
-			output.warnln("  ! Could not sync the local environment files")
-			output.faintln("    Orbit will use an existing synced environment if one is available.")
-		} else {
-			if err := envsync.RemoveRepositorySource(envsDir); err != nil {
-				return err
-			}
-			result.SyncedFiles = syncRes.Written
-			output.printf("  %s synced %d file(s)\n", cli.Green.Sprint("✓"), len(syncRes.Written))
-		}
-	} else if repoURL == "" {
+	if repoURL == "" {
 		warning := "no env repo configured; sync skipped"
 		result.Warnings = append(result.Warnings, warning)
 		output.warnln("  ! no env repo configured — skipping sync")
@@ -293,7 +270,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		result.ConfigPath = absPath
 
 		var err error
-		workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath, localWorkspaceRoot)
+		workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath)
 		if err != nil {
 			return err
 		}
@@ -324,7 +301,6 @@ func configureRequiredWorkspace(
 	output initPrinter,
 	settings *daemon.Settings,
 	envPath string,
-	localWorkspaceRoot string,
 ) (bool, string, error) {
 	cfg, err := config.Load(envPath)
 	if err != nil {
@@ -341,10 +317,7 @@ func configureRequiredWorkspace(
 		return false, "", nil
 	}
 
-	candidate := localWorkspaceRoot
-	if candidate == "" {
-		candidate = detectWorkspaceRoot(settings)
-	}
+	candidate := detectWorkspaceRoot(settings)
 	if candidate == "" && !initYes {
 		cwd, getwdErr := os.Getwd()
 		if getwdErr == nil {
@@ -360,7 +333,7 @@ func configureRequiredWorkspace(
 	output.printf("  Environment %s needs local project files for %s.\n",
 		daemonsrv.EnvShortName(envPath), strings.Join(requiredBy, ", "))
 	root := candidate
-	if !initYes && localWorkspaceRoot == "" {
+	if !initYes {
 		label := "  Project checkout or workspace root (absolute path)"
 		if candidate != "" {
 			label += " [" + candidate + "]"
@@ -582,13 +555,6 @@ func initExternalPrerequisite(result initResult) (daemon.DoctorCheck, bool) {
 
 // detectWorkspaceRoot tries to find the workspace root automatically.
 func detectWorkspaceRoot(settings *daemon.Settings) string {
-	cwd, _ := os.Getwd()
-	if cwd != "" {
-		if info, statErr := os.Stat(filepath.Join(cwd, "envs")); statErr == nil && info.IsDir() {
-			return cwd
-		}
-	}
-
 	if saved := settings.Get("workspace_root"); saved != "" {
 		if _, err := os.Stat(saved); err == nil {
 			return saved

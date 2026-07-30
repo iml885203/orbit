@@ -294,6 +294,13 @@ health_check:
 時，`http` check 仍會優先選擇 `http` alias；只有 endpoint 仍有歧義時，
 Orbit 才要求明確指定 health-check port。
 
+Host service 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個
+port 中包含 `http`，Orbit 會自動使用 TCP readiness check。Dependent 會等到
+endpoint 真的開始 listening 才啟動，不會把 process 剛 spawn 就誤判成
+「healthy」。若「能連線」仍不足以代表應用程式 ready，請明確使用 HTTP、
+log 或 exec check。沒有 port 的 worker 則必須通過一小段 startup
+stabilization window，Orbit 才會放行 dependent。
+
 ### `seed`
 
 ```yaml

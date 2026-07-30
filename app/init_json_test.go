@@ -32,16 +32,15 @@ func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
 	}
 
 	root := t.TempDir()
-	envsDir := filepath.Join(root, "envs")
-	if err := os.Mkdir(envsDir, 0o755); err != nil {
+	orbitHome := filepath.Join(t.TempDir(), "orbit-home")
+	envsDir := filepath.Join(orbitHome, "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	config := []byte("version: \"3\"\nservices: {}\n")
 	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), config, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orbitHome := filepath.Join(t.TempDir(), "orbit-home")
-
 	cmd := exec.Command(os.Args[0], "-test.run=^TestInitJSONOutputIsOneParseableEnvelope$")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
@@ -79,10 +78,10 @@ func TestInitJSONOutputIsOneParseableEnvelope(t *testing.T) {
 	}
 }
 
-func TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace(t *testing.T) {
+func TestInitIgnoresIncidentalLocalEnvsDirectory(t *testing.T) {
 	if os.Getenv("ORBIT_INIT_ZERO_PROMPT_HELPER") == "1" {
 		cli.JSONOutput = false
-		initYes = false
+		initYes = true
 		initEnvRepo = ""
 		initEnvName = ""
 		configFile = ""
@@ -99,11 +98,18 @@ func TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace(t *testing.T) {
 	if err := os.Mkdir(envsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(envsDir, "quickstart.yaml"), []byte("version: \"3\"\nservices: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(envsDir, "trap.yaml"), []byte("not: valid: yaml\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	orbitHome := filepath.Join(t.TempDir(), "orbit-home")
-	cmd := exec.Command(os.Args[0], "-test.run=^TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace$")
+	managedEnvsDir := filepath.Join(orbitHome, "envs")
+	if err := os.MkdirAll(managedEnvsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(managedEnvsDir, "quickstart.yaml"), []byte("version: \"3\"\nservices: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInitIgnoresIncidentalLocalEnvsDirectory$")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"ORBIT_INIT_ZERO_PROMPT_HELPER=1",
@@ -120,6 +126,10 @@ func TestInitLocalEnvironmentDoesNotAskAboutIrrelevantWorkspace(t *testing.T) {
 		if strings.Contains(stdout.String(), irrelevant) {
 			t.Fatalf("init exposed irrelevant %q:\n%s", irrelevant, stdout.String())
 		}
+	}
+	if strings.Contains(stdout.String(), "Syncing local") ||
+		!strings.Contains(stdout.String(), "Environment: quickstart") {
+		t.Fatalf("init used cwd/envs instead of the managed environment:\n%s", stdout.String())
 	}
 	settings := daemon.LoadSettings(filepath.Join(orbitHome, "settings.json"))
 	if root := settings.Get("workspace_root"); root != "" {

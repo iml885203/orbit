@@ -313,7 +313,7 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 		if c, ok := cfg.Containers[name]; ok {
 			hc = c.HealthCheck
 		} else if s, ok := cfg.Services[name]; ok {
-			hc = s.HealthCheck
+			hc = serviceReadinessCheck(s, cfg.Settings.HealthCheckInterval)
 		}
 		onProbeResult := func(r health.Result) {
 			if !r.Healthy {
@@ -350,6 +350,17 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 			}
 		}
 		go func() {
+			if hc == nil {
+				timer := time.NewTimer(500 * time.Millisecond)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					return
+				case <-timer.C:
+					onProbeResult(health.Result{Service: name, Healthy: true, Message: "process remained running after startup"})
+					return
+				}
+			}
 			err := checker.WaitForHealthy(ctx, name, hc, onProbeResult)
 			if err == nil {
 				if health.SupportsRecovery(hc) {
@@ -393,6 +404,34 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 			}
 		}()
 		return nil
+	}
+}
+
+func serviceReadinessCheck(service *config.Service, interval time.Duration) *config.HealthCheckConfig {
+	if service == nil || service.HealthCheck != nil {
+		if service == nil {
+			return nil
+		}
+		return service.HealthCheck
+	}
+	port := 0
+	if endpoint, ok := service.Ports["http"]; ok {
+		port = endpoint.Host
+	} else if len(service.Ports) == 1 {
+		for _, endpoint := range service.Ports {
+			port = endpoint.Host
+		}
+	}
+	if port == 0 {
+		return nil
+	}
+	return &config.HealthCheckConfig{
+		Type:             "tcp",
+		Port:             port,
+		Interval:         interval,
+		Timeout:          5 * time.Second,
+		Retries:          config.DefaultHealthRetries,
+		FailureThreshold: config.DefaultHealthFailureThreshold,
 	}
 }
 

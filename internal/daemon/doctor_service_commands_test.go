@@ -8,7 +8,7 @@ import (
 	"github.com/iml885203/orbit/config"
 )
 
-func TestConfiguredPythonInterpreterUsesServiceRelativePath(t *testing.T) {
+func TestHostEnvironmentChecksResolveServiceRelativeExecutable(t *testing.T) {
 	project := t.TempDir()
 	interpreter := filepath.Join(project, ".venv", "bin", "python")
 	if err := os.MkdirAll(filepath.Dir(interpreter), 0o755); err != nil {
@@ -22,32 +22,45 @@ func TestConfiguredPythonInterpreterUsesServiceRelativePath(t *testing.T) {
 	}}
 
 	checks := HostEnvironmentChecks(cfg)
-	var pythonChecks []DoctorCheck
+	var commandChecks []DoctorCheck
 	for _, check := range checks {
-		if check.Name == "Python" || check.Name == "Python (api)" {
-			pythonChecks = append(pythonChecks, check)
+		if check.Name == "Command (api)" {
+			commandChecks = append(commandChecks, check)
 		}
 	}
-	if len(pythonChecks) != 1 {
-		t.Fatalf("python checks = %+v", pythonChecks)
+	if len(commandChecks) != 1 {
+		t.Fatalf("command checks = %+v", commandChecks)
 	}
-	if pythonChecks[0].Status != CheckPass || pythonChecks[0].Message != "configured interpreter found at "+interpreter {
-		t.Fatalf("check = %+v", pythonChecks[0])
+	if commandChecks[0].Status != CheckPass || commandChecks[0].Message != "executable found at "+interpreter {
+		t.Fatalf("check = %+v", commandChecks[0])
 	}
 }
 
-func TestConfiguredPythonInterpreterNamesMissingPath(t *testing.T) {
+func TestHostEnvironmentChecksBlockMissingCommandAndPreStartExecutables(t *testing.T) {
 	project := t.TempDir()
 	cfg := &config.Config{Services: map[string]*config.Service{
-		"api": {Type: "python", Path: project, Command: ".venv/bin/python app.py"},
+		"api": {
+			Type:     "python",
+			Path:     project,
+			Command:  ".venv/bin/python app.py",
+			PreStart: []string{"./scripts/prepare"},
+		},
 	}}
 
-	checks := configuredPythonInterpreterChecks(cfg)
-	if len(checks) != 1 || checks[0].Status != CheckFail {
-		t.Fatalf("checks = %+v", checks)
+	checks := HostEnvironmentChecks(cfg)
+	var failed []DoctorCheck
+	for _, check := range checks {
+		if check.Status == CheckFail {
+			failed = append(failed, check)
+		}
 	}
-	want := filepath.Join(project, ".venv", "bin", "python")
-	if checks[0].Message != "configured interpreter not found: "+want {
-		t.Fatalf("message = %q", checks[0].Message)
+	if len(failed) != 2 {
+		t.Fatalf("failed checks = %+v", failed)
+	}
+	if failed[0].Name != "Command (api)" ||
+		failed[0].Message != "executable not found: "+filepath.Join(project, ".venv/bin/python") ||
+		failed[1].Name != "Pre-start (api #1)" ||
+		failed[1].Message != "executable not found: "+filepath.Join(project, "scripts/prepare") {
+		t.Fatalf("failed checks = %+v", failed)
 	}
 }

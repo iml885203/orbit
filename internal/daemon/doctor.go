@@ -102,7 +102,7 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 func HostEnvironmentChecks(cfg *config.Config) []DoctorCheck {
 	tools := requiredHostTools(cfg)
 	results := ServiceWorkingDirectoryChecks(cfg, nil)
-	results = append(results, configuredPythonInterpreterChecks(cfg)...)
+	results = append(results, configuredServiceCommandChecks(cfg)...)
 	toolOffset := len(results)
 	results = append(results, make([]DoctorCheck, len(tools))...)
 
