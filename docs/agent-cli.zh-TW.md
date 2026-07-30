@@ -104,7 +104,7 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。套用待處理的 config 編輯時，`data.environment_changes` 會回報 handoff 前後保留的 running intent。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
-| `orbit down --json` | 停止 resources 後回傳最終 lifecycle 結果。Orbit 已停止時會以空陣列成功 no-op，並只建議下一個正常的 `orbit up`。 |
+| `orbit down --json` | 停止 resources 後回傳最終 lifecycle 結果。Orbit 已停止時會以空陣列成功 no-op；尚未 setup 時建議 `orbit init`，已 setup 時才建議下一個正常的 `orbit up`。 |
 | `orbit down <resources...> --json` | 回傳指定 resources 的最終 lifecycle 結果。`--group` 與 `--infra` 使用和 `orbit up` 相同的互斥選擇模式；停止 group 時不會停止共享相依。 |
 | `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
 | `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇、可直接切換的 environment 選項，以及適用時的 managed repository URL/ref/commit。 |

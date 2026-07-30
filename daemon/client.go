@@ -161,11 +161,6 @@ func (c *Client) DownAndWait() (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{Wait: true})
 }
 
-// Stop stops a single service.
-func (c *Client) Stop(name string) (*APIResponse, error) {
-	return c.postJSON("/api/stop/"+name, nil)
-}
-
 // Restart restarts a single service.
 func (c *Client) Restart(name string) (*APIResponse, error) {
 	return c.postJSON("/api/restart/"+name, nil)

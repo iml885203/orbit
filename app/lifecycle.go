@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/iml885203/orbit/cli"
@@ -14,139 +13,7 @@ import (
 
 const downCompletionMessage = "Environment stopped. Orbit is ready for the next 'orbit up'."
 const downAlreadyStoppedMessage = "Environment is already stopped. Orbit is ready for the next 'orbit up'."
-
-type resourceNameError struct {
-	requested       string
-	available       []string
-	suggestion      string
-	correctedHuman  string
-	correctedAction string
-}
-
-func (e resourceNameError) Error() string {
-	message := "unknown resource: " + e.requested
-	if e.suggestion != "" {
-		return message + " (did you mean " + e.suggestion + "?)"
-	}
-	if len(e.available) == 0 {
-		return message + " (this environment defines no resources)"
-	}
-	return message + " (available: " + strings.Join(e.available, ", ") + ")"
-}
-
-func (e resourceNameError) ErrorCode() string {
-	return "unknown_resource"
-}
-
-func (e resourceNameError) CLIJSONHint() string {
-	if e.suggestion != "" {
-		return "Retry with the closest configured resource name."
-	}
-	return "Run 'orbit status --json' to inspect configured resources."
-}
-
-func (e resourceNameError) CLIJSONReplacementActions() []cli.JSONAction {
-	if e.correctedAction != "" {
-		return []cli.JSONAction{{
-			Command:     e.correctedAction,
-			Reason:      "Retry with the configured resource " + e.suggestion + ".",
-			Destructive: false,
-		}}
-	}
-	return []cli.JSONAction{cli.StatusAction()}
-}
-
-func (e resourceNameError) CLIHumanNextCommand() string {
-	if e.correctedHuman != "" {
-		return e.correctedHuman
-	}
-	return "orbit status"
-}
-
-func newResourceNameError(
-	status *daemon.StatusResponse,
-	requested string,
-	correctedCommand func(string) string,
-) error {
-	available := lifecycleResourceNames(status)
-	suggestion := closestResourceName(requested, available)
-	human := ""
-	action := ""
-	if suggestion != "" {
-		human = correctedCommand(suggestion)
-		action = human + " --json"
-	}
-	return resourceNameError{
-		requested:       requested,
-		available:       available,
-		suggestion:      suggestion,
-		correctedHuman:  human,
-		correctedAction: action,
-	}
-}
-
-func lifecycleResourceNames(status *daemon.StatusResponse) []string {
-	if status == nil {
-		return nil
-	}
-	names := make([]string, 0, len(status.Resources))
-	for _, resource := range status.Resources {
-		names = append(names, resource.Name)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func closestResourceName(requested string, available []string) string {
-	best := ""
-	bestDistance := len([]rune(requested)) + 1
-	tied := false
-	for _, candidate := range available {
-		distance := resourceNameDistance(strings.ToLower(requested), strings.ToLower(candidate))
-		switch {
-		case distance < bestDistance:
-			best = candidate
-			bestDistance = distance
-			tied = false
-		case distance == bestDistance:
-			tied = true
-		}
-	}
-	limit := 2
-	if len([]rune(requested)) <= 3 {
-		limit = 1
-	}
-	if tied || bestDistance > limit {
-		return ""
-	}
-	return best
-}
-
-func resourceNameDistance(left, right string) int {
-	a := []rune(left)
-	b := []rune(right)
-	previous := make([]int, len(b)+1)
-	current := make([]int, len(b)+1)
-	for j := range previous {
-		previous[j] = j
-	}
-	for i, leftRune := range a {
-		current[0] = i + 1
-		for j, rightRune := range b {
-			cost := 1
-			if leftRune == rightRune {
-				cost = 0
-			}
-			current[j+1] = min(
-				previous[j+1]+1,
-				current[j]+1,
-				previous[j]+cost,
-			)
-		}
-		previous, current = current, previous
-	}
-	return previous[len(b)]
-}
+const downBeforeSetupMessage = "Nothing is running because Orbit is not set up yet."
 
 type lifecycleJSONOptions struct {
 	Operation          string
@@ -157,19 +24,6 @@ type lifecycleJSONOptions struct {
 	TimedOutResources  []string
 	ContextSwitch      *projectContextSwitch
 	EnvironmentChanges *lifecycleEnvironmentChangesJSON
-}
-
-func validateLifecycleSelection(resources, selectedGroups []string, selectedInfra bool) error {
-	switch {
-	case selectedInfra && len(resources) > 0:
-		return cli.NewInvalidArgumentError("resource names and --infra cannot be used together")
-	case selectedInfra && len(selectedGroups) > 0:
-		return cli.NewInvalidArgumentError("--group and --infra cannot be used together")
-	case len(resources) > 0 && len(selectedGroups) > 0:
-		return cli.NewInvalidArgumentError("resource names and --group cannot be used together")
-	default:
-		return nil
-	}
 }
 
 type lifecycleEnvironmentChangesJSON struct {
@@ -271,6 +125,14 @@ func lifecycleDownSuccessActions() []cli.JSONAction {
 	return []cli.JSONAction{{
 		Command:     "orbit up --json",
 		Reason:      "Start the environment when you are ready.",
+		Destructive: false,
+	}}
+}
+
+func lifecycleSetupActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     "orbit init --yes --json",
+		Reason:      "Set up Orbit before starting an environment.",
 		Destructive: false,
 	}}
 }

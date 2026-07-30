@@ -56,6 +56,9 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err := validateUpSelection(args); err != nil {
 		return err
 	}
+	if err := validateConfiguredLifecycleSelection(configFile, args, groups, "up"); err != nil {
+		return err
+	}
 	configWithoutManagedEnvironment := cmd.Root().PersistentFlags().Changed("config") ||
 		usesDiscoveredProjectConfig(configFile)
 	if err := preflightOrAbort(configWithoutManagedEnvironment, args); err != nil {

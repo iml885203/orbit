@@ -672,15 +672,27 @@ func runDown(_ *cobra.Command, args []string) error {
 	if err := validateLifecycleSelection(args, groups, infraOnly); err != nil {
 		return err
 	}
+	if err := validateConfiguredLifecycleSelection(configFile, args, groups, "down"); err != nil {
+		return err
+	}
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if err := client.Health(); err != nil {
+		message := downAlreadyStoppedMessage
+		actions := lifecycleDownSuccessActions()
+		if setupRequired(readEnvironmentSelection(), configFile) {
+			message = downBeforeSetupMessage
+			actions = lifecycleSetupActions()
+		}
 		if cli.JSONOutput {
 			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 				Operation: "down",
-				Message:   downAlreadyStoppedMessage,
-			}), lifecycleDownSuccessActions())
+				Message:   message,
+			}), actions)
 		}
-		fmt.Println(downAlreadyStoppedMessage)
+		fmt.Println(message)
+		if message == downBeforeSetupMessage {
+			_, _ = cli.Faint.Println("  Next: orbit init")
+		}
 		return nil
 	}
 
@@ -775,6 +787,11 @@ func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, name
 }
 
 func runRestart(_ *cobra.Command, args []string) error {
+	if err := validateConfiguredCommandResources(configFile, args, func(_ int, suggestion string) string {
+		return "orbit restart " + suggestion
+	}); err != nil {
+		return err
+	}
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
 		return cli.NewOrbitNotRunningError()
@@ -823,46 +840,16 @@ func runRestart(_ *cobra.Command, args []string) error {
 	return waitForServicesHealthy(client, []string{name})
 }
 
-func runStop(_ *cobra.Command, args []string) error {
-	client, err := daemon.Dial(daemon.DefaultSocketPath())
-	if err != nil {
-		return cli.NewOrbitNotRunningError()
-	}
-
-	name := args[0]
-	status, err := client.Status()
-	if err != nil {
-		return fmt.Errorf("status: %w", err)
-	}
-	if !lifecycleResourceExists(status, name) {
-		return newResourceNameError(status, name, func(suggestion string) string {
-			return "orbit down " + suggestion
-		})
-	}
-	if cli.JSONOutput {
-		resp, err := client.Stop(name)
-		if err != nil {
-			return fmt.Errorf("stop failed: %w", err)
-		}
-		finalStatus, err := waitForLifecycleJSON(client, []string{name}, "stopped")
-		if err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActions([]string{name}))
-		}
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:          "down",
-			Message:            resp.Message,
-			RequestedResources: []string{name},
-			FinalStatus:        finalStatus,
-		}), nil)
-	}
-
-	if _, err := client.Stop(name); err != nil {
-		return fmt.Errorf("stop failed: %w", err)
-	}
-	return waitForServicesStopped(client, []string{name}, false)
-}
-
 func runLogs(_ *cobra.Command, args []string) error {
+	if err := validateConfiguredCommandResources(configFile, args, func(_ int, suggestion string) string {
+		command := "orbit logs " + suggestion
+		if follow {
+			command += " --follow"
+		}
+		return command
+	}); err != nil {
+		return err
+	}
 	client, err := daemon.Dial(daemon.DefaultSocketPath())
 	if err != nil {
 		return cli.NewOrbitNotRunningError()
@@ -1006,6 +993,11 @@ func writeLogJSONErrorEvent(w io.Writer, resource string, err error) error {
 func runOpen(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return runDashboard()
+	}
+	if err := validateConfiguredCommandResources(configFile, args, func(_ int, suggestion string) string {
+		return "orbit open " + suggestion
+	}); err != nil {
+		return err
 	}
 
 	client, err := daemon.Dial(daemon.DefaultSocketPath())

@@ -91,6 +91,21 @@ for help_file in open switch up down; do
   fi
 done
 
+"$orbit_bin" down --json >"$test_root/down-before-setup.json"
+python3 - "$test_root/down-before-setup.json" <<'PY'
+import json
+import sys
+
+result = json.load(open(sys.argv[1], encoding="utf-8"))
+assert result["ok"] is True
+assert result["data"]["message"] == "Nothing is running because Orbit is not set up yet."
+assert result["recommended_actions"] == [{
+    "command": "orbit init --yes --json",
+    "reason": "Set up Orbit before starting an environment.",
+    "destructive": False,
+}]
+PY
+
 missing_runtime_root="$test_root/missing-runtime"
 mkdir -p "$missing_runtime_root/bin" "$missing_runtime_root/project/envs"
 ln -s "$(command -v git)" "$missing_runtime_root/bin/git"
@@ -452,12 +467,40 @@ PY
 "$orbit_bin" down --json >"$test_root/down.json"
 "$orbit_bin" daemon stop --json >"$test_root/control-stop.json"
 "$orbit_bin" down --json >"$test_root/down-again.json"
-python3 - "$test_root/down.json" "$test_root/down-again.json" <<'PY'
+if "$orbit_bin" down demo-shp --json >"$test_root/offline-resource-typo.json"; then
+  echo "offline down accepted an unknown resource." >&2
+  exit 1
+fi
+if "$orbit_bin" down --group mini-shp --json >"$test_root/offline-group-typo.json"; then
+  echo "offline down accepted an unknown group." >&2
+  exit 1
+fi
+for command in up restart logs open; do
+  if "$orbit_bin" "$command" demo-shp --json >"$test_root/offline-$command-typo.json"; then
+    echo "offline $command accepted an unknown resource." >&2
+    exit 1
+  fi
+done
+python3 - \
+  "$test_root/down.json" \
+  "$test_root/down-again.json" \
+  "$test_root/offline-resource-typo.json" \
+  "$test_root/offline-group-typo.json" \
+  "$test_root/offline-up-typo.json" \
+  "$test_root/offline-restart-typo.json" \
+  "$test_root/offline-logs-typo.json" \
+  "$test_root/offline-open-typo.json" <<'PY'
 import json
 import sys
 
 down = json.load(open(sys.argv[1], encoding="utf-8"))
 again = json.load(open(sys.argv[2], encoding="utf-8"))
+resource_typo = json.load(open(sys.argv[3], encoding="utf-8"))
+group_typo = json.load(open(sys.argv[4], encoding="utf-8"))
+up_typo = json.load(open(sys.argv[5], encoding="utf-8"))
+restart_typo = json.load(open(sys.argv[6], encoding="utf-8"))
+logs_typo = json.load(open(sys.argv[7], encoding="utf-8"))
+open_typo = json.load(open(sys.argv[8], encoding="utf-8"))
 assert down["ok"] is True
 assert down["data"]["message"] == "Environment stopped. Orbit is ready for the next 'orbit up'."
 assert again["ok"] is True
@@ -474,6 +517,22 @@ assert again["recommended_actions"] == [{
     "reason": "Start the environment when you are ready.",
     "destructive": False,
 }]
+assert resource_typo["error"]["code"] == "unknown_resource"
+assert resource_typo["error"]["next_command"] == "orbit down demo-shop --json"
+assert resource_typo["recommended_actions"][0]["command"] == "orbit down demo-shop --json"
+assert group_typo["error"]["code"] == "invalid_argument"
+assert group_typo["error"]["next_command"] == "orbit down --group mini-shop --json"
+assert group_typo["recommended_actions"][0]["command"] == "orbit down --group mini-shop --json"
+for command, result in [
+    ("up", up_typo),
+    ("restart", restart_typo),
+    ("logs", logs_typo),
+    ("open", open_typo),
+]:
+    expected = f"orbit {command} demo-shop --json"
+    assert result["error"]["code"] == "unknown_resource"
+    assert result["error"]["next_command"] == expected
+    assert result["recommended_actions"][0]["command"] == expected
 PY
 
 echo "README first five minutes completes a linked checkout and reports runtime dependency failures truthfully"
