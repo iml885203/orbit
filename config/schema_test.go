@@ -317,6 +317,67 @@ func TestValidate_RejectsNegativeRuntimeHealthFailureThreshold(t *testing.T) {
 	}
 }
 
+func TestValidateSuggestsClosestSchemaValue(t *testing.T) {
+	cfg := &Config{
+		Containers: map[string]*Container{
+			"database": {
+				Kind:       "infa",
+				PullPolicy: "if-not-present",
+			},
+		},
+		Services: map[string]*Service{
+			"api": {
+				HealthCheck: &HealthCheckConfig{
+					Type: "htpp",
+				},
+			},
+		},
+	}
+
+	err := Validate(cfg)
+
+	if err == nil {
+		t.Fatal("typo'd schema values were accepted")
+	}
+	for _, correction := range []string{
+		`invalid kind "infa" (did you mean "infra"?)`,
+		`invalid pull_policy "if-not-present" (did you mean "if_not_present"?)`,
+		`unknown type "htpp" (did you mean "http"?)`,
+	} {
+		if !strings.Contains(err.Error(), correction) {
+			t.Errorf("error %q missing correction %q", err, correction)
+		}
+	}
+}
+
+func TestValidateSuggestsClosestConfiguredResource(t *testing.T) {
+	cfg := &Config{
+		Containers: map[string]*Container{
+			"database": {},
+		},
+		Services: map[string]*Service{
+			"api": {DependsOn: []string{"databse"}},
+		},
+		Groups: map[string]Group{
+			"backend": {Services: []string{"aip"}},
+		},
+	}
+
+	err := Validate(cfg)
+
+	if err == nil {
+		t.Fatal("unknown dependency and group resource were accepted")
+	}
+	for _, correction := range []string{
+		`depends on unknown "databse" (did you mean "database"?)`,
+		`references unknown resource "aip" (did you mean "api"?)`,
+	} {
+		if !strings.Contains(err.Error(), correction) {
+			t.Errorf("error %q missing correction %q", err, correction)
+		}
+	}
+}
+
 func TestConfig_TracingUsesExplicitOptOut(t *testing.T) {
 	tests := []struct {
 		name    string

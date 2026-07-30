@@ -112,6 +112,60 @@ PY
 
 printf '%s\n' \
   'version: "3"' \
+  'services:' \
+  '  api:' \
+  '    command: python3 -m http.server 0' \
+  '    depend_on: [database]' \
+  >"$test_root/typo.yaml"
+if "$orbit_bin" -c "$test_root/typo.yaml" doctor --json \
+  >"$test_root/typo-doctor.json"; then
+  echo "orbit doctor unexpectedly accepted a typo'd schema field." >&2
+  exit 1
+fi
+"$orbit_bin" -c "$test_root/typo.yaml" inspect --json \
+  >"$test_root/typo-inspect.json"
+printf '%s\n' \
+  'version: "3"' \
+  'services:' \
+  '  database:' \
+  '    command: python3 -m http.server 0' \
+  '  api:' \
+  '    command: python3 -m http.server 0' \
+  '    depends_on: [databse]' \
+  >"$test_root/unknown-reference.yaml"
+if "$orbit_bin" -c "$test_root/unknown-reference.yaml" doctor --json \
+  >"$test_root/unknown-reference-doctor.json"; then
+  echo "orbit doctor unexpectedly accepted an unknown dependency." >&2
+  exit 1
+fi
+python3 - \
+  "$test_root/typo-doctor.json" \
+  "$test_root/typo-inspect.json" \
+  "$test_root/unknown-reference-doctor.json" <<'PY'
+import json
+import pathlib
+import sys
+
+doctor = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert doctor["error"]["code"] == "checks_failed"
+config_check = next(
+    check for check in doctor["data"]["checks"] if check["name"] == "Config"
+)
+assert 'did you mean "depends_on"?' in config_check["message"]
+
+inspect = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+assert inspect["data"]["readiness"]["state"] == "config_invalid"
+assert 'did you mean "depends_on"?' in inspect["data"]["risks"][0]["message"]
+
+reference = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+reference_check = next(
+    check for check in reference["data"]["checks"] if check["name"] == "Config"
+)
+assert 'did you mean "database"?' in reference_check["message"]
+PY
+
+printf '%s\n' \
+  'version: "3"' \
   'containers:' \
   '  database:' \
   '    image: postgres:18-alpine' \

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -87,13 +88,17 @@ func decodeExtensionSections(cfg *Config, cfgPath string) error {
 	sort.Strings(names) // deterministic first error under multiple typos
 	for _, name := range names {
 		if _, ok := extensionSections.specs[name]; !ok {
-			known := make([]string, 0, len(extensionSections.specs))
+			known := coreTopLevelFields()
 			for k := range extensionSections.specs {
 				known = append(known, k)
 			}
 			sort.Strings(known)
 			node := cfg.Extensions[name]
-			return fmt.Errorf("line %d: field %s not found in type config.Config (registered extension sections: %v)", node.Line, name, known)
+			hint := ""
+			if suggestion := closestName(name, known); suggestion != "" {
+				hint = fmt.Sprintf(` (did you mean %q?)`, suggestion)
+			}
+			return fmt.Errorf("line %d: field %s not found in type config.Config%s (available top-level sections: %v)", node.Line, name, hint, known)
 		}
 	}
 
@@ -178,7 +183,7 @@ func LoadSharedSiblingYAML(cfgPath, filename string, out any) (found bool, err e
 	}
 	dec := yaml.NewDecoder(strings.NewReader(ExpandEnv(string(data))))
 	dec.KnownFields(true)
-	return true, dec.Decode(out)
+	return true, addSchemaFieldGuidance(dec.Decode(out), out)
 }
 
 // DecodeStrict decodes a section node into out with strict field
@@ -193,5 +198,10 @@ func DecodeStrict(node *yaml.Node, out any) error {
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
 	dec.KnownFields(true)
-	return dec.Decode(out)
+	return addSchemaFieldGuidance(dec.Decode(out), out)
+}
+
+func coreTopLevelFields() []string {
+	fields := schemaFieldsByType(reflect.TypeOf(Config{}))[reflect.TypeOf(Config{}).String()]
+	return append([]string(nil), fields...)
 }

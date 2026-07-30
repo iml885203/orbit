@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/iml885203/orbit/internal/suggest"
 )
 
 // resolvedArg is what a positional db/project argument resolved to.
@@ -106,7 +108,7 @@ func closestNames(names []string, arg string, max int) []string {
 	}
 	var out []scored
 	for _, n := range names {
-		d := levenshtein(strings.ToLower(n), strings.ToLower(arg))
+		d := suggest.Distance(strings.ToLower(n), strings.ToLower(arg))
 		limit := len(n)
 		if len(arg) > limit {
 			limit = len(arg)
@@ -129,26 +131,4 @@ func closestNames(names []string, arg string, max int) []string {
 		names2 = append(names2, s.name)
 	}
 	return names2
-}
-
-// levenshtein is the classic edit distance, used only for typo suggestions.
-func levenshtein(a, b string) int {
-	ra, rb := []rune(a), []rune(b)
-	prev := make([]int, len(rb)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ra); i++ {
-		cur := make([]int, len(rb)+1)
-		cur[0] = i
-		for j := 1; j <= len(rb); j++ {
-			cost := 1
-			if ra[i-1] == rb[j-1] {
-				cost = 0
-			}
-			cur[j] = min(cur[j-1]+1, prev[j]+1, prev[j-1]+cost)
-		}
-		prev = cur
-	}
-	return prev[len(rb)]
 }

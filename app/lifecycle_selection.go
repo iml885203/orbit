@@ -7,6 +7,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/suggest"
 )
 
 type resourceNameError struct {
@@ -145,7 +146,7 @@ func closestResourceName(requested string, available []string) string {
 	bestDistance := len([]rune(requested)) + 1
 	tied := false
 	for _, candidate := range available {
-		distance := resourceNameDistance(strings.ToLower(requested), strings.ToLower(candidate))
+		distance := suggest.Distance(strings.ToLower(requested), strings.ToLower(candidate))
 		switch {
 		case distance < bestDistance:
 			best = candidate
@@ -163,32 +164,6 @@ func closestResourceName(requested string, available []string) string {
 		return ""
 	}
 	return best
-}
-
-func resourceNameDistance(left, right string) int {
-	a := []rune(left)
-	b := []rune(right)
-	previous := make([]int, len(b)+1)
-	current := make([]int, len(b)+1)
-	for j := range previous {
-		previous[j] = j
-	}
-	for i, leftRune := range a {
-		current[0] = i + 1
-		for j, rightRune := range b {
-			cost := 1
-			if leftRune == rightRune {
-				cost = 0
-			}
-			current[j+1] = min(
-				previous[j+1]+1,
-				current[j]+1,
-				previous[j]+cost,
-			)
-		}
-		previous, current = current, previous
-	}
-	return previous[len(b)]
 }
 
 func validateLifecycleSelection(resources, selectedGroups []string, selectedInfra bool) error {

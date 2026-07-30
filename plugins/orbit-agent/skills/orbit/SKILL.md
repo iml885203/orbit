@@ -55,6 +55,10 @@ when implementing or debugging an `orbit.cli.v1` consumer.
 - Treat `dependency_readiness_ambiguous` as a configuration-authoring risk,
   not proof that startup failed. Tell the user which `health_check` path Orbit
   could not infer; do not invent a probe or edit project intent without scope.
+- When `config_invalid` includes a `did you mean` correction, preserve that
+  exact field or value in the explanation. Apply it only when the task includes
+  editing the environment; otherwise report the correction without mutating
+  project intent.
 - Prefer `orbit logs <resource> --json` over reading process files directly;
   use `-f --json` only when an NDJSON stream is useful.
 - Use history and trace commands only when the task needs correlation or an

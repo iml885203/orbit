@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // The inline Extensions map disables yaml.v3's KnownFields for top-level
@@ -24,6 +26,9 @@ func TestLoad_UnknownTopLevelKeyStillFails(t *testing.T) {
 	if !strings.Contains(err.Error(), "servcies") {
 		t.Fatalf("error does not name the offending key: %v", err)
 	}
+	if !strings.Contains(err.Error(), `did you mean "services"`) {
+		t.Fatalf("error does not correct the top-level key: %v", err)
+	}
 }
 
 // Unknown keys nested inside core sections still trip KnownFields — the
@@ -37,5 +42,24 @@ func TestLoad_UnknownNestedKeyStillFails(t *testing.T) {
 
 	if _, err := Load(path); err == nil {
 		t.Fatal("typo'd nested key loaded silently")
+	} else if !strings.Contains(err.Error(), `did you mean "image"`) {
+		t.Fatalf("error does not correct the nested key: %v", err)
+	}
+}
+
+func TestDecodeStrictSuggestsExtensionField(t *testing.T) {
+	type section struct {
+		Endpoint string `yaml:"endpoint"`
+	}
+	var node yaml.Node
+	if err := yaml.Unmarshal([]byte("endpont: http://localhost\n"), &node); err != nil {
+		t.Fatal(err)
+	}
+	var out section
+
+	err := DecodeStrict(node.Content[0], &out)
+
+	if err == nil || !strings.Contains(err.Error(), `did you mean "endpoint"`) {
+		t.Fatalf("DecodeStrict() = %v, want extension field suggestion", err)
 	}
 }

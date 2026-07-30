@@ -735,7 +735,7 @@ func TestLoad_UnknownField(t *testing.T) {
 containers:
   sql-server:
     image: foo:latest
-    bogus_field: true
+    imagee: typo
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.yaml")
@@ -746,8 +746,9 @@ containers:
 	if err == nil {
 		t.Fatal("expected error for unknown field, got nil")
 	}
-	if !strings.Contains(err.Error(), "bogus_field") {
-		t.Errorf("error %q should mention the unknown field name", err.Error())
+	if !strings.Contains(err.Error(), `imagee`) ||
+		!strings.Contains(err.Error(), `did you mean "image"`) {
+		t.Errorf("error %q should identify and correct the unknown field", err.Error())
 	}
 }
 

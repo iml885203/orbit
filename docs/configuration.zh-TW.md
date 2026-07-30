@@ -66,7 +66,9 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 
 Orbit 會嚴格 decode core schema 與已註冊的 extension sections。未知 key
 或拼錯的 field 會在任何 container 或 host process 啟動前失敗，錯誤也會指出
-有問題的 field 與來源行號；Orbit 不會安靜忽略它無法理解的設定。
+有問題的 field 與來源行號；若能明確判斷，還會建議最接近的合法 field 或
+enum value。`orbit doctor`、`orbit up` 與 `orbit inspect --json` 都會提供
+同一份指引；Orbit 不會安靜忽略它無法理解的設定。
 
 ### Schema 2 遷移到 3
 

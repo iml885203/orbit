@@ -6,6 +6,13 @@
 
 ## 啟動
 
+### `orbit.yaml` 出現未知 field 或 value
+
+在專案內執行 `orbit doctor`。Orbit 會在不啟動 resource 的情況下驗證 core
+與 extension sections，並指出來源行號。能辨識的 typo 也會直接給修正，例如
+`did you mean "depends_on"?`；套用後再執行 `orbit up`。若沒有 suggestion，
+請對照[設定參考](configuration.zh-TW.md)，不要猜測欄位。
+
 ### `orbit up` 卡在 "waiting for <service> to be healthy"
 container 已經啟動，但 health check 一直沒成功。
 

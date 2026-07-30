@@ -12,6 +12,7 @@ packages:
     exclude_files:
       - "config.go"
       - "validate.go"
+      - "schema_guidance.go"
       # holder.go is a Go concurrency primitive, not a wire type — an empty
       # `interface Holder {}` in the UI types would be noise.
       - "holder.go"

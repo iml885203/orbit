@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -30,14 +31,20 @@ func Validate(cfg *Config) error {
 		// Same name in both containers + services is allowed (dev/container mode toggle)
 		known[name] = true
 	}
+	knownNames := make([]string, 0, len(known))
+	for name := range known {
+		knownNames = append(knownNames, name)
+	}
+	sort.Strings(knownNames)
 
 	// Check dependency references exist
 	for name, s := range cfg.Services {
 		if s.Kind != "" && !validKinds[s.Kind] {
 			errs = append(errs, fmt.Sprintf(
-				"service %q has invalid kind %q (expected frontend, backend, or infra)",
+				"service %q has invalid kind %q%s (expected frontend, backend, or infra)",
 				name,
 				s.Kind,
+				schemaValueSuggestion(s.Kind, "frontend", "backend", "infra"),
 			))
 		}
 		if err := validateServiceURL(name, s); err != nil {
@@ -46,30 +53,52 @@ func Validate(cfg *Config) error {
 		errs = append(errs, validateHealthCheck("service", name, s.HealthCheck, false)...)
 		for _, dep := range s.DependsOn {
 			if !known[dep] {
-				errs = append(errs, fmt.Sprintf("service %q depends on unknown %q", name, dep))
+				errs = append(errs, fmt.Sprintf(
+					"service %q depends on unknown %q%s",
+					name,
+					dep,
+					configuredNameSuggestion(dep, knownNames),
+				))
 			}
 		}
 	}
 	for name, c := range cfg.Containers {
 		if c.Kind != "" && !validKinds[c.Kind] {
 			errs = append(errs, fmt.Sprintf(
-				"container %q has invalid kind %q (expected frontend, backend, or infra)",
+				"container %q has invalid kind %q%s (expected frontend, backend, or infra)",
 				name,
 				c.Kind,
+				schemaValueSuggestion(c.Kind, "frontend", "backend", "infra"),
 			))
 		}
 		errs = append(errs, validateHealthCheck("container", name, c.HealthCheck, true)...)
 		if !isValidPullPolicy(c.PullPolicy) {
-			errs = append(errs, fmt.Sprintf("container %q has invalid pull_policy %q (expected always, if_not_present, or never)", name, c.PullPolicy))
+			errs = append(errs, fmt.Sprintf(
+				"container %q has invalid pull_policy %q%s (expected always, if_not_present, or never)",
+				name,
+				c.PullPolicy,
+				schemaValueSuggestion(c.PullPolicy, "always", "if_not_present", "never"),
+			))
 		}
 		for _, dep := range c.DependsOn {
 			if !known[dep] {
-				errs = append(errs, fmt.Sprintf("container %q depends on unknown %q", name, dep))
+				errs = append(errs, fmt.Sprintf(
+					"container %q depends on unknown %q%s",
+					name,
+					dep,
+					configuredNameSuggestion(dep, knownNames),
+				))
 			}
 		}
 		for _, sc := range c.Sidecars {
 			if !isValidPullPolicy(sc.PullPolicy) {
-				errs = append(errs, fmt.Sprintf("sidecar %q/%q has invalid pull_policy %q (expected always, if_not_present, or never)", name, sc.Name, sc.PullPolicy))
+				errs = append(errs, fmt.Sprintf(
+					"sidecar %q/%q has invalid pull_policy %q%s (expected always, if_not_present, or never)",
+					name,
+					sc.Name,
+					sc.PullPolicy,
+					schemaValueSuggestion(sc.PullPolicy, "always", "if_not_present", "never"),
+				))
 			}
 		}
 		if c.Seed != nil {
@@ -86,7 +115,12 @@ func Validate(cfg *Config) error {
 	for gname, g := range cfg.Groups {
 		for _, svc := range g.Services {
 			if !known[svc] {
-				errs = append(errs, fmt.Sprintf("group %q references unknown service %q", gname, svc))
+				errs = append(errs, fmt.Sprintf(
+					"group %q references unknown resource %q%s",
+					gname,
+					svc,
+					configuredNameSuggestion(svc, knownNames),
+				))
 			}
 		}
 	}
@@ -126,6 +160,14 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("config validation errors:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+func configuredNameSuggestion(requested string, available []string) string {
+	suggestion := closestName(requested, available)
+	if suggestion == "" {
+		return ""
+	}
+	return ` (did you mean "` + suggestion + `"?)`
 }
 
 func validateServiceURL(name string, service *Service) error {
@@ -194,7 +236,11 @@ func validateHealthCheck(resourceType, name string, check *HealthCheckConfig, co
 	case "":
 		errs = append(errs, prefix+".type is required")
 	default:
-		errs = append(errs, prefix+" has unknown type "+fmt.Sprintf("%q", check.Type))
+		errs = append(
+			errs,
+			prefix+" has unknown type "+fmt.Sprintf("%q", check.Type)+
+				schemaValueSuggestion(check.Type, "http", "tcp", "log", "exec", "healthcheck"),
+		)
 	}
 	if check.Interval <= 0 {
 		errs = append(errs, prefix+".interval must be positive")

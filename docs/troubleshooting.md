@@ -6,6 +6,15 @@ Common failure modes, what they mean, and how to fix them. Start with `orbit doc
 
 ## Startup
 
+### `orbit.yaml` has an unknown field or value
+
+Run `orbit doctor` from the project. Orbit validates core and extension
+sections without starting resources and points to the source line. For a
+recognizable typo it also prints the correction, for example
+`did you mean "depends_on"?`; apply the suggested edit and run `orbit up`.
+If no suggestion appears, compare that section with the
+[configuration reference](configuration.md) instead of guessing.
+
 ### `orbit up` hangs at "waiting for <service> to be healthy"
 The container started but the health check never succeeded.
 

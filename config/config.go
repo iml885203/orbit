@@ -42,7 +42,7 @@ func Load(path string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(expanded))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+		return nil, fmt.Errorf("parsing env file %s: %w", path, addSchemaFieldGuidance(err, &cfg))
 	}
 
 	// Registered extension sections (allowlist + decoders): the inline

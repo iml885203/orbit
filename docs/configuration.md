@@ -67,8 +67,11 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 
 Orbit decodes the core schema and registered extension sections strictly.
 Unknown keys and misspelled fields fail before any container or host process
-starts, and the error identifies the offending field and source line. Orbit
-does not silently ignore configuration it cannot understand.
+starts. The error identifies the offending field and source line and suggests
+the closest supported field or enum value when the correction is unambiguous.
+The same guidance appears through `orbit doctor`, `orbit up`, and
+`orbit inspect --json`; Orbit does not silently ignore configuration it cannot
+understand.
 
 ### Migrating schema 2 to 3
 
