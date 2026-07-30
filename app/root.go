@@ -89,9 +89,13 @@ for the bundled demo or a shared environment repository.`,
 			configFile = resolveConfigFile()
 		}
 		selection := readEnvironmentSelection()
-		if commandRequiresAvailableEnvironment(cmd) &&
-			environmentSelectionBlocksConfig(selection, configFile) {
-			return newEnvironmentSelectionRequiredError(selection)
+		if commandRequiresAvailableEnvironment(cmd) {
+			if setupRequired(selection, configFile) {
+				return setupRequiredError{}
+			}
+			if environmentSelectionBlocksConfig(selection, configFile) {
+				return newEnvironmentSelectionRequiredError(selection)
+			}
 		}
 		requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
 		requiresReconcile := commandRequiresReconciledDaemon(cmd)

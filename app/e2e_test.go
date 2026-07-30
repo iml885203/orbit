@@ -1551,6 +1551,7 @@ func TestE2E_DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails(t *
 
 	emptyDir := t.TempDir()
 	commands := [][]string{
+		{"up"},
 		{"open"},
 		{"logs", "app"},
 		{"restart", "app"},
