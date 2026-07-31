@@ -571,7 +571,28 @@ which it has no registered handler.
 
 ## User settings (`~/.orbit/settings.json`)
 
-Env configs reference project directories via environment variables (e.g. `WORKSPACE_ROOT`, `API_ROOT`). If your checkouts live somewhere other than the default workspace location, set them in `~/.orbit/settings.json`:
+Env configs reference project directories via environment variables (e.g.
+`WORKSPACE_ROOT`, `API_ROOT`). If your checkouts live somewhere other than the
+default workspace location, set them with `orbit settings`:
+
+```bash
+orbit settings set workspace-root /path/to/workspace
+orbit settings set-env API_ROOT /path/to/api
+orbit settings list                              # show current values
+```
+
+No supported workflow requires editing `settings.json` by hand. The commands
+validate the path before storing it, so a typo is reported immediately instead
+of surfacing later as a missing service directory.
+
+`workspace-root` is a first-class setting, exported to env configs as
+`WORKSPACE_ROOT`. `orbit init` asks for it only when the selected environment
+actually references workspace projects; it never stores an arbitrary current
+directory for a containers-only or self-contained environment. It can be set
+before the daemon starts. Any other referenced variable is stored under
+`user_env` by `set-env`.
+
+For reference, the commands above produce:
 
 ```json
 {
@@ -581,19 +602,6 @@ Env configs reference project directories via environment variables (e.g. `WORKS
   }
 }
 ```
-
-`workspace_root` is a first-class setting. `orbit init` asks for it only when
-the selected environment actually references workspace projects; it never
-stores an arbitrary current directory for a containers-only or self-contained
-environment. You can also set it before the daemon starts with
-`orbit settings set workspace-root <path>`. It is exported to env configs as
-`WORKSPACE_ROOT`. Persist any other referenced variable without editing JSON:
-
-```bash
-orbit settings set-env API_ROOT /path/to/api
-```
-
-These values are stored under `user_env`.
 
 After selecting an environment, `orbit doctor` validates resolved service
 paths. For a `type: python` service launched by a Python interpreter, a

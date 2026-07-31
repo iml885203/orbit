@@ -550,7 +550,25 @@ Core schema 會保留由目前 binary 所編譯進的功能 package 註冊之最
 
 ## User settings (`~/.orbit/settings.json`)
 
-env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專案目錄。如果你的 checkout 不在預設 workspace 位置，請在 `~/.orbit/settings.json` 設定：
+env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專案目錄。如果你的
+checkout 不在預設 workspace 位置，請用 `orbit settings` 設定：
+
+```bash
+orbit settings set workspace-root /path/to/workspace
+orbit settings set-env API_ROOT /path/to/api
+orbit settings list                              # 顯示目前的值
+```
+
+任何支援的流程都不需要手動編輯 `settings.json`。這些指令會先驗證路徑才寫入，
+所以打錯字會立刻被指出，而不是之後才以「service 目錄不存在」的形式浮現。
+
+`workspace-root` 是 first-class 設定，會以 `WORKSPACE_ROOT` 輸出給 env config。
+只有所選 environment 實際引用 workspace projects 時，`orbit init` 才會詢問；
+只有 containers 或自給自足的 environment 不會把任意 current directory 存成
+workspace。它可以在 daemon 尚未啟動時設定。其他引用的變數由 `set-env` 存放在
+`user_env` 底下。
+
+上面的指令實際產生的內容如下（僅供參考）：
 
 ```json
 {
@@ -560,18 +578,6 @@ env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專
   }
 }
 ```
-
-`workspace_root` 是 first-class 設定。只有所選 environment 實際引用 workspace
-projects 時，`orbit init` 才會詢問；只有 containers 或自給自足的 environment
-不會把任意 current directory 存成 workspace。也可在 daemon 尚未啟動時用
-`orbit settings set workspace-root <path>` 設定。它會以 `WORKSPACE_ROOT`
-輸出給 env config。其他引用的變數不需要手動編輯 JSON：
-
-```bash
-orbit settings set-env API_ROOT /path/to/api
-```
-
-這些值會存放在 `user_env` 底下。
 
 選擇 environment 後，`orbit doctor` 會驗證解析完成的 service paths。對於由
 Python interpreter 啟動的 `type: python` service，也會使用該 interpreter
