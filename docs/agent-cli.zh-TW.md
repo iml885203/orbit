@@ -73,6 +73,10 @@ orbit logs redis --json
 
 Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而不是從錯誤訊息文字去猜測恢復路徑。
 
+有些失敗沒有任何指令可以推進。`socket_path_too_long` 必須先把 `ORBIT_HOME`
+換成較短的路徑，任何 Orbit 指令才能成功，因此它只帶 hint，不帶 `next_command`
+或 recommended action。缺少 `next_command` 應理解為「依 hint 處理」，而不是回應格式有問題。
+
 遇到 `resource_port_conflict` 時，`error.next_command` 是該平台用來查看
 目前 port owner 的唯讀指令。Resource status 也會提供 `port_conflict`
 evidence（`port`、`resource`、可取得時的 owner，以及 `inspect_command`）。

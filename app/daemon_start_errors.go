@@ -29,11 +29,33 @@ func renderDaemonStartError(err error) error {
 		return nil
 	}
 	if cli.JSONOutput {
+		// Agents must get the same remedy as the hint block, not the generic
+		// doctor/status fallback that cannot shorten a socket path.
+		if errors.Is(err, daemon.ErrSocketPathTooLong) {
+			return socketPathTooLongError{err: err}
+		}
 		return err
 	}
 	writeDaemonStartError(os.Stderr, err)
 	return errCLIJSONAlreadyRendered{err: err}
 }
+
+// socketPathTooLongError gives the overlong-socket-path failure its own JSON
+// classification. Retrying is useless until ORBIT_HOME changes, so it carries
+// no recommended action Orbit could run on the user's behalf.
+type socketPathTooLongError struct{ err error }
+
+func (e socketPathTooLongError) Error() string { return e.err.Error() }
+
+func (e socketPathTooLongError) Unwrap() error { return e.err }
+
+func (socketPathTooLongError) ErrorCode() string { return "socket_path_too_long" }
+
+func (socketPathTooLongError) CLIJSONHint() string {
+	return "Set ORBIT_HOME to a shorter path, then retry."
+}
+
+func (socketPathTooLongError) CLIJSONReplacementActions() []cli.JSONAction { return nil }
 
 // writeDaemonStartError formats the error + hint block for the given
 // writer. Split out so tests can capture output without touching stderr.

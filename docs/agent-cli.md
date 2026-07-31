@@ -79,6 +79,11 @@ Structured errors use this shape:
 Agents should prefer `error.next_command` and `recommended_actions` over
 guessing a recovery path from the message text.
 
+Some failures have no command that advances them. `socket_path_too_long` needs
+a shorter `ORBIT_HOME` before any Orbit command can succeed, so it carries a
+hint and no `next_command` or recommended action. Treat a missing
+`next_command` as "act on the hint", not as a malformed response.
+
 For `resource_port_conflict`, `error.next_command` is the platform-specific
 read-only command that inspects the current port owner. The resource's status
 also includes `port_conflict` evidence (`port`, `resource`, optional owner, and

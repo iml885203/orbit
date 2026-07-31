@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -51,6 +52,31 @@ func TestWriteDaemonStartError_SocketPathTooLongDoesNotSuggestRestart(t *testing
 		if strings.Contains(out, uselessAction) {
 			t.Errorf("hint offered %q, which cannot fix a path-length failure:\n%s", uselessAction, out)
 		}
+	}
+}
+
+// The 1.0 contract requires human and JSON output to give the same remedy.
+func TestRenderDaemonStartError_SocketPathTooLongJSONMatchesHumanRemedy(t *testing.T) {
+	origJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = origJSON })
+	cli.JSONOutput = true
+
+	err := fmt.Errorf("%w: %w", daemon.ErrSocketPathTooLong,
+		errors.New("/very/long/orbit.sock is 119 bytes, over the 104-byte OS limit for unix sockets"))
+	rendered := renderDaemonStartError(err)
+
+	var coded interface{ ErrorCode() string }
+	if !errors.As(rendered, &coded) || coded.ErrorCode() != "socket_path_too_long" {
+		t.Fatalf("error is not classified for agents: %#v", rendered)
+	}
+	var hinted interface{ CLIJSONHint() string }
+	if !errors.As(rendered, &hinted) || !strings.Contains(hinted.CLIJSONHint(), "ORBIT_HOME") {
+		t.Errorf("JSON hint omits the ORBIT_HOME remedy: %#v", rendered)
+	}
+	// No command Orbit can run shortens the path, so offering one would loop.
+	var actions interface{ CLIJSONReplacementActions() []cli.JSONAction }
+	if errors.As(rendered, &actions) && len(actions.CLIJSONReplacementActions()) != 0 {
+		t.Errorf("offered a recommended action that cannot fix the path")
 	}
 }
 

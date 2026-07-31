@@ -288,6 +288,19 @@ func classify(err error) JSONError {
 				Retryable:   false,
 				NextCommand: "orbit status --json",
 			}
+		default:
+			// An error that states its own code and remedy keeps both, rather
+			// than degrading to command_failed and a generic doctor hint that
+			// may not apply. Codes needing a next_command get an explicit case.
+			var hintedErr interface{ CLIJSONHint() string }
+			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
+				return JSONError{
+					Code:      codedErr.ErrorCode(),
+					Message:   msg,
+					Hint:      hintedErr.CLIJSONHint(),
+					Retryable: false,
+				}
+			}
 		}
 	}
 	switch {
