@@ -752,6 +752,51 @@ containers:
 	}
 }
 
+// Users edit YAML sections, not Go structs. A parse error naming
+// "config.Service" forces them to map an internal type back to the file they
+// are looking at.
+func TestLoad_SchemaErrorsSpeakConfigVocabulary(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "type mismatch under a named section",
+			content: "version: \"3\"\nservices:\n  web:\n  kind: frontend\n",
+			want:    "a services entry",
+		},
+		{
+			name:    "unknown field under a named section",
+			content: "version: \"3\"\nservices:\n  web:\n    kind: frontend\n    portz: {}\n",
+			want:    "unknown field portz in a services entry",
+		},
+		{
+			name:    "unknown top-level section",
+			content: "version: \"3\"\nservicez:\n  web:\n    kind: frontend\n",
+			want:    "unknown top-level section servicez",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "env.yaml")
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(path)
+			if err == nil {
+				t.Fatal("expected a schema error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not contain %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "config.") {
+				t.Errorf("error leaks a Go type name: %q", err)
+			}
+		})
+	}
+}
+
 func TestLoad_RealEnvFiles(t *testing.T) {
 	files := []string{
 		"../envs/example.yaml",

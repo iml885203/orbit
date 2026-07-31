@@ -98,7 +98,7 @@ func decodeExtensionSections(cfg *Config, cfgPath string) error {
 			if suggestion := closestName(name, known); suggestion != "" {
 				hint = fmt.Sprintf(` (did you mean %q?)`, suggestion)
 			}
-			return fmt.Errorf("line %d: field %s not found in type config.Config%s (available top-level sections: %v)", node.Line, name, hint, known)
+			return fmt.Errorf("line %d: unknown top-level section %s%s (available: %s)", node.Line, name, hint, strings.Join(known, ", "))
 		}
 	}
 
