@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight vulncheck
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -109,6 +109,12 @@ test-release:
 
 release-check:
 	@./scripts/verify-release-candidate.sh "$(RELEASE_VERSION)"
+
+# Called-symbol scan: an unreachable CVE in a transitive module is reported by
+# govulncheck but does not fail the build, so a release is never blocked by a
+# vulnerability this binary cannot reach.
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 lint: lint-filenames
 	golangci-lint run ./...

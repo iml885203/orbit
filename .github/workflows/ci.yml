@@ -37,6 +37,31 @@ jobs:
         run: test -n "$ORBIT_PRIVATE_IDENTIFIERS_PATTERN"
       - run: make preflight
 
+  # A 1.0 release gate: dependency vulnerabilities must be caught before a tag,
+  # not discovered by a user. Scoped to called symbols so an unreachable CVE in a
+  # transitive module does not block a release it cannot affect.
+  vulnerabilities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Scan Go dependencies
+        run: make vulncheck
+      - name: Scan dashboard runtime dependencies
+        run: pnpm --dir ui audit --prod
+
   first-five-minutes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
