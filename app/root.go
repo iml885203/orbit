@@ -716,6 +716,20 @@ func runDown(_ *cobra.Command, args []string) error {
 		names = append(names, status.Resources[i].Name)
 	}
 
+	// A repeat 'down' would otherwise replay every resource as freshly stopped
+	// work. Report the no-op the same way a selective 'down' already does.
+	if !anyResourceActive(status) {
+		if cli.JSONOutput {
+			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
+				Operation:   "down",
+				Message:     downAlreadyStoppedMessage,
+				FinalStatus: status,
+			}), lifecycleDownSuccessActions())
+		}
+		fmt.Println(downAlreadyStoppedMessage)
+		return nil
+	}
+
 	if cli.JSONOutput {
 		_, err := client.Down(false)
 		if err != nil {

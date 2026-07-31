@@ -680,6 +680,21 @@ func lifecycleResourceExists(status *daemon.StatusResponse, name string) bool {
 	return lifecycleResourceStatus(status, name) != nil
 }
 
+// anyResourceActive reports whether stopping the environment would change
+// anything. Any state other than "stopped" counts: a pending or degraded
+// resource still owns a process or container that 'down' must clean up.
+func anyResourceActive(status *daemon.StatusResponse) bool {
+	if status == nil {
+		return false
+	}
+	for i := range status.Resources {
+		if status.Resources[i].State != "stopped" {
+			return true
+		}
+	}
+	return false
+}
+
 func lifecycleResourceStatus(status *daemon.StatusResponse, name string) *daemon.ResourceStatus {
 	if status == nil {
 		return nil

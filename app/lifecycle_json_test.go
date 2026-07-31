@@ -37,6 +37,32 @@ func TestWriteLogJSONEvent(t *testing.T) {
 	}
 }
 
+func TestAnyResourceActiveDistinguishesRepeatDownFromRealWork(t *testing.T) {
+	stopped := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "redis", State: "stopped"},
+		{Name: "api", State: "stopped"},
+	}}
+	if anyResourceActive(stopped) {
+		t.Error("a fully stopped environment reported work for 'down' to do")
+	}
+
+	// Pending and degraded resources still own a process or container, so
+	// 'down' must run rather than claim the environment is already stopped.
+	for _, state := range []string{"healthy", "pending", "degraded", "starting"} {
+		status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+			{Name: "redis", State: "stopped"},
+			{Name: "api", State: state},
+		}}
+		if !anyResourceActive(status) {
+			t.Errorf("state %q treated as nothing to stop", state)
+		}
+	}
+
+	if anyResourceActive(nil) {
+		t.Error("nil status reported active resources")
+	}
+}
+
 func TestLifecycleRecommendedActionsLeadThroughRecovery(t *testing.T) {
 	got := lifecycleRecommendedActions([]string{"worker", "payments", "worker"})
 	want := []string{
