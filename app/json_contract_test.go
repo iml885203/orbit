@@ -143,6 +143,28 @@ func TestPrintExecutionErrorHuman(t *testing.T) {
 	}
 }
 
+func TestPrintExecutionErrorHumanMakesProjectConfigDiscoverableBeforeSetup(t *testing.T) {
+	origJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = origJSON })
+	cli.JSONOutput = false
+
+	var buf bytes.Buffer
+	printExecutionError(&buf, setupRequiredError{})
+
+	got := buf.String()
+	if !strings.Contains(got, projectConfigName) {
+		t.Fatalf("setup error hides the project-config path:\n%s", got)
+	}
+	if !strings.Contains(got, "Next: orbit init") {
+		t.Fatalf("setup error lost its single advancing action:\n%s", got)
+	}
+	// The 1.0 contract forbids recommending a startup command that must fail
+	// before setup, so the project-local path stays context, not a command.
+	if strings.Contains(got, "run: orbit up") || strings.Contains(got, "Next: orbit up") {
+		t.Fatalf("setup error recommended a startup command that must fail:\n%s", got)
+	}
+}
+
 func TestPrintExecutionErrorHumanExplainsPortRecovery(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })

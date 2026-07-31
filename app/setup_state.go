@@ -1,6 +1,10 @@
 package app
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/iml885203/orbit/cli"
+)
 
 type setupRequiredError struct{}
 
@@ -13,11 +17,27 @@ func (setupRequiredError) ErrorCode() string {
 }
 
 func (setupRequiredError) CLIJSONHint() string {
-	return "Set up Orbit before running environment commands."
+	return "Set up Orbit before running environment commands. A project directory containing " +
+		projectConfigName + " needs no setup."
+}
+
+func (setupRequiredError) CLIJSONReplacementActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command:     "orbit init --yes --json",
+		Reason:      "Set up a shared or demo environment without prompting.",
+		Destructive: false,
+	}}
 }
 
 func (setupRequiredError) CLIHumanNextCommand() string {
 	return "orbit init"
+}
+
+// The project-local path is named as context rather than a second command:
+// 'orbit init' stays the one runnable action, but a user inside their own
+// project cannot otherwise discover that a project config skips setup entirely.
+func (setupRequiredError) CLIHumanContext() string {
+	return "Already have " + projectConfigName + " in this project? Run Orbit from that directory instead."
 }
 
 func setupRequired(selection environmentSelection, path string) bool {

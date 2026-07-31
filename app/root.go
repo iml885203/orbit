@@ -299,6 +299,10 @@ func printExecutionError(w io.Writer, err error) {
 		return
 	}
 	_, _ = fmt.Fprintf(w, "Error: %v\n", err)
+	var withContext interface{ CLIHumanContext() string }
+	if errors.As(err, &withContext) && withContext.CLIHumanContext() != "" {
+		_, _ = fmt.Fprintf(w, "  %s\n", withContext.CLIHumanContext())
+	}
 	var withHumanNext interface{ CLIHumanNextCommand() string }
 	if errors.As(err, &withHumanNext) && withHumanNext.CLIHumanNextCommand() != "" {
 		_, _ = fmt.Fprintf(w, "  Next: %s\n", withHumanNext.CLIHumanNextCommand())
