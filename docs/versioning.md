@@ -14,7 +14,8 @@ Orbit and the bundled `plugins/orbit-agent` plugin use the same
   users to choose a release channel.
 - The first stable release is `v1.0.0`. Publishing that tag means the
   compatibility contracts below are documented, tested, and ready for external
-  users.
+  users. [The 1.0 test matrix](1.0-test-matrix.md) holds the platform evidence
+  that tag requires and records what has actually been exercised.
 - Release tags are immutable. Fixes are published as a new version.
 
 ## Preview batching
