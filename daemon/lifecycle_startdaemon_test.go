@@ -2,10 +2,12 @@ package daemon
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // StartDaemon must refuse to fork when the dashboard port is already
@@ -30,6 +32,29 @@ func TestStartDaemon_FailsWhenDashboardPortHeld(t *testing.T) {
 	}
 	if conflict.Port != port {
 		t.Errorf("conflict.Port = %d, want %d", conflict.Port, port)
+	}
+}
+
+// EnsureDaemon must classify an overlong socket path before forking. The child
+// binds the socket and exits, so without this the parent burned the full 30s
+// readiness timeout and then blamed a "stuck" daemon no restart could fix.
+func TestEnsureDaemon_RejectsOverlongSocketPathBeforeForking(t *testing.T) {
+	home := filepath.Join(t.TempDir(), strings.Repeat("d", 120))
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ORBIT_HOME", home)
+
+	start := time.Now()
+	_, err := EnsureDaemon(filepath.Join(home, "config.yaml"), nil)
+	if !errors.Is(err, ErrSocketPathTooLong) {
+		t.Fatalf("error = %T %v, want ErrSocketPathTooLong", err, err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("took %s — the readiness timeout ran instead of failing fast", elapsed)
+	}
+	if !strings.Contains(err.Error(), "ORBIT_HOME") {
+		t.Errorf("error is not actionable: %q", err)
 	}
 }
 

@@ -33,6 +33,10 @@ var (
 	// did not pass health checks within the timeout. The wrapped error
 	// includes the PID and a tail of ~/.orbit/daemon.log.
 	ErrDaemonNotReady = errors.New("daemon not ready")
+	// ErrSocketPathTooLong means ORBIT_HOME yields a socket path over the OS
+	// limit. It is classified separately because no daemon is stuck and no
+	// restart can help: the user must choose a shorter ORBIT_HOME.
+	ErrSocketPathTooLong = errors.New("socket path too long")
 )
 
 // ConfigMismatchError prevents a CLI command from silently combining one
@@ -237,6 +241,13 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 		}
 		RemovePID()
 		_ = os.Remove(DefaultSocketPath())
+	}
+
+	// Pre-validate the socket path for the same reason: the child binds it and
+	// exits, but the parent would otherwise report a 30s readiness timeout
+	// instead of the length limit that actually blocked startup.
+	if err := ValidateSocketPath(DefaultSocketPath()); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrSocketPathTooLong, err)
 	}
 
 	// Pre-validate config before forking. A schema/parse error here would

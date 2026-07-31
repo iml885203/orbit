@@ -36,6 +36,24 @@ func TestWriteDaemonStartError_NotReadyShowsRestartHint(t *testing.T) {
 	}
 }
 
+func TestWriteDaemonStartError_SocketPathTooLongDoesNotSuggestRestart(t *testing.T) {
+	err := fmt.Errorf("%w: %w", daemon.ErrSocketPathTooLong,
+		errors.New("/very/long/path/orbit.sock is 119 bytes, over the 104-byte OS limit for unix sockets"))
+	var buf bytes.Buffer
+	writeDaemonStartError(&buf, err)
+	out := buf.String()
+	if !strings.Contains(out, "ORBIT_HOME") {
+		t.Errorf("expected the ORBIT_HOME remedy, got:\n%s", out)
+	}
+	// Nothing is stuck and no restart can shorten the path, so the generic
+	// daemon-recovery actions would send the user through a loop.
+	for _, uselessAction := range []string{"orbit daemon stop", "orbit daemon restart"} {
+		if strings.Contains(out, uselessAction) {
+			t.Errorf("hint offered %q, which cannot fix a path-length failure:\n%s", uselessAction, out)
+		}
+	}
+}
+
 func TestWriteDaemonStartError_ExitedEarlyShowsLogHint(t *testing.T) {
 	err := fmt.Errorf("%w (pid 123)", daemon.ErrDaemonExitedEarly)
 	var buf bytes.Buffer

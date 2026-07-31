@@ -48,7 +48,7 @@ func sunPathLimit() int {
 func ValidateSocketPath(path string) error {
 	limit := sunPathLimit()
 	if len(path) >= limit {
-		return fmt.Errorf("socket path is %d bytes, over the %d-byte OS limit for unix sockets: %s — set ORBIT_HOME to a shorter path", len(path), limit, path)
+		return fmt.Errorf("%s is %d bytes, over the %d-byte OS limit for unix sockets — set ORBIT_HOME to a shorter path", path, len(path), limit)
 	}
 	return nil
 }

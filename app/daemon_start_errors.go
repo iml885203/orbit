@@ -59,6 +59,8 @@ func hintFor(err error) string {
 		return "Next steps:\n" +
 			"  cat " + daemon.DefaultLogPath() + "   # full daemon log\n" +
 			"  orbit daemon status                       # confirm not running\n"
+	case errors.Is(err, daemon.ErrSocketPathTooLong):
+		return socketPathTooLongHint()
 	case errors.Is(err, daemon.ErrDaemonNotReady):
 		return "Next steps:\n" +
 			"  cat " + daemon.DefaultLogPath() + "   # full daemon log\n" +
@@ -66,6 +68,17 @@ func hintFor(err error) string {
 			"  orbit daemon restart                      # try again\n"
 	}
 	return ""
+}
+
+func socketPathTooLongHint() string {
+	if runtime.GOOS == "windows" {
+		return "Next steps:\n" +
+			"  $env:ORBIT_HOME=\"$env:LOCALAPPDATA\\orbit\"   # or another short path\n" +
+			"  orbit up\n"
+	}
+	return "Next steps:\n" +
+		"  export ORBIT_HOME=~/.orbit    # or another short path\n" +
+		"  orbit up\n"
 }
 
 func dashboardPortConflictHint(port int) string {
