@@ -351,6 +351,41 @@ func TestE2E_UpInfraReconcilesExternalRestart(t *testing.T) {
 	})
 }
 
+// Covers: after an abrupt daemon exit, 'orbit down' must adopt the surviving
+// container and stop it. Reporting "already stopped" leaked the container while
+// claiming success, so the user was told Orbit had cleaned up when it had not.
+func TestE2E_DownReconcilesContainersLeftByAbruptDaemonExit(t *testing.T) {
+	env := setupE2E(t)
+	env.run(t, "daemon", "start")
+	_, _ = env.runNoFail(t, "up", "--infra")
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
+		return env.serviceState(t, "redis") == "healthy"
+	})
+
+	redisName := "orbit-" + env.namespace + "-redis"
+	daemonPID := readE2EDaemonPID(t, env.home)
+	if output, err := exec.Command("kill", "-9", strconv.Itoa(daemonPID)).CombinedOutput(); err != nil {
+		t.Fatalf("kill daemon: %v\n%s", err, output)
+	}
+	env.waitFor(t, "daemon gone", e2eReadyTimeout, func() bool {
+		return !platform.IsProcessAlive(daemonPID)
+	})
+	if !containerRunning(t, redisName) {
+		t.Fatalf("%s did not survive the daemon kill; nothing to reconcile", redisName)
+	}
+
+	output, err := env.runNoFail(t, "down")
+	if err != nil {
+		t.Fatalf("down after abrupt exit failed: %v\n%s", err, output)
+	}
+	if strings.Contains(output, "already stopped") {
+		t.Errorf("down claimed the environment was already stopped:\n%s", output)
+	}
+	env.waitFor(t, redisName+" stopped", e2eBootTimeout, func() bool {
+		return !containerRunning(t, redisName)
+	})
+}
+
 // Covers: daemon stop keeps containers running; daemon start re-adopts them.
 // This is the C-refactor's headline scenario.
 func TestE2E_RestartAdoptsContainers(t *testing.T) {

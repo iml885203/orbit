@@ -681,26 +681,28 @@ func runDown(_ *cobra.Command, args []string) error {
 		return err
 	}
 	client := daemon.NewClient(daemon.DefaultSocketPath())
+	// After an abrupt daemon exit its containers and processes survive. Claiming
+	// "already stopped" would leak them while reporting success, so adopt the
+	// orphans through a fresh daemon and stop them for real.
+	adoptedOrphans := false
 	if err := client.Health(); err != nil {
-		message := downAlreadyStoppedMessage
-		actions := lifecycleDownSuccessActions()
-		if setupRequired(readEnvironmentSelection(), configFile) {
-			message = downBeforeSetupMessage
-			actions = lifecycleSetupActions()
+		orphaned, orphanErr := reconcilableResourcesExist(configFile)
+		if orphanErr != nil || !orphaned {
+			message := downAlreadyStoppedMessage
+			actions := lifecycleDownSuccessActions()
+			if setupRequired(readEnvironmentSelection(), configFile) {
+				message = downBeforeSetupMessage
+				actions = lifecycleSetupActions()
+			}
+			return writeDownShortCircuit(message, actions)
 		}
-		if cli.JSONOutput {
-			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-				Operation: "down",
-				Message:   message,
-			}), actions)
+		reconciled, ensureErr := daemon.EnsureDaemon(configFile, nil)
+		if ensureErr != nil {
+			return renderDaemonStartError(ensureErr)
 		}
-		fmt.Println(message)
-		if message == downBeforeSetupMessage {
-			_, _ = cli.Faint.Println("  Next: orbit init")
-		}
-		return nil
+		client = reconciled
+		adoptedOrphans = true
 	}
-
 	// Snapshot the full service+container list BEFORE issuing Down —
 	// containers may be removed by the time we poll, leaving us with no
 	// list to track progress against.
@@ -718,7 +720,9 @@ func runDown(_ *cobra.Command, args []string) error {
 
 	// A repeat 'down' would otherwise replay every resource as freshly stopped
 	// work. Report the no-op the same way a selective 'down' already does.
-	if !anyResourceActive(status) {
+	// A daemon started to adopt orphans has not polled yet, so its snapshot
+	// still reads "stopped" — persisted state already proved there is work.
+	if !adoptedOrphans && !anyResourceActive(status) {
 		if cli.JSONOutput {
 			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 				Operation:   "down",
