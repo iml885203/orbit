@@ -222,6 +222,11 @@ func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&movable); err != nil {
 		return fmt.Errorf("line %d: invalid port mapping: %w", node.Line, err)
 	}
+	// A mapping with only "target" leaves Preferred at zero. Reporting that as
+	// an out-of-range preferred port blames a field the user never wrote.
+	if movable.Preferred == 0 {
+		return fmt.Errorf("line %d: port mapping needs \"preferred\"; use a plain int for a fixed host port", node.Line)
+	}
 	if err := validatePortNumber(movable.Preferred); err != nil {
 		return fmt.Errorf("line %d: preferred %w", node.Line, err)
 	}

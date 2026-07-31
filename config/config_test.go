@@ -1002,6 +1002,36 @@ services:
 	}
 }
 
+// A mapping with only "target" used to report "preferred port 0 out of range",
+// naming a field the author never wrote.
+func TestLoadRejectsPortMappingWithoutPreferred(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "target-only-port.yaml")
+	source := `version: "3"
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    ports:
+      http:
+        target: 8080
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("port mapping without preferred was accepted")
+	}
+	if !strings.Contains(err.Error(), `needs "preferred"`) {
+		t.Errorf("error = %q, want it to name the missing field", err)
+	}
+	if strings.Contains(err.Error(), "preferred port 0") {
+		t.Errorf("error blames a field the author never wrote: %q", err)
+	}
+}
+
 func TestLoadTreatsConfigAsAnAuthoringContract(t *testing.T) {
 	tests := []struct {
 		name    string
