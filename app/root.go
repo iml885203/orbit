@@ -694,7 +694,7 @@ func runDown(_ *cobra.Command, args []string) error {
 				message = downBeforeSetupMessage
 				actions = lifecycleSetupActions()
 			}
-			return writeDownShortCircuit(message, actions)
+			return writeDownShortCircuit(message, actions, nil)
 		}
 		reconciled, ensureErr := daemon.EnsureDaemon(configFile, nil)
 		if ensureErr != nil {
@@ -723,15 +723,7 @@ func runDown(_ *cobra.Command, args []string) error {
 	// A daemon started to adopt orphans has not polled yet, so its snapshot
 	// still reads "stopped" — persisted state already proved there is work.
 	if !adoptedOrphans && !anyResourceActive(status) {
-		if cli.JSONOutput {
-			return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-				Operation:   "down",
-				Message:     downAlreadyStoppedMessage,
-				FinalStatus: status,
-			}), lifecycleDownSuccessActions())
-		}
-		fmt.Println(downAlreadyStoppedMessage)
-		return nil
+		return writeDownShortCircuit(downAlreadyStoppedMessage, lifecycleDownSuccessActions(), status)
 	}
 
 	if cli.JSONOutput {
