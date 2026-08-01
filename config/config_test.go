@@ -752,9 +752,6 @@ containers:
 	}
 }
 
-// Users edit YAML sections, not Go structs. A parse error naming
-// "config.Service" forces them to map an internal type back to the file they
-// are looking at.
 func TestLoad_SchemaErrorsSpeakConfigVocabulary(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -1002,8 +999,6 @@ services:
 	}
 }
 
-// A mapping with only "target" used to report "preferred port 0 out of range",
-// naming a field the author never wrote.
 func TestLoadRejectsPortMappingWithoutPreferred(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "target-only-port.yaml")
 	source := `version: "3"

@@ -35,9 +35,6 @@ func TestStartDaemon_FailsWhenDashboardPortHeld(t *testing.T) {
 	}
 }
 
-// EnsureDaemon must classify an overlong socket path before forking. The child
-// binds the socket and exits, so without this the parent burned the full 30s
-// readiness timeout and then blamed a "stuck" daemon no restart could fix.
 func TestEnsureDaemon_RejectsOverlongSocketPathBeforeForking(t *testing.T) {
 	home := filepath.Join(t.TempDir(), strings.Repeat("d", 120))
 	if err := os.MkdirAll(home, 0o755); err != nil {
