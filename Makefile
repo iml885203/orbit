@@ -122,7 +122,7 @@ notice:
 # Not in preflight: go-licenses resolves every module and takes minutes, which
 # would tax every commit to catch a dependency change. The CI job runs it.
 test-notice:
-	@generated="$$(mktemp -t notice)"; \
+	@generated="$$(mktemp "$${TMPDIR:-/tmp}/notice.XXXXXX")"; \
 	trap 'rm -f "$$generated"' EXIT; \
 	./scripts/gen-notice.sh "$$generated" >/dev/null; \
 	if ! diff -u NOTICE "$$generated"; then \
