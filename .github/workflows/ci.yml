@@ -39,8 +39,9 @@ jobs:
 
   # A 1.0 release gate: dependency vulnerabilities must be caught before a tag,
   # not discovered by a user. Scoped to called symbols so an unreachable CVE in a
-  # transitive module does not block a release it cannot affect.
-  vulnerabilities:
+  # transitive module does not block a release it cannot affect. NOTICE lives
+  # here too — both answer "what did we ship and under what terms".
+  supply-chain:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -57,10 +58,14 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Install dashboard dependencies
+        run: pnpm --dir ui install --frozen-lockfile
       - name: Scan Go dependencies
         run: make vulncheck
       - name: Scan dashboard runtime dependencies
         run: pnpm --dir ui audit --prod
+      - name: Verify third-party notices match shipped dependencies
+        run: make test-notice
 
   first-five-minutes:
     runs-on: ubuntu-latest

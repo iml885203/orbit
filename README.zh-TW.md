@@ -243,4 +243,5 @@ Repository-local `/orbit-review` skill 會依這些規範檢查變更。每次 c
 
 ## 授權
 
-[MIT](LICENSE)
+[MIT](LICENSE)。binary 內嵌第三方相依套件，其授權與著作權標示列於
+[NOTICE](NOTICE)。

@@ -272,4 +272,5 @@ conventions. Run `make preflight` before every commit.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The binary embeds third-party dependencies; their licenses and
+attributions are listed in [NOTICE](NOTICE).

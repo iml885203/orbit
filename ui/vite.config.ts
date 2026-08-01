@@ -35,6 +35,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       output: {
+        // The dashboard ships inside the binary, so dependency copyright
+        // notices must survive minification. GSAP's standard license carries
+        // an attribution requirement and its source marks the notice `/*!`.
+        comments: { legal: true },
         manualChunks: (id) => {
           if (id.includes('node_modules/three/')) return 'vendor-three'
           if (id.includes('node_modules/@xyflow/') || id.includes('node_modules/@dagrejs/')) return 'vendor-graph'

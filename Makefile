@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight vulncheck
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -115,6 +115,21 @@ release-check:
 # vulnerability this binary cannot reach.
 vulncheck:
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+notice:
+	@./scripts/gen-notice.sh
+
+# Not in preflight: go-licenses resolves every module and takes minutes, which
+# would tax every commit to catch a dependency change. The CI job runs it.
+test-notice:
+	@generated="$$(mktemp -t notice)"; \
+	trap 'rm -f "$$generated"' EXIT; \
+	./scripts/gen-notice.sh "$$generated" >/dev/null; \
+	if ! diff -u NOTICE "$$generated"; then \
+		echo "NOTICE is stale — run 'make notice' and commit the result" >&2; \
+		exit 1; \
+	fi; \
+	echo "NOTICE matches current dependencies"
 
 lint: lint-filenames
 	golangci-lint run ./...
