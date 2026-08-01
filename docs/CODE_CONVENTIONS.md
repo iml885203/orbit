@@ -286,3 +286,21 @@ for algorithms, parsers, escaping, security boundaries, concurrency invariants,
 and stable wire contracts—not DTO builders, getters, thin wrappers, or private
 call sequences. Prefer one test through a public behavior over several tests
 for its implementation helpers.
+
+## 19. Definition of Done — pre-commit checklist
+
+`make preflight` gates the machine-checkable part. These are the judgment
+calls to walk through before each commit:
+
+- **Leave no dead weight.** If a change obsoletes a file, a doc, or a
+  paragraph, delete it in the same commit. Nothing is kept "just in case".
+- **Docs read simply.** Write documentation to be understood on first read:
+  short sentences, concrete commands, no filler.
+- **Explanation is a refactoring signal.** The urge to write a doc or comment
+  that explains code means the code should be restructured first (§3).
+- **The code states its intent.** A feature is done only after a
+  post-implementation refactor pass — names and structure reveal what it does
+  without narration.
+- **Behavior is test-protected.** Every feature ships with tests at its
+  behavioral boundaries — never one-to-one unit tests mirroring the
+  implementation (§18, [testing.md](testing.md)).

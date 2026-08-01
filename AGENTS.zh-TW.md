@@ -12,6 +12,7 @@ Orbit 是團隊中性的本地開發 orchestrator(Go CLI + daemon + Svelte UI)�
 - 解析 CLI 輸出時加 `--json`。人類可讀的輸出不是穩定 contract。完整的 agent JSON contract（`orbit.cli.v1` envelope、結構化錯誤、converted commands、NDJSON log streaming、legacy JSON 例外）請讀 [docs/agent-cli.zh-TW.md](docs/agent-cli.zh-TW.md)。
 - 在**每次 commit 前**（不是只在最後）跑 `make preflight`（完整 CI gate：build、tests、vet、verify-types、check-neutral）。它存在是為了抓兩個雷：(1) 改動任何 Go struct 或 config 欄位後 —— 連 tygo 會輸出的 doc comment 也算 —— 要跑 `make gen-types` 並把結果 stage，否則 `verify-types` 會因為漂掉的 `ui/src/lib/types/*.gen.ts` 而失敗；(2) `check-neutral` 會拒絕整個 tree 裡任何品牌/團隊名稱（「example」、「dbproject」…），包含受 gate 掃描的功能 package `internal/devdb` 與 `internal/tunnel` —— 全部保持中性（許可的例外列在 `scripts/check-neutral.sh`）。`make lint` 是更嚴格的 golangci 檢查。
 - 動非瑣碎的改動前先讀 [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md)。
+- 每次 commit 前走一遍 [Definition of Done checklist](docs/CODE_CONVENTIONS.zh-TW.md#19-definition-of-donecommit-前-checklist)——它涵蓋 `make preflight` 檢查不到的判斷題（死檔案/文件、突顯意圖的重構、行為測試保護）。
 
 ### 先問再動
 - 直接編輯 `~/.orbit/settings.json` —— 改走 UI/CLI 路徑。

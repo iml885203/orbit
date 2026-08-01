@@ -10,6 +10,7 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 - Use `--json` when parsing CLI output. Human output is not a stable contract. For the full agent-facing JSON contract (`orbit.cli.v1` envelope, structured errors, converted commands, NDJSON log streaming, legacy JSON exceptions), read [docs/agent-cli.md](docs/agent-cli.md).
 - Run `make preflight` (the full CI gate: build, tests, vet, verify-types, check-neutral) before **each commit** — not just at the end. Two gotchas it exists to catch: (1) after changing any Go struct or config field — even a doc comment tygo emits — run `make gen-types` and stage the result, or `verify-types` fails on the drifted `ui/src/lib/types/*.gen.ts`; (2) `check-neutral` rejects any brand/team name ("example", "dbproject", …) across the tree, including the gate-scanned feature packages `internal/devdb` and `internal/tunnel` — keep it all neutral (permitted exceptions are enumerated in `scripts/check-neutral.sh`). `make lint` for the stricter golangci pass.
 - Read [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) before non-trivial edits.
+- Walk the [Definition of Done checklist](docs/CODE_CONVENTIONS.md#19-definition-of-done--pre-commit-checklist) before each commit — it covers the judgment calls `make preflight` can't check (dead files/docs, intent-revealing refactor, behavioral test coverage).
 
 ### Ask first
 - Editing `~/.orbit/settings.json` directly — use the UI/CLI path instead.
