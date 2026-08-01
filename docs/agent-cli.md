@@ -121,7 +121,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit down <resources...> --json` | Returns the final lifecycle result for the requested resources. If that stop degrades running dependents, they are included in `resources` and `degraded_resources` with the one dependency-restoration action. `--group` and `--infra` use the same mutually exclusive selection modes as `orbit up`; group shutdown stops members without stopping shared dependencies. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |
-| `orbit env use <env> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
+| `orbit env use <path> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, requested reference, resolved commit, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
 | `orbit env apply --json` | Applies pending environment changes, then returns the resources that were running, restored, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
@@ -209,7 +209,7 @@ Stable `data.operation` values for converted control commands:
 | Command | `data.operation` |
 |---|---|
 | `orbit env list --json` | `env_list` |
-| `orbit env use <env> --json` | `env_use` |
+| `orbit env use <path> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit env apply --json` | `env_apply` |
 | `orbit switch <env> --json` | `switch` |

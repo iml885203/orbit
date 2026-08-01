@@ -188,7 +188,7 @@ schema diff；`reset` 與 forced publish 等破壞性路徑都要求確認。詳
 ### Callback tunnels
 
 ```bash
-orbit tunnel claim /callbacks/example -p 8080
+orbit tunnel claim /callbacks/example --to 8080
 ```
 
 只 claim 已授權的開發或 staging path。Callback traffic 可能含 credentials 或個人

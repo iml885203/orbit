@@ -189,6 +189,7 @@ containers:
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings |
 | `command` | list | no | Override the image's default command |
+| `user` | string | no | Container user for `docker --user`, e.g. `"0:0"` — needed by images that require root on a fresh named volume |
 | `entrypoint` | list | no | Override the image's entrypoint |
 | `kind` | string | no | `frontend` \| `backend` \| `infra` (default) — graph node tint |
 | `health_check` | object | no | When to consider the container ready (see below) |

@@ -207,7 +207,7 @@ require confirmation. See [SQL Server workflow](docs/sql-workflow.md).
 ### Callback tunnels
 
 ```bash
-orbit tunnel claim /callbacks/example -p 8080
+orbit tunnel claim /callbacks/example --to 8080
 ```
 
 Claim only authorized development or staging paths. Callback traffic may

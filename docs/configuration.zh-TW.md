@@ -183,6 +183,7 @@ containers:
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串 |
 | `command` | list | no | 覆寫 image 預設的 command |
+| `user` | string | no | Container user，對應 `docker --user`，例如 `"0:0"`——需要在全新 named volume 上以 root 執行的 image 會用到 |
 | `entrypoint` | list | no | 覆寫 image 的 entrypoint |
 | `kind` | string | no | `frontend` \| `backend` \| `infra`（預設）— graph 節點色調 |
 | `health_check` | object | no | 判定 container ready 的條件（見下節） |
