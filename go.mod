@@ -1,6 +1,6 @@
 module github.com/iml885203/orbit
 
-go 1.25.7
+go 1.25.12
 
 require (
 	github.com/containerd/errdefs v1.0.0
