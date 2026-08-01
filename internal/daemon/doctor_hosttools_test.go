@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/dockerctx"
 	"github.com/iml885203/orbit/internal/shellquote"
 )
 
@@ -283,4 +284,17 @@ func fakeBin(t *testing.T, name, body string) (string, string) {
 		t.Fatal(err)
 	}
 	return dir, name
+}
+
+func TestDockerFailRemedyNamesACommandThePlatformHas(t *testing.T) {
+	_, hint := formatDockerFailMessage(dockerctx.ContextInfo{}, "cannot reach docker")
+	if runtime.GOOS == "linux" {
+		if !strings.Contains(hint, "systemctl start docker") {
+			t.Errorf("linux hint = %q, want the daemon command a Linux install actually has", hint)
+		}
+		return
+	}
+	if !strings.Contains(hint, "Docker Desktop") {
+		t.Errorf("hint = %q, want Docker Desktop", hint)
+	}
 }
