@@ -19,10 +19,7 @@ Orbit 是團隊中性的本地開發 orchestrator(Go CLI + daemon + Svelte UI)�
 
 ### 永遠不要
 - `git push --force`、`git commit --no-verify`。
-- WHAT-comments。註解只回答 WHY。（CODE_CONVENTIONS §2）
-- Service indirection / 薄薄一層的 interface。（CODE_CONVENTIONS §6）
-- 把跨領域的 helper 塞進 `utils.go` / `shared/`。（CODE_CONVENTIONS §4）
-- 在 production 程式碼用 `strings.Contains(err.Error(), ...)` 做錯誤分類。（CODE_CONVENTIONS §9）
+- 規範裡的硬底線 —— WHAT-comments（§2）、把跨領域 helper 塞進 `utils.go`/`shared/`（§4）、薄薄一層的 service interface（§6）、用 `strings.Contains(err.Error(), ...)` 做錯誤分類（§9）。細節與 rationale 在 [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md)；對應的 `.claude/rules/` 檔案會依檔案類型強制執行。
 
 ## Rules
 
@@ -36,21 +33,12 @@ Orbit 是團隊中性的本地開發 orchestrator(Go CLI + daemon + Svelte UI)�
 
 完整的 rationale 與範例放在 [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md)。
 
-## CLI workflow
+## CLI 的雷
 
-```bash
-orbit up --infra              # start containers
-orbit up                      # start services
-orbit status --json           # verify state
-orbit switch <env>            # change env and restart daemon
-orbit logs <service>          # plaintext; -f to stream
-orbit doctor                  # checks setup; prints fixes
-orbit sqlserver query "SELECT TOP 5 * FROM Users"
-orbit sqlserver publish <dbname> # fast dev-loop, preserves data
-```
+指令用 `orbit --help` 自己查；agent 專用的 JSON contract 在 [docs/agent-cli.zh-TW.md](docs/agent-cli.zh-TW.md)。不明顯的行為：
 
-如果 `orbit up` 抱怨缺 env，跑 `orbit init` 或 `orbit env sync`。
-`orbit up` 會自動把 daemon 起起來；不必另外 `orbit daemon start`。
+- 如果 `orbit up` 抱怨缺 env，跑 `orbit init` 或 `orbit env sync`。
+- `orbit up` 會自動把 daemon 起起來；不必另外 `orbit daemon start`。
 
 ## Code review
 
@@ -59,7 +47,5 @@ orbit sqlserver publish <dbname> # fast dev-loop, preserves data
 
 ## 想看更多
 
-- [README.zh-TW.md](README.zh-TW.md) —— 入口
-- [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) —— 完整 coding 規範
-- [architecture.zh-TW.md](docs/architecture.zh-TW.md) —— state machine 與 event model
+- [docs/architecture.zh-TW.md](docs/architecture.zh-TW.md) —— state machine 與 event model
 - [docs/troubleshooting.zh-TW.md](docs/troubleshooting.zh-TW.md) —— runtime 與 optional DB workflow 錯誤

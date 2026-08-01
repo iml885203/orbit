@@ -17,10 +17,7 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 
 ### Never
 - `git push --force`, `git commit --no-verify`.
-- WHAT-comments. Comments answer WHY only. (CODE_CONVENTIONS §2)
-- Service indirection / thin interfaces. (CODE_CONVENTIONS §6)
-- Cross-domain helpers in `utils.go` / `shared/`. (CODE_CONVENTIONS §4)
-- `strings.Contains(err.Error(), ...)` for error classification in production code. (CODE_CONVENTIONS §9)
+- The convention hard-lines — WHAT-comments (§2), cross-domain helpers in `utils.go`/`shared/` (§4), thin service interfaces (§6), error classification via `strings.Contains(err.Error(), ...)` (§9). Details and rationale in [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md); the matching `.claude/rules/` files enforce them per file type.
 
 ## Rules
 
@@ -34,21 +31,12 @@ Project conventions live in `.claude/rules/`. Each file has `paths:` frontmatter
 
 Long-form rationale and examples live in [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md).
 
-## CLI workflows
+## CLI gotchas
 
-```bash
-orbit up --infra              # start containers
-orbit up                      # start services
-orbit status --json           # verify state
-orbit switch <env>            # change env and restart daemon
-orbit logs <service>          # plaintext; -f to stream
-orbit doctor                  # checks setup; prints fixes
-orbit sqlserver query "SELECT TOP 5 * FROM Users"
-orbit sqlserver publish <dbname> # fast dev-loop, preserves data
-```
+Discover commands with `orbit --help`; the agent-facing JSON contract is in [docs/agent-cli.md](docs/agent-cli.md). Non-obvious behaviors:
 
-If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.
-`orbit up` auto-starts the daemon; no need for separate `orbit daemon start`.
+- If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.
+- `orbit up` auto-starts the daemon; no separate `orbit daemon start` needed.
 
 ## Code review
 
@@ -57,7 +45,5 @@ If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.
 
 ## Where to read more
 
-- [README.md](README.md) — entry point
-- [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) — full coding standards
-- [architecture.md](docs/architecture.md) — state machine and event model
+- [docs/architecture.md](docs/architecture.md) — state machine and event model
 - [docs/troubleshooting.md](docs/troubleshooting.md) — runtime and optional DB-workflow errors
