@@ -224,9 +224,15 @@ Without installing the plugin, point an agent to
 [the skill](plugins/orbit-agent/skills/orbit/SKILL.md) and
 [the JSON contract](docs/agent-cli.md).
 
-To use the bundled plugin directly from a source checkout, add
-`plugins/orbit-agent` as a local Codex plugin or Claude Code plugin. The plugin
-version always matches the Orbit release tag; see
+In Claude Code, install it from this repository:
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+For Codex, or from a source checkout, add `plugins/orbit-agent` as a local
+plugin. The plugin version always matches the Orbit release tag; see
 [Versioning and compatibility](docs/versioning.md).
 
 ## Dashboard

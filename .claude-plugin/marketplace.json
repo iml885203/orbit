@@ -1,0 +1,16 @@
+{
+  "name": "orbit",
+  "metadata": {
+    "description": "Orbit — local development environment orchestrator"
+  },
+  "owner": {
+    "name": "Logan Guo"
+  },
+  "plugins": [
+    {
+      "name": "orbit-agent",
+      "source": "./plugins/orbit-agent",
+      "description": "Operate and diagnose local development environments with the Orbit CLI. Teaches agents to inspect state first, use the orbit.cli.v1 JSON contract, and confirm destructive operations."
+    }
+  ]
+}

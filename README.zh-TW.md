@@ -203,6 +203,17 @@ Repository 內含 `plugins/orbit-agent`，可包裝成同版本的 Codex 與 Cla
 [skill](plugins/orbit-agent/skills/orbit/SKILL.md) 與
 [JSON contract](docs/agent-cli.zh-TW.md)。
 
+在 Claude Code 中，可直接從這個 repository 安裝：
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+Codex 或從 source checkout 使用時，把 `plugins/orbit-agent` 加為 local plugin。
+Plugin 版本永遠對齊 Orbit 的 release tag，詳見
+[版本與相容性](docs/versioning.zh-TW.md)。
+
 ## Dashboard
 
 Daemon 啟動後執行 `orbit open`。Dashboard 提供：
