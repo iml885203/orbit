@@ -1045,9 +1045,22 @@ func TestE2E_SwitchStopsPreviousEnvironmentBeforeSuccess(t *testing.T) {
 	if err := os.WriteFile(emptyEnv, []byte("version: \"3\"\ncontainers: {}\nservices: {}\n"), 0o644); err != nil {
 		t.Fatalf("write empty env: %v", err)
 	}
-	env.run(t, "switch", emptyEnv)
 
 	redisName := "orbit-" + env.namespace + "-redis"
+	refusal, err := env.runNoFail(t, "switch", emptyEnv, "--json")
+	if err == nil {
+		t.Fatalf("switch --json succeeded without --yes while redis was running:\n%s", refusal)
+	}
+	envelope := parseE2EEnvelope(t, refusal)
+	if envelope.Error == nil || envelope.Error.Code != "confirmation_required" {
+		t.Fatalf("switch refusal error = %+v, want confirmation_required", envelope.Error)
+	}
+	if !containerRunning(t, redisName) {
+		t.Fatalf("%s was stopped by a refused switch", redisName)
+	}
+
+	env.run(t, "switch", emptyEnv, "--yes")
+
 	if containerRunning(t, redisName) {
 		t.Fatalf("%s still running after switch reported success", redisName)
 	}
@@ -2884,6 +2897,48 @@ services:
 	}
 	if count != 1 {
 		t.Fatalf("Node.js prerequisite count = %d: %+v", count, data.Prerequisites)
+	}
+}
+
+// Covers: a failed `orbit up --json` carries per-resource evidence — state,
+// reason, and a bounded log tail — so a CI caller or agent does not need a
+// second `orbit logs` call to explain the failure.
+func TestE2E_UpJSONFailureCarriesResourceEvidence(t *testing.T) {
+	env := setupE2E(t)
+	crashing := "version: \"3\"\n" +
+		"services:\n" +
+		"  api:\n" +
+		"    type: shell\n" +
+		"    path: /tmp\n" +
+		"    command: sh -c \"echo boom-evidence; sleep 1; exit 7\"\n" +
+		"    health_check:\n" +
+		"      type: tcp\n" +
+		"      port: 39997\n"
+	if err := os.WriteFile(env.envYaml, []byte(crashing), 0o644); err != nil {
+		t.Fatalf("write crashing env: %v", err)
+	}
+
+	output, err := env.runNoFail(t, "up", "--json")
+	if err == nil {
+		t.Fatalf("up succeeded for a crashing service:\n%s", output)
+	}
+	envelope := parseE2EEnvelope(t, output)
+	if envelope.OK || envelope.Error == nil {
+		t.Fatalf("up failure envelope = %+v\n%s", envelope, output)
+	}
+	var data upFailureJSONData
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatalf("parse failure data: %v\n%s", err, envelope.Data)
+	}
+	if len(data.FailedResources) != 1 || data.FailedResources[0].Name != "api" {
+		t.Fatalf("failed_resources = %+v, want api", data.FailedResources)
+	}
+	failed := data.FailedResources[0]
+	if failed.State == "healthy" || failed.State == "" {
+		t.Fatalf("failed resource state = %q, want a non-healthy state", failed.State)
+	}
+	if !strings.Contains(strings.Join(failed.LogTail, "\n"), "boom-evidence") {
+		t.Fatalf("log_tail = %v, want the service's own output", failed.LogTail)
 	}
 }
 

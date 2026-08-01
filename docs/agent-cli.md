@@ -104,6 +104,16 @@ A degraded host process may include both `state_reason` (for example,
 application log line captured for that failed generation. Treat the evidence
 as supporting detail, not a replacement for the lifecycle reason.
 
+A failed `orbit up --json` keeps its evidence in `data.failed_resources`: one
+entry per requested resource that did not reach healthy, with `name`, `state`,
+`state_reason`, and `log_tail` (at most 20 recent log lines). Read the failure
+from there instead of issuing a follow-up `orbit logs` call.
+
+Destructive steps that need an explicit go-ahead use the stable
+`confirmation_required` error code. The refusal changes nothing; the first
+recommended action is the same command with `--yes`. Emit it only when the
+caller (or its operator) intends the destruction.
+
 ## Converted Commands
 
 These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
@@ -223,8 +233,11 @@ Stable `data.operation` values for converted control commands:
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
-For `switch`, `previous_environment_stopped` says whether Orbit stopped a
-previously running environment before making the selection. A stopped Orbit is
+`switch` stops the running environment first, so with resources running and no
+`--yes` it returns `confirmation_required` instead of acting — switching is a
+machine-wide provisioning step, not something a harness should trigger
+implicitly. For `switch`, `previous_environment_stopped` says whether Orbit
+stopped a previously running environment before making the selection. A stopped Orbit is
 not started merely to record a selection; `orbit up` remains the sole startup
 action. `prerequisites_ready` is false when the newly selected env is missing a
 required runtime or package installation; `prerequisites` carries the same

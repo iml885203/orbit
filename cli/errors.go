@@ -22,8 +22,9 @@ var (
 	ErrEnvRepoAccess      = errors.New("environment repository access failed")
 	ErrEnvRepoUnavailable = errors.New("environment repository unavailable")
 	ErrInitIncomplete     = errors.New("initialization incomplete")
-	ErrInvalidEnvironment = errors.New("invalid environment")
-	ErrInvalidArgument    = errors.New("invalid argument")
+	ErrInvalidEnvironment   = errors.New("invalid environment")
+	ErrInvalidArgument      = errors.New("invalid argument")
+	ErrConfirmationRequired = errors.New("confirmation required")
 )
 
 type ResourcePortConflictError struct {
@@ -104,6 +105,10 @@ func NewInitIncompleteError(msg string) error {
 
 func NewInvalidEnvironmentError(msg string) error {
 	return classifiedError{kind: ErrInvalidEnvironment, msg: msg}
+}
+
+func NewConfirmationRequiredError(msg string) error {
+	return classifiedError{kind: ErrConfirmationRequired, msg: msg}
 }
 
 func NewInvalidArgumentError(msg string) error {

@@ -95,6 +95,15 @@ Degraded host process 可能同時包含 `state_reason`（例如
 generation 保存的最後一行有效 application log。它是 lifecycle reason 的
 佐證，不是取代 reason。
 
+失敗的 `orbit up --json` 會把證據放在 `data.failed_resources`：每個沒有達到
+healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` 與
+`log_tail`（最多 20 行最近的 log）。直接從這裡讀失敗原因，不必再補一次
+`orbit logs`。
+
+需要明確授權的破壞性步驟使用穩定的 `confirmation_required` 錯誤碼。被拒絕
+時什麼都不會改變；第一個 recommended action 就是加上 `--yes` 的同一個指令。
+只有在 caller（或其操作者）確實想要這個破壞性結果時才執行它。
+
 ## Converted Commands
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：
@@ -209,7 +218,9 @@ action。
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
-對 `switch` 而言，`previous_environment_stopped` 表示 Orbit 是否在選取前
+`switch` 會先停掉正在運行的環境，所以在有資源運行且未加 `--yes` 時會回傳
+`confirmation_required` 而不動手——切換環境是機器層級的 provisioning 步驟，
+不該由 harness 隱式觸發。對 `switch` 而言，`previous_environment_stopped` 表示 Orbit 是否在選取前
 停止了原本執行中的 environment。Orbit 停止時不會只為了記錄 selection
 而被啟動；`orbit up` 仍是唯一啟動動作。新 env 缺少必要 runtime 或 package
 installation 時，`prerequisites_ready` 會是 false；`prerequisites` 使用與

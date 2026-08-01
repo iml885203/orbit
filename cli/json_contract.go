@@ -406,6 +406,13 @@ func classify(err error) JSONError {
 			Hint:      "Correct the conflicting or unknown command selection, then retry.",
 			Retryable: false,
 		}
+	case errors.Is(err, ErrConfirmationRequired):
+		return JSONError{
+			Code:      "confirmation_required",
+			Message:   msg,
+			Hint:      "Rerun with --yes to confirm the destructive step.",
+			Retryable: true,
+		}
 	default:
 		return JSONError{
 			Code:        "command_failed",

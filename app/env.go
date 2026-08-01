@@ -247,14 +247,18 @@ func readCurrentEnv() string {
 	return daemonsrv.ReadCurrentEnv()
 }
 
+var switchYes bool
+
 func switchCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "switch <env>",
 		Short: "Switch the active environment",
-		Long:  "Stop resources in the current environment, select another environment by short name or path, and prepare it for `orbit up`.",
+		Long:  "Stop resources in the current environment, select another environment by short name or path, and prepare it for `orbit up`.\n\nWhen resources are running, switch asks for confirmation before stopping them; pass --yes to confirm non-interactively.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runSwitch,
 	}
+	cmd.Flags().BoolVar(&switchYes, "yes", false, "confirm stopping the running resources without prompting")
+	return cmd
 }
 
 func runSwitch(_ *cobra.Command, args []string) error {
@@ -289,10 +293,18 @@ func runSwitch(_ *cobra.Command, args []string) error {
 
 	pidBefore, alive := daemon.IsDaemonRunning()
 	if alive {
+		client := daemon.NewClient(daemon.DefaultSocketPath())
+		proceed, err := confirmSwitchStopsRunningResources(client, args[0])
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			fmt.Println("Aborted.")
+			return nil
+		}
 		if !cli.JSONOutput {
 			fmt.Println("→ stopping current environment")
 		}
-		client := daemon.NewClient(daemon.DefaultSocketPath())
 		if _, err := client.DownAndWait(); err != nil {
 			return fmt.Errorf("stop current environment: %w", err)
 		}
@@ -322,6 +334,51 @@ func runSwitch(_ *cobra.Command, args []string) error {
 		fmt.Println("  Next: orbit up")
 	}
 	return nil
+}
+
+// confirmSwitchStopsRunningResources keeps switch an explicit act: it is a
+// machine-wide provisioning step, so a script or harness must opt in with
+// --yes instead of silently stopping a stack someone else is using. A status
+// probe failure skips the check — DownAndWait surfaces the real error.
+func confirmSwitchStopsRunningResources(client *daemon.Client, target string) (bool, error) {
+	if switchYes {
+		return true, nil
+	}
+	status, err := client.Status()
+	if err != nil {
+		return true, nil
+	}
+	running := runningResourceNames(status)
+	if len(running) == 0 {
+		return true, nil
+	}
+	summary := fmt.Sprintf(
+		"Switching to %s stops %d running resource(s): %s.",
+		target, len(running), strings.Join(running, ", "),
+	)
+	if cli.JSONOutput {
+		return false, cli.WithJSONReplacementActions(
+			cli.NewConfirmationRequiredError(summary+" Rerun with --yes to confirm."),
+			[]cli.JSONAction{{
+				Command:     fmt.Sprintf("orbit switch %s --yes --json", target),
+				Reason:      "Confirm stopping the running resources before switching.",
+				Destructive: true,
+			}},
+		)
+	}
+	return cli.Confirm(summary + " Continue?"), nil
+}
+
+func runningResourceNames(status *daemon.StatusResponse) []string {
+	var names []string
+	for i := range status.Resources {
+		switch status.Resources[i].State {
+		case "stopped", "pending":
+		default:
+			names = append(names, status.Resources[i].Name)
+		}
+	}
+	return names
 }
 
 type switchJSONOptions struct {
