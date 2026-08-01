@@ -24,6 +24,21 @@ If you need a comment to explain what a line of code does, the line is under-nam
 
 ## 2. When to write a comment
 
+**The default is no comment.** Not "no WHAT-comments" — none. A WHY-comment
+that merely restates what the code and its names already convey is still
+noise, and most explanations belong in the name, the test, or the commit
+message instead. Reach for those first:
+
+- Explaining what a function does → name it better; add a test that shows it.
+- Explaining why a change was made → the commit message, where it stays with
+  the change and does not rot in the file.
+- Explaining a contract or a rule → the doc that owns it, linked from a test
+  name if it needs to be enforced.
+
+Write a comment only when a future reader would otherwise reintroduce a bug —
+an invisible constraint that no name or test can carry. The bar is high, and
+the examples below meet it.
+
 ### Write a comment when:
 
 **Explaining why a non-obvious choice was made.**

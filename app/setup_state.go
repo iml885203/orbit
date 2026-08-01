@@ -33,9 +33,6 @@ func (setupRequiredError) CLIHumanNextCommand() string {
 	return "orbit init"
 }
 
-// The project-local path is named as context rather than a second command:
-// 'orbit init' stays the one runnable action, but a user inside their own
-// project cannot otherwise discover that a project config skips setup entirely.
 func (setupRequiredError) CLIHumanContext() string {
 	return "Already have " + projectConfigName + " in this project? Run Orbit from that directory instead."
 }

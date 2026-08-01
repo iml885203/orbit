@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -751,9 +752,16 @@ func formatDockerPassMessage(ctxInfo dockerctx.ContextInfo, path, apiVersion str
 func formatDockerFailMessage(ctxInfo dockerctx.ContextInfo, fallbackMsg string) (string, string) {
 	if ctxInfo.Name != "" {
 		return fmt.Sprintf("cannot reach %s context", ctxInfo.Name),
-			"Start Docker Desktop, or run 'docker context use default' to fall back"
+			startDockerRemedy() + ", or run 'docker context use default' to fall back"
 	}
-	return fallbackMsg, "Start Docker Desktop"
+	return fallbackMsg, startDockerRemedy()
+}
+
+func startDockerRemedy() string {
+	if runtime.GOOS == "linux" {
+		return "Start Docker (e.g. 'sudo systemctl start docker') or Docker Desktop"
+	}
+	return "Start Docker Desktop"
 }
 
 // checkOrbitOnPath verifies that a bare `orbit` command resolves to the

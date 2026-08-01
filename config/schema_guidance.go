@@ -11,13 +11,8 @@ import (
 
 var unknownSchemaFieldPattern = regexp.MustCompile(`field ([^ \n]+) not found in type ([^ \n]+)`)
 
-// unknownSchemaFieldPhrase rewrites yaml.v3's "not found in type X" so the
-// sentence stays grammatical once X becomes a config section phrase.
 var unknownSchemaFieldPhrase = regexp.MustCompile(`field ([^ \n]+) not found in type `)
 
-// schemaTypeNamePattern matches the Go type names yaml.v3 reports for struct
-// and map targets, e.g. "into config.Service" or
-// "into map[string]config.Container".
 var schemaTypeNamePattern = regexp.MustCompile(`\b(?:map\[string\])?(config\.[A-Za-z0-9_]+)`)
 
 type schemaGuidanceError struct {
@@ -62,10 +57,6 @@ func schemaFieldsByType(root reflect.Type) map[string][]string {
 	return fieldsByType
 }
 
-// schemaVocabulary walks the schema once and returns both the YAML field names
-// available on each type and the singular config section each type is reached
-// through, so diagnostics can speak in config vocabulary ("a services entry")
-// rather than Go type names ("config.Service").
 func schemaVocabulary(root reflect.Type) (fieldsByType map[string][]string, sectionByType map[string]string) {
 	fieldsByType = make(map[string][]string)
 	sectionByType = make(map[string]string)
@@ -102,10 +93,6 @@ func schemaVocabulary(root reflect.Type) (fieldsByType map[string][]string, sect
 	return fieldsByType, sectionByType
 }
 
-// replaceSchemaTypeNames rewrites the Go type names yaml.v3 puts in type
-// mismatch errors into the config section the user actually edits. Types the
-// walk never reached through a named section keep their original name rather
-// than being described inaccurately.
 func replaceSchemaTypeNames(message string, sectionByType map[string]string) string {
 	return schemaTypeNamePattern.ReplaceAllStringFunc(message, func(match string) string {
 		parts := schemaTypeNamePattern.FindStringSubmatch(match)

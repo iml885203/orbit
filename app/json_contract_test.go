@@ -158,8 +158,6 @@ func TestPrintExecutionErrorHumanMakesProjectConfigDiscoverableBeforeSetup(t *te
 	if !strings.Contains(got, "Next: orbit init") {
 		t.Fatalf("setup error lost its single advancing action:\n%s", got)
 	}
-	// The 1.0 contract forbids recommending a startup command that must fail
-	// before setup, so the project-local path stays context, not a command.
 	if strings.Contains(got, "run: orbit up") || strings.Contains(got, "Next: orbit up") {
 		t.Fatalf("setup error recommended a startup command that must fail:\n%s", got)
 	}

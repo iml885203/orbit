@@ -32,10 +32,7 @@ var (
 	// ErrDaemonNotReady means the daemon process is still alive but
 	// did not pass health checks within the timeout. The wrapped error
 	// includes the PID and a tail of ~/.orbit/daemon.log.
-	ErrDaemonNotReady = errors.New("daemon not ready")
-	// ErrSocketPathTooLong means ORBIT_HOME yields a socket path over the OS
-	// limit. It is classified separately because no daemon is stuck and no
-	// restart can help: the user must choose a shorter ORBIT_HOME.
+	ErrDaemonNotReady    = errors.New("daemon not ready")
 	ErrSocketPathTooLong = errors.New("socket path too long")
 )
 
@@ -243,9 +240,6 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 		_ = os.Remove(DefaultSocketPath())
 	}
 
-	// Pre-validate the socket path for the same reason: the child binds it and
-	// exits, but the parent would otherwise report a 30s readiness timeout
-	// instead of the length limit that actually blocked startup.
 	if err := ValidateSocketPath(DefaultSocketPath()); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSocketPathTooLong, err)
 	}
@@ -368,9 +362,10 @@ func StartDaemon(configPath string, features []string) (int, error) {
 	}
 
 	pid := cmd.Process.Pid
-	// Let the daemon process run independently
-	_ = cmd.Process.Release()
-	_ = logFile.Close()
+	go func() {
+		_ = cmd.Wait()
+		_ = logFile.Close()
+	}()
 
 	return pid, nil
 }

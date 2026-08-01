@@ -46,8 +46,6 @@ func TestAnyResourceActiveDistinguishesRepeatDownFromRealWork(t *testing.T) {
 		t.Error("a fully stopped environment reported work for 'down' to do")
 	}
 
-	// Pending and degraded resources still own a process or container, so
-	// 'down' must run rather than claim the environment is already stopped.
 	for _, state := range []string{"healthy", "pending", "degraded", "starting"} {
 		status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "stopped"},

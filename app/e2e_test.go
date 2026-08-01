@@ -351,9 +351,6 @@ func TestE2E_UpInfraReconcilesExternalRestart(t *testing.T) {
 	})
 }
 
-// Covers: after an abrupt daemon exit, 'orbit down' must adopt the surviving
-// container and stop it. Reporting "already stopped" leaked the container while
-// claiming success, so the user was told Orbit had cleaned up when it had not.
 func TestE2E_DownReconcilesContainersLeftByAbruptDaemonExit(t *testing.T) {
 	env := setupE2E(t)
 	env.run(t, "daemon", "start")

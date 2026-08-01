@@ -46,8 +46,6 @@ func TestWriteDaemonStartError_SocketPathTooLongDoesNotSuggestRestart(t *testing
 	if !strings.Contains(out, "ORBIT_HOME") {
 		t.Errorf("expected the ORBIT_HOME remedy, got:\n%s", out)
 	}
-	// Nothing is stuck and no restart can shorten the path, so the generic
-	// daemon-recovery actions would send the user through a loop.
 	for _, uselessAction := range []string{"orbit daemon stop", "orbit daemon restart"} {
 		if strings.Contains(out, uselessAction) {
 			t.Errorf("hint offered %q, which cannot fix a path-length failure:\n%s", uselessAction, out)
@@ -55,7 +53,6 @@ func TestWriteDaemonStartError_SocketPathTooLongDoesNotSuggestRestart(t *testing
 	}
 }
 
-// The 1.0 contract requires human and JSON output to give the same remedy.
 func TestRenderDaemonStartError_SocketPathTooLongJSONMatchesHumanRemedy(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })
@@ -73,7 +70,6 @@ func TestRenderDaemonStartError_SocketPathTooLongJSONMatchesHumanRemedy(t *testi
 	if !errors.As(rendered, &hinted) || !strings.Contains(hinted.CLIJSONHint(), "ORBIT_HOME") {
 		t.Errorf("JSON hint omits the ORBIT_HOME remedy: %#v", rendered)
 	}
-	// No command Orbit can run shortens the path, so offering one would loop.
 	var actions interface{ CLIJSONReplacementActions() []cli.JSONAction }
 	if errors.As(rendered, &actions) && len(actions.CLIJSONReplacementActions()) != 0 {
 		t.Errorf("offered a recommended action that cannot fix the path")

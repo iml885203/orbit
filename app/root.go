@@ -681,9 +681,6 @@ func runDown(_ *cobra.Command, args []string) error {
 		return err
 	}
 	client := daemon.NewClient(daemon.DefaultSocketPath())
-	// After an abrupt daemon exit its containers and processes survive. Claiming
-	// "already stopped" would leak them while reporting success, so adopt the
-	// orphans through a fresh daemon and stop them for real.
 	adoptedOrphans := false
 	if err := client.Health(); err != nil {
 		orphaned, orphanErr := reconcilableResourcesExist(configFile)
@@ -718,10 +715,6 @@ func runDown(_ *cobra.Command, args []string) error {
 		names = append(names, status.Resources[i].Name)
 	}
 
-	// A repeat 'down' would otherwise replay every resource as freshly stopped
-	// work. Report the no-op the same way a selective 'down' already does.
-	// A daemon started to adopt orphans has not polled yet, so its snapshot
-	// still reads "stopped" — persisted state already proved there is work.
 	if !adoptedOrphans && !anyResourceActive(status) {
 		return writeDownShortCircuit(downAlreadyStoppedMessage, lifecycleDownSuccessActions(), status)
 	}

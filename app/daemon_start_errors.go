@@ -29,8 +29,6 @@ func renderDaemonStartError(err error) error {
 		return nil
 	}
 	if cli.JSONOutput {
-		// Agents must get the same remedy as the hint block, not the generic
-		// doctor/status fallback that cannot shorten a socket path.
 		if errors.Is(err, daemon.ErrSocketPathTooLong) {
 			return socketPathTooLongError{err: err}
 		}
@@ -40,9 +38,6 @@ func renderDaemonStartError(err error) error {
 	return errCLIJSONAlreadyRendered{err: err}
 }
 
-// socketPathTooLongError gives the overlong-socket-path failure its own JSON
-// classification. Retrying is useless until ORBIT_HOME changes, so it carries
-// no recommended action Orbit could run on the user's behalf.
 type socketPathTooLongError struct{ err error }
 
 func (e socketPathTooLongError) Error() string { return e.err.Error() }
