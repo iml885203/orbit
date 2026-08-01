@@ -264,6 +264,7 @@ Optional workflows:
 
 - [SQL Server Database Projects](docs/sql-workflow.md)
 - [Tunnel claims](docs/tunnel-claim.md)
+- [E2E testing on Orbit](docs/e2e-testing.md)
 
 For adopters and contributors:
 

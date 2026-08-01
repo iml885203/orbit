@@ -240,6 +240,7 @@ Dashboard 位於 <http://localhost:19800>。
 
 - [SQL Server Database Projects](docs/sql-workflow.zh-TW.md)
 - [Tunnel claims](docs/tunnel-claim.zh-TW.md)
+- [在 Orbit 上跑 E2E 測試](docs/e2e-testing.zh-TW.md)
 
 導入者與 contributors：
 
