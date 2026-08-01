@@ -172,7 +172,11 @@ func toolVersionsRequirement(service, projectPath, runtime string) (HostVersionR
 }
 
 func dotnetVersionRequirement(service, projectPath string) (HostVersionRequirement, bool) {
-	source := filepath.Join(projectPath, "global.json")
+	dir := projectPath
+	if info, err := os.Stat(projectPath); err == nil && !info.IsDir() {
+		dir = filepath.Dir(projectPath)
+	}
+	source := filepath.Join(dir, "global.json")
 	content, err := os.ReadFile(source)
 	if os.IsNotExist(err) {
 		return HostVersionRequirement{}, false

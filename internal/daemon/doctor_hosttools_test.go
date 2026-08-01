@@ -298,3 +298,25 @@ func TestDockerFailRemedyNamesACommandThePlatformHas(t *testing.T) {
 		t.Errorf("hint = %q, want Docker Desktop", hint)
 	}
 }
+
+func TestDotnetVersionRequirementReadsGlobalJSONBesideACsproj(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "global.json"), []byte(`{"sdk":{"version":"8.0.100"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	csproj := filepath.Join(dir, "App.csproj")
+	if err := os.WriteFile(csproj, []byte("<Project/>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := dotnetVersionRequirement("api", csproj)
+	if !ok {
+		t.Fatal("a csproj path found no global.json beside it")
+	}
+	if got.ParseError != "" {
+		t.Errorf("ParseError = %q, want none", got.ParseError)
+	}
+	if got.Requested != "8.0.100" {
+		t.Errorf("Requested = %q, want 8.0.100", got.Requested)
+	}
+}
