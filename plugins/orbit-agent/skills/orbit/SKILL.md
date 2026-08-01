@@ -1,12 +1,35 @@
 ---
 name: orbit
-description: Operate and diagnose local development environments with the Orbit CLI. Use whenever a task involves starting or stopping services or containers, checking environment status, switching or syncing environments, reading logs or traces, querying local infrastructure, publishing or resetting development databases, claiming callback tunnels, or troubleshooting an Orbit-managed workspace.
+description: Operate and diagnose local development environments with the Orbit CLI. Use whenever a task involves installing or setting up Orbit for the first time, starting or stopping services or containers, checking environment status, switching or syncing environments, reading logs or traces, querying local infrastructure, publishing or resetting development databases, claiming callback tunnels, or troubleshooting an Orbit-managed workspace.
 ---
 
 # Orbit
 
 Use Orbit as the control plane for the local environment. Prefer its structured
 CLI over invoking Docker, databases, or service processes directly.
+
+## Setup
+
+Docker must be running. If `orbit` is not installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then pick the path that matches the user:
+
+- **Their project already has `orbit.yaml`** — nothing to set up. Run
+  `orbit up` from anywhere inside the project; Orbit finds the nearest config.
+- **They have a team environment repository** —
+  `orbit init --yes --env-repo <url> [--env <name>]` records the workspace root,
+  syncs the repository, and selects an environment.
+- **They have neither** — `orbit init --yes` uses the public demo, which is the
+  fastest way to show what Orbit does. For a real project, prefer a
+  project-local `orbit.yaml` over building an environment repository.
+
+If a command reports that Orbit is not set up, follow its stated next step
+rather than guessing between these paths.
 
 ## Core loop
 
@@ -22,13 +45,16 @@ Use `--json` whenever the command supports it. Human output is not a stable
 parsing contract. `orbit up` starts the daemon when needed and safely applies
 pending config edits; do not manage the daemon preemptively.
 
-Agent and advanced commands such as `inspect`, `history`, and `env apply` are
-intentionally omitted from contextual human help. Invoke them as documented;
-do not treat absence from `orbit --help` as proof that a command is unavailable.
+Orbit ships commands faster than this file can track it, so treat
+`orbit <command> --help` as the current truth. Absence from `orbit --help` is
+not proof a command is unavailable: agent and advanced commands such as
+`inspect`, `history`, and `env apply` are intentionally hidden from contextual
+human help. Invoke them as documented.
 
 Read [references/workflows.md](references/workflows.md) for command selection
-and destructive-operation rules. Read the repository's `docs/agent-cli.md`
-when implementing or debugging an `orbit.cli.v1` consumer.
+and destructive-operation rules. Deeper references live in the repository's
+`docs/`: `agent-cli` (the `orbit.cli.v1` contract), `configuration`,
+`troubleshooting`, `tracing`, `sql-workflow`, `architecture`.
 
 ## State changes
 
