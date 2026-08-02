@@ -80,9 +80,10 @@ func TestStart_KillsProcessTreeOnCtxCancel(t *testing.T) {
 
 	// Launch a shell that forks a grandchild sleep and waits. Killing only
 	// the shell would leave the sleep orphaned — this is the zombie shape
-	// we are guarding against.
+	// we are guarding against. Invoke the new script through sh because some
+	// CI filesystems briefly reject direct exec after a write with ETXTBSY.
 	script := writeForkScript(t)
-	if err := m.Start(ctx, "tree", ".", script, nil, nil, 0); err != nil {
+	if err := m.Start(ctx, "tree", ".", "/bin/sh "+strconv.Quote(script), nil, nil, 0); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
