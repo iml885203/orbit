@@ -17,6 +17,7 @@
   )
   const actionState = $derived(environmentActionState(store.graph.data?.nodes ?? []))
   const primaryAction = $derived(actionState.primary)
+  const instanceContext = $derived(store.daemon.instanceName ? ` in instance \`${store.daemon.instanceName}\`` : '')
 
   type PendingAction =
     | { kind: 'switch'; env: string }
@@ -28,13 +29,13 @@
     if (pending.kind === 'switch') {
       return {
         title: 'Switch environment?',
-        message: `Switching to ${pending.env} will stop ${running} running item${running === 1 ? '' : 's'} from ${current}. You'll need to run \`orbit up\` afterwards.`,
+        message: `Switching to ${pending.env} will stop ${running} running item${running === 1 ? '' : 's'} from ${current}${instanceContext}. You'll need to run \`orbit up\` afterwards.`,
         confirmLabel: 'Stop and switch',
       }
     }
     return {
       title: 'Stop everything?',
-      message: `This will stop ${running} running service${running === 1 ? '' : 's'} and container${running === 1 ? '' : 's'}.`,
+      message: `This will stop ${running} running service${running === 1 ? '' : 's'} and container${running === 1 ? '' : 's'}${instanceContext}.`,
       confirmLabel: 'Stop all',
     }
   })

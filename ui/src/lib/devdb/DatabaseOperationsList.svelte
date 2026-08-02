@@ -2,7 +2,7 @@
   import type { DevDBProject, DBState } from '$lib/types.gen'
   import type { DBOpInFlight } from './stores.svelte'
   import { publishDB, resetDB, type ResetStateMap } from './api'
-  import { toast } from '$lib/stores.svelte'
+  import { store, toast } from '$lib/stores.svelte'
   import ConfirmModal from '$components/ConfirmModal.svelte'
   import LogModal from '$components/LogModal.svelte'
   import DatabaseRow from './DatabaseRow.svelte'
@@ -22,13 +22,14 @@
   // pendingForce holds the database whose blocked publish awaits the
   // "publish anyway" (data-loss) confirmation.
   let pendingForce = $state<string | null>(null)
+  const instanceContext = $derived(store.daemon.instanceName ? ` in instance ${store.daemon.instanceName}` : '')
   const resetRequiresRecreate = $derived(
     !!pendingReset
       && resetStates[pendingReset]?.exists === true
       && resetStates[pendingReset]?.hasBaseline === false,
   )
   const resetConfirmationTitle = $derived(
-    resetRequiresRecreate ? `Reset ${pendingReset} by recreating it?` : `Reset ${pendingReset}?`,
+    resetRequiresRecreate ? `Reset ${pendingReset}${instanceContext} by recreating it?` : `Reset ${pendingReset}${instanceContext}?`,
   )
   const resetConfirmationMessage = $derived(
     resetRequiresRecreate
@@ -84,7 +85,7 @@
   {/if}
 </section>
 
-{#if pendingForce}<ConfirmModal open title={`Publish ${pendingForce} despite data loss?`} message="The analyzed schema changes may discard data (such as dropped columns or tables). Publishing anyway applies the latest schema and lets that data go. This cannot be undone." confirmLabel="Publish anyway" danger onConfirm={confirmForcePublish} onCancel={() => pendingForce = null} />{/if}
+{#if pendingForce}<ConfirmModal open title={`Publish ${pendingForce}${instanceContext} despite data loss?`} message="The analyzed schema changes may discard data (such as dropped columns or tables). Publishing anyway applies the latest schema and lets that data go. This cannot be undone." confirmLabel="Publish anyway" danger onConfirm={confirmForcePublish} onCancel={() => pendingForce = null} />{/if}
 {#if pendingReset}<ConfirmModal open title={resetConfirmationTitle} message={resetConfirmationMessage} confirmLabel={resetRequiresRecreate ? 'Recreate database' : 'Reset database'} danger onConfirm={confirmReset} onCancel={cancelReset} />{/if}
 {#if logOpen && operation}<LogModal service={`${operation.op} ${dbOpLabel(operation)}`} lines={operation.lines} onClose={() => logOpen = false} />{/if}
 

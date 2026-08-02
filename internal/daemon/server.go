@@ -15,6 +15,7 @@ import (
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/instance"
 	"github.com/iml885203/orbit/internal/cmdmap/gaps"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/history"
@@ -64,6 +65,7 @@ type Server struct {
 	cancelFunc      context.CancelFunc // cancels the app context
 	baseCtx         context.Context
 	version         string
+	instanceName    string
 	tracing         *tracing.Store
 	// staticFS holds the dashboard assets (already rooted at the dist
 	// contents); nil when the build embeds none. See staticHandler.
@@ -93,15 +95,16 @@ func (s *Server) waitForBackground() {
 func NewServer(app *engine.App, holder *config.Holder, stateFile *StateFile, settings *Settings, version string, ui fs.FS, exts []extension.Extension) *Server {
 	cfg := holder.Load()
 	srv := &Server{
-		app:        app,
-		holder:     holder,
-		settings:   settings,
-		startedAt:  time.Now(),
-		stateFile:  stateFile,
-		version:    version,
-		extensions: exts,
-		tracing:    tracing.NewStore(cfg.TracingMaxTraces()),
-		staticFS:   ui,
+		app:          app,
+		holder:       holder,
+		settings:     settings,
+		startedAt:    time.Now(),
+		stateFile:    stateFile,
+		version:      version,
+		instanceName: instance.CurrentName(),
+		extensions:   exts,
+		tracing:      tracing.NewStore(cfg.TracingMaxTraces()),
+		staticFS:     ui,
 	}
 	return srv
 }

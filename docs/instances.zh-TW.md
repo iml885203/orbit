@@ -19,6 +19,8 @@ orbit logs app --instance checkout-a --json
 
 整個 workflow 都應維持相同的 instance target。JSON response 會包含 `instance`
 field，recommended actions 也會保留該 target。
+Named dashboard 會在 header 與 browser tab 顯示 instance；default runtime 則維持
+標準 dashboard header，不顯示 instance badge。
 
 列出 named instances，即可取得 environment、state、dashboard 與解析後的 resource
 endpoints：

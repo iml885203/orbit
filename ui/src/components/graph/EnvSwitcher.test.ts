@@ -19,6 +19,7 @@ describe('EnvSwitcher', () => {
     store.graph.preview = null
     store.graph.selectedNode = null
     store.daemon.services = {}
+    store.daemon.instanceName = ''
     store.daemon.logModal = { target: null, loading: false }
     store.daemon.envs = {
       running: 0,
@@ -106,5 +107,23 @@ describe('EnvSwitcher', () => {
     expect(screen.getByRole('button', { name: 'Use this env' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exit preview' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Start environment' })).not.toBeInTheDocument()
+  })
+
+  it('names the runtime in a high-impact confirmation', async () => {
+    store.daemon.instanceName = 'checkout-a'
+    store.daemon.services = {
+      api: {
+        name: 'api',
+        kind: 'service',
+        state: 'healthy',
+        restart_count: 0,
+        external_restart_count: 0,
+      },
+    }
+    render(EnvSwitcher)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Stop environment' }))
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('instance checkout-a')
   })
 })

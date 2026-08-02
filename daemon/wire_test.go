@@ -50,3 +50,17 @@ func TestLifecycleWireUsesResourceVocabulary(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusInstanceOmittedForDefaultRuntime(t *testing.T) {
+	raw, err := json.Marshal(StatusResponse{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := fields["instance"]; ok {
+		t.Fatalf("default status includes instance: %s", raw)
+	}
+}
