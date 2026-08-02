@@ -290,6 +290,15 @@ export interface EnvsResponse {
   envs: EnvInfo[];
   context: EnvironmentContext;
 }
+export interface EnvironmentSwitchResponse {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  confirmation_required?: boolean;
+  current_context?: EnvironmentContext;
+  target_context?: EnvironmentContext;
+  running_resources?: string[];
+}
 export interface EnvironmentReconcileResponse {
   ok?: boolean;
   error?: string;

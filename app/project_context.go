@@ -23,6 +23,13 @@ var projectContextYes bool
 var errProjectContextSwitchDeclined = errors.New("project context switch declined")
 
 func environmentContextKind(configPath string) string {
+	if configContextKind != "" && sameFilePath(configPath, configFile) {
+		return configContextKind
+	}
+	return inferredEnvironmentContextKind(configPath)
+}
+
+func inferredEnvironmentContextKind(configPath string) string {
 	if usesDiscoveredProjectConfig(configPath) {
 		return "project"
 	}

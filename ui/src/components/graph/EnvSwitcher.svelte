@@ -6,7 +6,8 @@
   import { Power, PowerOff, Database, ExternalLink, ScrollText } from '@lucide/svelte'
   import ConfirmModal from '../ConfirmModal.svelte'
 
-  const current = $derived(store.graph.data?.env ?? '')
+  const context = $derived(store.daemon.envs?.context)
+  const current = $derived(context?.display_name || store.graph.data?.env || '')
   // Count live state, not the cached running value from /api/envs (which
   // only refreshes on initial mount / SSE reconnect — would be stale
   // right after the user just started something).
@@ -19,7 +20,7 @@
   const primaryAction = $derived(actionState.primary)
 
   type PendingAction =
-    | { kind: 'switch'; env: string }
+    | { kind: 'switch'; env: string; current: string; currentIdentity: string; targetIdentity: string; resources: string[] }
     | { kind: 'down' }
   let pending = $state<PendingAction | null>(null)
 
@@ -28,7 +29,7 @@
     if (pending.kind === 'switch') {
       return {
         title: 'Switch environment?',
-        message: `Switching to ${pending.env} will stop ${running} running item${running === 1 ? '' : 's'} from ${current}. You'll need to run \`orbit up\` afterwards.`,
+        message: `Switching to ${pending.env} will stop ${pending.resources.length} running item${pending.resources.length === 1 ? '' : 's'} from ${pending.current}: ${pending.resources.join(', ')}. You'll need to run \`orbit up\` afterwards.`,
         confirmLabel: 'Stop and switch',
       }
     }
@@ -39,11 +40,23 @@
     }
   })
 
-  async function doSwitch(short: string) {
+  async function doSwitch(short: string, confirmed = false, currentIdentity = '', targetIdentity = '') {
     const total = running
     store.graph.envSwitching = { target: short, total, phase: 'stopping' }
-    const { ok, data } = await switchEnv(short)
+    const { ok, data } = await switchEnv(short, confirmed, currentIdentity, targetIdentity)
     if (!ok) {
+      if (data?.confirmation_required && data.current_context) {
+        pending = {
+          kind: 'switch',
+          env: data.target_context?.display_name || short,
+          current: data.current_context.display_name,
+          currentIdentity: data.current_context.identity,
+          targetIdentity: data.target_context?.identity || '',
+          resources: data.running_resources ?? [],
+        }
+        store.graph.envSwitching = null
+        return
+      }
       toast(data?.error || 'Failed to switch env')
       store.graph.envSwitching = null
       return
@@ -77,11 +90,7 @@
   function useThisEnv() {
     if (!store.graph.preview) return
     const target = store.graph.preview.env
-    if (running > 0) {
-      pending = { kind: 'switch', env: target }
-    } else {
-      doSwitch(target)
-    }
+    doSwitch(target)
   }
 
   // Wait for the live graph to reflect the target env, with a deadline.
@@ -121,7 +130,7 @@
     if (!pending) return
     const p = pending
     pending = null
-    if (p.kind === 'switch') doSwitch(p.env)
+    if (p.kind === 'switch') doSwitch(p.env, true, p.currentIdentity, p.targetIdentity)
     else if (p.kind === 'down') doDown()
   }
 
@@ -200,6 +209,8 @@
     <div class="current-context">
       <span>Environment</span>
       <strong>{current}</strong>
+      {#if context?.kind === 'project'}<span class="context-kind">Project environment</span>
+      {:else if context?.kind === 'explicit'}<span class="context-kind">Explicit config</span>{/if}
       <span class="environment-summary" role="status">{actionState.summary}</span>
     </div>
   {/if}
@@ -287,6 +298,10 @@
     padding-left: var(--space-2);
     border-left: 1px solid var(--border);
     color: var(--dim);
+  }
+  .context-kind {
+    color: var(--blue);
+    font-size: var(--text-xs);
   }
   .preview-context {
     color: var(--blue);

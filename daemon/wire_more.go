@@ -58,6 +58,16 @@ type EnvsResponse struct {
 	Context EnvironmentContext `json:"context"`
 }
 
+type EnvironmentSwitchResponse struct {
+	OK                   bool                `json:"ok,omitempty"`
+	Error                string              `json:"error,omitempty"`
+	Message              string              `json:"message,omitempty"`
+	ConfirmationRequired bool                `json:"confirmation_required,omitempty"`
+	CurrentContext       *EnvironmentContext `json:"current_context,omitempty"`
+	TargetContext        *EnvironmentContext `json:"target_context,omitempty"`
+	RunningResources     []string            `json:"running_resources,omitempty"`
+}
+
 type EnvironmentReconcileResponse struct {
 	OK                   bool     `json:"ok,omitempty"`
 	Error                string   `json:"error,omitempty"`

@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/svelte'
+import { tick } from 'svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EnvSwitcher from './EnvSwitcher.svelte'
 import { store } from '$lib/stores.svelte'
+import { switchEnv } from '$lib/api'
 
 vi.mock('$lib/api', () => ({
   apiPost: vi.fn(),
@@ -15,6 +17,7 @@ const previewGraph = { env: 'example', nodes: [], edges: [] }
 
 describe('EnvSwitcher', () => {
   beforeEach(() => {
+    vi.mocked(switchEnv).mockResolvedValue({ ok: true, data: { ok: true } })
     store.graph.data = liveGraph
     store.graph.preview = null
     store.graph.selectedNode = null
@@ -47,6 +50,55 @@ describe('EnvSwitcher', () => {
     expect(screen.queryByRole('button', { name: 'Infra Only' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'example' })).not.toBeInTheDocument()
+  })
+
+  it('uses project context in the graph label and switch confirmation', async () => {
+    if (!store.daemon.envs) throw new Error('env fixture missing')
+    store.daemon.envs.context = {
+      kind: 'project',
+      identity: '/work/payments/orbit.yaml',
+      display_name: 'payments',
+      config_path: '/work/payments/orbit.yaml',
+      project_root: '/work/payments',
+      available: true,
+      running: true,
+      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+    }
+    store.daemon.services = {
+      web: {
+        name: 'web',
+        kind: 'service',
+        state: 'healthy',
+        restart_count: 0,
+        external_restart_count: 0,
+      },
+    }
+    vi.mocked(switchEnv).mockResolvedValue({
+      ok: false,
+      data: {
+        error: 'confirmation required',
+        confirmation_required: true,
+        current_context: store.daemon.envs.context,
+        target_context: {
+          kind: 'managed',
+          identity: '/envs/example.yaml',
+          display_name: 'example',
+          config_path: '/envs/example.yaml',
+          available: true,
+          running: false,
+        },
+        running_resources: ['web'],
+      },
+    })
+
+    render(EnvSwitcher)
+    expect(screen.getByText('payments')).toBeInTheDocument()
+    expect(screen.getByText('Project environment')).toBeInTheDocument()
+    store.graph.preview = previewGraph
+    await tick()
+    await fireEvent.click(screen.getByRole('button', { name: 'Use this env' }))
+    expect(switchEnv).toHaveBeenCalledWith('example', false, '', '')
+    expect(screen.getByText(/stop 1 running item from payments/)).toBeInTheDocument()
   })
 
   it('leads a healthy environment with its application instead of lifecycle controls', () => {

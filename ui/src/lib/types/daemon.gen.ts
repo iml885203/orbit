@@ -26,6 +26,9 @@ import type { KafkaIO } from "./config.gen";
  */
 export interface EnvSwitchRequest {
   env: string; // short name (no .yaml) OR absolute path
+  confirmed?: boolean;
+  current_identity?: string;
+  target_identity?: string;
 }
 
 //////////

@@ -128,10 +128,12 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "http://localhost:$service_port" >"$test_root/page-b.html"
 grep -F "project-b" "$test_root/page-b.html" >/dev/null
 "$orbit_bin" status --json >"$test_root/status-b-after.json"
+cd "$test_root"
 "$orbit_bin" daemon restart --json >"$test_root/restart-daemon-b.json"
 "$orbit_bin" status --json >"$test_root/status-b-after-restart.json"
 curl --fail --silent --show-error \
   "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/envs-api-b.json"
+cd "$test_root/project-b"
 "$orbit_bin" inspect --json >"$test_root/inspect-b-after.json"
 "$orbit_bin" doctor --json >"$test_root/doctor-b-after.json"
 "$orbit_bin" logs app-b --json >"$test_root/logs-b-after.json"
@@ -419,6 +421,25 @@ assert [action["command"] for action in doctor["recommended_actions"]] == [
     "orbit up --json"
 ]
 PY
+"$orbit_bin" daemon stop --json >/dev/null
+
+cd "$test_root/project-a"
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" up --json >"$test_root/explicit-up.json"
+curl --fail --silent --show-error \
+  "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/explicit-envs-api.json"
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+up = json.loads((root / "explicit-up.json").read_text(encoding="utf-8"))
+envs = json.loads((root / "explicit-envs-api.json").read_text(encoding="utf-8"))
+assert up["data"]["context"]["kind"] == "explicit"
+assert envs["context"]["kind"] == "explicit"
+assert pathlib.Path(envs["context"]["config_path"]).resolve() == (root / "project-a" / "orbit.yaml").resolve()
+PY
+"$orbit_bin" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null
 
 echo "Project switching and detached context recovery keep one successful next action"

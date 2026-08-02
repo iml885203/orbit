@@ -29,6 +29,7 @@ type (
 	EnvInfo                      = pub.EnvInfo
 	EnvsResponse                 = pub.EnvsResponse
 	EnvironmentReconcileResponse = pub.EnvironmentReconcileResponse
+	EnvironmentSwitchResponse    = pub.EnvironmentSwitchResponse
 	VersionResponse              = pub.VersionResponse
 	EdgeDetachRequest            = pub.EdgeDetachRequest
 	ServiceModeRequest           = pub.ServiceModeRequest

@@ -35,6 +35,7 @@ var (
 	cliHistAt         time.Time
 	cliHistCmd        string
 	daemonContextKind string
+	configContextKind string
 	instanceName      string
 )
 
@@ -103,13 +104,26 @@ for the bundled demo or a shared environment repository.`,
 		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 		s.ApplyToEnv()
 
+		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+		configContextKind = ""
+		if daemonContextKind != "" {
+			configContextKind = daemonContextKind
+		} else if explicitConfig {
+			configContextKind = "explicit"
+		}
 		if configFile == "" {
 			configFile = resolveConfigFile()
+		}
+		if configContextKind == "" {
+			configContextKind = inferredEnvironmentContextKind(configFile)
 		}
 		selection := readEnvironmentSelection()
 		if commandRequiresAvailableEnvironment(cmd) {
 			if setupRequired(selection, configFile) {
-				return setupRequiredError{}
+				_, daemonAlive := daemon.IsDaemonRunning()
+				if !daemonAlive || !isDaemonRestartCommand(cmd) {
+					return setupRequiredError{}
+				}
 			}
 			if environmentSelectionBlocksConfig(selection, configFile) {
 				return newEnvironmentSelectionRequiredError(selection)
@@ -122,7 +136,6 @@ for the bundled demo or a shared environment repository.`,
 			if client.Health() == nil {
 				if status, err := client.Status(); err == nil {
 					if requiresMatch {
-						explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
 							configFile = status.ConfigPath
 						}
@@ -204,6 +217,10 @@ for the bundled demo or a shared environment repository.`,
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+}
+
+func isDaemonRestartCommand(cmd *cobra.Command) bool {
+	return cmd.Name() == "restart" && cmd.Parent() != nil && cmd.Parent().Name() == "daemon"
 }
 
 // contextualizeDaemonUnavailable keeps every daemon-backed command on the

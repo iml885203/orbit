@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,7 +40,7 @@ func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T
 	}
 
 	srv.SetConfigPath(project)
-	srv.SetEnvironmentContextKind("project")
+	srv.SetEnvironmentContext(project, "project")
 	req := httptest.NewRequest(http.MethodGet, "/api/envs", nil)
 	w := httptest.NewRecorder()
 	srv.handleEnvs(w, req)
@@ -68,11 +69,52 @@ func TestEnvironmentContextMarksMissingProjectUnavailable(t *testing.T) {
 	srv := newTestServer(t, &config.Config{})
 	missing := filepath.Join(t.TempDir(), "removed", "orbit.yaml")
 	srv.SetConfigPath(missing)
-	srv.SetEnvironmentContextKind("project")
+	srv.SetEnvironmentContext(missing, "project")
 
 	context := srv.environmentContext()
 	if context.Available || context.Kind != "project" || context.ConfigPath != missing {
 		t.Fatalf("context = %+v", context)
+	}
+}
+
+func TestEnvironmentContextMarksInvalidProjectUnavailable(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	invalid := filepath.Join(t.TempDir(), "orbit.yaml")
+	if err := os.WriteFile(invalid, []byte("version: [invalid\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv.SetConfigPath(invalid)
+	srv.SetEnvironmentContext(invalid, "project")
+
+	if context := srv.environmentContext(); context.Available {
+		t.Fatalf("invalid context reported available: %+v", context)
+	}
+}
+
+func TestEnvironmentContextIdentitySurvivesDeletedSymlink(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	root := t.TempDir()
+	target := filepath.Join(root, "project.yaml")
+	link := filepath.Join(root, "orbit.yaml")
+	if err := os.WriteFile(target, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	srv.SetConfigPath(link)
+	srv.SetEnvironmentContext(link, "project")
+	before := srv.environmentContext()
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	after := srv.environmentContext()
+
+	if before.Identity != after.Identity {
+		t.Fatalf("identity changed after deletion: before=%q after=%q", before.Identity, after.Identity)
+	}
+	if after.Available {
+		t.Fatalf("deleted symlink target reported available: %+v", after)
 	}
 }
 
@@ -132,6 +174,64 @@ func TestHandleEnvSwitch_UnknownEnv(t *testing.T) {
 	srv.handleEnvSwitch(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestHandleEnvSwitchRequiresServerConfirmationForRunningContext(t *testing.T) {
+	root := t.TempDir()
+	current := filepath.Join(root, "current.yaml")
+	target := filepath.Join(root, "target.yaml")
+	for _, path := range []string{current, target} {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := newTestServer(t, &config.Config{
+		Containers: map[string]*config.Container{
+			"redis": {Name: "redis", Image: "redis:7"},
+		},
+	})
+	srv.SetEnvironmentContext(current, "project")
+	srv.app.Orchestrator.OnContainerSeen("redis", true)
+	launched := false
+	srv.SetRestartLauncher(func(string) error {
+		launched = true
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target"}`))
+	w := httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409, body=%s", w.Code, w.Body.String())
+	}
+	var response EnvironmentSwitchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.ConfirmationRequired ||
+		response.CurrentContext == nil ||
+		response.CurrentContext.Kind != "project" ||
+		response.TargetContext == nil ||
+		response.TargetContext.DisplayName != "target" ||
+		len(response.RunningResources) != 1 ||
+		response.RunningResources[0] != "redis" {
+		t.Fatalf("confirmation response = %+v", response)
+	}
+	if launched || srv.ConfigPath() != current {
+		t.Fatalf("unconfirmed switch mutated state: launched=%v path=%q", launched, srv.ConfigPath())
+	}
+
+	staleConfirmation := fmt.Sprintf(
+		`{"env":"target","confirmed":true,"current_identity":%q,"target_identity":"/different/target.yaml"}`,
+		response.CurrentContext.Identity,
+	)
+	req = httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(staleConfirmation))
+	w = httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+	if w.Code != http.StatusConflict || launched || srv.ConfigPath() != current {
+		t.Fatalf("stale confirmation mutated state: status=%d launched=%v path=%q", w.Code, launched, srv.ConfigPath())
 	}
 }
 
@@ -250,7 +350,7 @@ func TestHandleEnvSwitchFromProjectRestoresManagedSelectionOnLaunchFailure(t *te
 		t.Fatal(err)
 	}
 	srv.SetConfigPath(project)
-	srv.SetEnvironmentContextKind("project")
+	srv.SetEnvironmentContext(project, "project")
 	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
 
 	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"managed"}`))
@@ -263,8 +363,8 @@ func TestHandleEnvSwitchFromProjectRestoresManagedSelectionOnLaunchFailure(t *te
 	if selected := canonicalEnvironmentPath(ReadCurrentEnv()); selected != canonicalEnvironmentPath(managed) {
 		t.Fatalf("managed selection = %q, want %q", selected, managed)
 	}
-	if srv.ConfigPath() != project || srv.EnvironmentContextKind() != "project" {
-		t.Fatalf("project context changed: path=%q kind=%q", srv.ConfigPath(), srv.EnvironmentContextKind())
+	if context := srv.environmentContext(); context.ConfigPath != project || context.Kind != "project" {
+		t.Fatalf("project context changed: %+v", context)
 	}
 }
 

@@ -111,6 +111,7 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 		}
 		result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
 		contextKind = status.Context.Kind
+		configPath = status.Context.ConfigPath
 		if report != nil && len(result.PreviouslyRunning) > 0 {
 			report(fmt.Sprintf(
 				"Restarting Orbit; %d running resource(s) will be restored...",
@@ -461,8 +462,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	}
 
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
-	server.SetConfigPath(configFile)
-	server.SetEnvironmentContextKind(daemonContextKind)
+	server.SetEnvironmentContext(configFile, daemonContextKind)
 	server.SetRestartLauncher(launchDashboardEnvRestart)
 	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
 	app.ProcessMgr.OnStarted = func(_ string) {
