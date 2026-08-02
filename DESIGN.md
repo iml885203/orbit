@@ -100,14 +100,8 @@ Avoid one-off decorative palettes, large marketing gradients, bokeh/orb wallpape
 
 ## Typography
 
-Use the existing type scale from `ui/src/app.css`:
-
-- `--text-xs`: 10px
-- `--text-sm`: 11px
-- `--text-md`: 12px
-- `--text-base`: 13px
-- `--text-lg`: 14px
-- `--text-xl`: 16px
+Use the existing type scale — the `--text-*` variables in `ui/src/app.css`
+are the single authoritative list; do not introduce sizes outside it.
 
 Use system sans-serif for normal UI and `ui-monospace` only for service names, env names, ports, versions, commands, logs, IDs, and machine-shaped values.
 
@@ -115,14 +109,8 @@ Do not introduce viewport-scaled type. Keep letter spacing at zero except for co
 
 ## Layout
 
-Build on the 4px spacing grid:
-
-- `--space-1`: 4px
-- `--space-2`: 8px
-- `--space-3`: 12px
-- `--space-4`: 16px
-- `--space-5`: 24px
-- `--space-6`: 32px
+Build on the 4px spacing grid — the `--space-*` variables in
+`ui/src/app.css` are the single authoritative list.
 
 Prefer compact, stable layouts with explicit dimensions for graph nodes, icon buttons, toolbars, progress rows, badges, and fixed-format controls. Dynamic content must not resize core controls or cause graph/dashboard layout jumps.
 

@@ -130,9 +130,6 @@ orbit doctor --json
 orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
 ```
 
-[Agent walkthrough](docs/agent-walkthrough.md) records a real session:
-diagnose, fix, and verify a failing service in four commands.
-
 The repository ships `plugins/orbit-agent`, a version-matched Claude and
 Codex plugin whose skill teaches agents to inspect state first, prefer
 `--json`, and confirm destructive operations. In Claude Code:
@@ -157,7 +154,7 @@ and request playback. It binds to loopback only.
 Core user documentation:
 
 - [Use Orbit with your project](docs/local-first.md)
-- [Why Orbit and comparisons](docs/why-orbit.md) — decision tables in [Comparisons](docs/comparisons.md)
+- [Why Orbit](docs/why-orbit.md) — design trade-offs and tool comparisons
 - [Configuration](docs/configuration.md)
 - [Using Orbit under an E2E test suite](docs/e2e-testing.md)
 - [Tracing](docs/tracing.md)

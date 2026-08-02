@@ -63,8 +63,8 @@ overlapping tools:
 Orbit does not require replacing a project's build system, package manager, or
 container images. Service commands remain the commands developers already use.
 
-For how these decisions relate to specific tools, see
-[Comparisons](comparisons.md).
+How these decisions relate to specific tools is tabled in
+[Comparisons](#comparisons) at the end of this page.
 
 ## Infrastructure without a database worldview
 
@@ -132,3 +132,47 @@ on shortening the inner loop without changing how the application is deployed.
 
 Those boundaries are part of the product: fewer promises mean a smaller mental
 model and more predictable behavior inside the scope Orbit owns.
+
+## Comparisons
+
+Design decisions, not feature lists. Other tools as publicly documented in
+August 2026.
+
+### Orbit and Docker Compose
+
+|  | Compose | Orbit |
+|---|---|---|
+| Runs | containers | host processes + containers, one graph |
+| "Ready" means | container started | endpoint answers |
+| Between commands | — | resident daemon keeps state, logs, health |
+| Machine interface | — | versioned `orbit.cli.v1` JSON contract |
+
+**Choose Compose** when the whole stack is containerized and one compose file
+serves both dev and deployment.
+
+### Orbit and Aspire
+
+| Decision | Aspire | Orbit |
+|---|---|---|
+| App model | code-first AppHost (C# / TypeScript) | one declarative `orbit.yaml` |
+| Environment lifetime | while `aspire run` runs | resident daemon, outlives sessions |
+| Switching scenarios (shared infra) | restart the AppHost and everything it runs | shared containers keep running |
+| Scope | dev → deployment (`publish` / `deploy`) | stops before deployment |
+| Distribution unit | AppHost inside the solution | YAML in any Git repo, can span repos |
+
+**Choose Aspire** for environment-as-code, typed integrations, an
+OpenTelemetry dashboard, and one model from dev to deployment—especially on
+Azure.
+
+**Choose Orbit** for one reviewable file, an environment that outlives the
+terminal, multi-repo stacks, and a stable JSON contract for coding agents and
+test harnesses.
+
+### SQL Server schema management
+
+|  | Aspire (Community Toolkit) | Orbit (`sqlserver` extension) |
+|---|---|---|
+| Apply schema | auto-publish dacpac at startup; dashboard "Redeploy" | `orbit sqlserver publish`, data-preserving |
+| Preview changes | — | `orbit sqlserver diff` |
+| Clean reset | — | `orbit sqlserver reset`, requires confirmation |
+| Query | — | `orbit sqlserver query` |

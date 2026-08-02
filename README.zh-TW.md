@@ -123,9 +123,6 @@ orbit doctor --json
 orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用表示的憑證
 ```
 
-[Agent 操作實錄](docs/agent-walkthrough.zh-TW.md)記錄了一段真實 session：
-四個指令完成診斷、修復、驗證一個故障的服務。
-
 Repository 內含 `plugins/orbit-agent`，是版本對齊的 Claude 與 Codex
 plugin，其 skill 會要求 agent 先檢查狀態、優先使用 `--json`，並在破壞性
 操作前確認。在 Claude Code 中：
@@ -150,7 +147,7 @@ playback。Dashboard 只綁定 loopback。
 核心使用者文件：
 
 - [在你的專案使用 Orbit](docs/local-first.zh-TW.md)
-- [為什麼是 Orbit 與比較](docs/why-orbit.zh-TW.md) —— 決策表在[比較](docs/comparisons.zh-TW.md)
+- [為什麼是 Orbit](docs/why-orbit.zh-TW.md) —— 設計取捨與工具比較
 - [設定](docs/configuration.zh-TW.md)
 - [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)

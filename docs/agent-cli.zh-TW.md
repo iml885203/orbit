@@ -113,38 +113,8 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：
 
-| Command | JSON 行為 |
-|---|---|
-| `orbit version --json` | 回傳目前安裝的 Orbit 版本。 |
-| `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
-| `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、resource risks，以及建議後續指令。 |
-| `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、managed repository URL/ref/commit、daemon，以及 `data.resources` 中的 resource 狀態。 |
-| `orbit env info --json` | 回傳 env 的身分，以及每個 resource 帶出處的 ports 與 URL：`declared` 來自 environment 檔，`observed` 來自運行中的 daemon。daemon 服務的是別的 environment 時（`data.daemon.config_match: false`）不給 observed 值。resource 的 environment 值只在 `--show-secrets` 時輸出；key 名稱一律列出。 |
-| `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
-| `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
-| `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。套用待處理的 config 編輯時，`data.environment_changes` 會回報 handoff 前後保留的 running intent。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
-| `orbit down --json` | 停止 resources 後回傳最終 lifecycle 結果。Orbit 已停止時會以空陣列成功 no-op；尚未 setup 時建議 `orbit init`，已 setup 時才建議下一個正常的 `orbit up`。 |
-| `orbit down <resources...> --json` | 回傳指定 resources 的最終 lifecycle 結果。若這次停止讓執行中的 dependents degraded，結果會在 `resources` 與 `degraded_resources` 直接列出，並只提供恢復 dependency 的 action。`--group` 與 `--infra` 使用和 `orbit up` 相同的互斥選擇模式；停止 group 時不會停止共享相依。 |
-| `orbit restart --json` | 回傳最終 lifecycle 結果，並驗證 restart 的證據。 |
-| `orbit env list --json` | 在 `data.environment` 回傳 selection state、已失效的先前選擇、可直接切換的 environment 選項，以及適用時的 managed repository URL/ref/commit。 |
-| `orbit env use <path> --json` | 回傳選取的 env、env 名稱、daemon 是否正在執行，以及是否需要 restart。 |
-| `orbit env sync --json` | 回傳 sync source、要求的 ref、實際 commit、destination、dry-run 狀態、寫入檔案、daemon 狀態、套用動作，以及恢復運行的資源。 |
-| `orbit env apply --json` | 套用待處理的環境變更，並回傳原先運行、成功恢復或已從新設定移除的資源。 |
-| `orbit switch <env> --json` | 回傳選取的 env、daemon start/restart action、最終 daemon 狀態、config path、dashboard URL，以及新 env 的 prerequisite checks/readiness。 |
-| `orbit update --json` | 更新目前呼叫的 binary；若環境正在執行，會重新連接並回傳 handoff 前後恢復的 resources。`--rollback` 對上一版 binary 使用相同 contract。 |
-| `orbit daemon start --json` | 回傳 daemon running 狀態、PID、config path 與 dashboard URL。 |
-| `orbit daemon stop --json` | 回傳停止後狀態、先前 PID，以及是否要求 service shutdown。 |
-| `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
-| `orbit uninstall --json` | 預覽 binary artifacts 與 user data 是否保留；只有加上 `--yes` 才會移除。 |
-| `orbit sqlserver publish <database|project> --json` | 執行一般的 data-preserving publish，並回傳 `databases`、`published` 與 `data_loss_allowed: false`。`--all`、`--parallel` 使用相同 envelope。`--force --json` 絕不 publish；它只回傳一個保留 scope 與 `--force`、移除 `--yes` 的人工 `destructive: true` action，讓執行的人仍需確認。 |
-| `orbit sqlserver list --json` | 在 `data` 回傳設定的 SQL projects 與其 databases。 |
-| `orbit sqlserver diff --json` | 以 envelope 回傳每個 database 的 drift；`--script` 會把變更腳本加進 `data`。 |
-| `orbit sqlserver reset --json` | 絕不執行 reset：以穩定的 `json_unsupported_destructive_command` 錯誤拒絕，資料遺失永遠由人決定。 |
-| `orbit init --json` | 以 envelope 回傳 setup 結果，失敗時帶出未完成的步驟。 |
-| `orbit trace --json` | 回傳近期 trace summaries 於 `data.traces`，最新在前。 |
-| `orbit trace -f --json` | 串流 NDJSON trace-summary event，一行一個 JSON 物件。 |
-| `orbit trace <id> --json` | 回傳一條完整 trace（summary 欄位 + `spans`）於 `data`。 |
-| `orbit tracing status --json` | 回傳 receiver 健康狀態、使用中的 port 與 ingest 計數器於 `data`。 |
+每個指令的 JSON 行為只維護一份完整對照表，見英文版
+[agent-cli.md](agent-cli.md#converted-commands)。新增或變更指令時只更新那份表。
 
 Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout 保持可解析。
 
@@ -211,23 +181,8 @@ action。
 
 已轉換控制指令的穩定 `data.operation` 值：
 
-| Command | `data.operation` |
-|---|---|
-| `orbit env list --json` | `env_list` |
-| `orbit env info --json` | `env_info` |
-| `orbit env use <path> --json` | `env_use` |
-| `orbit env sync --json` | `env_sync` |
-| `orbit env apply --json` | `env_apply` |
-| `orbit switch <env> --json` | `switch` |
-| `orbit daemon start --json` | `daemon_start` |
-| `orbit daemon stop --json` | `daemon_stop` |
-| `orbit daemon restart --json` | `daemon_restart` |
-| `orbit update --json` | `update` |
-| `orbit update --rollback --json` | `rollback` |
-| `orbit settings set <key> <value> --json` | `settings_set` |
-| `orbit settings set-env <name> <value> --json` | `settings_set_env` |
-| `orbit settings list --json` | `settings_list` |
-| `orbit uninstall --json` | `uninstall` |
+穩定的 `data.operation` 值只維護一份完整清單，見英文版
+[agent-cli.md](agent-cli.md#converted-commands)。
 
 `switch` 會先停掉正在運行的環境，所以在有資源運行且未加 `--yes` 時會回傳
 `confirmation_required` 而不動手——切換環境是機器層級的 provisioning 步驟，
