@@ -1,6 +1,7 @@
 # <img src="ui/public/orbit-logo-badge.svg" width="32" height="32" alt=""> Orbit
 
-用一份宣告式環境設定，同時管理本機開發 process 與 containers。
+用一份宣告式環境設定，同時執行 host processes 與 containers——服務本機開發，
+也作為 E2E 測試的基底。
 
 [安裝](docs/development.zh-TW.md) · [設定](docs/configuration.zh-TW.md) ·
 [架構](docs/architecture.zh-TW.md) · [Agent CLI](docs/agent-cli.zh-TW.md) ·
@@ -10,237 +11,151 @@
 > UX 與相容性契約仍在打磨中；`v1.0.0` 前可能有 breaking changes。
 
 Orbit 會依 dependency 順序啟動服務、檢查健康狀態、串流 logs，並透過常駐
-daemon 維持環境。相同操作也能從本機 dashboard 與穩定的 JSON CLI contract
-執行。
-
-## 為什麼使用 Orbit？
-
-真實的本機開發環境通常不只是一份 container 設定。應用程式會在 host 上執行
-以便快速修改，database、queue、cache 則跑在 containers 裡。Orbit 為整個環境
-提供單一 control plane：
+daemon 維持環境。人透過 CLI 與 dashboard 操作；coding agents 透過穩定的
+`orbit.cli.v1` JSON contract 操作。同一個環境既服務日常開發，也能作為 E2E
+測試套件的基底——在你的機器或 CI runner 上。
 
 - **混合 runtimes：** 在同一張 dependency graph 管理 host processes 與
   containers。
 - **共享 environments：** 從任何 Git repository 同步有版本的 YAML。
-- **Agent automation：** 使用 `orbit.cli.v1` JSON envelope 可靠控制環境。
-- **本機診斷：** CLI 與 dashboard 都能查看 health、logs、history、traces 與設定。
+- **Agent-first 控制：** coding agents 透過有版本的 `orbit.cli.v1` JSON
+  contract 驅動完整生命週期——穩定的 error codes 與可執行的建議動作。
+- **E2E 基底：** 測試套件驗證共用環境，而不是自己重建一份——見
+  [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)。
+- **本機診斷：** CLI 與 dashboard 都能查看 health、logs、history、traces
+  與設定。
 
-設計取捨與比較請見[為什麼是 Orbit](docs/why-orbit.zh-TW.md)。
+這些選擇背後的設計取捨請見[為什麼是 Orbit](docs/why-orbit.zh-TW.md)。
+
+## 一份檔案描述整個環境
+
+在你的程式碼旁存一份 `orbit.yaml`
+（[可直接執行的範例](docs/examples/local-first)）：
+
+```yaml
+version: "3"
+
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis:
+        preferred: 26379
+        target: 6379
+
+services:
+  app:
+    kind: frontend
+    command: python3 -m http.server "$PORT"
+    ports:
+      http:
+        preferred: 28080
+    depends_on: [redis]
+```
+
+日常迴圈只有四個指令：
+
+```bash
+orbit up       # 依 dependency 順序啟動所有資源
+orbit status   # 查看實際 ready 的狀態
+orbit logs app # 檢查 application output
+orbit down     # 停止環境
+```
+
+Orbit 會先啟動 Redis 再啟動 host process、等待真實 readiness 而不是把
+「process 存在」當成「可以使用」、把選定的 port 注入為 `PORT`，port 被占用
+時會在整張 graph 一致換成可用值，不需要改設定。編輯 `orbit.yaml` 後再執行
+一次 `orbit up`：Orbit 會先驗證新設定，再中斷任何東西。
+
+[在你的專案使用 Orbit](docs/local-first.zh-TW.md) 完整走過這條路徑，並說明
+如何把驗證過的檔案升級為團隊共享 environment。所有欄位請見
+[設定](docs/configuration.zh-TW.md)。
 
 ## 安裝
 
-以下 installer 會安裝最新發布的 preview release，不是尚未發布的 `main`
-build。
-
-公開 demo 需要：
-
-- [Git](https://git-scm.com/downloads) 同步 environment；
-- [Docker](https://docs.docker.com/get-docker/) 執行 Redis；以及
-- [Python 3](https://www.python.org/downloads/) 執行 host-side services。
-
-Orbit 只安裝自己的 CLI。它會從選定的 environment 偵測 project runtimes，
-並在啟動任何東西前提供明確修復方式；不會暗中安裝或更換 project toolchain。
+macOS 與 Linux：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## 五分鐘上手
-
-從任何目錄都能開始。Orbit 會下載並選取公開 demo environment；不需要先 clone
-這個 repository，也不需要自己建立 config：
-
-```bash
-orbit init --yes
-orbit up
-orbit status
-orbit open demo-shop
-```
-
-`orbit init --yes` 會使用公開的
-[Orbit demo environment](https://github.com/iml885203/orbit-demo)：包含 storefront、
-三個使用 Python 標準函式庫的 API 與各自的 SQLite database，以及 container 內
-的 Redis。若缺少必要工具，setup 會在啟動前停止並直接顯示修復方式；若預設
-port 已被占用，Orbit 會為整張 dependency graph 自動選擇可用 port。
-
-選擇 **Run checkout**，頁面會顯示同一個 request 如何穿過 catalog、
-inventory、Redis 與 orders，並保留 product、reservation、order 的關聯。
-**Try 99 items** 則顯示庫存 `7 → 7`、新增 reservation `+0`、新增 order
-`+0`，並保留先前成功的 order。這不只是證明五個 processes 能啟動，而是直接
-展示 Orbit 協調一套有用的混合 runtime application。完成後再執行
-`orbit open`，即可從 dashboard 檢視與控制同一套環境。試用結束後，用一個
-指令停止全部資源：
-
-```bash
-orbit down
-```
-
-準備套用到真實 checkout 時，從[一份 project-local
-`orbit.yaml`](docs/local-first.zh-TW.md) 開始。這條十分鐘路徑不需要
-environment repository、不需要 `orbit init`，也不需要手動編輯 `~/.orbit`
-設定。Host service 只需 command 與 port；Orbit 會推斷常見 runtime，並以
-config directory 作為 working directory。驗證完成後，文件會再說明何時、
-如何升級為團隊共享 environment。
-
-需要更多細節時：
-
-```bash
-orbit doctor             # 說明尚未滿足的 setup 條件
-orbit logs shop-order-api -f # 追蹤 checkout path
-orbit status --json      # 穩定的 machine-readable 狀態
-```
-
-Windows PowerShell：
+Windows（PowerShell，Beta）：
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
+```
+
+這會安裝最新發布的 preview release。Orbit 只安裝自己的 CLI，不會安裝專案的
+runtimes 或 dependencies；`orbit doctor` 會回報所選 environment 需要什麼與
+明確的修復方式。升級、rollback、移除與平台細節請見
+[安裝與開發](docs/development.zh-TW.md)。
+
+## 試玩 demo
+
+公開 demo 需要 Git、Docker 與 Python 3。從任何目錄開始：
+
+```bash
 orbit init --yes
 orbit up
 orbit status
 orbit open demo-shop
 ```
 
-Unix 的 export 會在 installer 使用 `~/.local/bin` 時，讓目前 shell
-立即找到新安裝的指令；把同一行加入 shell profile，之後開啟的 terminal
-也能直接使用。Windows installer 會同時更新目前 PowerShell process 與 user
-PATH。
+`orbit init --yes` 會下載
+[Orbit demo environment](https://github.com/iml885203/orbit-demo)：一個
+storefront、三個在 host 上執行並各自使用 SQLite 的 Python API，以及
+container 內的 Redis。在 storefront 中，**Run checkout** 展示同一個 request
+穿過 catalog、inventory、Redis 與 orders；**Try 99 items** 展示失敗路徑不會
+建立 order、庫存也維持不變。用 `orbit down` 停止全部資源。
 
-`orbit init` 會直接採用這些發行版預設，不會詢問 demo 沒有使用的
-environment repository 或 project workspace。完成五分鐘體驗後，可以另外
-clone [擴充版 mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop)，
-用相同的 project-local `orbit up` 流程執行獨立的八 API 專案；完整應用程式
-範例不放在 Orbit source repository 內。
-Orbit 不會自動安裝專案 runtime 或 dependencies；`orbit doctor` 會回報所選
-environment 需要的工具，並在啟動前偵測未滿足的 Python
-`requirements.txt`。
-`orbit up` 完成後，Orbit 會直接顯示 healthy application 的 URL 與唯一開啟
-指令；dashboard 則保留為次要選項。
-
-升級、rollback、移除、手動下載與測試尚未發布的 `main`
-請見[安裝與開發](docs/development.zh-TW.md)。
-
-macOS 與 Linux 為正式支援平台；Windows build 為 Beta。詳情請見
-[平台支援與安裝](docs/development.zh-TW.md#平台支援)。
-
-## 常用操作
-
-```bash
-orbit up                     # 啟動 services 與 dependencies
-orbit status --json          # 取得穩定的 machine-readable 狀態
-orbit logs shop-order-api -f # 追蹤預設 checkout path
-orbit env sync --json        # 更新共享 environment files
-orbit switch quickstart      # 選擇預設 demo environment
-orbit doctor --json          # 診斷本機設定
-orbit down                   # 停止環境
-```
-
-一般啟動只需使用 `orbit up`。只有刻意想單獨啟動 containers、不啟動 host
-services 時，才使用 `orbit up --infra`。需要縮小啟動範圍時，請選擇指定
-resource names 或一個以上的 `--group`；Orbit 會拒絕混用，不會默默忽略部分指令。
-
-`orbit down` 使用完全相同的選擇方式：不指定範圍會停止整個環境、resource
-names 只停止指定資源、`--group` 停止指定群組，而 `--infra` 只停止
-containers。關閉環境不需要再記另一套選擇模型。
-
-編輯 active `orbit.yaml` 後，再執行一次 `orbit up` 即可。Orbit 會先驗證新
-設定，再套用變更、恢復原本正在運行的 resources，最後啟動這次指令指定的
-resources，不會先中斷可用環境。只有想套用待處理變更、但不想額外啟動原先
-停止的 resources 時，才需要使用 `orbit env apply`。
-
-使用團隊自己的 environment 時，請把 `demo-shop` 與 `quickstart` 換成
-`orbit status` 和 `orbit env list` 顯示的名稱。切換後，Orbit 會在
-`orbit up` 前依 project version files 回報不相容的 runtime，或尚未安裝的
-project packages。
-
-`orbit env sync` 會更新共享設定；若 active environment 有變更，會詢問是否
-立即套用並恢復原本正在運行的 resources，原先停止的 resources 仍維持停止。
-官方 demo 會固定在每個 Orbit release 對應的 revision；`orbit env list` 與
-`orbit status` 會顯示 repository、要求的 ref 與實際 commit。團隊也可以用
-`orbit init --env-repo <url> --env-ref <tag-or-commit>` 得到相同的可重現性。
-若要延後中斷，使用 `--no-apply`，Orbit 會顯示之後完成套用的確切指令。
-
-若 environment 設定了對應的 infrastructure container，`orbit query redis`、
-`orbit query mongo` 與 `orbit query postgres` 會開啟 container 的原生 client。
-PostgreSQL 會沿用 container 的 `POSTGRES_USER` 與 `POSTGRES_DB`；只有要查其他
-database 時才需要傳入 `--database`。只有一個符合的 container 時 Orbit 會
-直接選取；有多個時則列出候選，要求 `--container <name>`，不會猜測。這些
-query helper 與下方選用的 SQL Server schema-project workflow 是兩件不同的事。
-
-## 選用 workflows
-
-除非 active environment 明確啟用對應 extension，相關 dashboard 頁面與設定
-檢查不會出現，指令也不會啟用。單純管理 host processes 與 containers 完全
-不需要理解或設定這些功能。
-
-### SQL Server Database Projects
-
-```bash
-orbit sqlserver list
-orbit sqlserver diff AppDB
-orbit sqlserver publish AppDB
-```
-
-Environment 透過 `sqlserver:` section 明確啟用。`publish` 會保留資料並套用
-schema diff；`reset` 與 forced publish 等破壞性路徑都要求確認。詳情請見
-[SQL Server workflow](docs/sql-workflow.zh-TW.md)。
-
-### Callback tunnels
-
-```bash
-orbit tunnel claim /callbacks/example --to 8080
-```
-
-只 claim 已授權的開發或 staging path。Callback traffic 可能含 credentials 或個人
-資料。詳情請見 [Tunnel claims](docs/tunnel-claim.zh-TW.md)。
+更大的範例請見
+[擴充版 mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop)。
 
 ## 搭配 AI agent
 
-Repository 內含 `plugins/orbit-agent`，可包裝成同版本的 Codex 與 Claude plugin。
-它會要求 agent 先檢查狀態、使用 `--json`，並在破壞性操作前確認。
+Agent 透過同一套 CLI 加上 `--json` 讀取狀態；錯誤帶有穩定 code 與可直接
+執行的建議動作：
 
-不安裝 plugin 時，也可以讓 agent 直接閱讀
-[skill](plugins/orbit-agent/skills/orbit/SKILL.md) 與
-[JSON contract](docs/agent-cli.zh-TW.md)。
+```bash
+orbit status --json
+orbit doctor --json
+```
 
-在 Claude Code 中，可直接從這個 repository 安裝：
+Repository 內含 `plugins/orbit-agent`，是版本對齊的 Claude 與 Codex
+plugin，其 skill 會要求 agent 先檢查狀態、優先使用 `--json`，並在破壞性
+操作前確認。在 Claude Code 中：
 
 ```bash
 claude plugin marketplace add iml885203/orbit
 claude plugin install orbit-agent@orbit
 ```
 
-Codex 或從 source checkout 使用時，把 `plugins/orbit-agent` 加為 local plugin。
-Plugin 版本永遠對齊 Orbit 的 release tag，詳見
-[版本與相容性](docs/versioning.zh-TW.md)。
+不安裝 plugin 時，讓 agent 直接閱讀
+[skill](plugins/orbit-agent/skills/orbit/SKILL.md) 與
+[JSON contract](docs/agent-cli.zh-TW.md)。
 
 ## Dashboard
 
-Daemon 啟動後執行 `orbit open`。Dashboard 提供：
-
-- dependency graph 與 service controls；
-- environment preview 與切換；
-- logs、設定與 health diagnostics；
-- active environment 啟用後才出現的 SQL Server schema 檢查與發布；
-- traces 與 request playback。
-
-Dashboard 位於 <http://localhost:19800>。
+`orbit open` 會開啟本機 dashboard：dependency graph 與 service controls、
+environment 預覽與切換、logs、health diagnostics、traces 與 request
+playback。Dashboard 只綁定 loopback。
 
 ## 文件
 
 核心使用者文件：
 
-- [在自己的專案使用 Orbit](docs/local-first.zh-TW.md)
+- [在你的專案使用 Orbit](docs/local-first.zh-TW.md)
 - [設定](docs/configuration.zh-TW.md)
+- [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)
 - [疑難排解](docs/troubleshooting.zh-TW.md)
 - [版本與相容性](docs/versioning.zh-TW.md)
 
-選用 workflows：
+選用 workflows（environment 啟用後才生效）：
 
 - [SQL Server Database Projects](docs/sql-workflow.zh-TW.md)
 - [Tunnel claims](docs/tunnel-claim.zh-TW.md)
-- [在 Orbit 上跑 E2E 測試](docs/e2e-testing.zh-TW.md)
 
 導入者與 contributors：
 
@@ -248,12 +163,9 @@ Dashboard 位於 <http://localhost:19800>。
 - [架構](docs/architecture.zh-TW.md)
 - [開發](docs/development.zh-TW.md)
 - [Agent CLI contract](docs/agent-cli.zh-TW.md)
-- [程式碼慣例](docs/CODE_CONVENTIONS.zh-TW.md)
+- [Contributing](CONTRIBUTING.md)
 
-Repository-local `/orbit-review` skill 會依這些規範檢查變更。每次 commit 前執行
-`make preflight`。
+## License
 
-## 授權
-
-[MIT](LICENSE)。binary 內嵌第三方相依套件，其授權與著作權標示列於
-[NOTICE](NOTICE)。
+[MIT](LICENSE)。Binary 內嵌第三方 dependencies，licenses 與 attributions
+列於 [NOTICE](NOTICE)。
