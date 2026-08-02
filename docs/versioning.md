@@ -29,10 +29,14 @@ Freeze a preview batch in this order:
 
 1. Complete the related implementation and its strongest practical journey.
 2. Review the combined user-visible difference from the previous release.
-3. Choose the next version and update Orbit, both plugin manifests, and the
-   paired demo tag together.
+3. Choose the next version, update both plugin manifests, and prepare the
+   paired demo tag. Its `.orbit-release.json` records the release version and
+   exact Orbit candidate commit that the demo journey built. Do not create the
+   Orbit tag yet.
 4. Prepare and review the user-facing release notes.
 5. Run the candidate and platform gates, then manually approve publication.
+   The release workflow creates the immutable Orbit tag only after every gate
+   passes, so a failed candidate never leaves a release tag behind.
 
 Release notes are entered when the release workflow is approved and live in
 GitHub Releases rather than accumulating in the source tree. They describe the
