@@ -199,20 +199,6 @@ assert [action["command"] for action in response["recommended_actions"]] == [
 ]
 PY
 
-python3 -c '
-import socket
-import time
-
-listeners = []
-for port in (26379, 28080, 28101, 28102, 28103):
-    listener = socket.socket()
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("127.0.0.1", port))
-    listener.listen()
-    listeners.append(listener)
-time.sleep(600)
-' &
-port_guard_pid=$!
 
 "$orbit_bin" init --yes | tee "$test_root/init.txt"
 for expected in "Step 1: Quickstart" "Preparing the Orbit demo" "Demo environment ready"; do
@@ -233,6 +219,58 @@ if grep -E 'Environment source|https://github.com/|@[[:space:]]+v[0-9]|/envs' \
   cat "$test_root/init.txt" >&2
   exit 1
 fi
+python3 -c '
+import socket
+import time
+
+listeners = []
+for port in (26379, 28080, 28101, 28102, 28103):
+    listener = socket.socket()
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", port))
+    listener.listen()
+    listeners.append(listener)
+import pathlib, sys
+pathlib.Path(sys.argv[1]).touch()
+time.sleep(600)
+' "$test_root/ports-ready" &
+port_guard_pid=$!
+for _ in $(seq 1 100); do
+  if [ -f "$test_root/ports-ready" ]; then
+    break
+  fi
+  sleep 0.05
+done
+if [ ! -f "$test_root/ports-ready" ]; then
+  echo "Timed out waiting for the port guard." >&2
+  exit 1
+fi
+
+# Declared ports are the contract: while the guard owns them, up must
+# refuse loudly with the failed checks instead of starting anything.
+if "$orbit_bin" up --json >"$test_root/up-conflict.json" 2>/dev/null; then
+  echo "orbit up started while the demo's declared ports were owned by another process." >&2
+  cat "$test_root/up-conflict.json" >&2
+  exit 1
+fi
+python3 - "$test_root/up-conflict.json" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+assert payload["ok"] is False
+message = payload["error"]["message"]
+assert any(port in message for port in ("26379", "28080", "28101", "28102", "28103")), message
+PY
+
+kill "$port_guard_pid" >/dev/null 2>&1 || true
+wait "$port_guard_pid" 2>/dev/null || true
+port_guard_pid=""
+for _ in $(seq 1 100); do
+  if ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 26379), 0.2)' 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+done
+
 if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   echo "orbit up failed during the first-five-minutes acceptance test." >&2
   if [ -s "$test_root/up.json" ]; then
@@ -279,11 +317,11 @@ assert set(resources) == {
     "shop-order-api",
     "redis",
 }
-assert resources["redis"]["ports"]["redis"] != 26379
-assert resources["demo-shop"]["ports"]["http"] != 28080
-assert resources["shop-catalog-api"]["ports"]["http"] != 28101
-assert resources["shop-inventory-api"]["ports"]["http"] != 28102
-assert resources["shop-order-api"]["ports"]["http"] != 28103
+assert resources["redis"]["ports"]["redis"] == 26379
+assert resources["demo-shop"]["ports"]["http"] == 28080
+assert resources["shop-catalog-api"]["ports"]["http"] == 28101
+assert resources["shop-inventory-api"]["ports"]["http"] == 28102
+assert resources["shop-order-api"]["ports"]["http"] == 28103
 assert all(resource["state"] == "healthy" for resource in resources.values())
 print(resources["demo-shop"]["url"])
 ' "$test_root/status.json"
@@ -296,8 +334,7 @@ PATH="$(dirname "$orbit_bin"):$PATH" \
   >"$test_root/mini-shop-smoke.txt"
 
 expected_demo_ref="$(
-  python3 -c 'import json, sys; print("v" + json.load(open(sys.argv[1], encoding="utf-8"))["version"])' \
-    "$repo_root/plugins/orbit-agent/.codex-plugin/plugin.json"
+  sed -n 's/.*EnvRepoRef: "\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
 )"
 
 python3 - "$test_root" "$demo_url" "$expected_demo_ref" <<'PY'

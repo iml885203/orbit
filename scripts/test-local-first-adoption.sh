@@ -235,6 +235,32 @@ if [ ! -f "$test_root/ports-ready" ]; then
   exit 1
 fi
 
+# Declared ports are the contract: while another process owns them, up
+# must refuse loudly instead of starting anything.
+if "$orbit_bin" up --json >"$test_root/up-conflict.json" 2>/dev/null; then
+  echo "orbit up started while the declared ports were owned by another process." >&2
+  cat "$test_root/up-conflict.json" >&2
+  exit 1
+fi
+python3 - "$test_root/up-conflict.json" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+assert payload["ok"] is False
+message = payload["error"]["message"]
+assert "26379" in message or "28080" in message, message
+PY
+
+kill "$port_guard_pid" >/dev/null 2>&1 || true
+wait "$port_guard_pid" 2>/dev/null || true
+port_guard_pid=""
+for _ in $(seq 1 100); do
+  if ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 26379), 0.2)' 2>/dev/null &&
+     ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 28080), 0.2)' 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+done
+
 "$orbit_bin" doctor --json >"$test_root/doctor.json"
 if ! "$orbit_bin" up --json \
   >"$test_root/up.json" 2>"$test_root/up.stderr"; then
@@ -288,8 +314,8 @@ assert status["ok"] is True
 resources = {resource["name"]: resource for resource in status["data"]["resources"]}
 assert set(resources) == {"app", "redis"}
 assert all(resource["state"] == "healthy" for resource in resources.values())
-assert resources["app"]["ports"]["http"] != 28080
-assert resources["redis"]["ports"]["redis"] != 26379
+assert resources["app"]["ports"]["http"] == 28080
+assert resources["redis"]["ports"]["redis"] == 26379
 environment = status["data"]["environment"]
 assert environment["source"] == "project"
 assert pathlib.Path(environment["selected_path"]) == root / "project" / "orbit.yaml"
@@ -405,4 +431,4 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
 grep -F "Orbit local-first works" "$test_root/shared-index.html" >/dev/null
 "$orbit_bin" down --json >"$test_root/shared-down.json"
 
-echo "Local-first trial and shared promotion work with occupied preferred ports"
+echo "Local-first trial refuses owned ports loudly and runs on the declared ones"
