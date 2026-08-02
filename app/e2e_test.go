@@ -193,6 +193,7 @@ type e2eCLIEnvelope struct {
 	SchemaVersion      string           `json:"schema_version"`
 	OK                 bool             `json:"ok"`
 	Command            string           `json:"command"`
+	Instance           string           `json:"instance,omitempty"`
 	Data               json.RawMessage  `json:"data"`
 	RecommendedActions []cli.JSONAction `json:"recommended_actions"`
 	Error              *struct {

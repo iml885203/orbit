@@ -28,16 +28,17 @@ import (
 )
 
 const (
-	labelManaged = "orbit.managed"
-	labelService = "orbit.service"
-	labelConfig  = "orbit.config"
-	networkName  = "orbit"
+	labelManaged       = "orbit.managed"
+	labelService       = "orbit.service"
+	labelConfig        = "orbit.config"
+	defaultNetworkName = "orbit"
 )
 
 // Manager handles Docker container lifecycle.
 type Manager struct {
 	cli       *client.Client
 	namespace string
+	network   string
 
 	// OnOutput is called for container log lines.
 	OnOutput func(name string, line string)
@@ -67,13 +68,20 @@ func NewManager(namespace string) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connecting to Docker: %w", err)
 	}
-	return &Manager{cli: cli, namespace: namespace}, nil
+	return &Manager{cli: cli, namespace: namespace, network: NetworkName(namespace)}, nil
+}
+
+func NetworkName(namespace string) string {
+	if namespace == "" {
+		return defaultNetworkName
+	}
+	return "orbit-" + namespace
 }
 
 // EnsureNetwork creates the orbit Docker network if it doesn't exist.
 func (m *Manager) EnsureNetwork(ctx context.Context) error {
 	networks, err := m.cli.NetworkList(ctx, client.NetworkListOptions{
-		Filters: make(client.Filters).Add("name", networkName),
+		Filters: make(client.Filters).Add("name", m.network),
 	})
 	if err != nil {
 		return err
@@ -81,7 +89,7 @@ func (m *Manager) EnsureNetwork(ctx context.Context) error {
 	if len(networks.Items) > 0 {
 		return nil
 	}
-	_, err = m.cli.NetworkCreate(ctx, networkName, client.NetworkCreateOptions{
+	_, err = m.cli.NetworkCreate(ctx, m.network, client.NetworkCreateOptions{
 		Driver: "bridge",
 	})
 	return err
@@ -183,8 +191,8 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 		Config: containerConfig,
 		HostConfig: &container.HostConfig{
 			PortBindings: portBindings,
-			Binds:        cfg.Volumes,
-			NetworkMode:  container.NetworkMode(networkName),
+			Binds:        namespaceVolumeBinds(m.namespace, cfg.Volumes),
+			NetworkMode:  container.NetworkMode(m.network),
 			SecurityOpt:  securityOpt,
 		},
 		NetworkingConfig: &network.NetworkingConfig{},

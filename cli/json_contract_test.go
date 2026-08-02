@@ -47,6 +47,37 @@ func TestWriteJSONSuccess(t *testing.T) {
 	}
 }
 
+func TestWriteJSONSuccessIdentifiesTargetInstance(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "checkout-a")
+	var buf bytes.Buffer
+	actions := []JSONAction{{Command: "orbit open --json", Reason: "Open the selected runtime."}}
+	if err := WriteJSONSuccess(&buf, "orbit status --instance checkout-a --json", map[string]bool{"running": true}, actions); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Instance != "checkout-a" {
+		t.Fatalf("instance = %q", got.Instance)
+	}
+	if got.RecommendedActions[0].Command != "orbit --instance checkout-a open --json" {
+		t.Fatalf("recommended action lost target: %+v", got.RecommendedActions)
+	}
+}
+
+func TestWriteJSONErrorIdentifiesTargetInstance(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "checkout-a")
+	var buf bytes.Buffer
+	if err := WriteJSONError(&buf, "orbit status --instance checkout-a --json", daemon.ErrDaemonUnreachable); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Instance != "checkout-a" {
+		t.Fatalf("instance = %q", got.Instance)
+	}
+	if got.Error == nil || !strings.Contains(got.Error.NextCommand, "--instance checkout-a") {
+		t.Fatalf("error recovery lost target: %+v", got.Error)
+	}
+}
+
 func TestWriteJSONErrorClassifiesDaemonUnreachable(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit restart worker --json", fmt.Errorf("dial daemon: %w", daemon.ErrDaemonUnreachable))
