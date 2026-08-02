@@ -64,12 +64,22 @@ class DaemonStore {
 // Group-interior layout mode for the graph canvas: 'rectangle' packs each
 // group into a near-square grid; 'extend' lays it out as wide dagre rows.
 export type LayoutMode = 'rectangle' | 'extend'
+export type ServiceView = 'graph' | 'table'
 const LAYOUT_MODE_KEY = 'orbit.layoutMode'
+const SERVICE_VIEW_KEY = 'orbit.serviceView'
 function loadLayoutMode(): LayoutMode {
   try {
     return localStorage.getItem(LAYOUT_MODE_KEY) === 'extend' ? 'extend' : 'rectangle'
   } catch {
     return 'rectangle'
+  }
+}
+
+function loadServiceView(): ServiceView {
+  try {
+    return localStorage.getItem(SERVICE_VIEW_KEY) === 'table' ? 'table' : 'graph'
+  } catch {
+    return 'graph'
   }
 }
 
@@ -83,11 +93,21 @@ class UIStore {
   version = $state<VersionResponse | null>(null)
   // Persisted across reloads so the user's layout preference sticks.
   layoutMode = $state<LayoutMode>(loadLayoutMode())
+  serviceView = $state<ServiceView>(loadServiceView())
 
   setLayoutMode(mode: LayoutMode) {
     this.layoutMode = mode
     try {
       localStorage.setItem(LAYOUT_MODE_KEY, mode)
+    } catch {
+      // localStorage unavailable (private mode / SSR) — in-memory only.
+    }
+  }
+
+  setServiceView(view: ServiceView) {
+    this.serviceView = view
+    try {
+      localStorage.setItem(SERVICE_VIEW_KEY, view)
     } catch {
       // localStorage unavailable (private mode / SSR) — in-memory only.
     }
@@ -215,4 +235,3 @@ export function hydrateLogs(service: string, snapshot: string[]) {
 export function isRunning(state: string): boolean {
   return state === 'healthy' || state === 'degraded' || state === 'starting' || state === 'building'
 }
-

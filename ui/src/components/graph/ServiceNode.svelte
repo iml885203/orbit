@@ -286,7 +286,7 @@
      across the canvas. */
   .node.state-stopped,
   .node.state-pending {
-    opacity: 0.55;
+    opacity: 0.95;
     border-style: dashed;
   }
   .node.state-starting,
@@ -295,7 +295,7 @@
   }
   @keyframes node-breathe {
     0%, 100% { opacity: 1; }
-    50%      { opacity: 0.55; }
+    50%      { opacity: 0.95; }
   }
   @media (prefers-reduced-motion: reduce) {
     .node.state-starting,
