@@ -84,6 +84,17 @@ func (s *Server) startBackground(work func()) {
 	}()
 }
 
+func (s *Server) startEnvironmentBackground(identity string, work func()) {
+	s.startBackground(func() {
+		s.environmentTransitionMu.Lock()
+		defer s.environmentTransitionMu.Unlock()
+		if s.environmentContext().Identity != identity {
+			return
+		}
+		work()
+	})
+}
+
 func (s *Server) waitForBackground() {
 	s.background.Wait()
 }

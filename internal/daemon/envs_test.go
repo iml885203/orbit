@@ -321,13 +321,23 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 		}
 	}
 
-	srv := newTestServer(t, &config.Config{})
+	srv := newTestServer(t, &config.Config{Containers: map[string]*config.Container{
+		"redis": {Name: "redis", Image: "redis:7"},
+	}})
 	srv.SetConfigPath(current)
+	srv.app.Orchestrator.OnContainerSeen("redis", true)
 	if err := os.WriteFile(CurrentEnvPath(), []byte(current+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
-	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target"}`))
+	currentIdentity := canonicalEnvironmentPath(current)
+	targetIdentity := canonicalEnvironmentPath(target)
+	body := fmt.Sprintf(
+		`{"env":"target","confirmed":true,"current_identity":%q,"target_identity":%q,"running_resources":["redis"]}`,
+		currentIdentity,
+		targetIdentity,
+	)
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	srv.handleEnvSwitch(w, req)
 

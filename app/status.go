@@ -94,7 +94,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		}
 		return nil
 	}
-	if cfgErr != nil && configFileExists(configFile) {
+	if cfgErr != nil && configFileExists(configFile) && !dstatus.DetachedProject {
 		var mismatch *config.SchemaVersionMismatchError
 		if errors.As(cfgErr, &mismatch) {
 			return mismatch

@@ -23,6 +23,8 @@ type EnvToggleInfo struct {
 func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		srv.environmentTransitionMu.RLock()
+		defer srv.environmentTransitionMu.RUnlock()
 		toggles := []EnvToggleInfo{}
 		cfg := srv.holder.Load()
 		for svcName, svc := range cfg.Services {
@@ -43,6 +45,9 @@ func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, toggles)
 
 	case http.MethodPut:
+		srv.environmentTransitionMu.Lock()
+		defer srv.environmentTransitionMu.Unlock()
+		identity := srv.environmentContext().Identity
 		var req EnvToggleUpdateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})
@@ -64,13 +69,13 @@ func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 			isRunning = st != "stopped" && st != "pending"
 		}
 		if isRunning {
-			go func() {
+			srv.startEnvironmentBackground(identity, func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				if err := srv.app.RestartService(ctx, req.Service); err != nil {
 					slog.Error("restart failed", "component", "env-toggles", "service", req.Service, "err", err)
 				}
-			}()
+			})
 		}
 		state := "ON"
 		if !req.Enabled {

@@ -9,6 +9,8 @@ import (
 )
 
 func (s *Server) handleEnvironmentReconcile(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}

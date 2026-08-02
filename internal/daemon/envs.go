@@ -146,9 +146,15 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if stopped > 0 {
 		s.app.StopAllServices()
 	}
+	restoreRunning := func() {
+		if s.app != nil && len(runningResources) > 0 {
+			s.app.StartServices(runningResources)
+		}
+	}
 
 	// Persist the choice (matches `orbit switch` behavior).
 	if err := atomicio.WriteFile(CurrentEnvPath(), []byte(target+"\n"), 0644); err != nil {
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
@@ -171,6 +177,7 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
@@ -185,6 +192,7 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "schedule daemon restart: " + err.Error()})
 		return
 	}

@@ -137,6 +137,8 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 
 	envName := s.currentEnvName()
 	if envQuery := r.URL.Query().Get("env"); envQuery != "" && envQuery != envName {
