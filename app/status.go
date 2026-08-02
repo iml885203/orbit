@@ -41,7 +41,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
 			dstatus.Context = status.Context
-			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
+			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
 				configFile = status.ConfigPath
 				cfg, cfgErr = config.Load(configFile)
 				dstatus.DetachedProject = true
@@ -50,7 +50,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 				dstatus.Context = status.Context
 			}
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-				if !usesDiscoveredProjectConfig(configFile) {
+				if environmentContextKind(configFile) != "project" {
 					return mismatch
 				}
 				daemonRunningForConfig = false

@@ -41,10 +41,10 @@
     }
   })
 
-  async function doSwitch(short: string, confirmed = false, currentIdentity = '', targetIdentity = '') {
+  async function doSwitch(short: string, confirmed = false, currentIdentity = '', targetIdentity = '', confirmedResources: string[] = []) {
     const total = running
     store.graph.envSwitching = { target: short, total, phase: 'stopping' }
-    const { ok, data } = await switchEnv(short, confirmed, currentIdentity, targetIdentity)
+    const { ok, data } = await switchEnv(short, confirmed, currentIdentity, targetIdentity, confirmedResources)
     if (!ok) {
       if (data?.confirmation_required && data.current_context) {
         pending = {
@@ -131,7 +131,7 @@
     if (!pending) return
     const p = pending
     pending = null
-    if (p.kind === 'switch') doSwitch(p.env, true, p.currentIdentity, p.targetIdentity)
+    if (p.kind === 'switch') doSwitch(p.env, true, p.currentIdentity, p.targetIdentity, p.resources)
     else if (p.kind === 'down') doDown()
   }
 

@@ -61,7 +61,7 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 			Running:                  result.Running,
 			PID:                      result.PID,
 			PreviousPID:              result.PreviousPID,
-			ConfigPath:               configFile,
+			ConfigPath:               result.ConfigPath,
 			Dashboard:                fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
 			RequestedServiceShutdown: result.WasRunning,
 			StopMethod:               result.StopMethod,
@@ -92,6 +92,7 @@ type daemonRestartResult struct {
 	StopMethod        daemonStopMethod
 	PreviouslyRunning []string
 	RestoredResources []string
+	ConfigPath        string
 }
 
 func restartDaemonPreservingResources(configPath string, report func(string)) (daemonRestartResult, error) {
@@ -102,6 +103,7 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 		PreviousPID:       previousPID,
 		PreviouslyRunning: []string{},
 		RestoredResources: []string{},
+		ConfigPath:        configPath,
 	}
 
 	if alive {
@@ -112,6 +114,7 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 		result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
 		contextKind = status.Context.Kind
 		configPath = status.Context.ConfigPath
+		result.ConfigPath = configPath
 		if report != nil && len(result.PreviouslyRunning) > 0 {
 			report(fmt.Sprintf(
 				"Restarting Orbit; %d running resource(s) will be restored...",

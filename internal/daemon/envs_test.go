@@ -233,6 +233,18 @@ func TestHandleEnvSwitchRequiresServerConfirmationForRunningContext(t *testing.T
 	if w.Code != http.StatusConflict || launched || srv.ConfigPath() != current {
 		t.Fatalf("stale confirmation mutated state: status=%d launched=%v path=%q", w.Code, launched, srv.ConfigPath())
 	}
+
+	staleResources := fmt.Sprintf(
+		`{"env":"target","confirmed":true,"current_identity":%q,"target_identity":%q,"running_resources":[]}`,
+		response.CurrentContext.Identity,
+		response.TargetContext.Identity,
+	)
+	req = httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(staleResources))
+	w = httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+	if w.Code != http.StatusConflict || launched || srv.ConfigPath() != current {
+		t.Fatalf("resource-stale confirmation mutated state: status=%d launched=%v path=%q", w.Code, launched, srv.ConfigPath())
+	}
 }
 
 func TestHandleEnvSwitch_WrongMethod(t *testing.T) {

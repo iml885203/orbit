@@ -34,6 +34,7 @@ type Server struct {
 	// would lose updates (e.g. a SQL restart rolling back an env switch).
 	holder        *config.Holder
 	configWriteMu sync.Mutex
+	envSwitchMu   sync.Mutex
 	background    sync.WaitGroup
 	settings      *Settings
 	// extHooks holds the registered feature seams (SSE event sources,

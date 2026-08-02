@@ -262,6 +262,7 @@ assert [(item["name"], item["state"]) for item in after["data"]["resources"]] ==
 assert after["data"]["daemon"]["context"]["kind"] == "project"
 
 assert restart_daemon["ok"] is True
+assert pathlib.Path(restart_daemon["data"]["config_path"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 assert after_restart["data"]["daemon"]["context"]["kind"] == "project"
 assert after_restart["data"]["daemon"]["context"]["display_name"] == "project-b"
 assert envs_api["context"]["kind"] == "project"
@@ -272,6 +273,8 @@ assert inspect_after["ok"] is True
 assert inspect_after["data"]["readiness"]["state"] == "ready"
 assert inspect_after["data"]["environment"]["selected_name"] == "project-b"
 assert inspect_after["data"]["environment"]["daemon_env"] == "project-b"
+assert inspect_after["data"]["environment"]["context"]["kind"] == "project"
+assert pathlib.Path(inspect_after["data"]["environment"]["context"]["identity"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 assert inspect_after["data"]["risks"] == [], inspect_after["data"]["risks"]
 assert inspect_after.get("recommended_actions", []) == []
 
@@ -424,7 +427,14 @@ PY
 "$orbit_bin" daemon stop --json >/dev/null
 
 cd "$test_root/project-a"
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" up >"$test_root/explicit-up.txt"
 "$orbit_bin" --config "$test_root/project-a/orbit.yaml" up --json >"$test_root/explicit-up.json"
+cd "$test_root"
+if "$orbit_bin" status --json >"$test_root/explicit-outside-status.json"; then
+  echo "status without the explicit config unexpectedly adopted it." >&2
+  exit 1
+fi
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" status --json >"$test_root/explicit-outside-matched-status.json"
 curl --fail --silent --show-error \
   "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/explicit-envs-api.json"
 python3 - "$test_root" <<'PY'
@@ -435,10 +445,41 @@ import sys
 root = pathlib.Path(sys.argv[1])
 up = json.loads((root / "explicit-up.json").read_text(encoding="utf-8"))
 envs = json.loads((root / "explicit-envs-api.json").read_text(encoding="utf-8"))
+outside = json.loads((root / "explicit-outside-status.json").read_text(encoding="utf-8"))
+outside_matched = json.loads((root / "explicit-outside-matched-status.json").read_text(encoding="utf-8"))
 assert up["data"]["context"]["kind"] == "explicit"
 assert envs["context"]["kind"] == "explicit"
+assert outside["error"]["code"] == "env_mismatch"
+assert outside_matched["data"]["daemon"]["context"]["kind"] == "explicit"
+assert outside_matched["data"]["daemon"].get("detached_project") is not True
+assert "Using project environment" not in (root / "explicit-up.txt").read_text(encoding="utf-8")
 assert pathlib.Path(envs["context"]["config_path"]).resolve() == (root / "project-a" / "orbit.yaml").resolve()
 PY
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" down --json >/dev/null
+"$orbit_bin" daemon stop --json >/dev/null
+
+make_project "team-a/payments" "payments-a" "team-a"
+make_project "team-b/payments" "payments-b" "team-b"
+cd "$test_root/team-a/payments"
+"$orbit_bin" up --json >/dev/null
+cd "$test_root/team-b/payments"
+if "$orbit_bin" up --json >"$test_root/same-name-refused.json"; then
+  echo "same-name project switch unexpectedly skipped confirmation." >&2
+  exit 1
+fi
+python3 - "$test_root/same-name-refused.json" "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+refused = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+message = refused["error"]["message"]
+assert refused["error"]["code"] == "confirmation_required"
+assert str(root / "team-a" / "payments" / "orbit.yaml") in message
+assert str(root / "team-b" / "payments" / "orbit.yaml") in message
+PY
+cd "$test_root/team-a/payments"
 "$orbit_bin" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null
 

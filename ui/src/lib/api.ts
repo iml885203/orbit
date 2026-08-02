@@ -97,12 +97,13 @@ export async function detachEdge(env: string, from: string, to: string, detached
   return apiPut(`/api/edges/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { env, detached })
 }
 
-export async function switchEnv(env: string, confirmed = false, currentIdentity = '', targetIdentity = '') {
+export async function switchEnv(env: string, confirmed = false, currentIdentity = '', targetIdentity = '', runningResources: string[] = []) {
   return apiPut<EnvironmentSwitchResponse>('/api/envs/current', {
     env,
     confirmed,
     current_identity: currentIdentity,
     target_identity: targetIdentity,
+		running_resources: runningResources,
   })
 }
 

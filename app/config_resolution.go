@@ -52,8 +52,9 @@ func usesDiscoveredProjectConfig(path string) bool {
 	return discovered != "" && sameFilePath(discovered, path)
 }
 
-func shouldResumeDetachedProject(explicitConfig bool, selectedPath, runningPath string) bool {
+func shouldResumeDetachedProject(explicitConfig bool, selectedPath, runningPath, runningKind string) bool {
 	return !explicitConfig &&
+		runningKind == "project" &&
 		!usesDiscoveredProjectConfig(selectedPath) &&
 		strings.EqualFold(filepath.Base(filepath.Clean(runningPath)), projectConfigName) &&
 		configFileExists(runningPath)

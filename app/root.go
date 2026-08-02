@@ -136,11 +136,11 @@ for the bundled demo or a shared environment repository.`,
 			if client.Health() == nil {
 				if status, err := client.Status(); err == nil {
 					if requiresMatch {
-						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
+						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
 							configFile = status.ConfigPath
 						}
 						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-							if usesDiscoveredProjectConfig(configFile) {
+							if environmentContextKind(configFile) == "project" {
 								return projectContextInactive(configFile, status.ConfigPath)
 							}
 							return mismatch

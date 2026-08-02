@@ -44,7 +44,7 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 		info := EnvInfo{
 			Name:    name,
 			Path:    full,
-			Current: context.Kind == "managed" && canonicalEnvironmentPath(full) == context.ConfigPath,
+			Current: context.Kind == "managed" && canonicalEnvironmentPath(full) == context.Identity,
 		}
 		resp.Envs = append(resp.Envs, info)
 	}
@@ -55,16 +55,19 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 
 // EnvSwitchRequest is the PUT body for /api/env.
 type EnvSwitchRequest struct {
-	Env             string `json:"env"` // short name (no .yaml) OR absolute path
-	Confirmed       bool   `json:"confirmed,omitempty"`
-	CurrentIdentity string `json:"current_identity,omitempty"`
-	TargetIdentity  string `json:"target_identity,omitempty"`
+	Env              string   `json:"env"` // short name (no .yaml) OR absolute path
+	Confirmed        bool     `json:"confirmed,omitempty"`
+	CurrentIdentity  string   `json:"current_identity,omitempty"`
+	TargetIdentity   string   `json:"target_identity,omitempty"`
+	RunningResources []string `json:"running_resources,omitempty"`
 }
 
 func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
+	s.envSwitchMu.Lock()
+	defer s.envSwitchMu.Unlock()
 	var req EnvSwitchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})
@@ -106,7 +109,8 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if len(runningResources) > 0 &&
 		(!req.Confirmed ||
 			req.CurrentIdentity != currentContext.Identity ||
-			req.TargetIdentity != targetIdentity) {
+			req.TargetIdentity != targetIdentity ||
+			!equalStringSlices(req.RunningResources, runningResources)) {
 		targetContext := EnvironmentContext{
 			Kind:        "managed",
 			Identity:    targetIdentity,
@@ -191,6 +195,18 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		msg = "Stopped " + strconv.Itoa(stopped) + " running items from the previous environment. " + msg
 	}
 	writeJSON(w, http.StatusOK, EnvironmentSwitchResponse{OK: true, Message: msg})
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func restoreManagedSelection(path string) error {

@@ -57,6 +57,13 @@
         {#if context.managed_selection && !context.managed_selection.active}
           <div class="metadata"><span>Managed selection</span><code>{context.managed_selection.name}</code><em>not active</em></div>
         {/if}
+        {#if !context.available}
+          {#if context.managed_selection}
+            <button class="recovery" onclick={() => preview(context.managed_selection!.name)}>Preview managed environment {context.managed_selection.name}</button>
+          {:else}
+            <div class="recovery-hint">Run <code>orbit init</code> to choose an available environment.</div>
+          {/if}
+        {/if}
       </section>
     {/if}
     <ul>

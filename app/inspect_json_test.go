@@ -338,6 +338,25 @@ func TestBuildInspectDataKeepsOtherProjectResourcesOutOfCurrentProject(t *testin
 	}
 }
 
+func TestBuildInspectDataIncludesPersistedProjectContext(t *testing.T) {
+	context := daemon.EnvironmentContext{
+		Kind: "project", Identity: "/workspace/payments/orbit.yaml",
+		DisplayName: "payments", ConfigPath: "/workspace/payments/orbit.yaml",
+		ProjectRoot: "/workspace/payments",
+		ManagedSelection: &daemon.ManagedEnvironmentSelection{
+			Name: "e2e", Path: "/envs/e2e.yaml", Active: false,
+		},
+	}
+	got := buildInspectData(inspectBuildOptions{Context: context})
+	if got.Environment.Context.Kind != "project" ||
+		got.Environment.Context.Identity != context.Identity ||
+		got.Environment.Context.ProjectRoot != context.ProjectRoot ||
+		got.Environment.Context.ManagedSelection == nil ||
+		got.Environment.Context.ManagedSelection.Active {
+		t.Fatalf("context = %+v", got.Environment.Context)
+	}
+}
+
 func TestBuildInspectDataZeroServicesMarshalEmptyArrays(t *testing.T) {
 	data := buildInspectData(inspectBuildOptions{
 		ConfigPath:    "/tmp/development.yaml",

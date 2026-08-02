@@ -29,6 +29,7 @@ export interface EnvSwitchRequest {
   confirmed?: boolean;
   current_identity?: string;
   target_identity?: string;
+  running_resources?: string[];
 }
 
 //////////

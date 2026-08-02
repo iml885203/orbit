@@ -98,8 +98,16 @@ describe('EnvSwitcher', () => {
     store.graph.preview = previewGraph
     await tick()
     await fireEvent.click(screen.getByRole('button', { name: 'Use this env' }))
-    expect(switchEnv).toHaveBeenCalledWith('example', false, '', '')
+    expect(switchEnv).toHaveBeenCalledWith('example', false, '', '', [])
     expect(screen.getByText(/stop 1 running item from payments/)).toBeInTheDocument()
+	await fireEvent.click(screen.getByRole('button', { name: 'Stop and switch' }))
+	expect(switchEnv).toHaveBeenLastCalledWith(
+	  'example',
+	  true,
+	  '/work/payments/orbit.yaml',
+	  '/envs/example.yaml',
+	  ['web'],
+	)
   })
 
   it('leads a healthy environment with its application instead of lifecycle controls', () => {

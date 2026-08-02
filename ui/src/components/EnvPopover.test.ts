@@ -67,6 +67,25 @@ describe('EnvPopover', () => {
     expect(screen.getByText('not active')).toBeInTheDocument()
   })
 
+  it('offers the inactive managed environment when a project config is unavailable', () => {
+    if (!store.daemon.envs) throw new Error('env fixture missing')
+    store.daemon.envs.context = {
+      kind: 'project',
+      identity: '/work/missing/orbit.yaml',
+      display_name: 'missing',
+      config_path: '/work/missing/orbit.yaml',
+      project_root: '/work/missing',
+      available: false,
+      running: false,
+      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+    }
+
+    render(EnvPopover)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Unavailable')
+    expect(screen.getByRole('button', { name: 'Preview managed environment development' })).toBeInTheDocument()
+  })
+
   it('previews another environment and returns to Services', async () => {
     fetchGraph.mockResolvedValue(previewGraph)
     render(EnvPopover)

@@ -74,7 +74,7 @@ func projectContextInactive(configPath, runningPath string) error {
 }
 
 func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
-	if !usesDiscoveredProjectConfig(configFile) {
+	if environmentContextKind(configFile) != "project" {
 		return nil, nil
 	}
 	previousPID, alive := daemon.IsDaemonRunning()
@@ -102,11 +102,12 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 		ToPath:           configFile,
 		StoppedResources: runningEnvironmentResources(status.Resources),
 	}
+	fromLabel, toLabel := projectContextSwitchLabels(switched)
 	if len(switched.StoppedResources) > 0 && !projectContextYes {
 		summary := fmt.Sprintf(
 			"Switching from %s to %s stops %d running resource(s): %s.",
-			switched.FromName,
-			switched.ToName,
+			fromLabel,
+			toLabel,
 			len(switched.StoppedResources),
 			strings.Join(switched.StoppedResources, ", "),
 		)
@@ -132,12 +133,12 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 	}
 	if !cli.JSONOutput {
 		if len(switched.StoppedResources) == 0 {
-			fmt.Printf("Switching from %s to %s...\n", switched.FromName, switched.ToName)
+			fmt.Printf("Switching from %s to %s...\n", fromLabel, toLabel)
 		} else {
 			fmt.Printf(
 				"Switching from %s to %s; stopping %d running resource(s)...\n",
-				switched.FromName,
-				switched.ToName,
+				fromLabel,
+				toLabel,
 				len(switched.StoppedResources),
 			)
 		}
@@ -149,7 +150,7 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 }
 
 func printProjectEnvironmentContext() {
-	if cli.JSONOutput || !usesDiscoveredProjectConfig(configFile) {
+	if cli.JSONOutput || environmentContextKind(configFile) != "project" {
 		return
 	}
 	fmt.Printf("Using project environment: %s\n", projectContextName(configFile))
@@ -161,6 +162,14 @@ func printProjectEnvironmentContext() {
 			daemonsrv.EnvShortName(selected),
 		)
 	}
+}
+
+func projectContextSwitchLabels(switched *projectContextSwitch) (string, string) {
+	if switched.FromName != switched.ToName {
+		return switched.FromName, switched.ToName
+	}
+	return fmt.Sprintf("%s (%s)", switched.FromName, switched.FromPath),
+		fmt.Sprintf("%s (%s)", switched.ToName, switched.ToPath)
 }
 
 func projectContextName(configPath string) string {

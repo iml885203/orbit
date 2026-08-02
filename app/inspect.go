@@ -58,14 +58,15 @@ type inspectDaemonSummary struct {
 }
 
 type inspectEnvSummary struct {
-	State                 string              `json:"state"`
-	SelectedName          string              `json:"selected_name,omitempty"`
-	SelectedPath          string              `json:"selected_path,omitempty"`
-	Environments          []environmentChoice `json:"environments"`
-	DaemonEnv             string              `json:"daemon_env,omitempty"`
-	ContextSwitchRequired bool                `json:"context_switch_required,omitempty"`
-	RunningName           string              `json:"running_name,omitempty"`
-	RunningPath           string              `json:"running_path,omitempty"`
+	State                 string                    `json:"state"`
+	SelectedName          string                    `json:"selected_name,omitempty"`
+	SelectedPath          string                    `json:"selected_path,omitempty"`
+	Environments          []environmentChoice       `json:"environments"`
+	DaemonEnv             string                    `json:"daemon_env,omitempty"`
+	ContextSwitchRequired bool                      `json:"context_switch_required,omitempty"`
+	RunningName           string                    `json:"running_name,omitempty"`
+	RunningPath           string                    `json:"running_path,omitempty"`
+	Context               daemon.EnvironmentContext `json:"context"`
 }
 
 type inspectServiceSummary struct {
@@ -106,6 +107,7 @@ type inspectBuildOptions struct {
 	Selection           environmentSelection
 	ContextMismatch     bool
 	RunningPath         string
+	Context             daemon.EnvironmentContext
 }
 
 func inspectCmd() *cobra.Command {
@@ -190,6 +192,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	}
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
+			opts.Context = status.Context
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
 				opts.Status = status
 				opts.ConfigMatchesDaemon = true
@@ -258,6 +261,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 		SelectedPath: opts.Selection.SelectedPath,
 		Environments: opts.Selection.Environments,
 		DaemonEnv:    daemonEnv,
+		Context:      opts.Context,
 	}
 	if opts.ContextMismatch {
 		environment.ContextSwitchRequired = true
