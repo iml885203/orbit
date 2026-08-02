@@ -41,16 +41,16 @@ func TestTunnelClaimOutputJSONRendersArgumentErrorOnce(t *testing.T) {
 	cmd := tunnelClaimCmd()
 	cmd.SilenceErrors = true
 	cmd.SilenceUsage = true
-	var stderr bytes.Buffer
-	cmd.SetErr(&stderr)
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
 	cmd.SetArgs([]string{"-o", "json"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected argument error")
 	}
 	var event map[string]any
-	if decodeErr := json.Unmarshal(stderr.Bytes(), &event); decodeErr != nil {
-		t.Fatalf("stderr = %q: %v", stderr.String(), decodeErr)
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &event); decodeErr != nil {
+		t.Fatalf("stdout = %q: %v", stdout.String(), decodeErr)
 	}
 	if event["type"] != "error" || event["schema_version"] != float64(1) {
 		t.Fatalf("event = %#v", event)
@@ -61,14 +61,14 @@ func TestTunnelClaimOutputJSONRendersFlagError(t *testing.T) {
 	cmd := tunnelClaimCmd()
 	cmd.SilenceErrors = true
 	cmd.SilenceUsage = true
-	var stderr bytes.Buffer
-	cmd.SetErr(&stderr)
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
 	cmd.SetArgs([]string{"-o", "json", "--unknown"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected flag error")
 	}
-	if !strings.Contains(stderr.String(), `"type":"error"`) {
-		t.Fatalf("stderr = %q", stderr.String())
+	if !strings.Contains(stdout.String(), `"type":"error"`) {
+		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
 

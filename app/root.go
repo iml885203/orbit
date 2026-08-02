@@ -20,6 +20,7 @@ import (
 	"github.com/iml885203/orbit/internal/history"
 	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -81,6 +82,14 @@ for the bundled demo or a shared environment repository.`,
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides project config and current env)")
 	rootCmd.PersistentFlags().BoolVar(&cli.JSONOutput, "json", false, "output in JSON format")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// A command with DisableFlagParsing (exec) never lets cobra
+		// intercept -h/--help, so a help request would run the daemon
+		// gates below and could fail for reasons unrelated to help.
+		// Only the leading argument counts: later flags belong to the
+		// command being passed through.
+		if cmd.DisableFlagParsing && len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+			return pflag.ErrHelp
+		}
 		// Apply saved settings (workspace root, SQL mode) to env for all commands
 		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 		s.ApplyToEnv()

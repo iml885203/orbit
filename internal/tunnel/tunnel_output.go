@@ -24,7 +24,9 @@ func renderTunnelCommandError(cmd *cobra.Command, err error) error {
 	if flagErr != nil || output != "json" {
 		return err
 	}
-	_ = json.NewEncoder(cmd.ErrOrStderr()).Encode(map[string]any{
+	// Machine-readable errors go to stdout like every other --json error
+	// (the envelope contract's deliberate choice); stderr stays human-only.
+	_ = json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
 		"schema_version": 1,
 		"type":           "error",
 		"code":           "command_failed",

@@ -2999,6 +2999,22 @@ func (e *e2eEnv) resourcePort(t *testing.T, name, label string) int {
 	return 0
 }
 
+// Covers: help must never fail. exec disables flag parsing, so its help
+// request used to fall through to the daemon gates and error on stale or
+// unconfigured setups — exactly when people read help.
+func TestE2E_ExecHelpNeverRunsDaemonGates(t *testing.T) {
+	binary := findOrbitBinary(t)
+	command := exec.Command(binary, "exec", "--help")
+	command.Env = append(os.Environ(), "ORBIT_HOME="+t.TempDir())
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("exec --help failed: %v\n%s", err, output)
+	}
+	if !bytes.Contains(output, []byte("orbit exec")) {
+		t.Fatalf("exec --help did not print help:\n%s", output)
+	}
+}
+
 // findOrbitBinary mirrors setupE2E's binary discovery without the docker skip
 // and without creating an e2eEnv. Useful for tests that don't need a full env.
 func findOrbitBinary(t *testing.T) string {

@@ -1,7 +1,6 @@
 package devdb
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -56,7 +55,7 @@ func runDBList(_ *cobra.Command, _ []string) error {
 	}
 
 	if cli.JSONOutput {
-		return printJSON(resp)
+		return cli.WriteJSONSuccess(os.Stdout, "orbit sqlserver list", resp, nil)
 	}
 
 	if len(resp.Projects) == 0 {
@@ -75,10 +74,4 @@ func runDBList(_ *cobra.Command, _ []string) error {
 		}
 	}
 	return nil
-}
-
-func printJSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }
