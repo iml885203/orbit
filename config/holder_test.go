@@ -12,7 +12,7 @@ func TestHolder_LoadStoreRoundTrip(t *testing.T) {
 	if h.Load() != a {
 		t.Fatal("Load must return the stored snapshot")
 	}
-	b := &Config{Version: "3", PreviewOnly: true}
+	b := &Config{Version: "4"}
 	h.Store(b)
 	if h.Load() != b {
 		t.Fatal("Store must publish the new snapshot")

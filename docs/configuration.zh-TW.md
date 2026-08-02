@@ -41,7 +41,6 @@ Orbit 對每個 command 依以下順序選出一份 config：
 
 ```yaml
 version: "3"
-previewOnly: false   # optional：此 env 只能檢視、不能在本機啟用
 settings:            # global timing, poll intervals
 tracing:             # optional 內建 OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -54,7 +53,6 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | Key | Type | Required | 用途 |
 |---|---|---|---|
 | `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit env sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
-| `previewOnly` | bool | no | env 可在 dashboard 檢視但不能在本機啟用（防誤點，非安全邊界） |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
 | `containers` | map | no | Docker container 定義 |
@@ -69,6 +67,10 @@ Orbit 會嚴格 decode core schema 與已註冊的 extension sections。未知 k
 有問題的 field 與來源行號；若能明確判斷，還會建議最接近的合法 field 或
 enum value。`orbit doctor`、`orbit up` 與 `orbit inspect --json` 都會提供
 同一份指引；Orbit 不會安靜忽略它無法理解的設定。
+
+先前的 top-level `previewOnly` field 已移除。請從既有 environment files
+刪除此 field；Orbit 會拒絕過時設定並顯示遷移指引。現在每個合法 environment
+都可以被選擇、啟用、檢視與管理。
 
 ### Schema 2 遷移到 3
 

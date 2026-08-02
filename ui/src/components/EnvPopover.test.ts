@@ -13,13 +13,11 @@ vi.mock('svelte-spa-router', () => ({ push }))
 
 const liveGraph = {
   env: 'development',
-  previewOnly: false,
   nodes: [],
   edges: [],
 }
 const previewGraph = {
   env: 'example',
-  previewOnly: false,
   nodes: [],
   edges: [],
 }
@@ -33,8 +31,8 @@ describe('EnvPopover', () => {
     store.daemon.envs = {
       running: 0,
       envs: [
-        { name: 'development.yaml', path: '/envs/development.yaml', current: true, previewOnly: false },
-        { name: 'example.yaml', path: '/envs/example.yaml', current: false, previewOnly: false },
+        { name: 'development.yaml', path: '/envs/development.yaml', current: true },
+        { name: 'example.yaml', path: '/envs/example.yaml', current: false },
       ],
     }
   })

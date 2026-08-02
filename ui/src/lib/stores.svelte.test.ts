@@ -4,7 +4,6 @@ import type { GraphResponse } from './types.gen'
 
 const graph = (state = 'healthy'): GraphResponse => ({
   env: 'preview',
-  previewOnly: false,
   nodes: [
     { name: 'api', kind: 'backend', state },
     { name: 'web', kind: 'frontend', state },

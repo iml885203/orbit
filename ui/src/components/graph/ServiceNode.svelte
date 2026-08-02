@@ -29,19 +29,9 @@
   )
 
   let busy = $state(false)
-  // True when the active env is preview-only or hover-previewing another
-  // env. Disables every mutation button below; daemon also rejects 409
-  // but disabling avoids the round trip.
+  // Another env's on-disk graph has no live processes to mutate.
   const readOnly = $derived(mutationsDisabled())
   const showActions = $derived(!readOnly)
-
-  // Show the infra icon strip only when the rendered graph is preview-only
-  // (infra container nodes are hidden in that mode — the strip carries the
-  // dependency info instead). For regular envs the strip is redundant with
-  // the infra node + edge that the canvas already draws.
-  const showInfraStrip = $derived(
-    !!store.graph.active?.previewOnly && (node.infraDeps?.length ?? 0) > 0
-  )
 
   // Kafka indicator: a small radio icon in row 1 that signals this node has
   // async (kafka) producers or consumers. The actual edges are revealed
@@ -232,19 +222,6 @@
         {/if}
       </div>
     {/if}
-    {#if showInfraStrip}
-      <span class="infra-strip" aria-label="Infra dependencies for {node.name}">
-        {#each node.infraDeps ?? [] as dep (dep.name)}
-          <span class="infra-chip" use:tooltip={{ content: dep.name }} aria-label={dep.name}>
-            {#if dep.icon}
-              <Icon icon={dep.icon} width="14" height="14" />
-            {:else}
-              <Cog size={14} strokeWidth={2} />
-            {/if}
-          </span>
-        {/each}
-      </span>
-    {/if}
     {#if firstPort}
       <span
         class="port-hint"
@@ -390,28 +367,6 @@
   .actions {
     display: flex;
     align-items: center;
-  }
-
-  /* Infra dependency strip: shown only in preview-only envs where the
-     infra container nodes themselves have been hidden. Visually quieter
-     than the action buttons — these are read-only affordances. Sits to
-     the right of the actions, before the port hint. */
-  .infra-strip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: auto;
-    padding-left: var(--space-2);
-    border-left: 1px solid var(--border);
-  }
-  .infra-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    color: var(--dim);
-    opacity: 0.7;
   }
 
   .action-btn {

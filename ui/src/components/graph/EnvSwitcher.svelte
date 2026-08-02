@@ -2,21 +2,11 @@
   import { store, toast, replaceGraphData, openLogViewer } from '../../lib/stores.svelte'
   import { opProgress } from '../../lib/opProgress.svelte'
   import { switchEnv, apiPost, fetchGraph } from '../../lib/api'
-  import { envShortName } from '../../lib/envName'
   import { environmentActionState } from '../../lib/graphActions'
   import { Power, PowerOff, Database, ExternalLink, ScrollText } from '@lucide/svelte'
   import ConfirmModal from '../ConfirmModal.svelte'
 
-  const envs = $derived(store.daemon.envs?.envs ?? [])
   const current = $derived(store.graph.data?.env ?? '')
-  // The EnvInfo entry for whatever env is currently being previewed (if
-  // any). Drives the lock state on the "Use this env" CTA.
-  const previewedEnv = $derived(
-    store.graph.preview
-      ? envs.find(e => envShortName(e.name) === store.graph.preview!.env) ?? null
-      : null
-  )
-  const previewIsLocked = $derived(!!previewedEnv?.previewOnly)
   // Count live state, not the cached running value from /api/envs (which
   // only refreshes on initial mount / SSE reconnect — would be stale
   // right after the user just started something).
@@ -85,7 +75,7 @@
   // the user explicitly clicked "Use this env" rather than misclicking
   // a tab.
   function useThisEnv() {
-    if (!store.graph.preview || previewIsLocked) return
+    if (!store.graph.preview) return
     const target = store.graph.preview.env
     if (running > 0) {
       pending = { kind: 'switch', env: target }
@@ -218,10 +208,7 @@
       <button
         class="toolbar-btn primary"
         type="button"
-        disabled={previewIsLocked}
-        title={previewIsLocked
-          ? `${store.graph.preview.env} is preview-only — cannot be activated`
-          : `Activate ${store.graph.preview.env} — stops services from ${current}`}
+        title={`Activate ${store.graph.preview.env} — stops services from ${current}`}
         onclick={useThisEnv}
       ><Power size={14} /> Use this env</button>
       <button

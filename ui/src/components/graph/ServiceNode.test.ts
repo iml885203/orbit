@@ -149,7 +149,6 @@ describe('ServiceNode', () => {
   it('hides action affordances while previewing', () => {
     store.graph.preview = {
       env: 'preview',
-      previewOnly: true,
       nodes: [],
       edges: [],
     } satisfies GraphResponse

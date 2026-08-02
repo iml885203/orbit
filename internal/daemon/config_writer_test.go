@@ -79,7 +79,7 @@ func TestConfigWriters_PathAndStalenessCommitWithStore(t *testing.T) {
 	}
 
 	s := &Server{holder: config.NewHolder(&config.Config{})}
-	next := &config.Config{PreviewOnly: false}
+	next := &config.Config{Version: "3"}
 	err := s.UpdateConfig(func(tx extension.ConfigTx) error {
 		tx.Store(next)
 		tx.SetConfigPath(envPath)

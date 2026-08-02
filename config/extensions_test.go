@@ -47,6 +47,19 @@ func TestLoad_UnknownNestedKeyStillFails(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectsRemovedPreviewOnlyField(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orbit.yaml")
+	yaml := "version: \"3\"\npreviewOnly: true\n"
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "previewOnly was removed; delete this field") {
+		t.Fatalf("Load() error = %v, want previewOnly migration guidance", err)
+	}
+}
+
 func TestDecodeStrictSuggestsExtensionField(t *testing.T) {
 	type section struct {
 		Endpoint string `yaml:"endpoint"`

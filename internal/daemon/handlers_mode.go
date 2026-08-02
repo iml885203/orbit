@@ -14,10 +14,6 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	name := strings.TrimPrefix(r.URL.Path, "/api/service-mode/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})

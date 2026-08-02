@@ -10,8 +10,8 @@ vi.mock('$lib/api', () => ({
 }))
 
 const stoppedNode = { name: 'web', kind: 'frontend', state: 'stopped', url: 'http://localhost:3000' }
-const liveGraph = { env: 'development', previewOnly: false, nodes: [stoppedNode], edges: [] }
-const previewGraph = { env: 'example', previewOnly: false, nodes: [], edges: [] }
+const liveGraph = { env: 'development', nodes: [stoppedNode], edges: [] }
+const previewGraph = { env: 'example', nodes: [], edges: [] }
 
 describe('EnvSwitcher', () => {
   beforeEach(() => {
@@ -23,8 +23,8 @@ describe('EnvSwitcher', () => {
     store.daemon.envs = {
       running: 0,
       envs: [
-        { name: 'development.yaml', path: '/envs/development.yaml', current: true, previewOnly: false },
-        { name: 'example.yaml', path: '/envs/example.yaml', current: false, previewOnly: false },
+        { name: 'development.yaml', path: '/envs/development.yaml', current: true },
+        { name: 'example.yaml', path: '/envs/example.yaml', current: false },
       ],
     }
   })

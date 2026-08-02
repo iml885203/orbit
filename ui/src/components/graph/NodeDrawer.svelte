@@ -26,9 +26,6 @@
   // drawer becomes a read-only inspector. Daemon doesn't need to enforce
   // anything because we don't fire any mutation API calls from here.
   const isPreviewing = $derived(store.graph.isPreviewing)
-  // readOnly covers BOTH hover-preview and an active env marked
-  // previewOnly. Use this for every disabled= attribute below; reserve
-  // isPreviewing for UI affordances specific to the hover-preview overlay.
   const readOnly = $derived(mutationsDisabled())
   const activeGraph = $derived(store.graph.active)
 

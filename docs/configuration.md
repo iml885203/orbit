@@ -42,7 +42,6 @@ remove the project copy so the shared file is the single source of truth.
 
 ```yaml
 version: "3"
-previewOnly: false   # optional: env is inspectable but not activatable here
 settings:            # global timing, poll intervals
 tracing:             # optional built-in OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -55,7 +54,6 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | Key | Type | Required | Purpose |
 |---|---|---|---|
 | `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit env sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
-| `previewOnly` | bool | no | Env can be inspected on the dashboard but not activated on this machine (guards against misclicks; not a security boundary) |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
 | `containers` | map | no | Docker container definitions |
@@ -72,6 +70,11 @@ the closest supported field or enum value when the correction is unambiguous.
 The same guidance appears through `orbit doctor`, `orbit up`, and
 `orbit inspect --json`; Orbit does not silently ignore configuration it cannot
 understand.
+
+The former top-level `previewOnly` field has been removed. Delete it from
+existing environment files; Orbit rejects the obsolete field with migration
+guidance. Every valid environment can now be selected, activated, inspected,
+and managed.
 
 ### Migrating schema 2 to 3
 

@@ -37,7 +37,7 @@
     !groupChanging && groupNodes.some(node => node.state === 'stopped' || node.state === 'pending'),
   )
   const canStop = $derived(!groupChanging && groupNodes.some(node => isRunning(node.state)))
-  // Hidden in preview-only / hover-preview envs (the daemon rejects mutations).
+  // Another env's on-disk preview has no live processes to mutate.
   const showActions = $derived(!mutationsDisabled() && services.length > 0)
 
   let busy = $state(false)

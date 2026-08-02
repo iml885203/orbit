@@ -53,14 +53,8 @@ export interface EnvToggleInfo {
 export interface GraphResponse {
   env: string;
   /**
-   * PreviewOnly mirrors the env yaml's previewOnly flag so the UI can
-   * switch to the cluster-layout / icon-strip presentation reserved for
-   * preview-only envs without having to cross-look the /api/envs list.
-   */
-  previewOnly: boolean;
-  /**
    * Groups maps group name → service names declared in that group. The UI
-   * uses it to cluster service nodes by group (preview-only envs only).
+   * uses it to cluster service nodes by group.
    * Only groups with at least one service are included. Order is
    * deterministic (sorted by group name) so the canvas doesn't reshuffle
    * on each poll.
@@ -110,7 +104,6 @@ export interface GraphNode {
   last_restart?: GraphRestart;
   startup_time?: string;
   uptime?: string;
-  infraDeps?: InfraDepRef[]; // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
   /**
    * Kafka carries the produces/consumes declarations the node owns.
    * Services with no declared topics get nil (omitted from JSON);
@@ -130,15 +123,6 @@ export interface GraphPortConflict {
   pid?: string;
   process?: string;
   inspect_command: string;
-}
-/**
- * InfraDepRef is a compact reference to one infra container that a service
- * depends on. We pre-resolve the icon server-side so the UI doesn't need to
- * cross-look the containers map per render.
- */
-export interface InfraDepRef {
-  name: string;
-  icon?: string;
 }
 /**
  * EdgeKind distinguishes startup-time synchronous dependencies (the

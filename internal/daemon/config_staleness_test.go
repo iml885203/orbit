@@ -52,7 +52,7 @@ func TestConfigStale_FileEdited(t *testing.T) {
 	path := writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\n")
 	s := staleServer(t, path)
 
-	writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\npreviewOnly: true\n")
+	writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\nsettings:\n  shutdown_timeout: 15s\n")
 	advanceModTime(t, path)
 
 	stale, reason := s.configStale()

@@ -8,14 +8,6 @@
  */
 export interface Config {
   version: string;
-  /**
-   * PreviewOnly marks the env as inspectable but not activatable on
-   * this machine. The daemon rejects switch attempts (CLI and UI
-   * both go through the same endpoint, so both paths are covered).
-   * Defends the active machine from misclicks; not a security
-   * boundary — a user with write access to the yaml can flip it.
-   */
-  previewOnly: boolean;
   settings: RuntimeSettings;
   groups: { [key: string]: Group};
   containers: { [key: string]: Container | undefined};
@@ -49,8 +41,7 @@ export interface RuntimeSettings {
  * Group is a named collection of services. It serves two purposes:
  *  1. Startup batching — `orbit up --groups X` brings up only the
  *     services listed under group X.
- *  2. Visual clustering on the dashboard (preview-only envs draw each
- *     group as a labeled box around its services).
+ *  2. Visual clustering on the dashboard.
  * Color is a free-form CSS color (e.g. "#d97706"). When empty the UI
  * derives a stable hue from the group name.
  */

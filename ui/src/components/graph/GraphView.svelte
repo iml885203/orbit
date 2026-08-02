@@ -2,7 +2,7 @@
   import { SvelteFlow, SvelteFlowProvider, Background, Controls, Panel, type Edge } from '@xyflow/svelte'
   import '@xyflow/svelte/dist/style.css'
   import { store } from '../../lib/stores.svelte'
-  import { layout, hiddenInfraNames } from './layout'
+  import { layout } from './layout'
   import { LayoutGrid, StretchHorizontal, Activity } from '@lucide/svelte'
   import { tooltip } from '../../lib/tooltip.svelte'
   import { liveTraffic } from '../../lib/liveTraffic.svelte'
@@ -29,14 +29,9 @@
 
   const nodes = $derived<ReturnType<typeof layout>>(activeGraph ? layout(activeGraph, layoutMode) : [])
 
-  // Infra nodes hidden by layout (preview-only envs) — also drop their
-  // edges so SvelteFlow doesn't warn about endpoints that no longer
-  // render. Source of truth lives in layout.ts.
-  const hiddenInfra = $derived(activeGraph ? hiddenInfraNames(activeGraph) : new Set<string>())
   const selectedNode = $derived(store.graph.selectedNode)
   const edges = $derived<Edge<GraphEdgeData, 'dep'>[]>(
     filterVisibleEdges(activeGraph?.edges ?? [], selectedNode)
-      .filter(e => !hiddenInfra.has(e.to) && !hiddenInfra.has(e.from))
       .map(e => ({
         id: `${e.from}->${e.to}:${e.kind === 'async' ? e.topic : 'sync'}`,
         source: e.from,

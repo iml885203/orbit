@@ -62,7 +62,6 @@ type inspectEnvSummary struct {
 	SelectedName          string              `json:"selected_name,omitempty"`
 	SelectedPath          string              `json:"selected_path,omitempty"`
 	Environments          []environmentChoice `json:"environments"`
-	PreviewOnly           bool                `json:"preview_only,omitempty"`
 	DaemonEnv             string              `json:"daemon_env,omitempty"`
 	ContextSwitchRequired bool                `json:"context_switch_required,omitempty"`
 	RunningName           string              `json:"running_name,omitempty"`
@@ -92,7 +91,6 @@ type inspectBuildOptions struct {
 	SetupRequired       bool
 	ConfigEnvName       string
 	ConfigMatchesDaemon bool
-	PreviewOnly         bool
 	DaemonEnv           string
 	DaemonRunning       bool
 	PID                 int
@@ -187,7 +185,6 @@ func runInspect(_ *cobra.Command, _ []string) error {
 		Selection:     activeEnvironmentSelection(selection, configFile),
 	}
 	if cfg != nil {
-		opts.PreviewOnly = cfg.PreviewOnly
 		opts.Configured = configuredInspectServices(cfg)
 		opts.ReadinessChecks = daemonsrv.DependencyReadinessChecks(cfg)
 	}
@@ -259,7 +256,6 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 		SelectedName: opts.Selection.SelectedName,
 		SelectedPath: opts.Selection.SelectedPath,
 		Environments: opts.Selection.Environments,
-		PreviewOnly:  opts.PreviewOnly,
 		DaemonEnv:    daemonEnv,
 	}
 	if opts.ContextMismatch {
