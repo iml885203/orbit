@@ -38,8 +38,8 @@ func uninstallCmd() *cobra.Command {
 			return runUninstall(opts)
 		},
 	}
-	cmd.Flags().BoolVarP(&opts.yes, "yes", "y", false, "Apply the displayed uninstall plan")
-	cmd.Flags().BoolVar(&opts.purge, "purge", false, "Also remove Orbit settings, environments, logs, and state")
+	cmd.Flags().BoolVarP(&opts.yes, "yes", "y", false, "confirm the displayed uninstall plan without prompting")
+	cmd.Flags().BoolVar(&opts.purge, "purge", false, "also remove Orbit settings, environments, logs, and state")
 	return cmd
 }
 

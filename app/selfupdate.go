@@ -49,7 +49,7 @@ func selfUpdateCmd() *cobra.Command {
 			return runSelfUpdate(cmd.Context())
 		},
 	}
-	cmd.Flags().BoolVar(&rollback, "rollback", false, "Restore the previous binary from <path>.prev")
+	cmd.Flags().BoolVar(&rollback, "rollback", false, "restore the previous binary from <path>.prev")
 	return cmd
 }
 

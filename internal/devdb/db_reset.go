@@ -35,7 +35,7 @@ Destructive: run manually. Requires the host dotnet SDK and sqlpackage.`,
 		Args: cobra.ExactArgs(1),
 		RunE: runDBReset,
 	}
-	cmd.Flags().BoolVar(&resetYes, "yes", false, "skip the confirmation prompt")
+	cmd.Flags().BoolVarP(&resetYes, "yes", "y", false, "confirm discarding local data without prompting")
 	return cmd
 }
 

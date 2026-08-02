@@ -204,7 +204,10 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 				fmt.Printf("    %s\n", environmentSwitchCommand(environment.Name, false))
 			}
 		}
+		return nil
 	}
+	fmt.Println()
+	fmt.Println("  Next: orbit up")
 	return nil
 }
 
@@ -258,7 +261,7 @@ func switchCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runSwitch,
 	}
-	cmd.Flags().BoolVar(&switchYes, "yes", false, "confirm stopping the running resources without prompting")
+	cmd.Flags().BoolVarP(&switchYes, "yes", "y", false, "confirm stopping the running resources without prompting")
 	return cmd
 }
 

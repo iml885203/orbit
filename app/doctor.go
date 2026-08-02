@@ -104,7 +104,12 @@ func runDoctorWithOptions(options doctorOptions) error {
 			fmt.Println("  Next: " + next)
 		}
 	}
-	return failure
+	if failure != nil {
+		// The report above already names the failing check and its remedy;
+		// a trailing "Error:" restatement would say it a second time.
+		return errCLIHumanAlreadyRendered{err: failure}
+	}
+	return nil
 }
 
 type humanDoctorItem struct {

@@ -208,6 +208,10 @@ func printEnvInfoHuman(data envInfoJSONData) {
 	}
 	printEnvInfoSection("Containers", data.Containers)
 	printEnvInfoSection("Services", data.Services)
+	if !data.Daemon.Running || !data.Daemon.ConfigMatch {
+		fmt.Println()
+		fmt.Println("  Next: orbit up")
+	}
 }
 
 func printEnvInfoSection(title string, resources map[string]envInfoResource) {

@@ -58,7 +58,7 @@ host dotnet SDK and sqlpackage
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
-	cmd.Flags().BoolVar(&publishYes, "yes", false, "confirm the data-loss risk when used with --force")
+	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --force without prompting")
 	return cmd
 }
 

@@ -52,7 +52,7 @@ Use --dry to preview changed files without downloading or applying them.`,
 	cmd.Flags().StringVar(&envSyncRef, "ref", "", "pin and remember a repository branch, tag, or commit")
 	cmd.Flags().StringVar(&envSyncPath, "path", "", "use a local checkout containing envs/ without remembering it")
 	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview updates without downloading or applying")
-	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "apply updates without prompting")
+	cmd.Flags().BoolVarP(&envSyncYes, "yes", "y", false, "confirm applying updates without prompting")
 	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download now and defer applying active updates")
 	return cmd
 }

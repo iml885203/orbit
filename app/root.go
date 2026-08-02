@@ -286,6 +286,10 @@ func printExecutionError(w io.Writer, err error) {
 	if errors.As(err, &rendered) {
 		return
 	}
+	var humanRendered errCLIHumanAlreadyRendered
+	if errors.As(err, &humanRendered) {
+		return
+	}
 	var extensionRendered interface{ CLIJSONAlreadyRendered() }
 	if errors.As(err, &extensionRendered) {
 		return
@@ -341,6 +345,25 @@ func (e errCLIJSONAlreadyRendered) Error() string {
 }
 
 func (e errCLIJSONAlreadyRendered) Unwrap() error {
+	return e.err
+}
+
+// errCLIHumanAlreadyRendered is the human-output analogue of
+// errCLIJSONAlreadyRendered: the command rendered its own readable report,
+// so appending a generic "Error:" restatement would only duplicate it. The
+// wrapped error still drives the non-zero exit and CLI history.
+type errCLIHumanAlreadyRendered struct {
+	err error
+}
+
+func (e errCLIHumanAlreadyRendered) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e errCLIHumanAlreadyRendered) Unwrap() error {
 	return e.err
 }
 
@@ -615,6 +638,7 @@ func logsCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&logLines, "lines", 100, "number of log lines to show")
 	cmd.Flags().IntVar(&logLines, "tail", 100, "number of log lines to show (alias for --lines)")
+	cmd.MarkFlagsMutuallyExclusive("lines", "tail")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream logs in real-time")
 	return cmd
 }
