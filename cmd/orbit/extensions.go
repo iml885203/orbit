@@ -21,7 +21,6 @@ func Extensions() []extension.Extension {
 		Commands: func() []*cobra.Command {
 			return []*cobra.Command{
 				devdb.SQLServerCmd(),
-				devdb.DBMigrationCmd(),
 				tunnel.TunnelCmd(),
 			}
 		},

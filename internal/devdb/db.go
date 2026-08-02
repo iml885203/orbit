@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -36,53 +34,6 @@ Examples:
 	cmd.AddCommand(dbPublishCmd())
 	cmd.AddCommand(dbResetCmd())
 	return cmd
-}
-
-func DBMigrationCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:                "db",
-		Hidden:             true,
-		DisableFlagParsing: true,
-		RunE: func(_ *cobra.Command, args []string) error {
-			next := []string{"orbit", "sqlserver"}
-			for _, arg := range args {
-				if arg == "--json" || arg == "--json=true" {
-					cli.JSONOutput = true
-				}
-				next = append(next, shellquote.Quote(arg))
-			}
-			command := strings.Join(next, " ")
-			return dbCommandRenamedError{next: command}
-		},
-	}
-}
-
-type dbCommandRenamedError struct {
-	next string
-}
-
-func (e dbCommandRenamedError) Error() string {
-	return "`orbit db` was renamed to `orbit sqlserver` before 1.0"
-}
-
-func (e dbCommandRenamedError) ErrorCode() string {
-	return "invalid_argument"
-}
-
-func (e dbCommandRenamedError) CLIJSONHint() string {
-	return "Use the provider-specific SQL Server command."
-}
-
-func (e dbCommandRenamedError) CLIHumanNextCommand() string {
-	return e.next
-}
-
-func (e dbCommandRenamedError) CLIJSONReplacementActions() []cli.JSONAction {
-	return []cli.JSONAction{{
-		Command:     e.next,
-		Reason:      "Use the provider-specific SQL Server command.",
-		Destructive: false,
-	}}
 }
 
 func dbListCmd() *cobra.Command {

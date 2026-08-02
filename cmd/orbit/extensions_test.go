@@ -34,11 +34,10 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 
 func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
 	commands := Extensions()[0].Commands()
-	if len(commands) != 3 ||
+	if len(commands) != 2 ||
 		commands[0].Name() != "sqlserver" ||
 		commands[0].Hidden ||
-		commands[1].Name() != "db" ||
-		!commands[1].Hidden {
+		commands[1].Name() != "tunnel" {
 		t.Fatalf("SQL Server command surface = %#v", commands)
 	}
 
