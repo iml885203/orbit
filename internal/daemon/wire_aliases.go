@@ -8,40 +8,41 @@ import (
 )
 
 type (
-	APIResponse            = pub.APIResponse
-	UpRequest              = pub.UpRequest
-	DownRequest            = pub.DownRequest
-	StatusResponse         = pub.StatusResponse
-	ResourceKind           = pub.ResourceKind
-	SidecarInfo            = pub.SidecarInfo
-	ResourceStatus         = pub.ResourceStatus
-	ResourceRestart        = pub.ResourceRestart
-	ResourcePortConflict   = pub.ResourcePortConflict
-	HealthProgressInfo     = pub.HealthProgressInfo
-	LogsResponse           = pub.LogsResponse
-	DoctorCheckStatus      = pub.DoctorCheckStatus
-	DoctorCheck            = pub.DoctorCheck
-	DoctorResponse         = pub.DoctorResponse
-	TraceLogLine           = pub.TraceLogLine
-	TraceLogsResponse      = pub.TraceLogsResponse
-	EnvInfo                = pub.EnvInfo
-	EnvsResponse           = pub.EnvsResponse
-	VersionResponse        = pub.VersionResponse
-	EdgeDetachRequest      = pub.EdgeDetachRequest
-	ServiceModeRequest     = pub.ServiceModeRequest
-	EnvToggleUpdateRequest = pub.EnvToggleUpdateRequest
-	SettingsResponse       = pub.SettingsResponse
-	Settings               = pub.Settings
-	SettingsChange         = pub.SettingsChange
-	SettingsPUTHook        = pub.SettingsPUTHook
-	ResourceSnapshot       = pub.ResourceSnapshot
-	ResourcesResponse      = pub.ResourcesResponse
-	ResourceContributor    = pub.ResourceContributor
-	ContainerOps           = pub.ContainerOps
-	ServiceRestarter       = pub.ServiceRestarter
-	Client                 = pub.Client
-	HostToolCheck          = pub.HostToolCheck
-	HostVersionRequirement = pub.HostVersionRequirement
+	APIResponse                  = pub.APIResponse
+	UpRequest                    = pub.UpRequest
+	DownRequest                  = pub.DownRequest
+	StatusResponse               = pub.StatusResponse
+	ResourceKind                 = pub.ResourceKind
+	SidecarInfo                  = pub.SidecarInfo
+	ResourceStatus               = pub.ResourceStatus
+	ResourceRestart              = pub.ResourceRestart
+	ResourcePortConflict         = pub.ResourcePortConflict
+	HealthProgressInfo           = pub.HealthProgressInfo
+	LogsResponse                 = pub.LogsResponse
+	DoctorCheckStatus            = pub.DoctorCheckStatus
+	DoctorCheck                  = pub.DoctorCheck
+	DoctorResponse               = pub.DoctorResponse
+	TraceLogLine                 = pub.TraceLogLine
+	TraceLogsResponse            = pub.TraceLogsResponse
+	EnvInfo                      = pub.EnvInfo
+	EnvsResponse                 = pub.EnvsResponse
+	EnvironmentReconcileResponse = pub.EnvironmentReconcileResponse
+	VersionResponse              = pub.VersionResponse
+	EdgeDetachRequest            = pub.EdgeDetachRequest
+	ServiceModeRequest           = pub.ServiceModeRequest
+	EnvToggleUpdateRequest       = pub.EnvToggleUpdateRequest
+	SettingsResponse             = pub.SettingsResponse
+	Settings                     = pub.Settings
+	SettingsChange               = pub.SettingsChange
+	SettingsPUTHook              = pub.SettingsPUTHook
+	ResourceSnapshot             = pub.ResourceSnapshot
+	ResourcesResponse            = pub.ResourcesResponse
+	ResourceContributor          = pub.ResourceContributor
+	ContainerOps                 = pub.ContainerOps
+	ServiceRestarter             = pub.ServiceRestarter
+	Client                       = pub.Client
+	HostToolCheck                = pub.HostToolCheck
+	HostVersionRequirement       = pub.HostVersionRequirement
 )
 
 const (

@@ -274,6 +274,16 @@ export interface EnvsResponse {
   running: number /* int */; // count of non-stopped services
   envs: EnvInfo[];
 }
+export interface EnvironmentReconcileResponse {
+  ok?: boolean;
+  error?: string;
+  restart_required?: boolean;
+  previously_running: string[];
+  restarted_resources: string[];
+  started_dependencies: string[];
+  unavailable_resources: string[];
+  affected_resources: string[];
+}
 /**
  * VersionResponse reports the running daemon's build and a binary Orbit can
  * order after it. Older or incomparable builds are omitted so

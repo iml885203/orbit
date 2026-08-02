@@ -88,7 +88,9 @@ Replace the example `command`, health check, and dependency with your real
 project only after this loop works. See [Configuration](configuration.md) for
 the available fields. While the environment is running, edit `orbit.yaml` and
 run `orbit up` again: Orbit validates the new file before stopping anything,
-then applies it and restores the resources that were already running.
+then applies it. Unchanged resources keep running; changed resources and their
+dependents restart only when needed. Daemon-level changes such as tracing or
+the Docker poll interval use a full handoff and restore the running resources.
 
 ## 3. Share the validated environment
 

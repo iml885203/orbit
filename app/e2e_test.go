@@ -1141,15 +1141,17 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 	if err != nil {
 		t.Fatalf("read env: %v", err)
 	}
-	updated := bytes.Replace(original, []byte("shutdown_timeout: 10s"), []byte("shutdown_timeout: 11s"), 1)
-	if bytes.Equal(updated, original) {
-		t.Fatal("test fixture no longer contains the expected shutdown timeout")
-	}
+	updated := append(original, []byte("\n  added-worker:\n    type: node\n    path: /tmp/orbit-test\n    command: node server.js\n    ports:\n      http: 4000\n")...)
 	if err := os.WriteFile(env.envYaml, updated, 0o644); err != nil {
 		t.Fatalf("update env: %v", err)
 	}
 
 	previousPID := readE2EDaemonPID(t, env.home)
+	redisName := "orbit-" + env.namespace + "-redis"
+	containerIDBefore, err := exec.Command("docker", "inspect", "--format", "{{.Id}}", redisName).Output()
+	if err != nil {
+		t.Fatalf("inspect redis before apply: %v", err)
+	}
 	output := env.run(t, "env", "apply", "--json")
 	envelope := parseE2EEnvelope(t, output)
 	if !envelope.OK {
@@ -1166,8 +1168,24 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 	if len(envelope.RecommendedActions) != 0 {
 		t.Fatalf("completed env apply invented follow-up work: %+v", envelope.RecommendedActions)
 	}
-	if currentPID := readE2EDaemonPID(t, env.home); currentPID == previousPID {
-		t.Fatalf("daemon pid remained %d after applying a changed config", currentPID)
+	addedWorkerFound := false
+	for _, resource := range applied.Resources {
+		if resource.Name == "added-worker" {
+			addedWorkerFound = resource.State == "stopped"
+		}
+	}
+	if !addedWorkerFound {
+		t.Fatalf("new resource missing or running unexpectedly: %+v", applied.Resources)
+	}
+	if currentPID := readE2EDaemonPID(t, env.home); currentPID != previousPID {
+		t.Fatalf("daemon pid changed from %d to %d for a live-reconcilable update", previousPID, currentPID)
+	}
+	containerIDAfter, err := exec.Command("docker", "inspect", "--format", "{{.Id}}", redisName).Output()
+	if err != nil {
+		t.Fatalf("inspect redis after apply: %v", err)
+	}
+	if !bytes.Equal(bytes.TrimSpace(containerIDAfter), bytes.TrimSpace(containerIDBefore)) {
+		t.Fatalf("environment apply recreated unchanged redis: before=%s after=%s", containerIDBefore, containerIDAfter)
 	}
 	if state := env.serviceState(t, "redis"); state != "healthy" {
 		t.Fatalf("redis state = %s after apply, want healthy", state)

@@ -44,7 +44,8 @@ type App struct {
 	// knows the port the receiver ACTUALLY bound after fallback — config alone
 	// can be wrong once a conflict moved the port. nil (no daemon) means no
 	// injection.
-	TracingEndpoint func() string
+	TracingEndpoint      func() string
+	runtimeReservedPorts []int
 
 	// OnFatal, if set, receives unrecoverable background errors so the
 	// owner can trigger graceful shutdown. Without it, deferred cleanup
@@ -106,12 +107,13 @@ func NewApp(
 	orch := NewOrchestrator(holder, serviceModes, detachedDeps)
 
 	app := &App{
-		Holder:        holder,
-		ContainerMgr:  containerMgr,
-		ProcessMgr:    processMgr,
-		Orchestrator:  orch,
-		HealthChecker: healthChecker,
-		Logs:          logs,
+		Holder:               holder,
+		ContainerMgr:         containerMgr,
+		ProcessMgr:           processMgr,
+		Orchestrator:         orch,
+		HealthChecker:        healthChecker,
+		Logs:                 logs,
+		runtimeReservedPorts: append([]int(nil), runtimeReservedPorts...),
 	}
 
 	app.wireLogCapture(logs, orch)
@@ -122,6 +124,30 @@ func NewApp(
 	app.Poller = app.newPoller(cfg, orch)
 
 	return app, nil
+}
+
+func (a *App) PrepareConfig(cfg *config.Config) error {
+	resolutions, err := port.ResolveAutoPorts(cfg, func(name string, target int) (int, bool, error) {
+		return a.ContainerMgr.ManagedHostPort(context.Background(), name, target)
+	}, a.runtimeReservedPorts...)
+	if err != nil {
+		return fmt.Errorf("resolving automatic ports: %w", err)
+	}
+	for _, resolution := range resolutions {
+		slog.Info(
+			"selected available port",
+			"component", "orbit",
+			"name", resolution.Resource,
+			"label", resolution.Label,
+			"preferred", resolution.Preferred,
+			"actual", resolution.Actual,
+		)
+	}
+	return nil
+}
+
+func (a *App) ApplyConfig(cfg *config.Config, detachedDeps map[string][]string, serviceModes map[string]string) {
+	a.Orchestrator.ApplyConfig(cfg, detachedDeps, serviceModes)
 }
 
 func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {
@@ -559,6 +585,29 @@ func (a *App) StopServices(names []string) {
 		}(name)
 	}
 	wg.Wait()
+}
+
+func (a *App) StopServicesForConfig(names []string) error {
+	var wg sync.WaitGroup
+	errs := make(chan error, len(names))
+	for _, name := range names {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), a.Holder.Load().Settings.ShutdownTimeout)
+			defer cancel()
+			if err := a.StopService(ctx, name); err != nil {
+				errs <- fmt.Errorf("stopping %s: %w", name, err)
+			}
+		}(name)
+	}
+	wg.Wait()
+	close(errs)
+	var failures []error
+	for err := range errs {
+		failures = append(failures, err)
+	}
+	return errors.Join(failures...)
 }
 
 // warnZombiePorts logs warnings about zombie processes still holding service ports.

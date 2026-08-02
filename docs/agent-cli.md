@@ -171,7 +171,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |
 | `orbit env use <path> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit env sync --json` | Returns sync source, requested reference, resolved commit, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
-| `orbit env apply --json` | Applies pending environment changes, then returns the resources that were running, restored, or removed from the new config. |
+| `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit update --json` | Updates the invoked binary and, when an environment is running, reconnects it and returns the resources restored across the handoff. `--rollback` applies the same contract to the previous binary. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |

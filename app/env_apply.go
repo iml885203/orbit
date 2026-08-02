@@ -101,6 +101,31 @@ func applyEnvironmentChangesWithEvidence(
 		return result, fmt.Errorf("cannot apply environment changes: %w", err)
 	}
 
+	reconciled, err := client.ReconcileEnvironment()
+	if err != nil {
+		return result, fmt.Errorf("reconciling environment changes: %w", err)
+	}
+	if !reconciled.RestartRequired {
+		result.Applied = true
+		result.PID = previousPID
+		result.PreviouslyRunning = append(result.PreviouslyRunning, reconciled.PreviouslyRunning...)
+		result.UnavailableResources = append(result.UnavailableResources, reconciled.UnavailableResources...)
+		result.RestoredResources = availablePreviouslyRunning(
+			reconciled.PreviouslyRunning,
+			reconciled.UnavailableResources,
+		)
+		result.StartedDependencies = append(result.StartedDependencies, reconciled.StartedDependencies...)
+		if len(reconciled.AffectedResources) == 0 {
+			result.FinalStatus, err = client.Status()
+		} else {
+			result.FinalStatus, err = waitForLifecycleJSON(client, reconciled.AffectedResources, "healthy")
+		}
+		if err != nil {
+			return result, fmt.Errorf("environment applied, but affected resources could not recover: %w", err)
+		}
+		return result, nil
+	}
+
 	result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
 	if report != nil {
 		if len(result.PreviouslyRunning) == 0 {
@@ -153,6 +178,20 @@ func applyEnvironmentChangesWithEvidence(
 		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)
 	}
 	return result, nil
+}
+
+func availablePreviouslyRunning(previouslyRunning, unavailable []string) []string {
+	unavailableSet := make(map[string]bool, len(unavailable))
+	for _, name := range unavailable {
+		unavailableSet[name] = true
+	}
+	available := make([]string, 0, len(previouslyRunning))
+	for _, name := range previouslyRunning {
+		if !unavailableSet[name] {
+			available = append(available, name)
+		}
+	}
+	return available
 }
 
 func environmentApplyProgress() func(string) {
