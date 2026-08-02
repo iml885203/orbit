@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -69,11 +69,11 @@ test-e2e: build
 # inner loop: they intentionally use real Git repositories, processes, and
 # Docker to prove the product works beyond package boundaries.
 test-journeys: build
-	$(MAKE) -j2 test-journey-first-five-minutes test-journey-project-context-switch
+	$(MAKE) -j2 test-journey-quickstart test-journey-project-context-switch
 	$(MAKE) -j4 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness test-journey-runtime-adoption
 
-test-journey-first-five-minutes:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-first-five-minutes.sh
+test-journey-quickstart:
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-quickstart-journey.sh
 
 test-journey-local-first-adoption:
 	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
@@ -95,7 +95,7 @@ test-install:
 	@./scripts/test-uninstall.sh
 
 test-docs:
-	@ORBIT_DOCS_ONLY=1 ./scripts/test-first-five-minutes.sh
+	@ORBIT_DOCS_ONLY=1 ./scripts/test-quickstart-journey.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-local-first-adoption.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
 	@./scripts/test-plugin-contract.sh

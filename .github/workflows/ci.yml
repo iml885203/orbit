@@ -62,7 +62,7 @@ jobs:
       - name: Verify third-party notices match shipped dependencies
         run: make test-notice
 
-  first-five-minutes:
+  installed-user-journeys:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

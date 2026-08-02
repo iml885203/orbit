@@ -72,7 +72,7 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/commits/$main_commit/check-runs" \
               --jq '[.check_runs[]
                 | select(
-                    (.name == "preflight" or .name == "first-five-minutes")
+                    (.name == "preflight" or .name == "installed-user-journeys")
                     and .conclusion == "success"
                   )
                 | .name]
@@ -80,7 +80,7 @@ jobs:
                 | length'
           )"
           if [ "$successful_gates" != "2" ]; then
-            echo "main must pass CI preflight and first-five-minutes before release" >&2
+            echo "main must pass CI preflight and installed-user-journeys before release" >&2
             exit 1
           fi
       - name: Verify paired demo evidence

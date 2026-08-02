@@ -272,7 +272,7 @@ for _ in $(seq 1 100); do
 done
 
 if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
-  echo "orbit up failed during the first-five-minutes acceptance test." >&2
+  echo "orbit up failed during the quickstart journey." >&2
   if [ -s "$test_root/up.json" ]; then
     echo "orbit up JSON:" >&2
     sed 's/^/  /' "$test_root/up.json" >&2
@@ -617,4 +617,4 @@ for command, result in [
     assert result["recommended_actions"][0]["command"] == expected
 PY
 
-echo "README first five minutes completes a linked checkout and reports runtime dependency failures truthfully"
+echo "README quickstart journey completes a linked checkout and reports runtime dependency failures truthfully"
