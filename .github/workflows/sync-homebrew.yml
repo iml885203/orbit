@@ -1,0 +1,51 @@
+name: Sync Homebrew
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Released semantic version tag
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        description: Fine-grained token for the homebrew-tap Actions API
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released semantic version tag to verify
+        required: true
+        type: string
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/sync-package-repository
+        with:
+          repository: iml885203/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          version: ${{ inputs.version }}
+      - name: Verify the formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          formula=$(gh api repos/iml885203/homebrew-tap/contents/Formula/orbit.rb \
+            --jq .content | base64 --decode)
+          formula_version=$(sed -nE 's/^  version "([^"]+)"/\1/p' <<<"$formula")
+          [ "v$formula_version" = "$VERSION" ] || {
+            echo "Homebrew formula is v$formula_version, expected $VERSION" >&2
+            exit 1
+          }
+          for asset in orbit-darwin-amd64 orbit-darwin-arm64 orbit-linux-amd64 orbit-linux-arm64; do
+            grep -Fq "releases/download/${VERSION}/${asset}" <<<"$formula" || {
+              echo "Homebrew formula does not reference ${asset} from $VERSION" >&2
+              exit 1
+            }
+          done
+          echo "Homebrew formula updated to $VERSION" >> "$GITHUB_STEP_SUMMARY"

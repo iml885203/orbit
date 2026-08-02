@@ -149,6 +149,8 @@ caller (or its operator) intends the destruction.
 | `logs_unavailable` | no buffered output exists for that resource |
 | `not_configured` | the active env does not enable this feature |
 | `orbit_update_pending` | an installed update needs a daemon restart |
+| `package_managed_install` | Orbit is owned by Homebrew or Scoop; use the reported package-manager command |
+| `package_managed_rollback` | rollback must be performed through the package manager that owns Orbit |
 | `project_context_inactive` | a project config was found but the daemon serves another env |
 | `resource_port_conflict` | a resource's host port is owned by another process |
 | `service_start_failed` | a resource failed to become healthy |

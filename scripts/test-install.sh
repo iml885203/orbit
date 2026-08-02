@@ -82,6 +82,10 @@ test "$("$install_dir/orbit" --version)" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
 grep -F "Next: export PATH=${install_dir}:\"\$PATH\" && orbit init" <<<"$install_output" >/dev/null
 PATH="$install_dir:$mock_bin:/usr/bin:/bin" orbit --version >/dev/null
 
+same_version_output="$(install_version "0.0.1")"
+grep -F "Already installed: Orbit 0.0.1 at ${install_dir}/orbit" <<<"$same_version_output" >/dev/null
+test ! -e "$install_dir/orbit.prev"
+
 write_release "0.0.0"
 if install_version "0.0.0" >/dev/null 2>&1; then
   echo "installer unexpectedly downgraded an existing binary" >&2
@@ -117,4 +121,4 @@ install_version "0.0.2" >/dev/null
 test "$("$install_dir/orbit" --version)" = "v0.0.2 (2026-07-27 12:44:56 +0800)"
 test "$("$install_dir/orbit.prev" --version)" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
 
-echo "installer immediate next step, fallback, downgrade guard, interrupted-download safety, checksum safety, and rollback backup OK"
+echo "installer no-op, immediate next step, fallback, downgrade guard, interrupted-download safety, checksum safety, and rollback backup OK"

@@ -227,3 +227,19 @@ jobs:
             --target "$GITHUB_SHA" \
             --notes "$RELEASE_NOTES" \
             --title "$release_title"
+
+  update-homebrew:
+    needs: release
+    uses: ./.github/workflows/sync-homebrew.yml
+    with:
+      version: ${{ inputs.tag }}
+    secrets:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  update-scoop:
+    needs: release
+    uses: ./.github/workflows/sync-scoop.yml
+    with:
+      version: ${{ inputs.tag }}
+    secrets:
+      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}

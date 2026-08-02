@@ -70,14 +70,27 @@ Orbit 會先啟動 Redis 再啟動 host process、等待真實 readiness 而不�
 
 ## 安裝
 
-macOS 與 Linux：
+macOS 或 Linux 使用 Homebrew：
+
+```bash
+brew install iml885203/tap/orbit
+```
+
+Windows 使用 Scoop（Beta）：
+
+```powershell
+scoop bucket add iml885203 https://github.com/iml885203/scoop-bucket
+scoop install orbit
+```
+
+macOS 與 Linux 也可以使用直接安裝並驗證過的 release：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windows（PowerShell，Beta）：
+Windows PowerShell（Beta）：
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex

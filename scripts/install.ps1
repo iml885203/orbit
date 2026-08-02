@@ -218,6 +218,11 @@ function Install-Orbit {
         if (Test-Path $target -PathType Leaf) {
             $currentVersion = $null
             try { $currentVersion = Get-OrbitBinaryVersion $target } catch { }
+            if ($currentVersion -eq $candidateVersion) {
+                Write-Host "Already installed: Orbit $candidateVersion at $target"
+                Add-OrbitToUserPath $directory
+                return
+            }
             if ($currentVersion -and
                 (Compare-SemVer $currentVersion $candidateVersion) -gt 0 -and
                 $env:ORBIT_ALLOW_DOWNGRADE -ne "1") {
