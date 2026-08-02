@@ -93,24 +93,24 @@ runtimes 或 dependencies；`orbit doctor` 會回報所選 environment 需要什
 
 ## 試玩 demo
 
-公開 demo 需要 Git、Docker 與 Python 3。從任何目錄開始：
+公開 demo 需要 Git、Docker 與 Python 3：
 
 ```bash
-orbit init --yes
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
 orbit up
 orbit status
 orbit open demo-shop
 ```
 
-`orbit init --yes` 會下載
-[Orbit demo environment](https://github.com/iml885203/orbit-demo)：一個
-storefront、三個在 host 上執行並各自使用 SQLite 的 Python API，以及
-container 內的 Redis。在 storefront 中，**Run checkout** 展示同一個 request
-穿過 catalog、inventory、Redis 與 orders；**Try 99 items** 展示失敗路徑不會
-建立 order、庫存也維持不變。用 `orbit down` 停止全部資源。
-
-更大的範例請見
-[擴充版 mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop)。
+[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個獨立的
+mini-shop——一個 storefront、三個在 host 上執行並各自使用 SQLite 的
+Python API，以及 container 內的 Redis——由單一 project-root `orbit.yaml`
+驅動，與 Orbit 在真實專案的用法完全一致。在 storefront 中，**Run checkout**
+展示同一個 request 穿過 catalog、inventory、Redis 與 orders；**Try 99 items**
+展示失敗路徑不會建立 order、庫存也維持不變。用 `orbit down` 停止全部資源。
+同一個應用程式也能不透過 Orbit 執行（`./scripts/run-local.sh`），
+清楚呈現 Orbit 幫你省下的是哪些事。
 
 ## 搭配 AI agent
 

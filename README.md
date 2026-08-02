@@ -99,24 +99,25 @@ rollback, uninstall, and platform details are in
 
 ## Try the demo
 
-The public demo needs Git, Docker, and Python 3. Start from any directory:
+The public demo needs Git, Docker, and Python 3:
 
 ```bash
-orbit init --yes
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
 orbit up
 orbit status
 orbit open demo-shop
 ```
 
-`orbit init --yes` downloads the
-[Orbit demo environment](https://github.com/iml885203/orbit-demo): a
-storefront, three Python APIs with SQLite databases on the host, and Redis in
-a container. In the storefront, **Run checkout** shows one request crossing
-catalog, inventory, Redis, and orders; **Try 99 items** shows the failure path
-commit no order and leave stock unchanged. Stop everything with `orbit down`.
-
-For a larger example, see
-[the extended mini-shop](https://github.com/iml885203/orbit-examples/tree/main/mini-shop).
+The [Orbit demo](https://github.com/iml885203/orbit-demo) is a standalone
+mini-shop — a storefront, three Python APIs with SQLite databases on the
+host, and Redis in a container — driven by one project-root `orbit.yaml`,
+exactly how Orbit works in a real project. In the storefront, **Run
+checkout** shows one request crossing catalog, inventory, Redis, and orders;
+**Try 99 items** shows the failure path commit no order and leave stock
+unchanged. Stop everything with `orbit down`. The same application also runs
+without Orbit (`./scripts/run-local.sh`), which makes visible exactly what
+Orbit takes off your hands.
 
 ## Using Orbit with an AI agent
 
