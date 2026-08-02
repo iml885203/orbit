@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           formula=$(gh api repos/iml885203/homebrew-tap/contents/Formula/orbit.rb \
             --jq .content | base64 --decode)
-          formula_version=$(sed -nE 's/^  version "([^"]+)"/\1/p' <<<"$formula")
+          formula_version=$(sed -nE 's|.*releases/download/v([^/]+)/orbit-.*|\1|p' <<<"$formula" | head -n 1)
           [ "v$formula_version" = "$VERSION" ] || {
             echo "Homebrew formula is v$formula_version, expected $VERSION" >&2
             exit 1
