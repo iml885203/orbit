@@ -11,7 +11,6 @@ import type {
   DriftSnapshotResponse,
   DevDBProject,
   Settings,
-  Snapshot as DBStateSnapshot,
 } from '$lib/types.gen'
 import { devStore } from './stores.svelte'
 
