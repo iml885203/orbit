@@ -20,7 +20,7 @@ Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放
 - [Extension 擁有的 section](#extension-擁有的-section)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [變數替換](#變數替換)
-- [Per-instance 覆寫](#per-instance-覆寫)
+- [底層 runtime 覆寫](#底層-runtime-覆寫)
 
 ## Config 選擇
 
@@ -217,12 +217,17 @@ command 會列出名稱並要求 `--container <name>`。其他 database client �
 workflow 擁有 SQL Server Database Project 的 diff、publish 與 reset semantics，
 因為這些操作無法誠實地套用到所有 database。
 
-### Port 以檔案為準
+### Port 解析
 
-檔案是每個資源監聽位置的唯一真相：Orbit 永遠不會移動 port。衝突是一個
-會指出占用程式與 remedy 的錯誤，因為位址被默默換掉會破壞所有 Orbit
-管不到的消費者——寫死的 env 值、書籤、測試設定。`orbit doctor` 會在
-任何東西啟動前，回報已被占用的宣告 port 與其擁有者。
+Default runtime 會把每個宣告的 host port 視為固定值。衝突是一個會指出占用
+程式與 remedy 的錯誤，因為位址被默默換掉會破壞 Orbit 管不到的消費者——寫死
+的 env 值、書籤與測試設定。`orbit doctor` 會在任何東西啟動前，回報已被占用
+的宣告 port 與其擁有者。
+
+以 `--instance` 選擇的 named runtime 會把宣告的 host ports 視為 preferences，
+並持久化可用的解析 port 以維持 restart 穩定。請使用 `up`、`status` 或
+`instance list` 回報的實際 endpoints。完整 ownership 與 cleanup model 見
+[隔離的 runtime instances](instances.zh-TW.md)。
 
 Orbit 會把 `<ALIAS>_PORT` 注入 host service；只有一個 port 的 service
 也會收到慣用的 `PORT` 變數。
@@ -591,9 +596,11 @@ Orbit 在載入時對所有 string 欄位進行 `${VAR}` 與 `${VAR:-default}` �
 path: ${API_ROOT:-~/dev/api}
 ```
 
-## Per-instance 覆寫
+## 底層 runtime 覆寫
 
-在同一台機器上隔離多個 Orbit instance（e2e 測試、sandbox）：
+這些 variables 會暴露 default runtime 使用的底層隔離 primitives。平行
+checkout、agent 與 CI job 應優先使用 `--instance`；詳見
+[隔離的 runtime instances](instances.zh-TW.md)。
 
 | Variable | 用途 | Default |
 |----------|---------|---------|
@@ -602,7 +609,7 @@ path: ${API_ROOT:-~/dev/api}
 | `ORBIT_DASHBOARD_PORT` | 固定 dashboard TCP port；未設定時若衝突會自動避開 | `19800` |
 | `ORBIT_LOG_LEVEL` | Daemon log 等級（`debug`/`info`/`warn`/`error`） | `info` |
 
-請在 `orbit up` 之前設定 —— daemon 已經跑起來後再改的話，需要 `orbit daemon restart`。
+請在 `orbit up` 之前設定底層 overrides——daemon 已經跑起來後再改的話，需要 `orbit daemon restart`。
 
 ## 延伸閱讀
 

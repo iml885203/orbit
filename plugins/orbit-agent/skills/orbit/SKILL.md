@@ -41,6 +41,12 @@ rather than guessing between these paths.
 3. Make the requested change with the narrowest lifecycle command.
 4. Verify the result with `orbit status --json`.
 
+If the user names an instance, or the task runs beside another checkout or CI
+job, choose one instance name before the first inspect and pass
+`--instance <name>` to every targeted command. Never fall back to the default
+runtime midway through a workflow. JSON recommended actions already retain the
+active instance target.
+
 Use `--json` whenever the command supports it. Human output is not a stable
 parsing contract. `orbit up` starts the daemon when needed and safely applies
 pending config edits; do not manage the daemon preemptively.
@@ -53,7 +59,7 @@ human help. Invoke them as documented.
 
 Read [references/workflows.md](references/workflows.md) for command selection
 and destructive-operation rules. Deeper references live in the repository's
-`docs/`: `agent-cli` (the `orbit.cli.v1` contract), `configuration`,
+`docs/`: `agent-cli` (the `orbit.cli.v1` contract), `instances`, `configuration`,
 `troubleshooting`, `tracing`, `sql-workflow`, `architecture`.
 
 ## State changes
@@ -65,6 +71,8 @@ and destructive-operation rules. Deeper references live in the repository's
   lifecycle changes; `up` and `down` use the same selection modes.
 - Use `orbit up --infra --json` only when the user explicitly wants
   containers without host services.
+- Use `orbit instance list --json` to discover named runtimes and their actual
+  endpoints. Named-instance ports may differ from the declarations.
 - Use `orbit env sync --json` to refresh shared configuration and
   `orbit switch <name> --json` to select it. With resources running, switch
   returns the stable `confirmation_required` error instead of acting; run the
@@ -104,6 +112,9 @@ and destructive-operation rules. Deeper references live in the repository's
   local data.
 - Treat `orbit switch` as destructive when resources are running: it stops
   them. Never pass `--yes` on the user's behalf without their intent.
+- Treat `orbit instance clean <name>` as destructive to that instance's local
+  processes, state, containers, and volumes. Run it only when the user's task
+  includes disposing of that instance.
 - Do not remove Docker volumes unless the user explicitly requests it.
 - Do not edit `~/.orbit/settings.json` directly; use `orbit settings`,
   `orbit init`, or `orbit env sync`.

@@ -13,7 +13,7 @@ for stale in \
   "orbit db " \
   "orbit sqlserver publish --clean"
 do
-  if grep -F "$stale" "$skill" "$workflows" >/dev/null; then
+  if grep -F -- "$stale" "$skill" "$workflows" >/dev/null; then
     echo "plugin teaches unsupported or internal lifecycle command: $stale" >&2
     exit 1
   fi
@@ -25,11 +25,14 @@ for required in \
   "orbit restart <resource> --json" \
   "orbit down <resource> --json" \
   "orbit status --json" \
+  "orbit instance list --json" \
+  "orbit instance clean <name>" \
+  "--instance <name>" \
   "orbit sqlserver diff" \
   "orbit sqlserver publish <database|project> --json" \
   "destructive: true"
 do
-  if ! grep -F "$required" "$skill" "$workflows" >/dev/null; then
+  if ! grep -F -- "$required" "$skill" "$workflows" >/dev/null; then
     echo "plugin is missing the supported workflow command: $required" >&2
     exit 1
   fi

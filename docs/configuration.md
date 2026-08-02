@@ -21,7 +21,7 @@ Full YAML schema for an Orbit environment file. A project may keep
 - [Extension-owned sections](#extension-owned-sections)
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [Variable substitution](#variable-substitution)
-- [Per-instance overrides](#per-instance-overrides)
+- [Low-level runtime overrides](#low-level-runtime-overrides)
 
 ## Config selection
 
@@ -226,14 +226,19 @@ The optional `sqlserver` workflow owns SQL Server Database Project diff,
 publish, and reset semantics because those operations do not map honestly onto
 every database.
 
-### Ports are fixed
+### Port resolution
 
-The file is the single source of truth for where every resource listens:
-Orbit never moves a port. A conflict is an error that names the owning
-process and the remedy, because a silently different address breaks every
-consumer Orbit does not manage — hardcoded env values, bookmarks, test
-configuration. `orbit doctor` reports occupied declared ports with their
-owners before anything starts.
+The default runtime treats each declared host port as fixed. A conflict is an
+error that names the owning process and the remedy, because a silently
+different address breaks consumers Orbit does not manage — hardcoded env
+values, bookmarks, and test configuration. `orbit doctor` reports occupied
+declared ports with their owners before anything starts.
+
+A named runtime selected with `--instance` treats declared host ports as
+preferences and persists available resolved ports for stable restarts. Consume
+the actual endpoints reported by `up`, `status`, or `instance list`. The full
+ownership and cleanup model is documented in
+[Isolated runtime instances](instances.md).
 
 Orbit injects `<ALIAS>_PORT` into the host service; a service with one port
 also receives the conventional `PORT` variable.
@@ -621,9 +626,11 @@ Undeclared variables evaluate to empty string — use `:-` to give them a meanin
 path: ${API_ROOT:-~/dev/api}
 ```
 
-## Per-instance overrides
+## Low-level runtime overrides
 
-Isolate multiple Orbit instances on one machine (e2e tests, sandboxes):
+These variables expose the isolation primitives used by the default runtime.
+For parallel checkouts, agents, and CI jobs, prefer `--instance`; see
+[Isolated runtime instances](instances.md).
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
@@ -632,7 +639,7 @@ Isolate multiple Orbit instances on one machine (e2e tests, sandboxes):
 | `ORBIT_DASHBOARD_PORT` | Pin the dashboard TCP port; without it, conflicts relocate automatically | `19800` |
 | `ORBIT_LOG_LEVEL` | Daemon log verbosity (`debug`/`info`/`warn`/`error`) | `info` |
 
-Set these before `orbit up` — changing them after the daemon is already running requires `orbit daemon restart`.
+Set low-level overrides before `orbit up` — changing them after the daemon is already running requires `orbit daemon restart`.
 
 ## See also
 

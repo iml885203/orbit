@@ -54,6 +54,8 @@ Every lifecycle command accepts `--instance <name>`. Use `orbit instance list
 resolved resource endpoints. `orbit instance clean <name> --json` stops the
 instance and removes only resources carrying that instance's ownership.
 Recommended actions emitted for a named runtime retain that instance target.
+The full targeting and cleanup model is documented in
+[Isolated runtime instances](instances.md).
 
 When a converted command fails with `--json`, Orbit prints a single JSON object
 to stdout and exits with code `1`.
@@ -445,24 +447,11 @@ and recommends only `orbit daemon restart --json`.
 
 ## Recommended Agent Workflow
 
-Start with inspect, act, then inspect again:
-
-```bash
-orbit inspect --json
-# run the response's first non-destructive recommended action
-orbit inspect --json
-```
-
-For a failing service:
-
-```bash
-orbit status --json
-orbit logs <resource> --json
-orbit restart <resource> --json  # after fixing the reported cause
-```
-
-If a JSON response includes `recommended_actions`, follow those before falling
-back to ad hoc debugging.
+This document owns the JSON contract, not agent decision policy. The
+version-matched [Orbit skill](../plugins/orbit-agent/skills/orbit/SKILL.md)
+defines the inspect, action, verification, failure-recovery, instance-targeting,
+and destructive-operation workflow. Agents should follow response
+`recommended_actions` before falling back to ad hoc debugging.
 
 ## Exit Codes
 

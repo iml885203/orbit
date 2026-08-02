@@ -52,17 +52,19 @@ bounded log tail. A CI log gets the explanation without a second command. See
 
 ## Running a second stack on one machine
 
-For a dedicated runner — or a careful second stack beside your dev
-environment — Orbit isolates everything through three environment variables,
-the same mechanism its own test suite uses:
+For a dedicated runner or a second stack beside a development environment,
+give the run a unique named instance:
 
 ```bash
-export ORBIT_HOME=/tmp/orbit-ci        # socket, state, env selection
-export ORBIT_NAMESPACE=ci-$RANDOM      # container names + labels
-export ORBIT_DASHBOARD_PORT=24500      # dashboard listener
+orbit up --instance ci-$BUILD_ID --infra --json
+orbit status --instance ci-$BUILD_ID --json
+# run tests against the resolved endpoints returned above
+orbit instance clean ci-$BUILD_ID --json
 ```
 
-Every command run with these set operates on a fully separate Orbit: its own
-daemon, its own containers, its own state. One caveat: host ports are still
-declared statically in the env file, so two stacks of the *same* env collide
-on ports — give the second stack an env file with different host ports.
+Named instances isolate daemon state, Docker resources, volumes, networks, and
+host ports. Declared ports are preferences; the JSON responses report the
+resolved endpoints, so the harness must consume them instead of assuming the
+ports in the environment file. Keep the same `--instance` target for every
+Orbit command in the run, and clean it after the suite finishes. See
+[Isolated runtime instances](instances.md) for the ownership model.

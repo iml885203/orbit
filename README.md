@@ -84,6 +84,8 @@ Declared host ports are preferences inside a named instance. Orbit persists
 the resolved ports for stable restarts and reports the actual endpoints in
 `up`, `status`, and `instance list`; callers do not need to coordinate
 `ORBIT_HOME`, `ORBIT_NAMESPACE`, `ORBIT_DASHBOARD_PORT`, or `ORBIT_SOCKET`.
+See [Isolated runtime instances](docs/instances.md) for targeting, isolation,
+port resolution, and cleanup semantics.
 
 [Use Orbit with your project](docs/local-first.md) walks this path and shows
 how to promote the proven file into a shared team environment. Every field is
@@ -169,6 +171,7 @@ Core user documentation:
 - [Use Orbit with your project](docs/local-first.md)
 - [Why Orbit](docs/why-orbit.md) — design trade-offs and tool comparisons
 - [Configuration](docs/configuration.md)
+- [Isolated runtime instances](docs/instances.md)
 - [Using Orbit under an E2E test suite](docs/e2e-testing.md)
 - [Tracing](docs/tracing.md)
 - [Troubleshooting](docs/troubleshooting.md)

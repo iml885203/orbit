@@ -46,16 +46,17 @@ healthy 的資源，含狀態、原因與有上限的 log tail。CI log 不需�
 
 ## 在同一台機器跑第二個 stack
 
-專屬 runner——或想小心地在 dev 環境旁邊跑第二個 stack——可以用三個環境變數
-完全隔離，這正是 Orbit 自己的測試套件用的機制：
+專屬 runner 或 dev 環境旁的第二個 stack，請為該次執行指定唯一 named instance：
 
 ```bash
-export ORBIT_HOME=/tmp/orbit-ci        # socket、狀態、env 選取
-export ORBIT_NAMESPACE=ci-$RANDOM      # container 名稱 + label
-export ORBIT_DASHBOARD_PORT=24500      # dashboard listener
+orbit up --instance ci-$BUILD_ID --infra --json
+orbit status --instance ci-$BUILD_ID --json
+# 使用上述 response 回報的 resolved endpoints 執行測試
+orbit instance clean ci-$BUILD_ID --json
 ```
 
-帶著這些變數執行的每個指令都操作一個完全獨立的 Orbit：自己的 daemon、自己的
-container、自己的狀態。一個限制：host port 仍然是 env 檔裡靜態宣告的，所以
-*同一個* env 的兩個 stack 會在 port 上相撞——給第二個 stack 一份 host port
-不同的 env 檔。
+Named instance 會隔離 daemon state、Docker resources、volumes、networks 與 host
+ports。宣告 ports 是 preferences；JSON response 會回報解析後的 endpoints，test
+harness 必須使用它們，不能假設 environment 檔裡的 ports。整次執行的每個 Orbit
+command 都要維持相同 `--instance` target，並在 suite 結束後清理。Ownership model
+見[隔離的 runtime instances](instances.zh-TW.md)。

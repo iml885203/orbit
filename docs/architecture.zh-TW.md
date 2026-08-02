@@ -197,6 +197,10 @@ process 依賴 stopped 或 degraded 資源，API view 會以 degraded 和
   `go:embed` 內嵌）與 SSE stream。Browser-facing control surface 會驗證
   loopback Host，且 mutation 必須是 same-origin。
 
+Unnamed runtime 會維持這些舊有 paths 與 names。Named runtime 的 ownership、
+state layout、port persistence 與 cleanup semantics 定義於
+[隔離的 runtime instances](instances.zh-TW.md)。
+
 所有 HTTP handler 依關注點分散在 `internal/daemon/*.go`:
 
 | File | 負責 |
