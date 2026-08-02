@@ -20,4 +20,15 @@ describe('buildDependencyPath', () => {
     expect(async.path).not.toBe(sync.path)
     expect(Math.abs(async.labelX - sync.labelX)).toBeGreaterThanOrEqual(20)
   })
+
+  it('routes fanned sync edges through straight side lanes', () => {
+    const left = buildDependencyPath({ ...verticalEdge, async: false, routeLane: -1 })
+    const right = buildDependencyPath({ ...verticalEdge, async: false, routeLane: 1 })
+
+    expect(left.path).not.toBe(right.path)
+    expect(Math.abs(left.labelX - verticalEdge.sourceX)).toBeGreaterThan(120)
+    expect(Math.abs(right.labelX - verticalEdge.sourceX)).toBeGreaterThan(120)
+    expect(left.path).toContain(`L${left.labelX},`)
+    expect(right.path).toContain(`L${right.labelX},`)
+  })
 })

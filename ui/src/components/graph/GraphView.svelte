@@ -9,7 +9,7 @@
   import { subscribe } from '../../lib/eventbus'
   import type { TraceSummary } from '../../lib/types.gen'
   import { filterVisibleEdges } from './edge-filter'
-  import type { GraphEdge } from '../../lib/types.gen'
+  import { dependencyEdgeID, routeDependencyEdges, type RoutedGraphEdge } from './edge-routing'
   import ServiceNode from './ServiceNode.svelte'
   import GroupNode from './GroupNode.svelte'
   import ExternalNode from './ExternalNode.svelte'
@@ -17,7 +17,7 @@
   import EnvSwitchingOverlay from './EnvSwitchingOverlay.svelte'
   import TracePlaybackBar from './TracePlaybackBar.svelte'
 
-  type GraphEdgeData = GraphEdge & Record<string, unknown>
+  type GraphEdgeData = RoutedGraphEdge & Record<string, unknown>
 
   // Canvas reads the store's `active` getter so the preview-wins rule
   // lives in one place (stores.svelte.ts GraphStore.active).
@@ -28,6 +28,16 @@
   const hasGroups = $derived((activeGraph?.groups?.length ?? 0) > 0)
 
   const nodes = $derived<ReturnType<typeof layout>>(activeGraph ? layout(activeGraph, layoutMode) : [])
+  const nodePositions = $derived.by(() => {
+    const parents = new Map(nodes.filter(node => !node.parentId).map(node => [node.id, node.position]))
+    return new Map(nodes.map(node => {
+      const parent = node.parentId ? parents.get(node.parentId) : undefined
+      return [node.id, {
+        x: node.position.x + (parent?.x ?? 0),
+        y: node.position.y + (parent?.y ?? 0),
+      }]
+    }))
+  })
 
   // Infra nodes hidden by layout (preview-only envs) — also drop their
   // edges so SvelteFlow doesn't warn about endpoints that no longer
@@ -35,10 +45,15 @@
   const hiddenInfra = $derived(activeGraph ? hiddenInfraNames(activeGraph) : new Set<string>())
   const selectedNode = $derived(store.graph.selectedNode)
   const edges = $derived<Edge<GraphEdgeData, 'dep'>[]>(
-    filterVisibleEdges(activeGraph?.edges ?? [], selectedNode)
-      .filter(e => !hiddenInfra.has(e.to) && !hiddenInfra.has(e.from))
+    filterVisibleEdges(
+      routeDependencyEdges(
+        (activeGraph?.edges ?? []).filter(e => !hiddenInfra.has(e.to) && !hiddenInfra.has(e.from)),
+        nodePositions,
+      ),
+      selectedNode,
+    )
       .map(e => ({
-        id: `${e.from}->${e.to}:${e.kind === 'async' ? e.topic : 'sync'}`,
+        id: dependencyEdgeID(e),
         source: e.from,
         target: e.to,
         type: 'dep',
