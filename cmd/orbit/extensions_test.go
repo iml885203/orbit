@@ -21,7 +21,7 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 	if distribution.EnvRepoURL != "https://github.com/iml885203/orbit-demo.git" {
 		t.Errorf("env repo URL = %q", distribution.EnvRepoURL)
 	}
-	if distribution.EnvRepoRef != "v0.5.0" {
+	if distribution.EnvRepoRef != "v0.6.0" {
 		t.Errorf("env repo ref = %q", distribution.EnvRepoRef)
 	}
 	if distribution.DefaultEnv != "quickstart.yaml" {
