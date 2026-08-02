@@ -294,8 +294,10 @@ calls to walk through before each commit:
 
 - **Leave no dead weight.** If a change obsoletes a file, a doc, or a
   paragraph, delete it in the same commit. Nothing is kept "just in case".
-- **Docs read simply.** Write documentation to be understood on first read:
-  short sentences, concrete commands, no filler.
+- **Docs read simply — and cheaply.** Write documentation to be understood
+  on first read: short sentences, concrete commands, no filler. Avoid docs
+  that must track feature changes; when one is genuinely needed, keep a
+  single authoritative copy and point every other location at it.
 - **Explanation is a refactoring signal.** The urge to write a doc or comment
   that explains code means the code should be restructured first (§3).
 - **The code states its intent.** A feature is done only after a

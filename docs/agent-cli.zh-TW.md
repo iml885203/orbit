@@ -106,40 +106,8 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 
 ### 穩定錯誤碼
 
-`error.code` 的值屬於版本化契約。目前的集合：
-
-| Code | 意義 |
-|---|---|
-| `checks_failed` | doctor 檢查失敗；解決後再跑一次 doctor |
-| `command_failed` | 未分類的失敗；依 hint 行動 |
-| `confirmation_required` | 破壞性步驟需要 `--yes` |
-| `daemon_unreachable` | Orbit 沒有在運行 |
-| `dashboard_port_conflict` | dashboard port 被其他 process 占用 |
-| `dependency_blocked` | 必要的 dependency 無法變 healthy |
-| `env_mismatch` | 選定的 config 與運行中 daemon 的不同 |
-| `env_repo_access` | environment repository 存取或認證失敗 |
-| `env_repo_unavailable` | environment repository 連不上 |
-| `environment_changed` | env 檔已變更；先套用再繼續 |
-| `environment_schema_newer` | env schema 比這個 Orbit 新 |
-| `environment_schema_outdated` | env schema 比這個 Orbit 舊 |
-| `environment_selection_required` | 尚未選定 environment |
-| `init_incomplete` | 初始化中途停止 |
-| `invalid_argument` | 衝突或未知的指令選擇 |
-| `invalid_environment` | environment 檔驗證失敗 |
-| `invalid_environment_schema` | environment 檔 schema 驗證失敗 |
-| `json_unsupported_destructive_command` | 這個破壞性指令拒絕 `--json` |
-| `logs_unavailable` | 該資源沒有緩衝的輸出 |
-| `not_configured` | active env 沒有啟用這個功能 |
-| `orbit_update_pending` | 已安裝的更新需要 daemon restart |
-| `project_context_inactive` | 找到 project config 但 daemon 服務別的 env |
-| `resource_port_conflict` | 資源的 host port 被其他 process 占用 |
-| `service_start_failed` | 資源未能變 healthy |
-| `service_working_directory_missing` | host service 的 path 解析不到 |
-| `setup_required` | `orbit init` 尚未完成 |
-| `socket_path_too_long` | `ORBIT_HOME` 產生過長的 socket 路徑 |
-| `timeout` | 等待超過 `--timeout` |
-| `unknown_group` | `--group` 指到不存在的 group |
-| `unknown_resource` | 指名的資源不在 env 裡 |
+`error.code` 的值屬於版本化契約。完整清單只維護一份,見英文版
+[agent-cli.md 的 Stable error codes](agent-cli.md#stable-error-codes)。
 
 ## Converted Commands
 

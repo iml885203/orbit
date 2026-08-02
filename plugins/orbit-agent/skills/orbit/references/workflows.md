@@ -40,12 +40,17 @@ containers without host services.
 orbit env sync --json
 orbit switch <name> --json
 orbit env list --json
+orbit env info --json
 ```
 
 Sync applies changed active configuration by default while restoring the
 resources that were running; resources that were stopped remain stopped.
 `--no-apply` deliberately defers that interruption. A switch handles the daemon
 handoff itself; follow its response rather than restarting Orbit preemptively.
+With resources running, switch first returns `confirmation_required`; rerun
+with `--yes` only when stopping them is what the user wants. `env info`
+reports each resource's ports and URL with declared/observed provenance —
+read it before connecting anything from outside the stack.
 
 For a project-local `orbit.yaml`, edit the file and run `orbit up --json`.
 Use `orbit env apply --json` only when the config must change while every

@@ -66,7 +66,13 @@ and destructive-operation rules. Deeper references live in the repository's
 - Use `orbit up --infra --json` only when the user explicitly wants
   containers without host services.
 - Use `orbit env sync --json` to refresh shared configuration and
-  `orbit switch <name> --json` to select it.
+  `orbit switch <name> --json` to select it. With resources running, switch
+  returns the stable `confirmation_required` error instead of acting; run the
+  recommended `--yes` command only when the user intends to stop that stack.
+- Use `orbit env info --json` to learn how to reach the env's resources:
+  ports and URLs carry `declared` vs `observed` provenance, and observed
+  values are withheld when the daemon serves a different environment.
+  Environment values need `--show-secrets`; key names are always listed.
 - After editing the active config, normal `orbit up --json` validates before
   interruption, restores resources that were running, then performs the
   requested startup selection. Use `orbit env apply --json` when the edit must
@@ -96,6 +102,8 @@ and destructive-operation rules. Deeper references live in the repository's
 
 - Ask before `orbit sqlserver reset` or `orbit sqlserver publish --force`; these may discard
   local data.
+- Treat `orbit switch` as destructive when resources are running: it stops
+  them. Never pass `--yes` on the user's behalf without their intent.
 - Do not remove Docker volumes unless the user explicitly requests it.
 - Do not edit `~/.orbit/settings.json` directly; use `orbit settings`,
   `orbit init`, or `orbit env sync`.
