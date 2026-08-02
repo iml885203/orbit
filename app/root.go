@@ -15,6 +15,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/instance"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/history"
@@ -34,6 +35,7 @@ var (
 	cliHistAt         time.Time
 	cliHistCmd        string
 	daemonContextKind string
+	instanceName      string
 )
 
 // extensions holds the feature sets injected by Main — consumed by the
@@ -82,6 +84,7 @@ for the bundled demo or a shared environment repository.`,
 
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides project config and current env)")
 	rootCmd.PersistentFlags().BoolVar(&cli.JSONOutput, "json", false, "output in JSON format")
+	rootCmd.PersistentFlags().StringVar(&instanceName, "instance", "", "target an isolated named runtime")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		// A command with DisableFlagParsing (exec) never lets cobra
 		// intercept -h/--help, so a help request would run the daemon
@@ -90,6 +93,11 @@ for the bundled demo or a shared environment repository.`,
 		// command being passed through.
 		if cmd.DisableFlagParsing && len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 			return pflag.ErrHelp
+		}
+		if instanceName != "" {
+			if _, err := instance.Activate(instanceName); err != nil {
+				return cli.NewInvalidArgumentError(err.Error())
+			}
 		}
 		// Apply saved settings (workspace root, SQL mode) to env for all commands
 		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
@@ -183,6 +191,7 @@ for the bundled demo or a shared environment repository.`,
 	rootCmd.AddCommand(edgeCmd())
 	rootCmd.AddCommand(serviceCmd())
 	rootCmd.AddCommand(settingsCmd())
+	rootCmd.AddCommand(instanceCmd())
 	rootCmd.AddCommand(traceCmd())
 	rootCmd.AddCommand(tracingCmd())
 	configureContextualRootHelp(rootCmd)
@@ -406,7 +415,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 	}
 	switch top.Name() {
 	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
-		"version", "update", "uninstall", "history", "settings", "trace", "tracing":
+		"version", "update", "uninstall", "history", "settings", "trace", "tracing", "instance":
 		return false
 	case "env":
 		return cmd.Name() == "toggle" || cmd.Name() == "apply"

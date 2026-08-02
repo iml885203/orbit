@@ -99,6 +99,10 @@ test-docs:
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-local-first-adoption.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
 	@./scripts/test-plugin-contract.sh
+	@grep -F 'Named instance' docs/instances.md docs/configuration.md docs/e2e-testing.md >/dev/null
+	@grep -F 'Named instance' docs/instances.zh-TW.md docs/configuration.zh-TW.md docs/e2e-testing.zh-TW.md >/dev/null
+	@! grep -F 'Orbit never moves a port' docs/configuration.md
+	@! grep -F 'Orbit 永遠不會移動 port' docs/configuration.zh-TW.md
 	@test ! -d docs/examples/mini-shop
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.md >/dev/null
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.zh-TW.md >/dev/null

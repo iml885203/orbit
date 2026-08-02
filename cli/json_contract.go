@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -25,6 +26,7 @@ type JSONEnvelope struct {
 	SchemaVersion      string       `json:"schema_version"`
 	OK                 bool         `json:"ok"`
 	Command            string       `json:"command"`
+	Instance           string       `json:"instance,omitempty"`
 	Data               any          `json:"data,omitempty"`
 	Error              *JSONError   `json:"error,omitempty"`
 	RecommendedActions []JSONAction `json:"recommended_actions,omitempty"`
@@ -86,9 +88,25 @@ func WriteJSONFailure(w io.Writer, command string, data any, err error, actions 
 }
 
 func writeJSON(w io.Writer, payload JSONEnvelope) error {
+	payload.Instance = os.Getenv("ORBIT_INSTANCE")
+	if payload.Instance != "" {
+		for i := range payload.RecommendedActions {
+			payload.RecommendedActions[i].Command = instanceTargetedCommand(payload.RecommendedActions[i].Command, payload.Instance)
+		}
+		if payload.Error != nil {
+			payload.Error.NextCommand = instanceTargetedCommand(payload.Error.NextCommand, payload.Instance)
+		}
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
+}
+
+func instanceTargetedCommand(command, name string) string {
+	if command == "" || !strings.HasPrefix(command, "orbit ") || strings.Contains(command, " --instance ") {
+		return command
+	}
+	return "orbit --instance " + name + " " + strings.TrimPrefix(command, "orbit ")
 }
 
 func classify(err error) JSONError {

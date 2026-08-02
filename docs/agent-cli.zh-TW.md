@@ -26,6 +26,7 @@ orbit logs redis --json
   "schema_version": "orbit.cli.v1",
   "ok": true,
   "command": "doctor",
+  "instance": "ci-123",
   "data": {},
   "error": null,
   "recommended_actions": []
@@ -39,9 +40,17 @@ orbit logs redis --json
 | `schema_version` | Contract 版本，目前為 `orbit.cli.v1`。 |
 | `ok` | 成功為 `true`，失敗為 `false`。 |
 | `command` | 產生這個 response 的 Orbit 指令。 |
+| `instance` | `--instance` 指定的 named runtime；default runtime 會省略。 |
 | `data` | 成功時的 command-specific payload。 |
 | `error` | 失敗時的結構化 error payload，否則為 `null`。 |
 | `recommended_actions` | Agent 應考慮的後續指令。 |
+
+所有 lifecycle commands 都接受 `--instance <name>`。使用 `orbit instance
+list --json` 取得各 instance 的 environment、state、dashboard 與解析後的
+resource endpoints。`orbit instance clean <name> --json` 只會停止並移除帶有
+該 instance ownership 的 resources。Named runtime 產生的 recommended actions
+會保留 instance target。完整 targeting 與 cleanup model 見
+[隔離的 runtime instances](instances.zh-TW.md)。
 
 已轉換的指令在 `--json` 模式下若失敗，Orbit 會在 stdout 印出單一 JSON 物件，並以 exit code `1` 結束。
 
@@ -326,23 +335,11 @@ resource mutation。這些 mutation 會回傳 `orbit_update_pending`，並且只
 
 ## Recommended Agent Workflow
 
-從 inspect 開始，做動作，再重新 inspect：
-
-```bash
-orbit inspect --json
-# 執行 response 的第一個 non-destructive recommended action
-orbit inspect --json
-```
-
-對於失敗中的 service：
-
-```bash
-orbit status --json
-orbit logs <resource> --json
-orbit restart <resource> --json  # 修正回報的原因後
-```
-
-如果 JSON response 帶有 `recommended_actions`，請先照著走，再退回到臨時 debug。
+本文件負責 JSON contract，不定義 agent decision policy。與版本配對的
+[Orbit skill](../plugins/orbit-agent/skills/orbit/SKILL.md) 是 inspect、action、
+verification、failure recovery、instance targeting 與 destructive operation
+workflow 的唯一來源。JSON response 帶有 `recommended_actions` 時，agent 應先
+遵循它們，再退回臨時 debug。
 
 ## Exit Codes
 

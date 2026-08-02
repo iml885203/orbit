@@ -85,11 +85,13 @@ environment selection, lifecycle orchestration, dependency recovery, or other
 cross-process behavior. It builds once, then reuses that exact binary for the
 empty-directory, local-adoption, and project-switch journeys.
 
-Expensive end-to-end cases must own a unique Orbit home, namespace, dashboard
-port, service ports, and cleanup. Once those boundaries are independent, run
-the cases in parallel instead of sharing a daemon or serializing unrelated
-user journeys. Do not parallelize cases that intentionally compete for the
-same port or installation path.
+Expensive end-to-end cases must own a unique named instance and clean it when
+finished. Consume the resolved endpoints reported by Orbit rather than
+hard-coding service or dashboard ports. Use low-level home, namespace, and port
+overrides only when the test intentionally exercises those primitives. Once
+the boundaries are independent, run cases in parallel instead of sharing a
+daemon or serializing unrelated user journeys. Do not parallelize cases that
+intentionally compete for the same installation path.
 
 When a test is flaky or slow, first ask whether it belongs at that level. Move
 it to a stronger boundary if isolated mocks caused the fragility; move it out

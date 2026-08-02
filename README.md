@@ -65,9 +65,27 @@ orbit down     # stop the environment
 
 Orbit starts Redis before the host process, waits for real readiness instead
 of equating "process exists" with "ready", and injects the declared port as
-`PORT`. Ports live in the file and never move: a conflict is reported with
-its owning process and the remedy. After editing `orbit.yaml`, run `orbit up`
+`PORT`. The default runtime keeps ports fixed: a conflict is reported with its
+owning process and the remedy. After editing `orbit.yaml`, run `orbit up`
 again: the new config is validated before anything is interrupted.
+
+For parallel local checkouts or CI jobs, select a named instance. Named
+instances isolate daemon state, Docker resources, volumes, networks, and host
+ports while leaving the unnamed runtime backward compatible:
+
+```bash
+orbit up --instance checkout-a
+orbit status --instance checkout-a --json
+orbit instance list --json
+orbit instance clean checkout-a
+```
+
+Declared host ports are preferences inside a named instance. Orbit persists
+the resolved ports for stable restarts and reports the actual endpoints in
+`up`, `status`, and `instance list`; callers do not need to coordinate
+`ORBIT_HOME`, `ORBIT_NAMESPACE`, `ORBIT_DASHBOARD_PORT`, or `ORBIT_SOCKET`.
+See [Isolated runtime instances](docs/instances.md) for targeting, isolation,
+port resolution, and cleanup semantics.
 
 [Use Orbit with your project](docs/local-first.md) walks this path and shows
 how to promote the proven file into a shared team environment. Every field is
@@ -153,6 +171,7 @@ Core user documentation:
 - [Use Orbit with your project](docs/local-first.md)
 - [Why Orbit](docs/why-orbit.md) — design trade-offs and tool comparisons
 - [Configuration](docs/configuration.md)
+- [Isolated runtime instances](docs/instances.md)
 - [Using Orbit under an E2E test suite](docs/e2e-testing.md)
 - [Tracing](docs/tracing.md)
 - [Troubleshooting](docs/troubleshooting.md)

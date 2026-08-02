@@ -13,6 +13,23 @@ prerequisites. Use `orbit history --json` only for an audit trail.
 On a fresh install, execute inspect's exact setup action
 (`orbit init --yes --json`) directly; do not insert doctor first.
 
+## Named instances
+
+Use one named runtime for parallel checkouts, agents, or CI jobs, and retain the
+target for the entire workflow:
+
+```bash
+orbit inspect --instance <name> --json
+orbit up --instance <name> --json
+orbit status --instance <name> --json
+orbit instance list --json
+```
+
+Consume the resolved endpoints returned by Orbit; a named instance may relocate
+declared host ports. JSON recommended actions retain the instance target.
+`orbit instance clean <name> --json` stops and removes that instance's local
+state and Docker resources, so run it only when disposal is in scope.
+
 ## Start and stop
 
 ```bash

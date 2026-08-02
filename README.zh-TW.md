@@ -60,9 +60,24 @@ orbit down     # 停止環境
 ```
 
 Orbit 會先啟動 Redis 再啟動 host process、等待真實 readiness 而不是把
-「process 存在」當成「可以使用」、把宣告的 port 注入為 `PORT`。Port 以檔案
-為準、永不移動：衝突時會報錯並指出占用的程式與 remedy。編輯 `orbit.yaml`
-後再執行一次 `orbit up`：Orbit 會先驗證新設定，再中斷任何東西。
+「process 存在」當成「可以使用」、把宣告的 port 注入為 `PORT`。Default
+runtime 的 port 固定不移動：衝突時會報錯並指出占用的程式與 remedy。編輯
+`orbit.yaml` 後再執行一次 `orbit up`：Orbit 會先驗證新設定，再中斷任何東西。
+
+平行 checkout 或 CI job 請使用 named instance。它會隔離 daemon state、Docker
+resources、volumes、networks 與 host ports，同時維持 default runtime 的相容性：
+
+```bash
+orbit up --instance checkout-a
+orbit status --instance checkout-a --json
+orbit instance list --json
+orbit instance clean checkout-a
+```
+
+Named instance 會把宣告的 host ports 視為 preferences、持久化解析結果，並透過
+`up`、`status` 與 `instance list` 回報實際 endpoints；caller 不必自行協調底層
+environment variables。完整語意見
+[隔離的 runtime instances](docs/instances.zh-TW.md)。
 
 [在你的專案使用 Orbit](docs/local-first.zh-TW.md) 完整走過這條路徑，並說明
 如何把驗證過的檔案升級為團隊共享 environment。所有欄位請見
@@ -146,6 +161,7 @@ playback。Dashboard 只綁定 loopback。
 - [在你的專案使用 Orbit](docs/local-first.zh-TW.md)
 - [為什麼是 Orbit](docs/why-orbit.zh-TW.md) —— 設計取捨與工具比較
 - [設定](docs/configuration.zh-TW.md)
+- [隔離的 runtime instances](docs/instances.zh-TW.md)
 - [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)
 - [疑難排解](docs/troubleshooting.zh-TW.md)

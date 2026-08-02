@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/instance"
 	"github.com/iml885203/orbit/platform"
 	"github.com/iml885203/orbit/process"
 )
@@ -324,6 +325,14 @@ func StartDaemonWithContext(configPath string, features []string, contextKind st
 	// coexist with another Orbit instance without user configuration. The
 	// child validates the selected port again after the close/fork gap.
 	preferredDashboardPort, pinnedDashboardPort := dashboardPortFromEnv()
+	if instance.CurrentName() != "" {
+		var err error
+		preferredDashboardPort, err = instance.ResolveDashboardPort(preferredDashboardPort)
+		if err != nil {
+			return 0, fmt.Errorf("resolving instance dashboard port: %w", err)
+		}
+		pinnedDashboardPort = true
+	}
 	dashboardPort, err := selectDashboardPort(preferredDashboardPort, pinnedDashboardPort)
 	if err != nil {
 		return 0, err

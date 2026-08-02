@@ -19,6 +19,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/instance"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/logging"
@@ -396,6 +397,12 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+	if err := instance.ResolvePorts(cfg); err != nil {
+		return fmt.Errorf("resolving instance ports: %w", err)
+	}
+	if err := instance.WriteManifest(configFile); err != nil {
+		return fmt.Errorf("writing instance manifest: %w", err)
 	}
 
 	// Detached edges are scoped per env (basename of the config path

@@ -216,6 +216,10 @@ so still-running dependents recover without a restart.
   (embedded via `go:embed`) and SSE streams. Loopback Host validation and
   same-origin mutation checks protect the browser-facing control surface.
 
+The unnamed runtime uses these legacy paths and names unchanged. Named runtime
+ownership, state layout, port persistence, and cleanup semantics are defined in
+[Isolated runtime instances](instances.md).
+
 All HTTP handlers live in `internal/daemon/*.go` by concern:
 
 | File | Concern |
