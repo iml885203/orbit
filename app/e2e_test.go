@@ -2994,9 +2994,29 @@ func TestE2E_UpReselectsPreferredPortTakenWhileDaemonAlive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("up did not relocate the taken preferred port: %v\n%s", err, output)
 	}
+	envelope := parseE2EEnvelope(t, output)
+	var lifecycle struct {
+		RelocatedPorts []struct {
+			Resource  string `json:"resource"`
+			Label     string `json:"label"`
+			Preferred int    `json:"preferred"`
+			Actual    int    `json:"actual"`
+		} `json:"relocated_ports"`
+	}
+	if err := json.Unmarshal(envelope.Data, &lifecycle); err != nil {
+		t.Fatalf("parse up data: %v\n%s", err, envelope.Data)
+	}
+	if len(lifecycle.RelocatedPorts) != 1 ||
+		lifecycle.RelocatedPorts[0].Resource != "api" ||
+		lifecycle.RelocatedPorts[0].Label != "http" {
+		t.Fatalf("relocated_ports = %+v, want the api http move announced", lifecycle.RelocatedPorts)
+	}
 	secondPort := env.resourcePort(t, "api", "http")
 	if secondPort == firstPort {
 		t.Fatalf("api still on %d after the port was taken", firstPort)
+	}
+	if lifecycle.RelocatedPorts[0].Actual != secondPort {
+		t.Fatalf("relocated_ports actual = %d, status says %d", lifecycle.RelocatedPorts[0].Actual, secondPort)
 	}
 	if state := env.serviceState(t, "api"); state != "healthy" {
 		t.Fatalf("api state = %s after relocation, want healthy", state)

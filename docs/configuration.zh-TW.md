@@ -253,6 +253,8 @@ host port，同步更新 health check 與 loopback URL，並把
 選擇在每次啟動時都成立，不是只在 daemon 啟動時：已停止資源的選定 port
 被其他程式占走後，下一次 `orbit up` 會直接為它換 port，而不是回報
 conflict。運行中的資源永遠不會被移動，仍可用的選擇也不會被重新洗牌。
+每次 `orbit up` 都會把看到的搬移喊出來——每個被搬移的 port 一行人類輸出，
+`--json` 則放在 `data.relocated_ports`。
 
 單純的數字或 `"host:target"` 字串仍代表固定 port。若團隊想在不改檔案的
 情況下覆寫偏好值，也可以在 `preferred` 與 `target` 中使用 environment

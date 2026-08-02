@@ -78,3 +78,27 @@ func TestRunningResourceNamesIgnoresStoppedAndPending(t *testing.T) {
 		t.Fatalf("running resources = %v, want %v", got, want)
 	}
 }
+
+func TestRelocatedPortsReportsOnlyMovedAutoPorts(t *testing.T) {
+	cfg, _ := loadEnvInfoFixture(t)
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "api", State: "healthy", Ports: map[string]int{"http": 18081}},
+		{Name: "db", State: "healthy", Ports: map[string]int{"pg": 15432}},
+	}}
+
+	moves := relocatedPorts(cfg, status)
+
+	if len(moves) != 1 {
+		t.Fatalf("moves = %+v, want only the moved auto port", moves)
+	}
+	if moves[0].Resource != "api" || moves[0].Label != "http" || moves[0].Preferred != 18080 || moves[0].Actual != 18081 {
+		t.Fatalf("move = %+v", moves[0])
+	}
+
+	stable := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "api", State: "healthy", Ports: map[string]int{"http": 18080}},
+	}}
+	if got := relocatedPorts(cfg, stable); len(got) != 0 {
+		t.Fatalf("moves = %+v, want none when the preference held", got)
+	}
+}

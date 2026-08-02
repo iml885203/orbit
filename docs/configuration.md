@@ -263,6 +263,8 @@ Selection holds at every start, not only at daemon startup: when another
 process takes a stopped resource's selected port, the next `orbit up`
 relocates that resource instead of failing with a conflict. Running
 resources never move, and an available selection is never reshuffled.
+Every `orbit up` announces the moves it sees — a human output line per
+relocated port, and `data.relocated_ports` in `--json`.
 
 A simple number or `"host:target"` string remains fixed. Environment
 substitution also works inside `preferred` and `target` when a team wants to

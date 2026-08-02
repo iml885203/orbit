@@ -164,7 +164,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
-| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. |
+| `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. Movable ports that ended up off their preference are announced in `data.relocated_ports` (`resource`, `label`, `preferred`, `actual`). |
 | `orbit down --json` | Returns final lifecycle result after stopping resources. It is a successful no-op with empty arrays when Orbit is already stopped. Before setup it recommends `orbit init`; after setup it recommends the next normal `orbit up`. |
 | `orbit down <resources...> --json` | Returns the final lifecycle result for the requested resources. If that stop degrades running dependents, they are included in `resources` and `degraded_resources` with the one dependency-restoration action. `--group` and `--infra` use the same mutually exclusive selection modes as `orbit up`; group shutdown stops members without stopping shared dependencies. |
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
@@ -183,6 +183,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit sqlserver diff --json` | Returns per-database drift in the envelope; `--script` adds the change script to `data`. |
 | `orbit sqlserver reset --json` | Never resets: refuses with the stable `json_unsupported_destructive_command` error so data loss stays a human decision. |
 | `orbit init --json` | Returns the setup result in the envelope, with failures carrying the incomplete step. |
+| `orbit tunnel list --json` | Returns active claims in `data.claims` (paths, owner, target, status); `--all` includes other owners' claims with `mine` flags. |
+| `orbit tunnel release --json` | Returns the released count, paths or local port, and gateway in the envelope. |
 | `orbit trace --json` | Returns recent trace summaries in `data.traces`, newest first. |
 | `orbit trace -f --json` | Streams NDJSON trace-summary events, one JSON object per line. |
 | `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |
@@ -262,6 +264,8 @@ Stable `data.operation` values for converted control commands:
 |---|---|
 | `orbit env list --json` | `env_list` |
 | `orbit env info --json` | `env_info` |
+| `orbit tunnel list --json` | `tunnel_list` |
+| `orbit tunnel release --json` | `tunnel_release` |
 | `orbit env use <path> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit env apply --json` | `env_apply` |
@@ -305,7 +309,7 @@ shape for compatibility:
 | `orbit daemon status --json` | Returns the legacy daemon status object. |
 | `orbit history --json` | Keeps its existing history payload. |
 | `orbit history gaps --json` | Keeps its existing history gaps payload. |
-| `orbit tunnel claim/list/release --json` | Emits Tunlease-shaped NDJSON events (`schema_version: 1`, `type` per event) rather than the envelope; errors use the same shape on stdout. |
+| `orbit tunnel claim --json` | Streams Tunlease-shaped NDJSON events (`schema_version: 1`, `type` per event) — it is a live stream, not a request-response. The upstream event shape also stays available on `list`/`release` behind `-o json`. |
 
 ## Passthrough Commands
 

@@ -118,3 +118,7 @@ export interface ClaimConfig {
   token?: string;
   insecure?: boolean;
 }
+
+//////////
+// source: tunnel_json.go
+

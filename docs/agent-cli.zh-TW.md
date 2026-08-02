@@ -209,7 +209,7 @@ Host service path 尚未解析或不存在時，會使用穩定的
 | `orbit daemon status --json` | 回傳 legacy daemon status 物件。 |
 | `orbit history --json` | 保持既有的 history payload。 |
 | `orbit history gaps --json` | 保持既有的 history gaps payload。 |
-| `orbit tunnel claim/list/release --json` | 輸出 Tunlease 形狀的 NDJSON 事件（`schema_version: 1`、每事件一個 `type`），不是 envelope；錯誤用同一形狀走 stdout。 |
+| `orbit tunnel claim --json` | 串流 Tunlease 形狀的 NDJSON 事件（`schema_version: 1`、每事件一個 `type`）——它是即時串流，不是請求-回應。`list`/`release` 的上游事件形狀仍可用 `-o json` 取得。 |
 
 ## Passthrough Commands
 

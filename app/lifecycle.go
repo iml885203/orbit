@@ -26,6 +26,7 @@ type lifecycleJSONOptions struct {
 	TimedOutResources  []string
 	ContextSwitch      *projectContextSwitch
 	EnvironmentChanges *lifecycleEnvironmentChangesJSON
+	RelocatedPorts     []relocatedPortJSON
 }
 
 type lifecycleEnvironmentChangesJSON struct {
@@ -45,6 +46,7 @@ type lifecycleJSONData struct {
 	TimedOutResources  []string                         `json:"timed_out_resources"`
 	ContextSwitch      *projectContextSwitch            `json:"context_switch,omitempty"`
 	EnvironmentChanges *lifecycleEnvironmentChangesJSON `json:"environment_changes,omitempty"`
+	RelocatedPorts     []relocatedPortJSON              `json:"relocated_ports,omitempty"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
@@ -85,6 +87,7 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 		TimedOutResources:  timedOutResources,
 		ContextSwitch:      opts.ContextSwitch,
 		EnvironmentChanges: opts.EnvironmentChanges,
+		RelocatedPorts:     opts.RelocatedPorts,
 	}
 }
 

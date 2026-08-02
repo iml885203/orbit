@@ -71,9 +71,6 @@ func tunnelReleaseCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if cli.JSONOutput {
-				resolved.Output = "json"
-			}
 			client, err := daemon.Dial(daemon.DefaultSocketPath())
 			if err != nil {
 				return err
@@ -87,10 +84,21 @@ func tunnelReleaseCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("release failed: %w", err)
 				}
+				if cli.JSONOutput {
+					return cli.WriteJSONSuccess(cmd.OutOrStdout(), "orbit tunnel release", tunnelReleaseJSONData{
+						Operation: "tunnel_release", Released: result.Released,
+						LocalPort: resolved.To, Gateway: result.Gateway,
+					}, nil)
+				}
 				out.releaseSummary(resolved.To, result.Released, result.Gateway)
 			case len(args) == 1:
 				if _, err := releaseWithOptions(client, args[0], resolved); err != nil {
 					return fmt.Errorf("release failed: %w", err)
+				}
+				if cli.JSONOutput {
+					return cli.WriteJSONSuccess(cmd.OutOrStdout(), "orbit tunnel release", tunnelReleaseJSONData{
+						Operation: "tunnel_release", Released: 1, ReleasedPaths: []string{args[0]},
+					}, nil)
 				}
 				out.released([]string{args[0]}, 0)
 			default:
@@ -116,9 +124,6 @@ func tunnelListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if cli.JSONOutput {
-				resolved.Output = "json"
-			}
 			client, err := daemon.Dial(daemon.DefaultSocketPath())
 			if err != nil {
 				return err
@@ -129,12 +134,18 @@ func tunnelListCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if cli.JSONOutput {
+					return cli.WriteJSONSuccess(cmd.OutOrStdout(), "orbit tunnel list --all", buildGlobalClaimsJSONData(claims), nil)
+				}
 				out.globalClaims(claims)
 				return nil
 			}
 			state, err := listTunnelState(client)
 			if err != nil {
 				return err
+			}
+			if cli.JSONOutput {
+				return cli.WriteJSONSuccess(cmd.OutOrStdout(), "orbit tunnel list", buildTunnelListJSONData(state), nil)
 			}
 			out.tunnels(state)
 			return nil
