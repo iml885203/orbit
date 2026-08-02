@@ -10,7 +10,6 @@ type DependencyPathInput = {
   targetX: number
   targetY: number
   targetPosition?: Position
-  routeLane?: number
 }
 
 type DependencyPath = {
@@ -22,15 +21,9 @@ type DependencyPath = {
 const SYNC_CURVATURE = 0.25
 const ASYNC_CURVATURE = 0.6
 const ASYNC_BOW = 44
-const NODE_HALF_WIDTH = 120
-const ROUTE_GUTTER = 12
-const ROUTE_LANE_GAP = 28
-const ROUTE_STUB = 32
-const ROUTE_CORNER = 12
 
 export function buildDependencyPath(input: DependencyPathInput): DependencyPath {
   if (!input.async) {
-    if (input.routeLane) return buildRoutedPath(input)
     const [path, labelX, labelY] = getBezierPath({
       sourceX: input.sourceX,
       sourceY: input.sourceY,
@@ -47,43 +40,6 @@ export function buildDependencyPath(input: DependencyPathInput): DependencyPath 
 }
 
 function buildAsyncPath(input: DependencyPathInput): DependencyPath {
-  return buildBowedPath(input, asyncBow(input), ASYNC_CURVATURE)
-}
-
-function buildRoutedPath(input: DependencyPathInput): DependencyPath {
-  const lane = input.routeLane ?? 0
-  const side = Math.sign(lane)
-  const laneX = input.sourceX + side * (
-    NODE_HALF_WIDTH + ROUTE_GUTTER + (Math.abs(lane) - 1) * ROUTE_LANE_GAP
-  )
-  const sourceRouteY = input.sourceY + ROUTE_STUB
-  const targetRouteY = input.targetY - ROUTE_STUB
-  const sourceCornerX = laneX - side * ROUTE_CORNER
-  const targetCornerX = input.targetX + side * ROUTE_CORNER
-
-  return {
-    path: [
-      `M${input.sourceX},${input.sourceY}`,
-      `L${input.sourceX},${sourceRouteY - ROUTE_CORNER}`,
-      `Q${input.sourceX},${sourceRouteY} ${input.sourceX + side * ROUTE_CORNER},${sourceRouteY}`,
-      `L${sourceCornerX},${sourceRouteY}`,
-      `Q${laneX},${sourceRouteY} ${laneX},${sourceRouteY + ROUTE_CORNER}`,
-      `L${laneX},${targetRouteY - ROUTE_CORNER}`,
-      `Q${laneX},${targetRouteY} ${sourceCornerX},${targetRouteY}`,
-      `L${targetCornerX},${targetRouteY}`,
-      `Q${input.targetX},${targetRouteY} ${input.targetX},${targetRouteY + ROUTE_CORNER}`,
-      `L${input.targetX},${input.targetY}`,
-    ].join(' '),
-    labelX: laneX,
-    labelY: (sourceRouteY + targetRouteY) / 2,
-  }
-}
-
-function buildBowedPath(
-  input: DependencyPathInput,
-  bow: { x: number; y: number },
-  curvature: number,
-): DependencyPath {
   const sourcePosition = input.sourcePosition ?? Position.Bottom
   const targetPosition = input.targetPosition ?? Position.Top
   const [sourceControlX, sourceControlY] = controlPoint({
@@ -92,7 +48,7 @@ function buildBowedPath(
     y1: input.sourceY,
     x2: input.targetX,
     y2: input.targetY,
-    curvature,
+    curvature: ASYNC_CURVATURE,
   })
   const [targetControlX, targetControlY] = controlPoint({
     pos: targetPosition,
@@ -100,8 +56,9 @@ function buildBowedPath(
     y1: input.targetY,
     x2: input.sourceX,
     y2: input.sourceY,
-    curvature,
+    curvature: ASYNC_CURVATURE,
   })
+  const bow = asyncBow(input)
   const sourceControl = { x: sourceControlX + bow.x, y: sourceControlY + bow.y }
   const targetControl = { x: targetControlX + bow.x, y: targetControlY + bow.y }
   const labelX = (
