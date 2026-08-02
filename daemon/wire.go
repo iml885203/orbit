@@ -41,6 +41,9 @@ type StatusResponse struct {
 	// CLI clients compare it with their selected config before combining
 	// local config with daemon state.
 	ConfigPath string `json:"config_path"`
+	// Instance identifies the isolated named runtime serving this status.
+	// It is omitted for the default runtime so existing clients stay quiet.
+	Instance string `json:"instance,omitempty"`
 	// ConfigStale means the loaded config has fallen behind reality (env
 	// file edited, selection changed, or an API env switch left the
 	// orchestrator on the previous env) — `orbit env apply` applies.

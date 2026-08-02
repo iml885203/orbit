@@ -15,11 +15,21 @@
   }
 </script>
 
+<svelte:head>
+  <title>{store.daemon.instanceName ? `${store.daemon.instanceName} · Orbit Dashboard` : 'Orbit Dashboard'}</title>
+</svelte:head>
+
 <header>
   <div class="brand">
     <img class="logo-mark" src="/orbit-logo.svg" alt="" aria-hidden="true">
     <h1>Orbit</h1>
   </div>
+  {#if store.daemon.instanceName}
+    <span class="instance-chip" aria-label={`Instance ${store.daemon.instanceName}`} title={store.daemon.instanceName}>
+      <span class="instance-label">instance</span>
+      <span class="instance-name">{store.daemon.instanceName}</span>
+    </span>
+  {/if}
   <span
     class="conn-dot"
     class:disconnected={!store.daemon.connected}
@@ -102,6 +112,33 @@
     height: 28px;
     display: block;
     flex-shrink: 0;
+  }
+  .instance-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+    color: var(--dim);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    max-width: 200px;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .instance-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .instance-name {
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .conn-dot {
     width: 8px;

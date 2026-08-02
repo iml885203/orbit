@@ -3,11 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import DatabaseOperationsList from './DatabaseOperationsList.svelte'
 import DatabaseRow from './DatabaseRow.svelte'
 import type { DBOpInFlight } from './stores.svelte'
+import { store } from '$lib/stores.svelte'
 
 const project = { name: 'Wallet', path: '/db/wallet', databases: ['WalletDB'] }
 
 afterEach(() => {
   cleanup()
+  store.daemon.instanceName = ''
   vi.unstubAllGlobals()
 })
 
@@ -23,6 +25,25 @@ describe('DatabaseRow reset flow', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reset database' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/db/reset', expect.objectContaining({ body: JSON.stringify({ db: 'WalletDB', acknowledgeDataLoss: true }) })))
+  })
+
+  it('names a named runtime in destructive database confirmations', async () => {
+    store.daemon.instanceName = 'checkout-a'
+    render(DatabaseOperationsList, {
+      props: {
+        project,
+        states: {},
+        operation: null,
+        driftByDB: { WalletDB: { inSync: false, changes: 2, dataLoss: true } },
+      },
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset…' }))
+    expect(screen.getByRole('dialog', { name: 'Reset WalletDB in instance checkout-a?' })).toBeInTheDocument()
+    await fireEvent.click(screen.getByText('Cancel', { selector: 'button' }))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Publish…' }))
+    expect(screen.getByRole('dialog', { name: 'Publish WalletDB in instance checkout-a despite data loss?' })).toBeInTheDocument()
   })
 
   it('offers Publish anyway after a data-loss block and posts a forced publish', async () => {

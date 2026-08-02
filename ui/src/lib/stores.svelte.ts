@@ -39,6 +39,7 @@ class GraphStore {
 class DaemonStore {
   connected = $state(false)
   daemonEpoch = $state<number | null>(null)
+  instanceName = $state('')
   services = $state<Record<string, ResourceStatus>>({})
   logBuffers = $state<Record<string, string[]>>({})
   openLogs = $state<Record<string, boolean>>({})
