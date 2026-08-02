@@ -109,7 +109,8 @@ func runUp(cmd *cobra.Command, args []string) error {
 		printUpSuccessNextStep(nil, nil)
 		return nil
 	}
-	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
+	relocationCfg, _ := config.Load(configFile)
+	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args), relocationCfg)
 }
 
 func upCompletionMessage(args []string) string {
@@ -156,6 +157,7 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		return fmt.Errorf("up failed: %w", err)
 	}
 	names := resp.AffectedResources
+	relocationCfg, _ := config.Load(configFile)
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
 		failure := cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
@@ -175,7 +177,7 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		FinalStatus:        finalStatus,
 		ContextSwitch:      contextSwitch,
 		EnvironmentChanges: lifecycleEnvironmentChanges(appliedChanges),
-		RelocatedPorts:     upRelocatedPorts(finalStatus),
+		RelocatedPorts:     relocatedPorts(relocationCfg, finalStatus),
 	}), lifecycleUpSuccessActions(names, finalStatus))
 }
 
@@ -424,7 +426,7 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 	}
 }
 
-func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string) error {
+func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string, cfg *config.Config) error {
 	watch := watchSet(serviceNames)
 	announced := map[string]bool{}
 	return runProgressWait(client, waitOptions{
@@ -447,7 +449,7 @@ func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMe
 				}
 			}
 			if len(done) == len(watch) {
-				printRelocatedPorts(status)
+				printRelocatedPorts(cfg, status)
 				fmt.Println(completionMessage)
 				printUpSuccessNextStep(serviceNames, status)
 				return true, nil
@@ -593,70 +595,6 @@ func blockedDependencyError(client *daemon.Client, status *daemon.StatusResponse
 	)
 }
 
-type relocatedPortJSON struct {
-	Resource  string `json:"resource"`
-	Label     string `json:"label"`
-	Preferred int    `json:"preferred"`
-	Actual    int    `json:"actual"`
-}
-
-// relocatedPorts compares declared preferences against the observed
-// selections so consumers outside the stack (DB clients, scripts,
-// bookmarks) learn a move without diffing status by hand — the one place
-// automatic relocation was previously silent.
-func relocatedPorts(cfg *config.Config, status *daemon.StatusResponse) []relocatedPortJSON {
-	if cfg == nil || status == nil {
-		return nil
-	}
-	declared := map[string]map[string]config.PortDef{}
-	for name, container := range cfg.Containers {
-		declared[name] = container.Ports
-	}
-	for name, service := range cfg.Services {
-		declared[name] = service.Ports
-	}
-	var moves []relocatedPortJSON
-	for i := range status.Resources {
-		resource := &status.Resources[i]
-		for label, def := range declared[resource.Name] {
-			if !def.IsAuto() {
-				continue
-			}
-			observed := resource.Ports[label]
-			if observed != 0 && observed != def.PreferredHost() {
-				moves = append(moves, relocatedPortJSON{
-					Resource:  resource.Name,
-					Label:     label,
-					Preferred: def.PreferredHost(),
-					Actual:    observed,
-				})
-			}
-		}
-	}
-	sort.Slice(moves, func(i, j int) bool {
-		if moves[i].Resource != moves[j].Resource {
-			return moves[i].Resource < moves[j].Resource
-		}
-		return moves[i].Label < moves[j].Label
-	})
-	return moves
-}
-
-func upRelocatedPorts(status *daemon.StatusResponse) []relocatedPortJSON {
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		return nil
-	}
-	return relocatedPorts(cfg, status)
-}
-
-func printRelocatedPorts(status *daemon.StatusResponse) {
-	for _, move := range upRelocatedPorts(status) {
-		fmt.Printf("  → %s %s: preferred port %d was taken, using %d\n",
-			move.Resource, move.Label, move.Preferred, move.Actual)
-	}
-}
-
 // watchSet builds the set used by filter / done-count comparisons.
 func watchSet(names []string) map[string]bool {
 	m := make(map[string]bool, len(names))
@@ -697,93 +635,6 @@ func serviceStartError(name string, snapshot progressSnapshot, evidence string) 
 		message += "\n  Last log: " + evidence
 	}
 	return fmt.Errorf("%s\n  Next: orbit logs %s", message, name)
-}
-
-type upFailureJSONData struct {
-	Operation          string             `json:"operation"`
-	RequestedResources []string           `json:"requested_resources"`
-	FailedResources    []upFailedResource `json:"failed_resources"`
-}
-
-type upFailedResource struct {
-	Name        string   `json:"name"`
-	State       string   `json:"state"`
-	StateReason string   `json:"state_reason,omitempty"`
-	LogTail     []string `json:"log_tail,omitempty"`
-}
-
-// buildUpFailureJSONData packs the evidence for every watched resource that
-// did not reach healthy — state, reason, and a bounded log tail — so a CI
-// caller or agent does not need a second `orbit logs` call to explain the
-// failure.
-func buildUpFailureJSONData(names []string, status *daemon.StatusResponse, logTail func(string) []string) upFailureJSONData {
-	data := upFailureJSONData{Operation: "up", RequestedResources: names}
-	if status == nil {
-		return data
-	}
-	watch := watchSet(names)
-	for i := range status.Resources {
-		svc := &status.Resources[i]
-		if len(names) > 0 && !watch[svc.Name] {
-			continue
-		}
-		if svc.State == "healthy" {
-			continue
-		}
-		reason := svc.StateReason
-		if reason == "" && svc.HealthProgress != nil {
-			reason = svc.HealthProgress.LastErr
-		}
-		data.FailedResources = append(data.FailedResources, upFailedResource{
-			Name:        svc.Name,
-			State:       svc.State,
-			StateReason: reason,
-			LogTail:     logTail(svc.Name),
-		})
-	}
-	return data
-}
-
-func recentLogTail(client *daemon.Client, name string) []string {
-	const maxTailLines = 20
-	if client == nil {
-		return nil
-	}
-	response, err := client.Logs(name, maxTailLines)
-	if err != nil || response == nil {
-		return nil
-	}
-	return response.Lines
-}
-
-func recentLogEvidence(client *daemon.Client, name string) string {
-	if client == nil {
-		return ""
-	}
-	response, err := client.Logs(name, 20)
-	if err != nil || response == nil {
-		return ""
-	}
-	return lastServiceLogLine(response.Lines)
-}
-
-func lastServiceLogLine(lines []string) string {
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "[orbit]") {
-			continue
-		}
-		return truncateEvidence(line)
-	}
-	return ""
-}
-
-func truncateEvidence(line string) string {
-	const maxEvidenceLength = 240
-	if len(line) <= maxEvidenceLength {
-		return line
-	}
-	return line[:maxEvidenceLength-3] + "..."
 }
 
 // coloredEvent applies the existing colour scheme to a commit line so

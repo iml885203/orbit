@@ -88,14 +88,14 @@ func removedRuntimeResources(oldCfg, newCfg *config.Config) map[string]bool {
 	return removed
 }
 
-func transitiveDependents(seeds map[string]bool, configs ...*config.Config) map[string]bool {
+func transitiveDependents(seeds map[string]bool, oldCfg, newCfg *config.Config) map[string]bool {
 	impacted := make(map[string]bool, len(seeds))
 	for name := range seeds {
 		impacted[name] = true
 	}
 	for changed := true; changed; {
 		changed = false
-		for _, cfg := range configs {
+		for _, cfg := range []*config.Config{oldCfg, newCfg} {
 			for _, name := range runtimeResourceNames(cfg) {
 				if impacted[name] {
 					continue

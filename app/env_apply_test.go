@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 )
 
 func TestRunningEnvironmentResourcesPreservesActiveIntent(t *testing.T) {
@@ -47,7 +48,7 @@ func TestEnvironmentApplySeparatesRestoredIntentFromNewDependencies(t *testing.T
 	restored := []string{"api", "web"}
 	affected := []string{"redis", "web", "api"}
 
-	startedDependencies := additionalAffectedResources(restored, affected)
+	startedDependencies := daemonsrv.AdditionalResourceNames(restored, affected)
 	if !reflect.DeepEqual(startedDependencies, []string{"redis"}) {
 		t.Fatalf("started dependencies = %v", startedDependencies)
 	}

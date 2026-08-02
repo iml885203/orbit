@@ -92,7 +92,7 @@ func (s *Server) startReconciledResources(response *EnvironmentReconcileResponse
 		return err
 	}
 	response.AffectedResources = affected
-	response.StartedDependencies = additionalResourceNames(response.RestartedResources, affected)
+	response.StartedDependencies = AdditionalResourceNames(response.RestartedResources, affected)
 	s.app.StartServices(affected)
 	return nil
 }
@@ -119,7 +119,10 @@ func runningNameSet(names []string) map[string]bool {
 	return set
 }
 
-func additionalResourceNames(requested, affected []string) []string {
+// AdditionalResourceNames reports which resources an operation pulled in
+// beyond the requested set — the daemon owns this vocabulary, and the CLI's
+// env-apply payload reuses it.
+func AdditionalResourceNames(requested, affected []string) []string {
 	requestedSet := make(map[string]bool, len(requested))
 	for _, name := range requested {
 		requestedSet[name] = true

@@ -77,22 +77,9 @@ func NewApp(
 	if err != nil {
 		return nil, fmt.Errorf("initializing container manager: %w", err)
 	}
-	resolutions, err := port.ResolveAutoPorts(cfg, func(name string, target int) (int, bool, error) {
-		return containerMgr.ManagedHostPort(context.Background(), name, target)
-	}, runtimeReservedPorts...)
-	if err != nil {
+	if err := resolveAndLogAutoPorts(cfg, containerMgr, runtimeReservedPorts); err != nil {
 		_ = containerMgr.Close()
-		return nil, fmt.Errorf("resolving automatic ports: %w", err)
-	}
-	for _, resolution := range resolutions {
-		slog.Info(
-			"selected available port",
-			"component", "orbit",
-			"name", resolution.Resource,
-			"label", resolution.Label,
-			"preferred", resolution.Preferred,
-			"actual", resolution.Actual,
-		)
+		return nil, err
 	}
 
 	if err := containerMgr.EnsureNetwork(context.Background()); err != nil {
@@ -127,9 +114,16 @@ func NewApp(
 }
 
 func (a *App) PrepareConfig(cfg *config.Config) error {
+	return resolveAndLogAutoPorts(cfg, a.ContainerMgr, a.runtimeReservedPorts)
+}
+
+// resolveAndLogAutoPorts is the single owner of "resolve auto ports and
+// announce the selections" — NewApp runs it on the initial config,
+// PrepareConfig on a reconciled one.
+func resolveAndLogAutoPorts(cfg *config.Config, containerMgr *container.Manager, runtimeReserved []int) error {
 	resolutions, err := port.ResolveAutoPorts(cfg, func(name string, target int) (int, bool, error) {
-		return a.ContainerMgr.ManagedHostPort(context.Background(), name, target)
-	}, a.runtimeReservedPorts...)
+		return containerMgr.ManagedHostPort(context.Background(), name, target)
+	}, runtimeReserved...)
 	if err != nil {
 		return fmt.Errorf("resolving automatic ports: %w", err)
 	}

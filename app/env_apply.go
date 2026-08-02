@@ -9,6 +9,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/spf13/cobra"
 )
 
@@ -170,7 +171,7 @@ func applyEnvironmentChangesWithEvidence(
 	if err != nil {
 		return result, fmt.Errorf("restoring running resources: %w", err)
 	}
-	result.StartedDependencies = additionalAffectedResources(requestedRestores, response.AffectedResources)
+	result.StartedDependencies = daemonsrv.AdditionalResourceNames(requestedRestores, response.AffectedResources)
 	sort.Strings(result.RestoredResources)
 	finalStatus, err := waitForLifecycleJSON(client, response.AffectedResources, "healthy")
 	result.FinalStatus = finalStatus
@@ -241,21 +242,6 @@ func restorableEnvironmentResources(previouslyRunning []string, available []daem
 		}
 	}
 	return restored, unavailable
-}
-
-func additionalAffectedResources(requested, affected []string) []string {
-	requestedSet := make(map[string]bool, len(requested))
-	for _, name := range requested {
-		requestedSet[name] = true
-	}
-	additional := make([]string, 0)
-	for _, name := range affected {
-		if !requestedSet[name] {
-			additional = append(additional, name)
-		}
-	}
-	sort.Strings(additional)
-	return additional
 }
 
 func buildEnvironmentApplyJSONData(result environmentApplyResult) environmentApplyJSONData {
