@@ -3,12 +3,12 @@
   import { store } from '../../lib/stores.svelte'
   import { playback } from '../../lib/tracePlayback.svelte'
   import { liveTraffic } from '../../lib/liveTraffic.svelte'
-  import type { GraphEdge } from '../../lib/types.gen'
+  import type { RoutedGraphEdge } from './edge-routing'
   import { buildDependencyPath } from './edge-path'
   import { stableHash } from '../../lib/hash'
 
   let props: EdgeProps = $props()
-  const data = $derived(props.data as (GraphEdge & Record<string, unknown>) | undefined)
+  const data = $derived(props.data as (RoutedGraphEdge & Record<string, unknown>) | undefined)
   const isAsync = $derived(data?.kind === 'async')
   const topic = $derived(data?.topic ?? '')
   const detached = $derived(!!data?.detached)
@@ -33,6 +33,7 @@
     sourcePosition: props.sourcePosition,
     targetX: props.targetX, targetY: props.targetY,
     targetPosition: props.targetPosition,
+    routeLane: data?.routeLane ?? 0,
   }))
   const path = $derived(pathData.path)
   const labelX = $derived(pathData.labelX)
