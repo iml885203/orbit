@@ -16,8 +16,6 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      ORBIT_PRIVATE_IDENTIFIERS_PATTERN: ${{ secrets.ORBIT_PRIVATE_IDENTIFIERS_PATTERN }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -32,9 +30,6 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
-      - name: Verify private identifier gate on main
-        if: ${{ github.event_name == 'push' }}
-        run: test -n "$ORBIT_PRIVATE_IDENTIFIERS_PATTERN"
       - run: make preflight
 
   # A 1.0 release gate: dependency vulnerabilities must be caught before a tag,

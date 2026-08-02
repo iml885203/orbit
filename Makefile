@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames check-neutral setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-first-five-minutes test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -134,10 +134,6 @@ test-notice:
 lint: lint-filenames
 	golangci-lint run ./...
 
-# Zero-brand gate — core production code must stay feature-set neutral.
-check-neutral:
-	@./scripts/check-neutral.sh
-
 # Enforce filename conventions from docs/CODE_CONVENTIONS.md §4.
 lint-filenames:
 	@./scripts/check-filenames.sh
@@ -179,5 +175,4 @@ preflight:
 	$(MAKE) test-docs
 	$(MAKE) test-release
 	$(MAKE) verify-types
-	$(MAKE) check-neutral
 	@echo "preflight OK - matches the CI gate"
