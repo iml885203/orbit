@@ -421,6 +421,8 @@ func buildAsyncEdges(cfg *config.Config) []GraphEdge {
 }
 
 func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}

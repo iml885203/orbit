@@ -35,6 +35,7 @@ type Server struct {
 	holder                  *config.Holder
 	configWriteMu           sync.Mutex
 	environmentTransitionMu sync.RWMutex
+	environmentGeneration   atomic.Uint64
 	background              sync.WaitGroup
 	settings                *Settings
 	// extHooks holds the registered feature seams (SSE event sources,
@@ -84,11 +85,11 @@ func (s *Server) startBackground(work func()) {
 	}()
 }
 
-func (s *Server) startEnvironmentBackground(identity string, work func()) {
+func (s *Server) startEnvironmentBackground(generation uint64, work func()) {
 	s.startBackground(func() {
 		s.environmentTransitionMu.Lock()
 		defer s.environmentTransitionMu.Unlock()
-		if s.environmentContext().Identity != identity {
+		if s.environmentGeneration.Load() != generation {
 			return
 		}
 		work()
@@ -403,6 +404,7 @@ func (s *Server) SetConfigPath(path string) {
 	s.environmentContextIdentity = canonicalEnvironmentPath(path)
 	s.recordConfigBaselineLocked(path)
 	s.pathMu.Unlock()
+	s.environmentGeneration.Add(1)
 }
 
 func (s *Server) ConfigPath() string {
@@ -419,6 +421,7 @@ func (s *Server) SetEnvironmentContext(path, kind string) {
 	s.environmentContextIdentity = identity
 	s.recordConfigBaselineLocked(path)
 	s.pathMu.Unlock()
+	s.environmentGeneration.Add(1)
 }
 
 func (s *Server) environmentContext() EnvironmentContext {

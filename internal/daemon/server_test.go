@@ -165,6 +165,25 @@ func TestStatusIdentifiesOnlyNamedRuntime(t *testing.T) {
 	}
 }
 
+func TestEnvironmentBackgroundRejectsABAGeneration(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	s.SetEnvironmentContext("/env/a.yaml", "managed")
+	generation := s.environmentGeneration.Load()
+
+	s.environmentTransitionMu.Lock()
+	ran := make(chan struct{}, 1)
+	s.startEnvironmentBackground(generation, func() { ran <- struct{}{} })
+	s.environmentGeneration.Add(2)
+	s.environmentTransitionMu.Unlock()
+	s.background.Wait()
+
+	select {
+	case <-ran:
+		t.Fatal("stale background mutation ran after an A→B→A transition")
+	default:
+	}
+}
+
 func TestHandleStatus_RejectsNonGet(t *testing.T) {
 	s := newTestServer(t, testConfig())
 	rr := httptest.NewRecorder()

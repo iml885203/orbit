@@ -16,7 +16,7 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
-	identity := s.environmentContext().Identity
+	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/service-mode/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
@@ -50,7 +50,7 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	}
 	s.app.Orchestrator.SetServiceKind(name, kind)
 
-	s.startEnvironmentBackground(identity, func() {
+	s.startEnvironmentBackground(generation, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if err := s.app.Orchestrator.RestartService(ctx, name); err != nil {

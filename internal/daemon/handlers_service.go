@@ -394,7 +394,7 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	identity := s.environmentContext().Identity
+	generation := s.environmentGeneration.Load()
 	var req DownRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		req = DownRequest{}
@@ -407,7 +407,7 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-		s.startEnvironmentBackground(identity, func() {
+		s.startEnvironmentBackground(generation, func() {
 			time.Sleep(200 * time.Millisecond)
 			// Feature OnDown hooks run FIRST, before any teardown. Tunnel
 			// release depends on this ordering: releasing before ctx
@@ -450,7 +450,7 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, APIResponse{Error: err.Error(), Code: code})
 			return
 		}
-		s.startEnvironmentBackground(identity, func() {
+		s.startEnvironmentBackground(generation, func() {
 			s.app.StopServices(names)
 			s.PersistState()
 		})
@@ -466,7 +466,7 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 	// StopService lifecycle. Status pollers (orbit down's progress
 	// renderer) see real stopping → stopped transitions instead of a
 	// sudden state jump at the end.
-	s.startEnvironmentBackground(identity, func() {
+	s.startEnvironmentBackground(generation, func() {
 		s.app.StopAllServices()
 		s.PersistState()
 		s.stateFile.Remove()
@@ -552,7 +552,7 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	identity := s.environmentContext().Identity
+	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/stop/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
@@ -563,7 +563,7 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.startEnvironmentBackground(identity, func() {
+	s.startEnvironmentBackground(generation, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), s.holder.Load().Settings.ShutdownTimeout)
 		defer cancel()
 		if err := s.app.StopService(ctx, name); err != nil {
@@ -581,7 +581,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	identity := s.environmentContext().Identity
+	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/restart/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
@@ -592,7 +592,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.startEnvironmentBackground(identity, func() {
+	s.startEnvironmentBackground(generation, func() {
 		// RestartService's ctx covers only the stop phase (start is
 		// driven by the orchestrator event loop afterwards), so reuse
 		// the same ShutdownTimeout handleStop and handleDown use rather

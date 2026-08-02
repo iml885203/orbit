@@ -152,7 +152,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	var stoppedServices []string
 	var openableServices []string
 
-	if dstatus.ConfigStale || setup.SelectionRequired {
+	if dstatus.ConfigStale || setup.SelectionRequired || cfg == nil {
 		stoppedInfra, stoppedServices, openableServices = printRunningSnapshot(running)
 	} else {
 		// Containers
@@ -539,7 +539,7 @@ func writeStatusJSON(
 	}
 	resources := make([]jsonService, 0)
 
-	if dstatus.ConfigStale || setup.SelectionRequired {
+	if dstatus.ConfigStale || setup.SelectionRequired || cfg == nil {
 		for name, resource := range running {
 			svc := jsonService{
 				Name:  name,

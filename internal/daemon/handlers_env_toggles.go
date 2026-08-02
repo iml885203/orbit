@@ -47,7 +47,7 @@ func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		srv.environmentTransitionMu.Lock()
 		defer srv.environmentTransitionMu.Unlock()
-		identity := srv.environmentContext().Identity
+		generation := srv.environmentGeneration.Load()
 		var req EnvToggleUpdateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})
@@ -69,7 +69,7 @@ func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 			isRunning = st != "stopped" && st != "pending"
 		}
 		if isRunning {
-			srv.startEnvironmentBackground(identity, func() {
+			srv.startEnvironmentBackground(generation, func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				if err := srv.app.RestartService(ctx, req.Service); err != nil {

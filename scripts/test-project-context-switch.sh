@@ -420,6 +420,7 @@ mv "$test_root/project-b/orbit.yaml.saved" "$test_root/project-b/orbit.yaml"
 mv "$test_root/project-b/orbit.yaml" "$test_root/project-b/orbit.yaml.valid"
 printf 'version: [invalid\n' >"$test_root/project-b/orbit.yaml"
 "$orbit_bin" status --json >"$test_root/status-invalid-project.json"
+"$orbit_bin" status >"$test_root/status-invalid-project.txt"
 python3 - "$test_root/status-invalid-project.json" <<'PY'
 import json
 import pathlib
@@ -429,7 +430,13 @@ status = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert status["ok"] is True
 assert status["data"]["daemon"]["context"]["kind"] == "project"
 assert status["data"]["daemon"]["context"]["available"] is False
+assert [resource["name"] for resource in status["data"]["resources"]] == ["app-b"]
 PY
+grep -F "app-b" "$test_root/status-invalid-project.txt" >/dev/null
+if grep -F "panic:" "$test_root/status-invalid-project.txt" >/dev/null; then
+  echo "invalid detached project status panicked." >&2
+  exit 1
+fi
 mv "$test_root/project-b/orbit.yaml.valid" "$test_root/project-b/orbit.yaml"
 "$orbit_bin" down --json >"$test_root/down-outside-project.json"
 cd "$test_root/project-a"
