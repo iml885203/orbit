@@ -93,6 +93,16 @@ SQL Server Database Projects 具有額外的 diff、publish、reset semantics，
 
 目標不是隱藏失敗，而是讓下一個正確動作顯而易見。
 
+## 在 E2E 測試套件底下
+
+服務日常開發的同一個環境，也可以作為 E2E 測試套件的基底——在開發者自己的
+機器或 CI runner 上。Orbit 的職責刻意收得很小：提供共用的基礎設施，並誠實
+回答關於它的問題。測試 harness 擁有測試資料與受測系統；它透過
+`orbit env info --json` 驗證基底而不是重新 provision，缺少必要 resource 時
+快速失敗並給出可執行的訊息。
+
+分層模式請見[在 E2E 測試底下使用 Orbit](e2e-testing.zh-TW.md)。
+
 ## Orbit 刻意不負責什麼
 
 Orbit 不是：
@@ -103,8 +113,9 @@ Orbit 不是：
 - 泛用 database schema framework；
 - application-level service discovery 或 telemetry SDK 的替代品。
 
-它是 single-user 的本機開發 control plane。Dashboard 只綁定 loopback，project
-toolchain 仍由開發者控制；Orbit 專注縮短 inner loop，不改變 application 的部署方式。
+它是 single-user、single-machine 的 control plane，服務開發與測試環境。
+Dashboard 只綁定 loopback，project toolchain 仍由開發者控制；Orbit 專注縮短
+inner loop，不改變 application 的部署方式。
 
 這些邊界本身就是產品的一部分：承諾越少，使用者需要理解的模型越小，Orbit 在自己
 負責的範圍內也越可預期。

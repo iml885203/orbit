@@ -100,6 +100,19 @@ happened. Orbit treats recovery as part of the command contract:
 
 The goal is not to hide failures. It is to make the next correct action obvious.
 
+## Under an E2E suite
+
+The environment that serves daily development can also be the substrate under
+an E2E test suite—on a developer's machine or a CI runner. Orbit's role stays
+deliberately small: provide the shared infrastructure and answer questions
+about it truthfully. The harness owns test data and the system under test; it
+verifies the substrate through `orbit env info --json` instead of
+reprovisioning it, and fails fast with an executable message when a required
+resource is missing.
+
+See [Using Orbit under an E2E test suite](e2e-testing.md) for the layering
+pattern.
+
 ## Where Orbit stops
 
 Orbit is intentionally not:
@@ -110,8 +123,8 @@ Orbit is intentionally not:
 - a universal database schema framework;
 - a replacement for application-level service discovery or telemetry SDKs.
 
-It is a single-user, local-development control plane. It binds its dashboard to
-loopback, leaves project toolchains under the developer's control, and focuses
+It is a single-user, single-machine control plane for development and test
+environments. It binds its dashboard to loopback, leaves project toolchains under the developer's control, and focuses
 on shortening the inner loop without changing how the application is deployed.
 
 Those boundaries are part of the product: fewer promises mean a smaller mental
