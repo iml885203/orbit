@@ -216,6 +216,14 @@ so still-running dependents recover without a restart.
   (embedded via `go:embed`) and SSE streams. Loopback Host validation and
   same-origin mutation checks protect the browser-facing control surface.
 
+The unnamed runtime uses these legacy paths and names unchanged. A named
+runtime selected with `--instance` receives its own directory under
+`~/.orbit/instances/`, socket, ownership record, daemon log, state, Docker
+namespace and network. Its resolved host ports are persisted in that directory
+so daemon restarts reuse the same endpoints. Instance cleanup starts recovery
+when necessary, stops the recovered graph, then removes only resources bearing
+the instance namespace.
+
 All HTTP handlers live in `internal/daemon/*.go` by concern:
 
 | File | Concern |
