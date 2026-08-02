@@ -63,6 +63,9 @@ overlapping tools:
 Orbit does not require replacing a project's build system, package manager, or
 container images. Service commands remain the commands developers already use.
 
+For how these decisions relate to specific tools, see
+[Comparisons](comparisons.md).
+
 ## Infrastructure without a database worldview
 
 Containers are generic resources. Health checks, dependency injection, seed

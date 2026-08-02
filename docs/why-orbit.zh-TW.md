@@ -59,6 +59,8 @@ layout 或 environment repository。確認環境值得讓團隊共用後，再�
 Orbit 不要求替換專案既有的 build system、package manager 或 container images。
 Service command 仍是開發者原本就在使用的 command。
 
+這些決策與具名工具的對照請見[比較](comparisons.zh-TW.md)。
+
 ## Infrastructure 不預設 database 世界觀
 
 Containers 是 generic resources。Health checks、dependency injection、seed
