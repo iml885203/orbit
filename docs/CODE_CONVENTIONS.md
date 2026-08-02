@@ -306,3 +306,41 @@ calls to walk through before each commit:
 - **Behavior is test-protected.** Every feature ships with tests at its
   behavioral boundaries — never one-to-one unit tests mirroring the
   implementation (§18, [testing.md](testing.md)).
+
+### Documentation ownership
+
+Each product contract has one authoritative owner. Guides summarize a workflow
+for their audience and link to that owner; they do not redefine the contract.
+
+| Document | Owns |
+|---|---|
+| `configuration.md` | YAML schema, config resolution, and field semantics |
+| `agent-cli.md` | JSON envelopes, payloads, errors, and wire compatibility |
+| `plugins/orbit-agent/skills/orbit/` | Agent decision policy and operational workflow |
+| Domain references such as `instances.md`, `tracing.md`, and `sql-workflow.md` | One product domain's user-visible behavior and safety model |
+| `architecture.md` | Implementation model and extension boundaries |
+| README and task-oriented guides | Audience-specific entry points that link to the owning contract |
+
+When a new domain has no natural owner, create one focused reference instead
+of copying its rules into every existing guide. Keep English and `.zh-TW.md`
+pairs behaviorally equivalent; translation may differ in phrasing, not in
+contracts, commands, safety, or supported workflows.
+
+### Documentation impact checklist
+
+For every user-visible behavior, CLI, config, or wire-contract change:
+
+- [ ] Name the authoritative document before editing prose.
+- [ ] Update that owner, then search for stale or duplicated claims elsewhere;
+      delete repetition in favor of links when the audience does not need it.
+- [ ] Update the paired `.zh-TW.md` document, or verify that the changed section
+      has no translated pair.
+- [ ] Check the Orbit agent skill when CLI targeting, JSON actions, recovery,
+      setup, lifecycle, or destructive-operation behavior changes.
+- [ ] Check README and task guides when their runnable path changes; check
+      `testing.md` and the test matrix when isolation or verification changes.
+- [ ] Search absolute language such as “always”, “never”, “fixed”, and “only”
+      for assumptions invalidated by the new behavior.
+- [ ] Add a documentation gate only for a stable invariant that would cause an
+      incorrect command or safety decision. Do not snapshot prose or enforce
+      identical translations.

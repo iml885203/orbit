@@ -271,3 +271,38 @@ Orbit 偏好 end-to-end journey 與 sociable domain test。Solitary test 留給�
 - **想解釋就是該重構的訊號。** 想寫文件或註解來解釋程式碼，代表應該先重構程式碼（§3）。
 - **程式碼自己說出意圖。** 功能不是能動就算完成——實作完要再做一輪重構，讓命名與結構不靠旁白就能突顯意圖。
 - **行為有測試保護。** 每個功能都要有守在行為邊界的測試——絕不寫一對一鏡射實作的單元測試（§18、[testing.md](testing.md)）。
+
+### 文件 ownership
+
+每個 product contract 都只有一份 authoritative owner。Guides 依讀者情境摘要
+workflow 並連回 owner，不重新定義 contract。
+
+| 文件 | 負責內容 |
+|---|---|
+| `configuration.md` | YAML schema、config resolution 與 field semantics |
+| `agent-cli.md` | JSON envelopes、payloads、errors 與 wire compatibility |
+| `plugins/orbit-agent/skills/orbit/` | Agent decision policy 與 operational workflow |
+| `instances.md`、`tracing.md`、`sql-workflow.md` 等 domain references | 單一 product domain 對使用者可見的行為與 safety model |
+| `architecture.md` | Implementation model 與 extension boundaries |
+| README 與 task-oriented guides | 依讀者情境提供入口，並連向 owning contract |
+
+新 domain 沒有自然 owner 時，建立一份聚焦的 reference，不要把規則複製到每份
+既有 guide。英文與 `.zh-TW.md` pair 必須保持行為等價；措辭可以不同，但 contract、
+commands、safety 與 supported workflows 不可不同。
+
+### 文件 impact checklist
+
+每次改動使用者可見行為、CLI、config 或 wire contract 時：
+
+- [ ] 寫 prose 前先指出 authoritative document。
+- [ ] 更新 owner，再搜尋其他位置過時或重複的說法；讀者不需要完整內容時，刪除
+      重複敘述並改成連結。
+- [ ] 更新成對的 `.zh-TW.md` 文件；若沒有翻譯 pair，確認並記錄這一點。
+- [ ] CLI targeting、JSON actions、recovery、setup、lifecycle 或 destructive-operation
+      行為改變時，檢查 Orbit agent skill。
+- [ ] 可執行路徑改變時檢查 README 與 task guides；isolation 或 verification 改變時
+      檢查 `testing.md` 與 test matrix。
+- [ ] 搜尋「永遠」、「絕不」、「固定」、「唯一」以及 “always”、 “never”、
+      “fixed”、 “only” 等絕對用語，確認新行為沒有推翻其假設。
+- [ ] 只有在 invariant 穩定，且違反時會導致錯誤 command 或 safety decision，才新增
+      documentation gate。不要 snapshot prose，也不要強迫翻譯逐字相同。
