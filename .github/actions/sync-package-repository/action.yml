@@ -20,15 +20,15 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        previous_run_id=$(gh run list --repo "$REPOSITORY" --workflow update.yml \
-          --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
+        correlation="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        display_title="Update orbit ${VERSION} ${correlation}"
         gh workflow run update.yml --repo "$REPOSITORY" --ref main \
-          -f project=orbit -f version="$VERSION"
+          -f project=orbit -f version="$VERSION" -f correlation="$correlation"
         for _ in $(seq 1 20); do
           run_id=$(gh run list --repo "$REPOSITORY" --workflow update.yml \
-            --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
-          [ -n "$run_id" ] && [ "$run_id" != "$previous_run_id" ] && break
-          run_id=
+            --event workflow_dispatch --limit 50 --json databaseId,displayTitle \
+            --jq ".[] | select(.displayTitle == \"$display_title\") | .databaseId" | head -n 1)
+          [ -z "$run_id" ] || break
           sleep 3
         done
         [ -n "${run_id:-}" ] || { echo "$REPOSITORY updater did not start" >&2; exit 1; }
