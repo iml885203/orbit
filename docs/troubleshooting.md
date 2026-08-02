@@ -56,8 +56,10 @@ orbit switch example
 ### Environment changes are waiting to be applied
 
 Run `orbit env apply`. Orbit validates the updated environment before stopping
-anything, remembers which resources are running, applies the update, and
-restores those resources. Resources that were already stopped remain stopped.
+anything. Unchanged resources keep their current process or container; changed
+resources and their dependents restart. Resources that were already stopped
+remain stopped. Daemon-level changes use a full handoff and restore the running
+resources afterward.
 
 If you want to download a team update without interrupting the current
 environment, use `orbit env sync --no-apply`, then apply it when ready.

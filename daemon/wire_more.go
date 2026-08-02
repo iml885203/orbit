@@ -58,6 +58,17 @@ type EnvsResponse struct {
 	Envs    []EnvInfo `json:"envs"`
 }
 
+type EnvironmentReconcileResponse struct {
+	OK                   bool     `json:"ok,omitempty"`
+	Error                string   `json:"error,omitempty"`
+	RestartRequired      bool     `json:"restart_required,omitempty"`
+	PreviouslyRunning    []string `json:"previously_running"`
+	RestartedResources   []string `json:"restarted_resources"`
+	StartedDependencies  []string `json:"started_dependencies"`
+	UnavailableResources []string `json:"unavailable_resources"`
+	AffectedResources    []string `json:"affected_resources"`
+}
+
 // VersionResponse reports the running daemon's build and a binary Orbit can
 // order after it. Older or incomparable builds are omitted so
 // clients never recommend a restart that could downgrade the user.

@@ -1,5 +1,5 @@
-// Config staleness detection: the daemon runs on the config it loaded at
-// startup (or the last API env switch), while the user keeps editing env
+// Config staleness detection: the daemon runs on the config it last applied,
+// while the user keeps editing env
 // files and switching selections. This file answers "does what I loaded
 // still match reality?" so status can offer a safe environment apply
 // instead of silently serving stale state.

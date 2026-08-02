@@ -161,6 +161,29 @@ func (c *Client) DownAndWait() (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{Wait: true})
 }
 
+func (c *Client) ReconcileEnvironment() (*EnvironmentReconcileResponse, error) {
+	req, err := http.NewRequest(http.MethodPost, "http://orbit/api/env/reconcile", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return nil, fmt.Errorf("building environment reconcile request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(CLIOriginHeader, "cli")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("environment reconcile request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var result EnvironmentReconcileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding environment reconcile response: %w", err)
+	}
+	if result.Error != "" {
+		return &result, fmt.Errorf("%s", result.Error)
+	}
+	return &result, nil
+}
+
 // Restart restarts a single service.
 func (c *Client) Restart(name string) (*APIResponse, error) {
 	return c.postJSON("/api/restart/"+name, nil)

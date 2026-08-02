@@ -11,9 +11,8 @@ import (
 // Orchestrator is the central event loop that coordinates all services.
 type Orchestrator struct {
 	// holder is the shared immutable-config publisher. Operations Load()
-	// one snapshot each (per start, per event) — the services map and the
-	// initial DepGraph below are construction-time snapshots by design;
-	// they rebuild only on daemon restart (see the config-holder spec).
+	// one snapshot each (per start, per event). Config reconciliation swaps
+	// the services map and DepGraph under their owning locks with the holder.
 	holder     *config.Holder
 	services   map[string]*ServiceInfo
 	events     chan Event
