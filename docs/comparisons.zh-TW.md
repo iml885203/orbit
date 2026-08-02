@@ -21,6 +21,7 @@
 |---|---|---|
 | App model | code-first AppHost（C# / TypeScript） | 一份宣告式 `orbit.yaml` |
 | 環境生命週期 | 隨 `aspire run` 存活 | 常駐 daemon，比 session 活得久 |
+| 情境切換（共用 infra） | 重啟 AppHost 與其下所有 runtime/containers | 共用的 containers 持續運行 |
 | 範圍 | 開發 → 部署（`publish` / `deploy`） | 到部署為止 |
 | 分發單位 | solution 內的 AppHost | 任何 Git repo 裡的 YAML，可跨 repo |
 
@@ -29,3 +30,12 @@
 
 **選 Orbit**：環境是一份可 review 的檔案、要比 terminal 活得久、跨多個
 repo，以及給 coding agents 與測試 harness 的穩定 JSON contract。
+
+### SQL Server schema 管理
+
+|  | Aspire（Community Toolkit） | Orbit（`sqlserver` extension） |
+|---|---|---|
+| 套用 schema | 啟動時自動 publish dacpac；dashboard「Redeploy」 | `orbit sqlserver publish`，保留資料 |
+| 預覽變更 | — | `orbit sqlserver diff` |
+| 乾淨重置 | — | `orbit sqlserver reset`，要求確認 |
+| 查詢 | — | `orbit sqlserver query` |

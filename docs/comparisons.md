@@ -23,6 +23,7 @@ serves both dev and deployment.
 |---|---|---|
 | App model | code-first AppHost (C# / TypeScript) | one declarative `orbit.yaml` |
 | Environment lifetime | while `aspire run` runs | resident daemon, outlives sessions |
+| Switching scenarios (shared infra) | restart the AppHost and everything it runs | shared containers keep running |
 | Scope | dev → deployment (`publish` / `deploy`) | stops before deployment |
 | Distribution unit | AppHost inside the solution | YAML in any Git repo, can span repos |
 
@@ -33,3 +34,12 @@ Azure.
 **Choose Orbit** for one reviewable file, an environment that outlives the
 terminal, multi-repo stacks, and a stable JSON contract for coding agents and
 test harnesses.
+
+### SQL Server schema management
+
+|  | Aspire (Community Toolkit) | Orbit (`sqlserver` extension) |
+|---|---|---|
+| Apply schema | auto-publish dacpac at startup; dashboard "Redeploy" | `orbit sqlserver publish`, data-preserving |
+| Preview changes | — | `orbit sqlserver diff` |
+| Clean reset | — | `orbit sqlserver reset`, requires confirmation |
+| Query | — | `orbit sqlserver query` |
