@@ -26,6 +26,10 @@ Orbit 是團隊中性的本地開發 orchestrator(Go CLI + daemon + Svelte UI)�
 
 專案規範放在 `.claude/rules/`。每個檔案的 frontmatter 都有 `paths:` 宣告何時生效。
 
+Skills 只放一份在 `.claude/skills/`；Claude Code 直接發現它們，Codex 則透過
+`.agents/skills` symlink 發現同一批檔案。Claude Code 也經由一行的
+`CLAUDE.md` import 讀到這份文件。
+
 - **Claude Code**：當你 Read 到匹配的檔案時，rule 會自動載入。
 - **Codex CLI / 其他 agent**：編輯前要顯式讀進來：
   - Go 檔（`*.go`）：`.claude/rules/error-handling.md`、`.claude/rules/go-*.md`、`.claude/rules/domain-organization.md`

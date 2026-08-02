@@ -8,7 +8,8 @@ cmd/orbit/dist/
 .claude/*.local.json
 .claude/scheduled_tasks.lock
 .codex/
-.agents/
+.agents/*
+!.agents/skills
 .superpowers/
 .playwright-cli/
 ui/node_modules/

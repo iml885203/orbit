@@ -24,6 +24,10 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 
 Project conventions live in `.claude/rules/`. Each file has `paths:` frontmatter declaring when it applies.
 
+Skills live once in `.claude/skills/`; Claude Code discovers them there and
+Codex discovers the same files through the `.agents/skills` symlink. Claude
+Code also reads this file through the one-line `CLAUDE.md` import.
+
 - **Claude Code**: rules auto-load when you Read a matching file.
 - **Codex CLI / other agents**: read them explicitly before editing:
   - Go files (`*.go`): `.claude/rules/error-handling.md`, `.claude/rules/go-*.md`, `.claude/rules/domain-organization.md`
