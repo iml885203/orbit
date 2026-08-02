@@ -25,16 +25,18 @@ import (
 )
 
 var (
-	configFile   string
-	groups       []string
-	timeout      time.Duration
-	infraOnly    bool
-	logLines     int
-	follow       bool
-	cliHistID    string
-	cliHistAt    time.Time
-	cliHistCmd   string
-	instanceName string
+	configFile        string
+	groups            []string
+	timeout           time.Duration
+	infraOnly         bool
+	logLines          int
+	follow            bool
+	cliHistID         string
+	cliHistAt         time.Time
+	cliHistCmd        string
+	daemonContextKind string
+	configContextKind string
+	instanceName      string
 )
 
 // extensions holds the feature sets injected by Main — consumed by the
@@ -102,13 +104,26 @@ for the bundled demo or a shared environment repository.`,
 		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 		s.ApplyToEnv()
 
+		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+		configContextKind = ""
+		if daemonContextKind != "" {
+			configContextKind = daemonContextKind
+		} else if explicitConfig {
+			configContextKind = "explicit"
+		}
 		if configFile == "" {
 			configFile = resolveConfigFile()
+		}
+		if configContextKind == "" {
+			configContextKind = inferredEnvironmentContextKind(configFile)
 		}
 		selection := readEnvironmentSelection()
 		if commandRequiresAvailableEnvironment(cmd) {
 			if setupRequired(selection, configFile) {
-				return setupRequiredError{}
+				_, daemonAlive := daemon.IsDaemonRunning()
+				if !daemonAlive || !isDaemonRestartCommand(cmd) {
+					return setupRequiredError{}
+				}
 			}
 			if environmentSelectionBlocksConfig(selection, configFile) {
 				return newEnvironmentSelectionRequiredError(selection)
@@ -121,12 +136,11 @@ for the bundled demo or a shared environment repository.`,
 			if client.Health() == nil {
 				if status, err := client.Status(); err == nil {
 					if requiresMatch {
-						explicitConfig := cmd.Root().PersistentFlags().Changed("config")
-						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
+						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
 							configFile = status.ConfigPath
 						}
 						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-							if usesDiscoveredProjectConfig(configFile) {
+							if environmentContextKind(configFile) == "project" {
 								return projectContextInactive(configFile, status.ConfigPath)
 							}
 							return mismatch
@@ -203,6 +217,10 @@ for the bundled demo or a shared environment repository.`,
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+}
+
+func isDaemonRestartCommand(cmd *cobra.Command) bool {
+	return cmd.Name() == "restart" && cmd.Parent() != nil && cmd.Parent().Name() == "daemon"
 }
 
 // contextualizeDaemonUnavailable keeps every daemon-backed command on the
@@ -603,6 +621,7 @@ Resource names, --infra, and --group are separate selection modes and cannot be 
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "start only infrastructure containers")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "exit after duration (e.g. 60s)")
+	cmd.Flags().BoolVarP(&projectContextYes, "yes", "y", false, "confirm stopping resources from another context")
 	return cmd
 }
 
@@ -676,6 +695,8 @@ func daemonCmd() *cobra.Command {
 		RunE:   runDaemon,
 	}
 	runCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
+	runCmd.Flags().StringVar(&daemonContextKind, "context-kind", "", "environment context kind")
+	_ = runCmd.Flags().MarkHidden("context-kind")
 
 	startCmd := &cobra.Command{
 		Use:   "start",
@@ -698,6 +719,8 @@ func daemonCmd() *cobra.Command {
 		RunE:  runDaemonRestart,
 	}
 	restartCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
+	restartCmd.Flags().StringVar(&daemonContextKind, "context-kind", "", "environment context kind")
+	_ = restartCmd.Flags().MarkHidden("context-kind")
 	restartCmd.Flags().DurationVar(&daemonRestartDelay, "handoff-delay", 0, "delay restart for dashboard handoff")
 	_ = restartCmd.Flags().MarkHidden("handoff-delay")
 

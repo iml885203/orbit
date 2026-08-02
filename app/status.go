@@ -40,15 +40,17 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
-			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
+			dstatus.Context = status.Context
+			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
 				configFile = status.ConfigPath
 				cfg, cfgErr = config.Load(configFile)
 				dstatus.DetachedProject = true
 				dstatus.ConfigPath = status.ConfigPath
 				dstatus.RunningEnvironment = projectContextName(status.ConfigPath)
+				dstatus.Context = status.Context
 			}
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-				if !usesDiscoveredProjectConfig(configFile) {
+				if environmentContextKind(configFile) != "project" {
 					return mismatch
 				}
 				daemonRunningForConfig = false
@@ -61,6 +63,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 				}
 				dstatus.ConfigStale = status.ConfigStale
 				dstatus.ConfigStaleReason = status.ConfigStaleReason
+				dstatus.Context = status.Context
 			}
 		}
 		if v, err := currentDaemonVersion(client); err == nil {
@@ -71,7 +74,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	setup := statusSetupState{Selection: activeEnvironmentSelection(selection, configFile)}
+	setup := statusSetupState{Selection: activeEnvironmentSelectionWithKind(selection, configFile, dstatus.Context.Kind)}
 	if dstatus.ContextMismatch {
 		setup.Selection.ContextSwitchRequired = true
 		setup.Selection.RunningName = dstatus.RunningEnvironment
@@ -91,7 +94,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		}
 		return nil
 	}
-	if cfgErr != nil && configFileExists(configFile) {
+	if cfgErr != nil && configFileExists(configFile) && !dstatus.DetachedProject {
 		var mismatch *config.SchemaVersionMismatchError
 		if errors.As(cfgErr, &mismatch) {
 			return mismatch
@@ -105,7 +108,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			Destructive: false,
 		}})
 	}
-	if cfgErr != nil && daemonRunning {
+	if cfgErr != nil && daemonRunning && !dstatus.DetachedProject {
 		err := cli.NewInvalidEnvironmentError(
 			fmt.Sprintf("active environment is unavailable while the daemon is still running: %v", cfgErr),
 		)
@@ -149,7 +152,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	var stoppedServices []string
 	var openableServices []string
 
-	if dstatus.ConfigStale || setup.SelectionRequired {
+	if dstatus.ConfigStale || setup.SelectionRequired || cfg == nil {
 		stoppedInfra, stoppedServices, openableServices = printRunningSnapshot(running)
 	} else {
 		// Containers
@@ -509,17 +512,18 @@ type jsonService struct {
 }
 
 type daemonStatus struct {
-	Running            bool   `json:"running"`
-	Version            string `json:"version,omitempty"`
-	OnDisk             string `json:"on_disk,omitempty"`
-	OnDiskPath         string `json:"on_disk_path,omitempty"`
-	UpdateAvailable    bool   `json:"update_available"`
-	ConfigPath         string `json:"config_path,omitempty"`
-	RunningEnvironment string `json:"running_environment,omitempty"`
-	ContextMismatch    bool   `json:"context_mismatch,omitempty"`
-	DetachedProject    bool   `json:"detached_project,omitempty"`
-	ConfigStale        bool   `json:"config_stale,omitempty"`
-	ConfigStaleReason  string `json:"config_stale_reason,omitempty"`
+	Running            bool                      `json:"running"`
+	Version            string                    `json:"version,omitempty"`
+	OnDisk             string                    `json:"on_disk,omitempty"`
+	OnDiskPath         string                    `json:"on_disk_path,omitempty"`
+	UpdateAvailable    bool                      `json:"update_available"`
+	ConfigPath         string                    `json:"config_path,omitempty"`
+	RunningEnvironment string                    `json:"running_environment,omitempty"`
+	ContextMismatch    bool                      `json:"context_mismatch,omitempty"`
+	DetachedProject    bool                      `json:"detached_project,omitempty"`
+	ConfigStale        bool                      `json:"config_stale,omitempty"`
+	ConfigStaleReason  string                    `json:"config_stale_reason,omitempty"`
+	Context            daemon.EnvironmentContext `json:"context,omitempty"`
 }
 
 func writeStatusJSON(
@@ -535,7 +539,7 @@ func writeStatusJSON(
 	}
 	resources := make([]jsonService, 0)
 
-	if dstatus.ConfigStale || setup.SelectionRequired {
+	if dstatus.ConfigStale || setup.SelectionRequired || cfg == nil {
 		for name, resource := range running {
 			svc := jsonService{
 				Name:  name,

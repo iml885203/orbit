@@ -11,9 +11,12 @@ import (
 )
 
 func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
+	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/service-mode/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
@@ -47,13 +50,13 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	}
 	s.app.Orchestrator.SetServiceKind(name, kind)
 
-	go func() {
+	s.startEnvironmentBackground(generation, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if err := s.app.Orchestrator.RestartService(ctx, name); err != nil {
 			slog.Error("restart failed", "component", "service-mode", "name", name, "err", err)
 		}
-	}()
+	})
 
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("%s switching to %s mode", name, req.Mode)})
 }

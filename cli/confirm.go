@@ -15,7 +15,7 @@ import (
 // a hidden question (callers gate destructive actions behind a --yes
 // flag for those). The single owner of orbit's interactive y/N prompt.
 func Confirm(prompt string) bool {
-	if !isatty.IsTerminal(os.Stdin.Fd()) {
+	if !CanPrompt() {
 		return false
 	}
 	fmt.Print(prompt + " [y/N]: ")
@@ -25,4 +25,8 @@ func Confirm(prompt string) bool {
 	}
 	ans := strings.ToLower(strings.TrimSpace(line))
 	return ans == "y" || ans == "yes"
+}
+
+func CanPrompt() bool {
+	return isatty.IsTerminal(os.Stdin.Fd())
 }

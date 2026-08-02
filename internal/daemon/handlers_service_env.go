@@ -27,6 +27,8 @@ func (s *Server) handleServiceEnv(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 	name := strings.TrimPrefix(r.URL.Path, "/api/service-env/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})

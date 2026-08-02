@@ -79,4 +79,38 @@ func TestActiveEnvironmentSelectionReportsProjectOverride(t *testing.T) {
 	if active.Environments[0].Selected {
 		t.Fatal("managed environment must not be marked active while project config wins")
 	}
+	if active.ManagedSelection == nil || active.ManagedSelection.Name != "team" || active.ManagedSelection.Selected {
+		t.Fatalf("managed selection = %+v, want preserved but inactive", active.ManagedSelection)
+	}
+}
+
+func TestExplicitOrbitYAMLIsNotProjectEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), projectConfigName)
+	active := activeEnvironmentSelectionWithKind(environmentSelection{
+		State:        environmentSelectionSelected,
+		SelectedName: "managed",
+		SelectedPath: "/envs/managed.yaml",
+	}, path, "explicit")
+
+	if active.Source != "explicit" || active.SelectedPath != path {
+		t.Fatalf("explicit config was relabeled as project: %+v", active)
+	}
+	if active.ManagedSelection == nil || active.ManagedSelection.Path != "/envs/managed.yaml" {
+		t.Fatalf("managed selection was not preserved: %+v", active.ManagedSelection)
+	}
+}
+
+func TestSameFilePathResolvesSymlinks(t *testing.T) {
+	root := t.TempDir()
+	realPath := filepath.Join(root, "real.yaml")
+	if err := os.WriteFile(realPath, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(root, "linked.yaml")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if !sameFilePath(realPath, linkPath) {
+		t.Fatalf("%q and %q should be the same canonical file", realPath, linkPath)
+	}
 }

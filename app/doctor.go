@@ -43,7 +43,7 @@ func runDoctorWithOptions(options doctorOptions) error {
 	var detachedStatus *daemon.StatusResponse
 	if client.Health() == nil {
 		if status, err := client.Status(); err == nil {
-			if shouldResumeDetachedProject(options.explicitConfig, configFile, status.ConfigPath) {
+			if shouldResumeDetachedProject(options.explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
 				configFile = status.ConfigPath
 				detachedStatus = status
 			} else if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {

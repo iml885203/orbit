@@ -30,16 +30,23 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 	current := s.ConfigPath()
-	dir := filepath.Dir(current)
-	resp := EnvsResponse{Current: current, Envs: []EnvInfo{}}
+	context := s.environmentContext()
+	listRoot := current
+	if context.ManagedSelection != nil {
+		listRoot = context.ManagedSelection.Path
+	}
+	dir := filepath.Dir(listRoot)
+	resp := EnvsResponse{Current: current, Envs: []EnvInfo{}, Context: context}
 
 	for _, name := range ListEnvYamls(dir) {
 		full := filepath.Join(dir, name)
 		info := EnvInfo{
 			Name:    name,
 			Path:    full,
-			Current: full == current,
+			Current: context.Kind == "managed" && canonicalEnvironmentPath(full) == context.Identity,
 		}
 		resp.Envs = append(resp.Envs, info)
 	}
@@ -50,13 +57,19 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 
 // EnvSwitchRequest is the PUT body for /api/env.
 type EnvSwitchRequest struct {
-	Env string `json:"env"` // short name (no .yaml) OR absolute path
+	Env              string   `json:"env"` // short name (no .yaml) OR absolute path
+	Confirmed        bool     `json:"confirmed,omitempty"`
+	CurrentIdentity  string   `json:"current_identity,omitempty"`
+	TargetIdentity   string   `json:"target_identity,omitempty"`
+	RunningResources []string `json:"running_resources,omitempty"`
 }
 
 func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	var req EnvSwitchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})
@@ -72,7 +85,11 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(target, ".yaml") {
 			target += ".yaml"
 		}
-		target = filepath.Join(filepath.Dir(s.ConfigPath()), target)
+		selectionRoot := s.ConfigPath()
+		if selection := s.environmentContext().ManagedSelection; selection != nil {
+			selectionRoot = selection.Path
+		}
+		target = filepath.Join(filepath.Dir(selectionRoot), target)
 	}
 	if _, err := os.Stat(target); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "env not found: " + req.Env})
@@ -88,7 +105,33 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, APIResponse{Error: "environment switching is unavailable in this Orbit build"})
 		return
 	}
+	currentContext := s.environmentContext()
+	runningResources := s.runningResourceNames()
+	targetIdentity := canonicalEnvironmentPath(target)
+	if len(runningResources) > 0 &&
+		(!req.Confirmed ||
+			req.CurrentIdentity != currentContext.Identity ||
+			req.TargetIdentity != targetIdentity ||
+			!equalStringSlices(req.RunningResources, runningResources)) {
+		targetContext := EnvironmentContext{
+			Kind:        "managed",
+			Identity:    targetIdentity,
+			DisplayName: EnvShortName(targetIdentity),
+			ConfigPath:  targetIdentity,
+			Available:   true,
+		}
+		writeJSON(w, http.StatusConflict, EnvironmentSwitchResponse{
+			Error:                "confirmation required before stopping the active environment",
+			ConfirmationRequired: true,
+			CurrentContext:       &currentContext,
+			TargetContext:        &targetContext,
+			RunningResources:     runningResources,
+		})
+		return
+	}
 	previousPath := s.ConfigPath()
+	previousSelection := ReadCurrentEnv()
+	previousContext := s.environmentContext()
 	previousCfg := s.holder.Load()
 
 	// Stop everything before swapping config — including containers.
@@ -103,9 +146,15 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if stopped > 0 {
 		s.app.StopAllServices()
 	}
+	restoreRunning := func() {
+		if s.app != nil && len(runningResources) > 0 {
+			s.app.StartServices(runningResources)
+		}
+	}
 
 	// Persist the choice (matches `orbit switch` behavior).
 	if err := atomicio.WriteFile(CurrentEnvPath(), []byte(target+"\n"), 0644); err != nil {
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
@@ -122,26 +171,28 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("load: %w", err)
 		}
 		tx.Store(finalCfg)
-		tx.SetConfigPath(target)
 		return nil
 	})
 	if err != nil {
-		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
+	s.SetEnvironmentContext(target, "managed")
 
 	if err := s.restartLauncher(target); err != nil {
 		s.UpdateConfig(func(tx extension.ConfigTx) error {
 			tx.Store(previousCfg)
-			tx.SetConfigPath(previousPath)
 			return nil
 		})
-		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+		s.SetEnvironmentContext(previousPath, previousContext.Kind)
+		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
+		restoreRunning()
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "schedule daemon restart: " + err.Error()})
 		return
 	}
@@ -153,26 +204,47 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if stopped > 0 {
 		msg = "Stopped " + strconv.Itoa(stopped) + " running items from the previous environment. " + msg
 	}
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: msg})
+	writeJSON(w, http.StatusOK, EnvironmentSwitchResponse{OK: true, Message: msg})
 }
 
-// runningCount returns how many services or containers are currently
-// in a non-stopped state. Used to tell the user how disruptive an
-// env switch will be.
-// runningCount returns how many services or containers are currently
-// in a non-stopped state. Used to tell the user how disruptive an
-// env switch will be — env switch stops everything (including infra)
-// because two envs may share names but differ in spec.
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func restoreManagedSelection(path string) error {
+	if path == "" {
+		err := os.Remove(CurrentEnvPath())
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return atomicio.WriteFile(CurrentEnvPath(), []byte(path+"\n"), 0644)
+}
+
 func (s *Server) runningCount() int {
+	return len(s.runningResourceNames())
+}
+
+func (s *Server) runningResourceNames() []string {
 	services := s.app.Orchestrator.GetAllServices()
-	n := 0
+	names := make([]string, 0)
 	for i := range services {
 		st := services[i].State.String()
 		if st != "stopped" && st != "pending" {
-			n++
+			names = append(names, services[i].Name)
 		}
 	}
-	return n
+	sort.Strings(names)
+	return names
 }
 
 // CurrentEnvPath is the on-disk env selection pointer (~/.orbit/current).

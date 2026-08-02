@@ -7,6 +7,7 @@
   import { ChevronDown, Eye, Settings } from '@lucide/svelte'
 
   const visibleNavItems = $derived(navItems.filter(item => !item.hidden?.()))
+  const environmentContext = $derived(store.daemon.envs?.context)
 
   function isActive(path: string, loc: string): boolean {
     const l = loc || '/'
@@ -57,8 +58,13 @@
       aria-expanded={store.ui.envPopoverOpen}
       aria-haspopup="dialog"
     >
-      <span class="env-label">env</span>
-      <span class="env-name">{envShortName(store.daemon.envs.envs.find(e => e.current)?.name ?? '') || '—'}</span>
+      <span class="env-label">{environmentContext?.kind === 'project' ? 'project' : 'env'}</span>
+      <span class="env-name">{environmentContext?.display_name || envShortName(store.daemon.envs.envs.find(e => e.current)?.name ?? '') || '—'}</span>
+      {#if environmentContext?.kind === 'project'}
+        <span class="context-badge">Project environment</span>
+      {:else if environmentContext?.kind === 'explicit'}
+        <span class="context-badge">Explicit config</span>
+      {/if}
       {#if store.graph.preview}
         <span class="preview"><Eye size={11} aria-hidden="true" /> {store.graph.preview.env}</span>
       {/if}
@@ -221,6 +227,13 @@
     align-items: center;
     gap: var(--space-1);
     color: var(--blue);
+    font-size: var(--text-xs);
+  }
+  .context-badge {
+    color: var(--blue);
+    background: color-mix(in srgb, var(--blue) 13%, transparent);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
     font-size: var(--text-xs);
   }
   .chev {

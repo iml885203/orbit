@@ -58,7 +58,9 @@ Orbit 會從目前目錄往上找到最近的 `orbit.yaml`，所以人在專案�
 你可以直接移動到另一個同樣有 `orbit.yaml` 的專案。`orbit status` 會告訴你
 另一個專案仍在執行，但不會把它的 resource 混入目前專案；`orbit doctor`
 則會檢查目前專案是否已準備好。執行 `orbit up` 即可切換專案：Orbit 會先
-驗證新專案、停止舊專案的 resource，再啟動目前專案。`down`、`logs`、`open`
+驗證新專案；若舊專案仍有執行中的 resource，會明確列出兩個專案並在停止前
+詢問確認，script 則使用 `orbit up --yes`。確認後才會停止舊專案並啟動目前
+專案。`down`、`logs`、`open`
 等指令絕不會誤控另一個專案的 resource。
 
 此時需要理解的只有：

@@ -40,7 +40,8 @@ type StatusResponse struct {
 	// ConfigPath identifies the environment loaded by the running daemon.
 	// CLI clients compare it with their selected config before combining
 	// local config with daemon state.
-	ConfigPath string `json:"config_path"`
+	ConfigPath string             `json:"config_path"`
+	Context    EnvironmentContext `json:"context"`
 	// Instance identifies the isolated named runtime serving this status.
 	// It is omitted for the default runtime so existing clients stay quiet.
 	Instance string `json:"instance,omitempty"`
@@ -49,6 +50,23 @@ type StatusResponse struct {
 	// orchestrator on the previous env) — `orbit env apply` applies.
 	ConfigStale       bool   `json:"config_stale,omitempty"`
 	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
+}
+
+type EnvironmentContext struct {
+	Kind             string                       `json:"kind"`
+	Identity         string                       `json:"identity"`
+	DisplayName      string                       `json:"display_name"`
+	ConfigPath       string                       `json:"config_path"`
+	ProjectRoot      string                       `json:"project_root,omitempty"`
+	Available        bool                         `json:"available"`
+	Running          bool                         `json:"running"`
+	ManagedSelection *ManagedEnvironmentSelection `json:"managed_selection,omitempty"`
+}
+
+type ManagedEnvironmentSelection struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Active bool   `json:"active"`
 }
 
 // ResourceKind identifies how Orbit runs a resource.

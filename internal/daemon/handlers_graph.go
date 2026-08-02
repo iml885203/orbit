@@ -137,6 +137,8 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 
 	envName := s.currentEnvName()
 	if envQuery := r.URL.Query().Get("env"); envQuery != "" && envQuery != envName {
@@ -419,6 +421,8 @@ func buildAsyncEdges(cfg *config.Config) []GraphEdge {
 }
 
 func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}

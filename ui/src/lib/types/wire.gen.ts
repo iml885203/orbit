@@ -87,6 +87,7 @@ export interface StatusResponse {
    * local config with daemon state.
    */
   config_path: string;
+  context: EnvironmentContext;
   /**
    * Instance identifies the isolated named runtime serving this status.
    * It is omitted for the default runtime so existing clients stay quiet.
@@ -99,6 +100,21 @@ export interface StatusResponse {
    */
   config_stale?: boolean;
   config_stale_reason?: string;
+}
+export interface EnvironmentContext {
+  kind: string;
+  identity: string;
+  display_name: string;
+  config_path: string;
+  project_root?: string;
+  available: boolean;
+  running: boolean;
+  managed_selection?: ManagedEnvironmentSelection;
+}
+export interface ManagedEnvironmentSelection {
+  name: string;
+  path: string;
+  active: boolean;
 }
 /**
  * ResourceKind identifies how Orbit runs a resource.
@@ -277,6 +293,16 @@ export interface EnvsResponse {
   current?: string;
   running: number /* int */; // count of non-stopped services
   envs: EnvInfo[];
+  context: EnvironmentContext;
+}
+export interface EnvironmentSwitchResponse {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  confirmation_required?: boolean;
+  current_context?: EnvironmentContext;
+  target_context?: EnvironmentContext;
+  running_resources?: string[];
 }
 export interface EnvironmentReconcileResponse {
   ok?: boolean;

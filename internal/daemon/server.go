@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,10 +32,12 @@ type Server struct {
 	// (config_write.go), the sole acquirer of configWriteMu —
 	// Load→build→Store is a read-modify-write and unserialized writers
 	// would lose updates (e.g. a SQL restart rolling back an env switch).
-	holder        *config.Holder
-	configWriteMu sync.Mutex
-	background    sync.WaitGroup
-	settings      *Settings
+	holder                  *config.Holder
+	configWriteMu           sync.Mutex
+	environmentTransitionMu sync.RWMutex
+	environmentGeneration   atomic.Uint64
+	background              sync.WaitGroup
+	settings                *Settings
 	// extHooks holds the registered feature seams (SSE event sources,
 	// daemon-exit hooks). Appended in NewServer and ListenAndServe's
 	// route setup — all before the listener serves — and read-only once
@@ -43,13 +46,15 @@ type Server struct {
 	// extensions are the registered feature sets; DaemonSetup runs in
 	// ListenAndServe's route setup. resourceContributors is append-only
 	// during that setup, read-only once serving.
-	extensions           []extension.Extension
-	resourceContributors []ResourceContributor
-	settingsPUTHooks     []SettingsPUTHook
-	doctorContributors   []func() []DoctorCheck
-	configPath           string
-	baseline             configBaseline
-	pathMu               sync.RWMutex // guards configPath and baseline (the config itself lives in holder)
+	extensions                 []extension.Extension
+	resourceContributors       []ResourceContributor
+	settingsPUTHooks           []SettingsPUTHook
+	doctorContributors         []func() []DoctorCheck
+	configPath                 string
+	environmentContextKind     string
+	environmentContextIdentity string
+	baseline                   configBaseline
+	pathMu                     sync.RWMutex // guards config path, environment context, and baseline
 	// engineStale closes the handoff window after an API env switch publishes
 	// new config but before the replacement daemon rebuilds the service graph.
 	engineStale atomic.Bool
@@ -78,6 +83,17 @@ func (s *Server) startBackground(work func()) {
 		defer s.background.Done()
 		work()
 	}()
+}
+
+func (s *Server) startEnvironmentBackground(generation uint64, work func()) {
+	s.startBackground(func() {
+		s.environmentTransitionMu.Lock()
+		defer s.environmentTransitionMu.Unlock()
+		if s.environmentGeneration.Load() != generation {
+			return
+		}
+		work()
+	})
 }
 
 func (s *Server) waitForBackground() {
@@ -385,14 +401,93 @@ func (s *Server) epoch() int64 {
 func (s *Server) SetConfigPath(path string) {
 	s.pathMu.Lock()
 	s.configPath = path
+	s.environmentContextIdentity = canonicalEnvironmentPath(path)
 	s.recordConfigBaselineLocked(path)
 	s.pathMu.Unlock()
+	s.environmentGeneration.Add(1)
 }
 
 func (s *Server) ConfigPath() string {
 	s.pathMu.RLock()
 	defer s.pathMu.RUnlock()
 	return s.configPath
+}
+
+func (s *Server) SetEnvironmentContext(path, kind string) {
+	identity := canonicalEnvironmentPath(path)
+	s.pathMu.Lock()
+	s.configPath = path
+	s.environmentContextKind = kind
+	s.environmentContextIdentity = identity
+	s.recordConfigBaselineLocked(path)
+	s.pathMu.Unlock()
+	s.environmentGeneration.Add(1)
+}
+
+func (s *Server) environmentContext() EnvironmentContext {
+	s.pathMu.RLock()
+	configPath := s.configPath
+	kind := s.environmentContextKind
+	identity := s.environmentContextIdentity
+	s.pathMu.RUnlock()
+
+	if identity == "" {
+		identity = canonicalEnvironmentPath(configPath)
+	}
+	selectedPath := canonicalEnvironmentPath(ReadCurrentEnv())
+	if kind == "" {
+		if selectedPath != "" && selectedPath == identity {
+			kind = "managed"
+		} else {
+			kind = "explicit"
+		}
+	}
+	displayName := EnvShortName(configPath)
+	projectRoot := ""
+	if kind == "project" {
+		projectRoot = filepath.Dir(configPath)
+		displayName = filepath.Base(projectRoot)
+	}
+	context := EnvironmentContext{
+		Kind:        kind,
+		Identity:    identity,
+		DisplayName: displayName,
+		ConfigPath:  configPath,
+		ProjectRoot: projectRoot,
+		Available:   configFileAvailable(configPath),
+		Running:     s.runningCount() > 0,
+	}
+	if selectedPath != "" {
+		context.ManagedSelection = &ManagedEnvironmentSelection{
+			Name:   EnvShortName(selectedPath),
+			Path:   selectedPath,
+			Active: kind == "managed" && selectedPath == identity,
+		}
+	}
+	return context
+}
+
+func canonicalEnvironmentPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(path); err == nil {
+		path = absolute
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return filepath.Clean(path)
+}
+
+func configFileAvailable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	_, err = config.Load(path)
+	return err == nil
 }
 
 func (s *Server) BaseContext() context.Context {

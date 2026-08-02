@@ -98,6 +98,11 @@ if "$orbit_bin" --config "$test_root/candidate/orbit.yaml" doctor --json \
   echo "orbit doctor unexpectedly accepted a missing candidate executable." >&2
   exit 1
 fi
+if "$orbit_bin" --config "$test_root/candidate/orbit.yaml" up --yes --json \
+  >"$test_root/up-candidate.json"; then
+  echo "orbit up unexpectedly accepted an invalid candidate before switching." >&2
+  exit 1
+fi
 if "$orbit_bin" down --json >"$test_root/down-b.json"; then
   echo "orbit down unexpectedly controlled the other project." >&2
   exit 1
@@ -106,11 +111,29 @@ curl --fail --silent --show-error \
   "http://localhost:$service_port" >"$test_root/page-a-after-guard.html"
 grep -F "project-a" "$test_root/page-a-after-guard.html" >/dev/null
 
-"$orbit_bin" up --json >"$test_root/up-b.json"
+if "$orbit_bin" up --json >"$test_root/up-b-refused.json"; then
+  echo "orbit up --json unexpectedly switched projects without --yes." >&2
+  exit 1
+fi
+if "$orbit_bin" up >"$test_root/up-b-noninteractive.txt" 2>&1; then
+  echo "non-interactive orbit up unexpectedly switched projects without --yes." >&2
+  exit 1
+fi
+curl --fail --silent --show-error \
+  "http://localhost:$service_port" >"$test_root/page-a-after-refusal.html"
+grep -F "project-a" "$test_root/page-a-after-refusal.html" >/dev/null
+
+"$orbit_bin" up --yes --json >"$test_root/up-b.json"
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "http://localhost:$service_port" >"$test_root/page-b.html"
 grep -F "project-b" "$test_root/page-b.html" >/dev/null
 "$orbit_bin" status --json >"$test_root/status-b-after.json"
+cd "$test_root"
+"$orbit_bin" daemon restart --json >"$test_root/restart-daemon-b.json"
+"$orbit_bin" status --json >"$test_root/status-b-after-restart.json"
+curl --fail --silent --show-error \
+  "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/envs-api-b.json"
+cd "$test_root/project-b"
 "$orbit_bin" inspect --json >"$test_root/inspect-b-after.json"
 "$orbit_bin" doctor --json >"$test_root/doctor-b-after.json"
 "$orbit_bin" logs app-b --json >"$test_root/logs-b-after.json"
@@ -149,9 +172,14 @@ before = read("status-b-before.json")
 doctor = read("doctor-b.json")
 inspect = read("inspect-b.json")
 candidate = read("doctor-candidate.json")
+candidate_up = read("up-candidate.json")
 guard = read("down-b.json")
+refused = read("up-b-refused.json")
 up = read("up-b.json")
 after = read("status-b-after.json")
+after_restart = read("status-b-after-restart.json")
+restart_daemon = read("restart-daemon-b.json")
+envs_api = read("envs-api-b.json")
 inspect_after = read("inspect-b-after.json")
 doctor_after = read("doctor-b-after.json")
 logs_after = read("logs-b-after.json")
@@ -199,6 +227,8 @@ assert any(
     for check in candidate["data"]["checks"]
 )
 assert "daemon restart" not in json.dumps(candidate)
+assert candidate_up["ok"] is False
+assert candidate_up["error"]["code"] == "checks_failed"
 
 assert guard["ok"] is False
 assert guard["error"]["code"] == "project_context_inactive"
@@ -206,11 +236,22 @@ assert [action["command"] for action in guard["recommended_actions"]] == [
     "orbit up --json"
 ]
 
+assert refused["ok"] is False
+assert refused["error"]["code"] == "confirmation_required"
+assert [action["command"] for action in refused["recommended_actions"]] == [
+    "orbit up --yes --json"
+]
+noninteractive = (root / "up-b-noninteractive.txt").read_text(encoding="utf-8").lower()
+assert "rerun with --yes" in noninteractive
+
 assert up["ok"] is True
 switched = up["data"]["context_switch"]
 assert switched["from_name"] == "project-a"
 assert switched["to_name"] == "project-b"
 assert switched["stopped_resources"] == ["app-a"]
+assert up["data"]["context"]["kind"] == "project"
+assert up["data"]["context"]["display_name"] == "project-b"
+assert pathlib.Path(up["data"]["context"]["project_root"]).resolve() == (root / "project-b").resolve()
 
 assert after["ok"] is True
 assert after["data"]["environment"].get("context_switch_required") is not True
@@ -218,11 +259,22 @@ assert after["data"]["daemon"].get("context_mismatch") is not True
 assert [(item["name"], item["state"]) for item in after["data"]["resources"]] == [
     ("app-b", "healthy")
 ]
+assert after["data"]["daemon"]["context"]["kind"] == "project"
+
+assert restart_daemon["ok"] is True
+assert pathlib.Path(restart_daemon["data"]["config_path"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
+assert after_restart["data"]["daemon"]["context"]["kind"] == "project"
+assert after_restart["data"]["daemon"]["context"]["display_name"] == "project-b"
+assert envs_api["context"]["kind"] == "project"
+assert envs_api["context"]["display_name"] == "project-b"
+assert pathlib.Path(envs_api["context"]["config_path"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 
 assert inspect_after["ok"] is True
 assert inspect_after["data"]["readiness"]["state"] == "ready"
 assert inspect_after["data"]["environment"]["selected_name"] == "project-b"
 assert inspect_after["data"]["environment"]["daemon_env"] == "project-b"
+assert inspect_after["data"]["environment"]["context"]["kind"] == "project"
+assert pathlib.Path(inspect_after["data"]["environment"]["context"]["identity"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 assert inspect_after["data"]["risks"] == [], inspect_after["data"]["risks"]
 assert inspect_after.get("recommended_actions", []) == []
 
@@ -287,8 +339,14 @@ cd "$test_root"
 "$orbit_bin" status --json >"$test_root/status-outside-project.json"
 "$orbit_bin" status >"$test_root/status-outside-project.txt"
 "$orbit_bin" doctor --json >"$test_root/doctor-outside-project.json"
+"$orbit_bin" inspect --json >"$test_root/inspect-outside-project.json"
 "$orbit_bin" doctor >"$test_root/doctor-outside-project.txt"
-"$orbit_bin" logs app-b --json >"$test_root/logs-outside-project.json"
+"$orbit_bin" logs app-b --json >"$test_root/logs-outside-project.json" 2>"$test_root/logs-outside-project.err"
+if [ ! -s "$test_root/logs-outside-project.json" ]; then
+  cat "$test_root/logs-outside-project.err" >&2
+  echo "detached project logs returned no JSON." >&2
+  exit 1
+fi
 if "$orbit_bin" --config "$ORBIT_HOME/envs/quickstart.yaml" status --json \
   >"$test_root/explicit-managed-status.json"; then
   echo "explicit managed config unexpectedly controlled the active project." >&2
@@ -302,6 +360,7 @@ import sys
 root = pathlib.Path(sys.argv[1])
 status = json.loads((root / "status-outside-project.json").read_text(encoding="utf-8"))
 doctor = json.loads((root / "doctor-outside-project.json").read_text(encoding="utf-8"))
+inspect = json.loads((root / "inspect-outside-project.json").read_text(encoding="utf-8"))
 logs = json.loads((root / "logs-outside-project.json").read_text(encoding="utf-8"))
 explicit = json.loads((root / "explicit-managed-status.json").read_text(encoding="utf-8"))
 assert status["ok"] is True
@@ -335,7 +394,50 @@ assert "quickstart.yaml" not in json.dumps(logs)
 
 assert explicit["ok"] is False
 assert explicit["error"]["code"] == "env_mismatch"
+assert inspect["ok"] is True
+assert inspect["data"]["environment"]["context"]["kind"] == "project"
+assert pathlib.Path(inspect["data"]["environment"]["context"]["identity"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 PY
+mv "$test_root/project-b/orbit.yaml" "$test_root/project-b/orbit.yaml.saved"
+"$orbit_bin" status --json >"$test_root/status-missing-project.json"
+curl --fail --silent --show-error \
+  "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/envs-api-missing-project.json"
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+status = json.loads((root / "status-missing-project.json").read_text(encoding="utf-8"))
+envs = json.loads((root / "envs-api-missing-project.json").read_text(encoding="utf-8"))
+assert status["ok"] is True
+assert status["data"]["daemon"]["context"]["kind"] == "project"
+assert status["data"]["daemon"]["context"]["available"] is False
+assert envs["context"]["kind"] == "project"
+assert envs["context"]["available"] is False
+PY
+mv "$test_root/project-b/orbit.yaml.saved" "$test_root/project-b/orbit.yaml"
+mv "$test_root/project-b/orbit.yaml" "$test_root/project-b/orbit.yaml.valid"
+printf 'version: [invalid\n' >"$test_root/project-b/orbit.yaml"
+"$orbit_bin" status --json >"$test_root/status-invalid-project.json"
+"$orbit_bin" status >"$test_root/status-invalid-project.txt"
+python3 - "$test_root/status-invalid-project.json" <<'PY'
+import json
+import pathlib
+import sys
+
+status = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert status["ok"] is True
+assert status["data"]["daemon"]["context"]["kind"] == "project"
+assert status["data"]["daemon"]["context"]["available"] is False
+assert [resource["name"] for resource in status["data"]["resources"]] == ["app-b"]
+PY
+grep -F "app-b" "$test_root/status-invalid-project.txt" >/dev/null
+if grep -F "panic:" "$test_root/status-invalid-project.txt" >/dev/null; then
+  echo "invalid detached project status panicked." >&2
+  exit 1
+fi
+mv "$test_root/project-b/orbit.yaml.valid" "$test_root/project-b/orbit.yaml"
 "$orbit_bin" down --json >"$test_root/down-outside-project.json"
 cd "$test_root/project-a"
 "$orbit_bin" doctor --json >"$test_root/doctor-after-down.json"
@@ -347,7 +449,9 @@ import sys
 down = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert down["ok"] is True
 assert all(resource["state"] == "stopped" for resource in down["data"]["resources"])
-assert "quickstart.yaml" not in json.dumps(down)
+assert down["data"]["context"]["kind"] == "project"
+assert down["data"]["context"]["managed_selection"]["name"] == "quickstart"
+assert down["data"]["context"]["managed_selection"]["active"] is False
 PY
 python3 - "$test_root/doctor-after-down.json" <<'PY'
 import json
@@ -365,6 +469,63 @@ assert [action["command"] for action in doctor["recommended_actions"]] == [
     "orbit up --json"
 ]
 PY
+"$orbit_bin" daemon stop --json >/dev/null
+
+cd "$test_root/project-a"
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" up >"$test_root/explicit-up.txt"
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" up --json >"$test_root/explicit-up.json"
+cd "$test_root"
+if "$orbit_bin" status --json >"$test_root/explicit-outside-status.json"; then
+  echo "status without the explicit config unexpectedly adopted it." >&2
+  exit 1
+fi
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" status --json >"$test_root/explicit-outside-matched-status.json"
+curl --fail --silent --show-error \
+  "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/explicit-envs-api.json"
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+up = json.loads((root / "explicit-up.json").read_text(encoding="utf-8"))
+envs = json.loads((root / "explicit-envs-api.json").read_text(encoding="utf-8"))
+outside = json.loads((root / "explicit-outside-status.json").read_text(encoding="utf-8"))
+outside_matched = json.loads((root / "explicit-outside-matched-status.json").read_text(encoding="utf-8"))
+assert up["data"]["context"]["kind"] == "explicit"
+assert envs["context"]["kind"] == "explicit"
+assert outside["error"]["code"] == "env_mismatch"
+assert outside_matched["data"]["daemon"]["context"]["kind"] == "explicit"
+assert outside_matched["data"]["daemon"].get("detached_project") is not True
+assert "Using project environment" not in (root / "explicit-up.txt").read_text(encoding="utf-8")
+assert pathlib.Path(envs["context"]["config_path"]).resolve() == (root / "project-a" / "orbit.yaml").resolve()
+PY
+"$orbit_bin" --config "$test_root/project-a/orbit.yaml" down --json >/dev/null
+"$orbit_bin" daemon stop --json >/dev/null
+
+make_project "team-a/payments" "payments-a" "team-a"
+make_project "team-b/payments" "payments-b" "team-b"
+cd "$test_root/team-a/payments"
+"$orbit_bin" up --json >/dev/null
+cd "$test_root/team-b/payments"
+if "$orbit_bin" up --json >"$test_root/same-name-refused.json"; then
+  echo "same-name project switch unexpectedly skipped confirmation." >&2
+  exit 1
+fi
+python3 - "$test_root/same-name-refused.json" "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+refused = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+message = refused["error"]["message"]
+assert refused["error"]["code"] == "confirmation_required"
+assert str(root / "team-a" / "payments" / "orbit.yaml") in message
+assert str(root / "team-b" / "payments" / "orbit.yaml") in message
+PY
+cd "$test_root/team-a/payments"
+"$orbit_bin" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null
 
 echo "Project switching and detached context recovery keep one successful next action"

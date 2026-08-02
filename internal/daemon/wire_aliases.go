@@ -12,6 +12,8 @@ type (
 	UpRequest                    = pub.UpRequest
 	DownRequest                  = pub.DownRequest
 	StatusResponse               = pub.StatusResponse
+	EnvironmentContext           = pub.EnvironmentContext
+	ManagedEnvironmentSelection  = pub.ManagedEnvironmentSelection
 	ResourceKind                 = pub.ResourceKind
 	SidecarInfo                  = pub.SidecarInfo
 	ResourceStatus               = pub.ResourceStatus
@@ -27,6 +29,7 @@ type (
 	EnvInfo                      = pub.EnvInfo
 	EnvsResponse                 = pub.EnvsResponse
 	EnvironmentReconcileResponse = pub.EnvironmentReconcileResponse
+	EnvironmentSwitchResponse    = pub.EnvironmentSwitchResponse
 	VersionResponse              = pub.VersionResponse
 	EdgeDetachRequest            = pub.EdgeDetachRequest
 	ServiceModeRequest           = pub.ServiceModeRequest

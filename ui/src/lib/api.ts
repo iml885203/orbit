@@ -1,4 +1,4 @@
-import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse, LogsResponse, ServiceEnvResponse } from './types.gen'
+import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, EnvironmentSwitchResponse, GraphResponse, LogsResponse, ServiceEnvResponse } from './types.gen'
 import type { HistoryRecord, HistoryFilter } from './history.svelte'
 import { toast } from './stores.svelte'
 
@@ -97,8 +97,14 @@ export async function detachEdge(env: string, from: string, to: string, detached
   return apiPut(`/api/edges/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { env, detached })
 }
 
-export async function switchEnv(env: string) {
-  return apiPut('/api/envs/current', { env })
+export async function switchEnv(env: string, confirmed = false, currentIdentity = '', targetIdentity = '', runningResources: string[] = []) {
+  return apiPut<EnvironmentSwitchResponse>('/api/envs/current', {
+    env,
+    confirmed,
+    current_identity: currentIdentity,
+    target_identity: targetIdentity,
+		running_resources: runningResources,
+  })
 }
 
 export async function fetchHistoryList(filter: HistoryFilter = {}): Promise<HistoryRecord[]> {

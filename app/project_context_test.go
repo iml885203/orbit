@@ -38,3 +38,25 @@ func TestProjectContextInactiveOffersOneSafeAction(t *testing.T) {
 		t.Fatalf("actions = %+v", actions)
 	}
 }
+
+func TestProjectContextInactiveDisambiguatesSameNamedProjects(t *testing.T) {
+	err := projectContextInactive(
+		"/workspace/b/payments/orbit.yaml",
+		"/workspace/a/payments/orbit.yaml",
+	)
+	if !strings.Contains(err.Error(), "/workspace/a/payments/orbit.yaml") ||
+		!strings.Contains(err.Error(), "/workspace/b/payments/orbit.yaml") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestProjectContextSwitchLabelsDisambiguateSameNamedProjects(t *testing.T) {
+	switched := &projectContextSwitch{
+		FromName: "payments", FromPath: "/workspace/a/payments/orbit.yaml",
+		ToName: "payments", ToPath: "/workspace/b/payments/orbit.yaml",
+	}
+	from, to := projectContextSwitchLabels(switched)
+	if from == to || !strings.Contains(from, switched.FromPath) || !strings.Contains(to, switched.ToPath) {
+		t.Fatalf("labels = %q -> %q", from, to)
+	}
+}

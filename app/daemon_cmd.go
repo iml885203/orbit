@@ -61,7 +61,7 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 			Running:                  result.Running,
 			PID:                      result.PID,
 			PreviousPID:              result.PreviousPID,
-			ConfigPath:               configFile,
+			ConfigPath:               result.ConfigPath,
 			Dashboard:                fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
 			RequestedServiceShutdown: result.WasRunning,
 			StopMethod:               result.StopMethod,
@@ -92,15 +92,18 @@ type daemonRestartResult struct {
 	StopMethod        daemonStopMethod
 	PreviouslyRunning []string
 	RestoredResources []string
+	ConfigPath        string
 }
 
 func restartDaemonPreservingResources(configPath string, report func(string)) (daemonRestartResult, error) {
 	previousPID, alive := daemon.IsDaemonRunning()
+	contextKind := environmentContextKind(configPath)
 	result := daemonRestartResult{
 		WasRunning:        alive,
 		PreviousPID:       previousPID,
 		PreviouslyRunning: []string{},
 		RestoredResources: []string{},
+		ConfigPath:        configPath,
 	}
 
 	if alive {
@@ -109,6 +112,9 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 			return result, fmt.Errorf("checking the running environment before restart: %w", err)
 		}
 		result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
+		contextKind = status.Context.Kind
+		configPath = status.Context.ConfigPath
+		result.ConfigPath = configPath
 		if report != nil && len(result.PreviouslyRunning) > 0 {
 			report(fmt.Sprintf(
 				"Restarting Orbit; %d running resource(s) will be restored...",
@@ -117,7 +123,7 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 		}
 	}
 
-	stopMethod, pid, running, err := restartDaemon(configPath, previousPID, alive)
+	stopMethod, pid, running, err := restartDaemonWithContext(configPath, contextKind, previousPID, alive)
 	result.StopMethod = stopMethod
 	result.PID = pid
 	result.Running = running
@@ -172,7 +178,7 @@ func launchDashboardEnvRestart(configPath string) error {
 	}
 	defer func() { _ = logFile.Close() }()
 
-	cmd := exec.Command(exe, "daemon", "restart", "--config", configPath, "--handoff-delay", "250ms")
+	cmd := exec.Command(exe, "daemon", "restart", "--config", configPath, "--context-kind", "managed", "--handoff-delay", "250ms")
 	cmd.Dir = filepath.Dir(configPath)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
@@ -185,11 +191,19 @@ func launchDashboardEnvRestart(configPath string) error {
 }
 
 func ensureDaemonStarted(configPath string) error {
-	_, err := daemon.EnsureDaemon(configPath, groups)
+	kind := daemonContextKind
+	if kind == "" {
+		kind = environmentContextKind(configPath)
+	}
+	_, err := daemon.EnsureDaemonWithContext(configPath, groups, kind)
 	return renderDaemonStartError(err)
 }
 
 func restartDaemon(configPath string, previousPID int, alive bool) (daemonStopMethod, int, bool, error) {
+	return restartDaemonWithContext(configPath, environmentContextKind(configPath), previousPID, alive)
+}
+
+func restartDaemonWithContext(configPath, contextKind string, previousPID int, alive bool) (daemonStopMethod, int, bool, error) {
 	stopMethod := daemonStopNotRunning
 	if alive {
 		var err error
@@ -198,7 +212,11 @@ func restartDaemon(configPath string, previousPID int, alive bool) (daemonStopMe
 			return stopMethod, 0, false, err
 		}
 	}
-	if err := ensureDaemonStarted(configPath); err != nil {
+	previousKind := daemonContextKind
+	daemonContextKind = contextKind
+	err := ensureDaemonStarted(configPath)
+	daemonContextKind = previousKind
+	if err != nil {
 		return stopMethod, 0, false, err
 	}
 	pid, running := daemon.IsDaemonRunning()
@@ -447,7 +465,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	}
 
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
-	server.SetConfigPath(configFile)
+	server.SetEnvironmentContext(configFile, daemonContextKind)
 	server.SetRestartLauncher(launchDashboardEnvRestart)
 	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
 	app.ProcessMgr.OnStarted = func(_ string) {
