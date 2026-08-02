@@ -1,7 +1,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,7 +11,59 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/iml885203/orbit/cli"
 )
+
+func TestPackageManagerForBinary(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		goos    string
+		manager string
+		command string
+	}{
+		{name: "Apple Silicon Homebrew", path: "/opt/homebrew/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade orbit"},
+		{name: "Intel Homebrew", path: "/usr/local/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade orbit"},
+		{name: "Linuxbrew", path: "/home/linuxbrew/.linuxbrew/Cellar/orbit/0.8.0/bin/orbit", goos: "linux", manager: "Homebrew", command: "brew upgrade orbit"},
+		{name: "Scoop user install", path: `C:\Users\dev\scoop\apps\orbit\current\orbit-windows-amd64.exe`, goos: "windows", manager: "Scoop", command: "scoop update orbit"},
+		{name: "Scoop custom root", path: `D:\tools\apps\orbit\0.8.0\orbit-windows-arm64.exe`, goos: "windows", manager: "Scoop", command: "scoop update orbit"},
+		{name: "direct Unix install", path: "/Users/dev/.local/bin/orbit", goos: "darwin"},
+		{name: "direct Windows install", path: `C:\Users\dev\AppData\Local\Programs\Orbit\orbit.exe`, goos: "windows"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := packageManagerForBinary(tt.path, tt.goos)
+			if tt.manager == "" {
+				if got != nil {
+					t.Fatalf("managed install = %+v, want direct", got)
+				}
+				return
+			}
+			if got == nil || got.manager != tt.manager || got.command != tt.command {
+				t.Fatalf("managed install = %+v, want %s / %s", got, tt.manager, tt.command)
+			}
+		})
+	}
+}
+
+func TestManagedInstallErrorJSONAction(t *testing.T) {
+	var output bytes.Buffer
+	err := managedInstallError{manager: "Homebrew", command: "brew upgrade orbit"}
+	if writeErr := cli.WriteJSONError(&output, "orbit update --json", err); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	var envelope cli.JSONEnvelope
+	if decodeErr := json.Unmarshal(output.Bytes(), &envelope); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "package_managed_install" {
+		t.Fatalf("error = %+v", envelope.Error)
+	}
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "brew upgrade orbit" {
+		t.Fatalf("actions = %+v", envelope.RecommendedActions)
+	}
+}
 
 func TestRunSelfUpdateFailsWhenInstallScriptDownloadFails(t *testing.T) {
 	if runtime.GOOS == "windows" {

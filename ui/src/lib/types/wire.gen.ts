@@ -89,6 +89,11 @@ export interface StatusResponse {
   config_path: string;
   context: EnvironmentContext;
   /**
+   * Instance identifies the isolated named runtime serving this status.
+   * It is omitted for the default runtime so existing clients stay quiet.
+   */
+  instance?: string;
+  /**
    * ConfigStale means the loaded config has fallen behind reality (env
    * file edited, selection changed, or an API env switch left the
    * orchestrator on the previous env) — `orbit env apply` applies.

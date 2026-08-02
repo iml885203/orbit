@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orbit Feature Implement"
+  short_description: "Implement an Orbit feature from issue through merge"
+  default_prompt: "Use $orbit-feature-implement to implement Orbit feature issue #13 through verified merge and exploratory testing."

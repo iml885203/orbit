@@ -207,6 +207,10 @@ main() {
   fi
   if [ -f "$target" ]; then
     current_version="$(binary_version "$target" || true)"
+    if [ "$current_version" = "$candidate_version" ]; then
+      echo "Already installed: Orbit ${candidate_version} at ${target}"
+      return
+    fi
     if [ -n "$current_version" ] &&
        version_is_newer "$current_version" "$candidate_version" &&
        [ "${ORBIT_ALLOW_DOWNGRADE:-0}" != "1" ]; then

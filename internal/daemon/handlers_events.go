@@ -225,6 +225,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 	resp := StatusResponse{Epoch: s.epoch(), Resources: make([]ResourceStatus, 0),
 		ConfigPath:  s.ConfigPath(),
 		Context:     s.environmentContext(),
+		Instance:    s.instanceName,
 		ConfigStale: stale, ConfigStaleReason: staleReason}
 	for name, c := range cfg.Containers {
 		if ss, ok := tracked[name]; ok {

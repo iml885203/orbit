@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/instance"
 	"github.com/iml885203/orbit/internal/engine"
 )
 
@@ -132,6 +133,35 @@ func TestHandleStatus_ListsAllServices(t *testing.T) {
 		if got[name] != view {
 			t.Errorf("service %q = %+v, want %+v", name, got[name], view)
 		}
+	}
+}
+
+func TestStatusIdentifiesOnlyNamedRuntime(t *testing.T) {
+	tests := []struct {
+		name     string
+		instance string
+	}{
+		{name: "default runtime"},
+		{name: "named runtime", instance: "checkout-a"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(instance.EnvName, tt.instance)
+			s := newTestServer(t, testConfig())
+
+			rr := httptest.NewRecorder()
+			s.handleStatus(rr, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+			var resp StatusResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode status: %v", err)
+			}
+			if resp.Instance != tt.instance {
+				t.Errorf("REST instance = %q, want %q", resp.Instance, tt.instance)
+			}
+			if got := s.buildStatusResponse().Instance; got != tt.instance {
+				t.Errorf("SSE instance = %q, want %q", got, tt.instance)
+			}
+		})
 	}
 }
 

@@ -69,6 +69,7 @@
         }
         store.daemon.daemonEpoch = resp.epoch
       }
+      store.daemon.instanceName = resp.instance ?? ''
       store.daemon.connected = true
       replaceServices(resp.resources || [])
       const key = graphKeyOf(resp)

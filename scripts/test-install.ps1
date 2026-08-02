@@ -117,6 +117,14 @@ try {
         throw "installer did not provide the immediate init command: $($installOutput -join '; ')"
     }
 
+    $sameVersionOutput = @(Invoke-Installer "0.0.1" 6>&1 | ForEach-Object { "$_" })
+    if (-not ($sameVersionOutput -contains "Already installed: Orbit 0.0.1 at $target")) {
+        throw "same-version install was not reported as a no-op: $($sameVersionOutput -join '; ')"
+    }
+    if (Test-Path "$target.prev") {
+        throw "same-version install replaced the rollback backup"
+    }
+
     $env:ORBIT_SKIP_PATH_UPDATE = "1"
 
     Write-TestRelease "0.0.0"
@@ -157,7 +165,7 @@ try {
     if ($leftovers.Count -ne 0) {
         throw "installer left temporary files: $($leftovers.Name -join ', ')"
     }
-    Write-Host "PowerShell installer downgrade, interruption, checksum, atomic backup, and cleanup OK"
+    Write-Host "PowerShell installer no-op, downgrade, interruption, checksum, atomic backup, and cleanup OK"
 }
 finally {
     Stop-FixtureServer

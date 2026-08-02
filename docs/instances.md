@@ -20,6 +20,8 @@ orbit logs app --instance checkout-a --json
 
 Keep the same instance target for the whole workflow. JSON responses include
 the `instance` field, and their recommended actions retain that target.
+Named dashboards show the instance in the header and browser tab. The default
+runtime keeps the standard dashboard header without an instance badge.
 
 List named instances to discover their environment, state, dashboard, and
 resolved resource endpoints:
