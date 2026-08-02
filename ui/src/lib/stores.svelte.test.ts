@@ -65,3 +65,15 @@ describe('hydrateLogs', () => {
     expect(store.daemon.logBuffers.api).toEqual(['first', 'second', 'third'])
   })
 })
+
+describe('service view preference', () => {
+  it('persists graph and table selections', () => {
+    store.ui.setServiceView('table')
+    expect(store.ui.serviceView).toBe('table')
+    expect(localStorage.getItem('orbit.serviceView')).toBe('table')
+
+    store.ui.setServiceView('graph')
+    expect(store.ui.serviceView).toBe('graph')
+    expect(localStorage.getItem('orbit.serviceView')).toBe('graph')
+  })
+})
