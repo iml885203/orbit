@@ -6,38 +6,46 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 
 for readme in README.md README.zh-TW.md; do
-  install_line="$(grep -n '^curl -fsSL .*scripts/install.sh' "$repo_root/$readme" | cut -d: -f1)"
-  for requirement in Git Docker "Python 3"; do
-    requirement_line="$(grep -n -m1 "\\[$requirement\\]" "$repo_root/$readme" | cut -d: -f1)"
-    if [ -z "$requirement_line" ] || [ "$requirement_line" -ge "$install_line" ]; then
-      echo "$readme must name $requirement before the install command." >&2
-      exit 1
-    fi
-  done
-
-  first_run_section="$(
+  demo_section="$(
     awk '
-      /^## (First 5 minutes|五分鐘上手)$/ { capture = 1; next }
+      /^## (Try the demo|試玩 demo)$/ { capture = 1; next }
       capture && /^## / { exit }
       capture { print }
     ' "$repo_root/$readme"
   )"
 
-  for command in "orbit init --yes" "orbit up" "orbit status" "orbit open demo-shop" "orbit down"; do
-    if ! grep -Fx "$command" <<<"$first_run_section" >/dev/null; then
-      echo "$readme first-run section is missing: $command" >&2
+  for requirement in Git Docker "Python 3"; do
+    if ! grep -F "$requirement" <<<"$demo_section" >/dev/null; then
+      echo "$readme demo section must name $requirement." >&2
       exit 1
     fi
   done
 
-  if grep -E 'orbit .*docs/examples/|orbit .*README' <<<"$first_run_section" >/dev/null; then
-    echo "$readme first-run section depends on a source checkout." >&2
+  for command in \
+    "git clone https://github.com/iml885203/orbit-demo.git" \
+    "cd orbit-demo" \
+    "orbit up" \
+    "orbit status" \
+    "orbit open demo-shop"; do
+    if ! grep -Fx "$command" <<<"$demo_section" >/dev/null; then
+      echo "$readme demo section is missing: $command" >&2
+      exit 1
+    fi
+  done
+
+  if ! grep -F '`orbit down`' <<<"$demo_section" >/dev/null; then
+    echo "$readme demo section must tell the user how to stop the demo." >&2
+    exit 1
+  fi
+
+  if grep -E 'orbit .*docs/examples/|orbit .*README' <<<"$demo_section" >/dev/null; then
+    echo "$readme demo section depends on a source checkout." >&2
     exit 1
   fi
 done
 
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
-  echo "README first-run commands are location-independent"
+  echo "README demo section matches the clone-based quickstart"
   exit 0
 fi
 
