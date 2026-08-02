@@ -124,6 +124,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, and recommended follow-up commands. |
 | `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon state, and configured resource state in `data.resources`. |
+| `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. |
@@ -219,6 +220,7 @@ Stable `data.operation` values for converted control commands:
 | Command | `data.operation` |
 |---|---|
 | `orbit env list --json` | `env_list` |
+| `orbit env info --json` | `env_info` |
 | `orbit env use <path> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit env apply --json` | `env_apply` |

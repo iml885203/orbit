@@ -39,6 +39,7 @@ func envCmd() *cobra.Command {
 		Hidden: true,
 	}
 	cmd.AddCommand(useCmd)
+	cmd.AddCommand(envInfoCmd())
 	currentCmd := &cobra.Command{
 		Use:    "current",
 		Short:  "Show the active environment config",

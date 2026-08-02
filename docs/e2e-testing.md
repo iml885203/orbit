@@ -32,9 +32,14 @@ non-interactive caller must pass `--yes`.
 
 A harness should instead *verify* before it runs:
 
-1. Read `orbit status --json`. It reports the active env's identity
-   (`config_path`) and every resource's name, state, and ports.
-2. Check that the resources the suite needs exist and are healthy.
+1. Read `orbit env info --json`. It reports the env's identity and, per
+   resource, ports and URL with provenance — `declared` from the environment
+   file, `observed` from the running daemon. Observed values are withheld when
+   the daemon serves a different environment, so a harness can never mistake
+   another stack's ports for its own. Credentials-bearing environment values
+   require `--show-secrets`.
+2. Check that the resources the suite needs exist and are healthy
+   (`orbit status --json` has the full lifecycle detail).
 3. If they are not, fail fast with an actionable message — name the missing
    resources and print the exact `orbit switch <env>` / `orbit up` command a
    human (or the pipeline's provisioning stage) should run. Do not run it

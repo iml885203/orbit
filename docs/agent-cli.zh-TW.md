@@ -114,6 +114,7 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 | `orbit doctor --json` | 在 `data` 中回傳診斷檢查結果。 |
 | `orbit inspect --json` | 回傳 agent-ready 狀態快照，包含 readiness、daemon/env 摘要、resource risks，以及建議後續指令。 |
 | `orbit status --json` | 回傳 setup/selection readiness、目前與可用 environments、managed repository URL/ref/commit、daemon，以及 `data.resources` 中的 resource 狀態。 |
+| `orbit env info --json` | 回傳 env 的身分，以及每個 resource 帶出處的 ports 與 URL：`declared` 來自 environment 檔，`observed` 來自運行中的 daemon。daemon 服務的是別的 environment 時（`data.daemon.config_match: false`）不給 observed 值。resource 的 environment 值只在 `--show-secrets` 時輸出；key 名稱一律列出。 |
 | `orbit logs <resource> --json` | 以單一 JSON 物件回傳最近的 log 行。 |
 | `orbit logs <resource> -f --json` | 以 NDJSON 串流事件，每行一個 JSON 物件。 |
 | `orbit up --json` | 回傳 daemon 實際選中的 resources（包含相依與 group 篩選結果）、觀察到的最終 state、降級或逾時的 resources，以及建議的後續指令。套用待處理的 config 編輯時，`data.environment_changes` 會回報 handoff 前後保留的 running intent。沒有 enabled resources 的 environment 會立即成功並回傳空陣列。 |
@@ -204,6 +205,7 @@ action。
 | Command | `data.operation` |
 |---|---|
 | `orbit env list --json` | `env_list` |
+| `orbit env info --json` | `env_info` |
 | `orbit env use <path> --json` | `env_use` |
 | `orbit env sync --json` | `env_sync` |
 | `orbit env apply --json` | `env_apply` |

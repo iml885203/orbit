@@ -29,9 +29,13 @@ caller 必須加 `--yes`。
 
 harness 應該做的是開跑前先*驗證*：
 
-1. 讀 `orbit status --json`。它回報 active env 的身分（`config_path`）以及每
-   個資源的名稱、狀態、port。
-2. 確認套件需要的資源存在且 healthy。
+1. 讀 `orbit env info --json`。它回報 env 的身分，以及每個資源帶出處的 port
+   與 URL——`declared` 來自 environment 檔、`observed` 來自運行中的 daemon。
+   daemon 服務的是別的 environment 時不給 observed 值，harness 永遠不會把別
+   的 stack 的 port 誤認成自己的。含憑證的 environment 值需要
+   `--show-secrets` 才輸出。
+2. 確認套件需要的資源存在且 healthy（完整生命週期細節在
+   `orbit status --json`）。
 3. 不滿足時快速失敗，並給出可執行的訊息——列出缺少的資源，印出人類（或
    pipeline 的 provisioning 階段）該執行的 `orbit switch <env>` / `orbit up`
    指令。不要自己執行它。
