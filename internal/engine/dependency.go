@@ -2,13 +2,8 @@ package engine
 
 import "github.com/iml885203/orbit/config"
 
-// BuildDAG returns a topologically sorted start order and the full deps
-// adjacency. Convenience wrapper for BuildDAGWithDetached(cfg, nil).
-func BuildDAG(cfg *config.Config) ([]string, map[string][]string) {
-	return BuildDAGWithDetached(cfg, nil)
-}
-
-// BuildDAGWithDetached is BuildDAG with a detached-edges overlay.
+// BuildDAGWithDetached returns a topologically sorted start order and the
+// full deps adjacency, honoring a detached-edges overlay.
 func BuildDAGWithDetached(cfg *config.Config, detached map[string][]string) ([]string, map[string][]string) {
 	g := NewDepGraph(cfg, detached)
 	return topoSort(g), g.AllDeps()

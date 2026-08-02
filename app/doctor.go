@@ -333,10 +333,6 @@ func localDoctorResponseWithContext(
 	}
 }
 
-func localPortChecks(cfg *config.Config) []daemon.DoctorCheck {
-	return localPortChecksWithContext(cfg, nil)
-}
-
 func localPortChecksWithContext(
 	cfg *config.Config,
 	runningStatus *daemon.StatusResponse,

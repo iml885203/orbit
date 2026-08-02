@@ -211,17 +211,8 @@ export function hydrateLogs(service: string, snapshot: string[]) {
   store.daemon.logBuffers[service] = [...snapshot, ...live.slice(overlap)].slice(-MAX_LINES)
 }
 
-export function toggleLog(name: string) {
-  store.daemon.openLogs[name] = !store.daemon.openLogs[name]
-}
 
 export function isRunning(state: string): boolean {
   return state === 'healthy' || state === 'degraded' || state === 'starting' || state === 'building'
 }
 
-
-export function portUrl(label: string, port: number): string | null {
-  if (label === 'https') return `https://localhost:${port}`
-  if (['http', 'dev', 'ui'].includes(label)) return `http://localhost:${port}`
-  return null
-}

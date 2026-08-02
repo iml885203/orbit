@@ -24,7 +24,7 @@ func TestBuildDAG_TopologicalOrder(t *testing.T) {
 		},
 	}
 
-	order, deps := BuildDAG(cfg)
+	order, deps := BuildDAGWithDetached(cfg, nil)
 
 	if len(order) != 4 {
 		t.Fatalf("order has %d items, want 4", len(order))
@@ -63,7 +63,7 @@ func TestBuildDAG_FiltersDetachedEdges(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
-			"api": {Name: "api", Kind: "backend", DependsOn: []string{"redis"}},
+			"api":      {Name: "api", Kind: "backend", DependsOn: []string{"redis"}},
 		},
 		Containers: map[string]*config.Container{
 			"redis": {Name: "redis", Kind: "infra"},
@@ -101,12 +101,12 @@ func TestFilterEnabledServices(t *testing.T) {
 		Services: map[string]*config.Service{
 			"payments": {Name: "payments", DependsOn: []string{"worker"}},
 			"worker":   {Name: "worker", DependsOn: []string{"redis", "sql-server"}},
-			"frontend":      {Name: "frontend", DependsOn: []string{"api"}},
+			"frontend": {Name: "frontend", DependsOn: []string{"api"}},
 			"api":      {Name: "api", DependsOn: []string{"redis"}},
 		},
 	}
 
-	enabled := FilterEnabledServices(cfg, nil)
+	enabled := FilterEnabledServicesWithDetached(cfg, nil, nil)
 
 	// Back office enabled: payments, worker + all containers
 	if !enabled["payments"] {
@@ -141,12 +141,12 @@ func TestFilterEnabledServices_CLIOverride(t *testing.T) {
 		},
 		Services: map[string]*config.Service{
 			"payments": {Name: "payments"},
-			"frontend":      {Name: "frontend"},
+			"frontend": {Name: "frontend"},
 		},
 	}
 
 	// CLI override enables player_site even though config has it disabled
-	enabled := FilterEnabledServices(cfg, []string{"player_site"})
+	enabled := FilterEnabledServicesWithDetached(cfg, []string{"player_site"}, nil)
 
 	if !enabled["frontend"] {
 		t.Error("frontend should be enabled via CLI override")

@@ -339,7 +339,6 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 	return &result, nil
 }
 
-// nolint:unused // called by subsequent tasks
 func (c *Client) putJSON(path string, body any) (*APIResponse, error) {
 	var reader io.Reader
 	if body != nil {

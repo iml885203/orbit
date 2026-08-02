@@ -54,8 +54,6 @@ Use --dry to preview changed files without downloading or applying them.`,
 	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview updates without downloading or applying")
 	cmd.Flags().BoolVar(&envSyncYes, "yes", false, "apply updates without prompting")
 	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download now and defer applying active updates")
-	cmd.Flags().BoolVar(&envSyncNoApply, "no-restart", false, "deprecated alias for --no-apply")
-	_ = cmd.Flags().MarkHidden("no-restart")
 	return cmd
 }
 

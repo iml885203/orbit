@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iml885203/orbit/internal/tracing"
 	"github.com/fatih/color"
+	"github.com/iml885203/orbit/internal/tracing"
 )
 
 func fixtureTrace() *tracing.Trace {

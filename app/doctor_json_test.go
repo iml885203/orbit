@@ -114,7 +114,7 @@ func TestLocalPortChecksDetectIPv4LoopbackOwner(t *testing.T) {
 		"api": {Ports: map[string]config.PortDef{"http": {Host: portNumber, Target: portNumber}}},
 	}}
 
-	checks := localPortChecks(cfg)
+	checks := localPortChecksWithContext(cfg, nil)
 	if len(checks) != 1 || checks[0].Name != "Port "+strconv.Itoa(portNumber) ||
 		checks[0].Status != daemon.CheckFail {
 		t.Fatalf("checks = %+v", checks)
@@ -142,7 +142,7 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	checks := localPortChecks(cfg)
+	checks := localPortChecksWithContext(cfg, nil)
 	if len(checks) != 1 || checks[0].Status != daemon.CheckInfo {
 		t.Fatalf("checks = %+v", checks)
 	}

@@ -50,7 +50,7 @@ func TestClone_ShallowCheckout(t *testing.T) {
 	})
 	dest := t.TempDir()
 
-	if err := Clone(url, dest); err != nil {
+	if _, err := CloneAt(url, "", dest); err != nil {
 		t.Fatalf("Clone: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func TestClone_NonExistentFails(t *testing.T) {
 		t.Skip("git not available")
 	}
 	dest := t.TempDir()
-	err := Clone("file:///nonexistent/repo", dest)
+	_, err := CloneAt("file:///nonexistent/repo", "", dest)
 	if err == nil {
 		t.Error("expected error for non-existent repo, got nil")
 	}

@@ -91,8 +91,4 @@ export async function publishAllDBs(): Promise<{ ok: boolean; data?: APIResponse
   return apiPost('/api/db/publish', { all: true })
 }
 
-export async function fetchDBState(): Promise<DBStateSnapshot | null> {
-  return getJSON('/api/db-state')
-}
-
 export type SettingsWire = Settings

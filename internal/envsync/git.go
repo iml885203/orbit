@@ -45,13 +45,6 @@ func (e *CloneError) ReportsAmbiguousGitHubAvailability() bool {
 		strings.Contains(output, "could not read username for 'https://github.com")
 }
 
-// Clone performs a shallow clone of url into destDir. destDir must be empty
-// (or nonexistent — git clone creates it).
-func Clone(url, destDir string) error {
-	_, err := CloneAt(url, "", destDir)
-	return err
-}
-
 // CloneAt resolves ref to one detached commit so a branch or tag cannot move
 // between fetch and checkout. An empty ref preserves Git's default-branch
 // behavior for user-managed repositories that intentionally track it.

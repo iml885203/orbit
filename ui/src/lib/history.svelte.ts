@@ -17,15 +17,6 @@ export interface HistoryRecord {
   error?: string
 }
 
-export interface HistoryGap {
-  method: string
-  pathPattern: string
-  summary: string
-  firstSeen: string
-  lastSeen: string
-  count: number
-}
-
 export interface HistoryFilter {
   source?: HistorySource
   onlyNoCli?: boolean

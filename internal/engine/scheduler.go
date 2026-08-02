@@ -5,11 +5,7 @@ import "github.com/iml885203/orbit/config"
 // FilterEnabledServices returns the set of service/container names that should
 // be started based on the enabled groups. If no groups are defined, all
 // services and containers are included.
-func FilterEnabledServices(cfg *config.Config, groupOverrides []string) map[string]bool {
-	return FilterEnabledServicesWithDetached(cfg, groupOverrides, nil)
-}
-
-// FilterEnabledServicesWithDetached is FilterEnabledServices plus an overlay
+// FilterEnabledServicesWithDetached applies an overlay
 // of detached edges (keyed by "from" service, value = list of "to" deps to
 // skip). Used by the daemon at request time so `orbit up <service>` doesn't
 // drag in a detached dependency.
