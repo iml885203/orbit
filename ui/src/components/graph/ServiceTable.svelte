@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ExternalLink, Play, RotateCcw, ScrollText, Search, Square } from '@lucide/svelte'
+  import { AppWindow, ExternalLink, Play, RotateCcw, ScrollText, Search, Square } from '@lucide/svelte'
   import type { GraphNode, GraphResponse } from '../../lib/types.gen'
   import { apiPost } from '../../lib/api'
   import { COLORS, ICONS } from '../../lib/constants'
@@ -125,6 +125,11 @@
                 {/if}
                 {#if !readOnly && node.url && node.state === 'healthy'}
                   <a class="icon-action" href={node.url} target="_blank" rel="noreferrer" aria-label="Open {node.name} in browser" use:tooltip={{ content: 'Open in browser' }}><ExternalLink size={14} /></a>
+                {/if}
+                {#if !readOnly}
+                  {#each node.sidecars ?? [] as sidecar (sidecar.name)}
+                    <a class="icon-action" href={sidecar.url} target="_blank" rel="noreferrer" aria-label="Open {sidecar.name} UI" use:tooltip={{ content: sidecar.name }}><AppWindow size={14} /></a>
+                  {/each}
                 {/if}
                 {#if !readOnly && (node.logsAvailable || node.kind !== 'external')}
                   <button aria-label="Open logs for {node.name}" use:tooltip={{ content: 'Logs' }} onclick={() => openLogViewer(node.name)}><ScrollText size={14} /></button>

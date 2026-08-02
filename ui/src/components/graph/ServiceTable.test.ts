@@ -14,7 +14,7 @@ const graph: GraphResponse = {
   nodes: [
     { name: 'web', kind: 'frontend', state: 'healthy', mode: 'dev', url: 'http://localhost:5173', ports: { http: 5173 } },
     { name: 'api', kind: 'backend', state: 'healthy', mode: 'dev' },
-    { name: 'redis', kind: 'infra', state: 'stopped' },
+    { name: 'redis', kind: 'infra', state: 'stopped', sidecars: [{ name: 'RedisInsight', url: 'http://localhost:5540' }] },
   ],
   edges: [
     { from: 'web', to: 'api', kind: 'sync', detached: false, detachable: true },
@@ -36,6 +36,7 @@ describe('ServiceTable', () => {
     expect(getByText('http:5173')).toBeTruthy()
     expect(getByText('api', { selector: '.deps span' })).toBeTruthy()
     expect(getByRole('button', { name: 'Start redis' })).toBeTruthy()
+    expect(getByRole('link', { name: 'Open RedisInsight UI' })).toHaveAttribute('href', 'http://localhost:5540')
   })
 
   it('filters by resource metadata and reports an empty result', async () => {
@@ -72,5 +73,6 @@ describe('ServiceTable', () => {
     expect(getByRole('button', { name: 'Start redis' })).toBeDisabled()
     expect(queryByRole('button', { name: 'Open logs for api' })).toBeNull()
     expect(queryByRole('link', { name: 'Open web in browser' })).toBeNull()
+    expect(queryByRole('link', { name: 'Open RedisInsight UI' })).toBeNull()
   })
 })
