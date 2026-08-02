@@ -339,6 +339,7 @@ cd "$test_root"
 "$orbit_bin" status --json >"$test_root/status-outside-project.json"
 "$orbit_bin" status >"$test_root/status-outside-project.txt"
 "$orbit_bin" doctor --json >"$test_root/doctor-outside-project.json"
+"$orbit_bin" inspect --json >"$test_root/inspect-outside-project.json"
 "$orbit_bin" doctor >"$test_root/doctor-outside-project.txt"
 "$orbit_bin" logs app-b --json >"$test_root/logs-outside-project.json" 2>"$test_root/logs-outside-project.err"
 if [ ! -s "$test_root/logs-outside-project.json" ]; then
@@ -359,6 +360,7 @@ import sys
 root = pathlib.Path(sys.argv[1])
 status = json.loads((root / "status-outside-project.json").read_text(encoding="utf-8"))
 doctor = json.loads((root / "doctor-outside-project.json").read_text(encoding="utf-8"))
+inspect = json.loads((root / "inspect-outside-project.json").read_text(encoding="utf-8"))
 logs = json.loads((root / "logs-outside-project.json").read_text(encoding="utf-8"))
 explicit = json.loads((root / "explicit-managed-status.json").read_text(encoding="utf-8"))
 assert status["ok"] is True
@@ -392,7 +394,29 @@ assert "quickstart.yaml" not in json.dumps(logs)
 
 assert explicit["ok"] is False
 assert explicit["error"]["code"] == "env_mismatch"
+assert inspect["ok"] is True
+assert inspect["data"]["environment"]["context"]["kind"] == "project"
+assert pathlib.Path(inspect["data"]["environment"]["context"]["identity"]).resolve() == (root / "project-b" / "orbit.yaml").resolve()
 PY
+mv "$test_root/project-b/orbit.yaml" "$test_root/project-b/orbit.yaml.saved"
+"$orbit_bin" status --json >"$test_root/status-missing-project.json"
+curl --fail --silent --show-error \
+  "http://localhost:$ORBIT_DASHBOARD_PORT/api/envs" >"$test_root/envs-api-missing-project.json"
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+status = json.loads((root / "status-missing-project.json").read_text(encoding="utf-8"))
+envs = json.loads((root / "envs-api-missing-project.json").read_text(encoding="utf-8"))
+assert status["ok"] is True
+assert status["data"]["daemon"]["context"]["kind"] == "project"
+assert status["data"]["daemon"]["context"]["available"] is False
+assert envs["context"]["kind"] == "project"
+assert envs["context"]["available"] is False
+PY
+mv "$test_root/project-b/orbit.yaml.saved" "$test_root/project-b/orbit.yaml"
 "$orbit_bin" down --json >"$test_root/down-outside-project.json"
 cd "$test_root/project-a"
 "$orbit_bin" doctor --json >"$test_root/doctor-after-down.json"

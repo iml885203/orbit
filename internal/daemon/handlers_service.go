@@ -25,6 +25,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // and container, merging tracked orchestrator state with config-only
 // entries so stopped services still appear.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -200,6 +202,8 @@ func resourcePortConflict(svc *engine.ServiceInfo) *ResourcePortConflict {
 }
 
 func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -385,6 +389,8 @@ func (s *Server) resolveExplicitServices(services []string) ([]string, error) {
 }
 
 func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -566,6 +572,8 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}

@@ -63,12 +63,17 @@ func (e projectContextInactiveError) CLIJSONHint() string {
 func projectContextInactive(configPath, runningPath string) error {
 	currentName := projectContextName(configPath)
 	runningName := projectContextName(runningPath)
+	currentLabel, runningLabel := currentName, runningName
+	if currentName == runningName {
+		currentLabel = fmt.Sprintf("%s (%s)", currentName, configPath)
+		runningLabel = fmt.Sprintf("%s (%s)", runningName, runningPath)
+	}
 	return cli.WithJSONActions(projectContextInactiveError{
-		currentName: currentName,
-		runningName: runningName,
+		currentName: currentLabel,
+		runningName: runningLabel,
 	}, []cli.JSONAction{{
 		Command:     "orbit up --json",
-		Reason:      fmt.Sprintf("Stop %s and start %s.", runningName, currentName),
+		Reason:      fmt.Sprintf("Stop %s and start %s.", runningLabel, currentLabel),
 		Destructive: false,
 	}})
 }

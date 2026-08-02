@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -354,6 +355,42 @@ func TestBuildInspectDataIncludesPersistedProjectContext(t *testing.T) {
 		got.Environment.Context.ManagedSelection == nil ||
 		got.Environment.Context.ManagedSelection.Active {
 		t.Fatalf("context = %+v", got.Environment.Context)
+	}
+}
+
+func TestLocalInspectEnvironmentContextDistinguishesConfigKinds(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "payments", projectConfigName)
+	managed := filepath.Join(root, "envs", "e2e.yaml")
+	for _, path := range []string{project, managed} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selection := environmentSelection{ManagedSelection: &environmentChoice{Name: "e2e", Path: managed}}
+
+	configContextKind = "project"
+	configFile = project
+	projectContext := localInspectEnvironmentContext(project, selection)
+	configContextKind = "explicit"
+	configFile = project
+	explicitContext := localInspectEnvironmentContext(project, selection)
+	configContextKind = "managed"
+	configFile = managed
+	managedContext := localInspectEnvironmentContext(managed, selection)
+	t.Cleanup(func() { configContextKind = "" })
+
+	if projectContext.Kind != "project" || !sameFilePath(projectContext.ProjectRoot, filepath.Dir(project)) {
+		t.Fatalf("project context = %+v", projectContext)
+	}
+	if explicitContext.Kind != "explicit" || explicitContext.ProjectRoot != "" {
+		t.Fatalf("explicit context = %+v", explicitContext)
+	}
+	if managedContext.Kind != "managed" || managedContext.ManagedSelection == nil || !managedContext.ManagedSelection.Active {
+		t.Fatalf("managed context = %+v", managedContext)
 	}
 }
 

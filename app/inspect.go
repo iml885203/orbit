@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -59,6 +60,7 @@ type inspectDaemonSummary struct {
 
 type inspectEnvSummary struct {
 	State                 string                    `json:"state"`
+	Source                string                    `json:"source,omitempty"`
 	SelectedName          string                    `json:"selected_name,omitempty"`
 	SelectedPath          string                    `json:"selected_path,omitempty"`
 	Environments          []environmentChoice       `json:"environments"`
@@ -161,7 +163,7 @@ func (e inspectTargetError) CLIJSONReplacementActions() []cli.JSONAction {
 	}}
 }
 
-func runInspect(_ *cobra.Command, _ []string) error {
+func runInspect(cmd *cobra.Command, _ []string) error {
 	selection := readEnvironmentSelection()
 	cfg, cfgErr := config.Load(configFile)
 	client := daemon.NewClient(daemon.DefaultSocketPath())
@@ -193,6 +195,18 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
 			opts.Context = status.Context
+			if shouldResumeDetachedProject(cmd.Root().PersistentFlags().Changed("config"), configFile, status.ConfigPath, status.Context.Kind) {
+				configFile = status.ConfigPath
+				cfg, cfgErr = config.Load(configFile)
+				opts.ConfigPath = configFile
+				opts.ConfigErr = cfgErr
+				opts.ConfigEnvName = projectContextName(configFile)
+				opts.Selection = activeEnvironmentSelectionWithKind(selection, configFile, status.Context.Kind)
+				if cfg != nil {
+					opts.Configured = configuredInspectServices(cfg)
+					opts.ReadinessChecks = daemonsrv.DependencyReadinessChecks(cfg)
+				}
+			}
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
 				opts.Status = status
 				opts.ConfigMatchesDaemon = true
@@ -219,6 +233,9 @@ func runInspect(_ *cobra.Command, _ []string) error {
 			}
 		}
 	}
+	if opts.Context.Kind == "" && cfgErr == nil {
+		opts.Context = localInspectEnvironmentContext(configFile, opts.Selection)
+	}
 
 	data := buildInspectData(opts)
 	if cli.JSONOutput {
@@ -226,6 +243,33 @@ func runInspect(_ *cobra.Command, _ []string) error {
 	}
 	printInspectHuman(data)
 	return nil
+}
+
+func localInspectEnvironmentContext(configPath string, selection environmentSelection) daemon.EnvironmentContext {
+	identity := configPath
+	if absolute, err := filepath.Abs(identity); err == nil {
+		identity = absolute
+	}
+	if resolved, err := filepath.EvalSymlinks(identity); err == nil {
+		identity = resolved
+	}
+	kind := environmentContextKind(configPath)
+	context := daemon.EnvironmentContext{
+		Kind: kind, Identity: identity, ConfigPath: identity,
+		DisplayName: daemonsrv.EnvShortName(identity), Available: true, Running: false,
+	}
+	if kind == "project" {
+		context.DisplayName = projectContextName(identity)
+		context.ProjectRoot = filepath.Dir(identity)
+	}
+	if selection.ManagedSelection != nil {
+		context.ManagedSelection = &daemon.ManagedEnvironmentSelection{
+			Name:   selection.ManagedSelection.Name,
+			Path:   selection.ManagedSelection.Path,
+			Active: kind == "managed" && sameFilePath(selection.ManagedSelection.Path, identity),
+		}
+	}
+	return context
 }
 
 func alivePID(pid int, alive bool) int {
@@ -257,6 +301,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	}
 	environment := inspectEnvSummary{
 		State:        opts.Selection.State,
+		Source:       opts.Selection.Source,
 		SelectedName: opts.Selection.SelectedName,
 		SelectedPath: opts.Selection.SelectedPath,
 		Environments: opts.Selection.Environments,

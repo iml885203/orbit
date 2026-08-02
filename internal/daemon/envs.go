@@ -30,6 +30,8 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	s.environmentTransitionMu.RLock()
+	defer s.environmentTransitionMu.RUnlock()
 	current := s.ConfigPath()
 	context := s.environmentContext()
 	listRoot := current
@@ -66,8 +68,8 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
-	s.envSwitchMu.Lock()
-	defer s.envSwitchMu.Unlock()
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	var req EnvSwitchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})

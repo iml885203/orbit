@@ -108,7 +108,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			Destructive: false,
 		}})
 	}
-	if cfgErr != nil && daemonRunning {
+	if cfgErr != nil && daemonRunning && !dstatus.DetachedProject {
 		err := cli.NewInvalidEnvironmentError(
 			fmt.Sprintf("active environment is unavailable while the daemon is still running: %v", cfgErr),
 		)

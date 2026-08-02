@@ -32,11 +32,11 @@ type Server struct {
 	// (config_write.go), the sole acquirer of configWriteMu —
 	// Load→build→Store is a read-modify-write and unserialized writers
 	// would lose updates (e.g. a SQL restart rolling back an env switch).
-	holder        *config.Holder
-	configWriteMu sync.Mutex
-	envSwitchMu   sync.Mutex
-	background    sync.WaitGroup
-	settings      *Settings
+	holder                  *config.Holder
+	configWriteMu           sync.Mutex
+	environmentTransitionMu sync.RWMutex
+	background              sync.WaitGroup
+	settings                *Settings
 	// extHooks holds the registered feature seams (SSE event sources,
 	// daemon-exit hooks). Appended in NewServer and ListenAndServe's
 	// route setup — all before the listener serves — and read-only once
