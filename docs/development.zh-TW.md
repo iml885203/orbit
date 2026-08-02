@@ -16,9 +16,9 @@
 
 | 平台 | 支援程度 | 安裝方式 |
 |---|---|---|
-| macOS arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
-| Linux arm64 / amd64 | 正式支援 | `install.sh` 或手動下載 release |
-| Windows amd64 / arm64 | Beta | 原生 `install.ps1` 或手動下載 `.exe` |
+| macOS arm64 / amd64 | 正式支援 | Homebrew、`install.sh` 或手動下載 release |
+| Linux arm64 / amd64 | 正式支援 | Homebrew、`install.sh` 或手動下載 release |
+| Windows amd64 / arm64 | Beta | Scoop、原生 `install.ps1` 或手動下載 `.exe` |
 
 使用 container 的環境在 macOS 與 Windows 需要 Docker Desktop，在 Linux
 需要 Docker Engine。每個環境也可能宣告額外的 host runtime；`orbit doctor`
@@ -46,6 +46,11 @@ Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
 orbit update
 ```
 
+透過 package manager 安裝的 Orbit 仍由原本的 package manager 管理。
+`orbit update` 不會修改其 binary，而會回報明確指令：
+`brew upgrade orbit` 或 `scoop update orbit`。`orbit update --rollback`
+也不會直接修改 package manager 管理的 binary。
+
 `orbit update` 會替換目前真正執行的 binary，即使 `PATH` 前面還有另一套
 Orbit。若環境正在執行，指令會用新 binary 重新連接，並恢復更新前正在跑的
 resources；正常更新不需要再執行 daemon 指令或第二次 `orbit up`。
@@ -60,7 +65,8 @@ resource mutation 會先暫停，避免跨版本操作。請依照它顯示的�
 每次 upgrade 會把前一版 binary 保留在 `<path>.prev`（例如 `~/.local/bin/orbit.prev`）。
 Installer 會先驗證 checksum 與下載 binary 回報的版本，確認成功後才碰目前
 安裝；替換檔會放在 target 同一個 filesystem，再用 atomic rename 安裝。
-除非明確允許 downgrade，否則不會用舊版覆蓋較新的版本。
+除非明確允許 downgrade，否則不會用舊版覆蓋較新的版本。若已安裝版本與
+release 相同，installer 會成功結束，且不替換 binary 或改動 `.prev` backup。
 
 ### Rollback
 

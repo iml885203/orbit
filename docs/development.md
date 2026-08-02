@@ -17,9 +17,9 @@ test current source, follow [Testing unreleased main](#testing-unreleased-main).
 
 | Platform | Support | Installation |
 |---|---|---|
-| macOS arm64 / amd64 | Supported | `install.sh` or manual release download |
-| Linux arm64 / amd64 | Supported | `install.sh` or manual release download |
-| Windows amd64 / arm64 | Beta | Native `install.ps1` or manual `.exe` download |
+| macOS arm64 / amd64 | Supported | Homebrew, `install.sh`, or manual release download |
+| Linux arm64 / amd64 | Supported | Homebrew, `install.sh`, or manual release download |
+| Windows amd64 / arm64 | Beta | Scoop, native `install.ps1`, or manual `.exe` download |
 
 Container-based environments require Docker Desktop on macOS and Windows, or
 Docker Engine on Linux. Every environment may declare additional host runtimes;
@@ -52,6 +52,11 @@ binary's distribution config provides an install URL:
 orbit update
 ```
 
+Package-manager installations remain owned by their package manager. For
+those installations, `orbit update` leaves the binary unchanged and reports
+the exact command to run: `brew upgrade orbit` or `scoop update orbit`.
+`orbit update --rollback` likewise refuses to modify a package-managed binary.
+
 `orbit update` replaces the binary that is actually running, even when another
 Orbit installation appears earlier on `PATH`. If an environment is running,
 the command reconnects it with the new binary and restores exactly the
@@ -71,7 +76,9 @@ Each upgrade keeps the previous binary at `<path>.prev` (e.g. `~/.local/bin/orbi
 The installer verifies the checksum and the downloaded binary's reported
 version before touching the current install. Replacement is staged beside the
 target for an atomic rename. It refuses to replace a newer installed version
-unless the downgrade is explicit.
+unless the downgrade is explicit. When the installed and released versions
+match, the installer exits successfully without replacing the binary or
+changing its `.prev` backup.
 
 ### Rollback
 

@@ -93,14 +93,27 @@ documented in [Configuration](docs/configuration.md).
 
 ## Install
 
-macOS and Linux:
+macOS or Linux with Homebrew:
+
+```bash
+brew install iml885203/tap/orbit
+```
+
+Windows with Scoop (Beta):
+
+```powershell
+scoop bucket add iml885203 https://github.com/iml885203/scoop-bucket
+scoop install orbit
+```
+
+Or use the direct verified installer on macOS and Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windows (PowerShell, Beta):
+Windows PowerShell (Beta):
 
 ```powershell
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex

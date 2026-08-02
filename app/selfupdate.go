@@ -25,6 +25,44 @@ type selfUpdateJSONData struct {
 	RestoredResources             []string `json:"restored_resources"`
 }
 
+type managedInstallError struct {
+	manager string
+	command string
+}
+
+type managedRollbackError struct {
+	manager string
+}
+
+func (e managedRollbackError) Error() string {
+	return fmt.Sprintf("Orbit rollback is managed by %s", e.manager)
+}
+
+func (e managedRollbackError) ErrorCode() string { return "package_managed_rollback" }
+
+func (e managedRollbackError) CLIJSONHint() string {
+	return "Select and install the required version with the package manager; Orbit cannot modify package-owned binaries."
+}
+
+func (e managedInstallError) Error() string {
+	return fmt.Sprintf("Orbit was installed with %s", e.manager)
+}
+
+func (e managedInstallError) ErrorCode() string { return "package_managed_install" }
+
+func (e managedInstallError) CLIJSONHint() string {
+	return "Update Orbit with the package manager that installed it."
+}
+
+func (e managedInstallError) CLIHumanNextCommand() string { return e.command }
+
+func (e managedInstallError) CLIJSONReplacementActions() []cli.JSONAction {
+	return []cli.JSONAction{{
+		Command: e.command,
+		Reason:  "Update Orbit with the package manager that owns this installation.",
+	}}
+}
+
 // resolveInstallURL picks ORBIT_INSTALL_URL env > the distribution
 // default ("" in an unbranded build — update then refuses with a
 // configuration hint).
@@ -54,6 +92,13 @@ func selfUpdateCmd() *cobra.Command {
 }
 
 func runSelfUpdate(ctx context.Context) error {
+	exe, err := currentBinaryPath()
+	if err != nil {
+		return fmt.Errorf("resolve current binary: %w", err)
+	}
+	if managed := packageManagerForBinary(exe, runtime.GOOS); managed != nil {
+		return *managed
+	}
 	if runtime.GOOS == "windows" {
 		return fmt.Errorf(
 			"Windows Beta limitation: automatic update is not supported yet; " +
@@ -63,10 +108,6 @@ func runSelfUpdate(ctx context.Context) error {
 	installURL := resolveInstallURL()
 	if installURL == "" {
 		return fmt.Errorf("this build has no install URL configured; set ORBIT_INSTALL_URL to your install script")
-	}
-	exe, err := currentBinaryPath()
-	if err != nil {
-		return fmt.Errorf("resolve current binary: %w", err)
 	}
 	activeConfig, daemonWasRunning, err := updateHandoffContext()
 	if err != nil {
@@ -137,6 +178,9 @@ func runRollback() error {
 	if err != nil {
 		return fmt.Errorf("resolve current binary: %w", err)
 	}
+	if managed := packageManagerForBinary(exe, runtime.GOOS); managed != nil {
+		return managedRollbackError{manager: managed.manager}
+	}
 	prev := exe + ".prev"
 	if _, err := os.Stat(prev); err != nil {
 		if os.IsNotExist(err) {
@@ -176,6 +220,17 @@ func runRollback() error {
 	}
 	if cli.JSONOutput {
 		return writeSelfUpdateJSON("rollback", exe, failed, restartResult)
+	}
+	return nil
+}
+
+func packageManagerForBinary(executable, goos string) *managedInstallError {
+	normalized := strings.ToLower(strings.ReplaceAll(filepath.ToSlash(executable), `\`, "/"))
+	if goos == "windows" && strings.Contains(normalized, "/apps/orbit/") {
+		return &managedInstallError{manager: "Scoop", command: "scoop update orbit"}
+	}
+	if goos != "windows" && strings.Contains(normalized, "/cellar/orbit/") {
+		return &managedInstallError{manager: "Homebrew", command: "brew upgrade orbit"}
 	}
 	return nil
 }

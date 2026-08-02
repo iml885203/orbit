@@ -1,0 +1,52 @@
+name: Sync Scoop
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Released semantic version tag
+        required: true
+        type: string
+    secrets:
+      SCOOP_BUCKET_TOKEN:
+        description: Fine-grained token for the scoop-bucket Actions API
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released semantic version tag to verify
+        required: true
+        type: string
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/sync-package-repository
+        with:
+          repository: iml885203/scoop-bucket
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          version: ${{ inputs.version }}
+      - name: Verify the manifest
+        env:
+          GH_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          manifest=$(gh api repos/iml885203/scoop-bucket/contents/bucket/orbit.json \
+            --jq .content | base64 --decode)
+          manifest_version=$(jq -r .version <<<"$manifest")
+          [ "v$manifest_version" = "$VERSION" ] || {
+            echo "Scoop manifest is v$manifest_version, expected $VERSION" >&2
+            exit 1
+          }
+          for asset in orbit-windows-amd64.exe orbit-windows-arm64.exe; do
+            jq -e --arg suffix "releases/download/${VERSION}/${asset}" \
+              '.. | strings | select(endswith($suffix))' <<<"$manifest" >/dev/null || {
+              echo "Scoop manifest does not reference ${asset} from $VERSION" >&2
+              exit 1
+            }
+          done
+          echo "Scoop manifest updated to $VERSION" >> "$GITHUB_STEP_SUMMARY"
