@@ -167,11 +167,10 @@ func (s *Store) SnapshotRefreshed(db string, source Source) error {
 // declareBaseline marks the database's CURRENT contents as its clean
 // baseline. Single owner of the invariant: declaring a baseline absorbs
 // any recorded delta above the old one (mirrors Reset semantics), so
-// LastApply and ResetPending clear together with the timestamp move.
+// LastApply clears together with the timestamp move.
 func declareBaseline(cur *DBState, at time.Time, source Source) {
 	cur.BaselineAt = &Event{At: at, Source: source}
 	cur.LastApply = nil
-	cur.ResetPending = false
 }
 
 // Apply records a successful apply on db. Other fields untouched.
@@ -185,8 +184,7 @@ func (s *Store) Apply(db string, source Source, durationMs int64) error {
 	return s.commitLocked()
 }
 
-// Reset records a successful reset: clears LastApply and ResetPending,
-// updates LastReset.
+// Reset records a successful reset: clears LastApply, updates LastReset.
 func (s *Store) Reset(db string, source Source, durationMs int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -194,35 +192,6 @@ func (s *Store) Reset(db string, source Source, durationMs int64) error {
 	cur.Name = db
 	cur.LastReset = &Event{At: time.Now(), Source: source, DurationMs: durationMs}
 	cur.LastApply = nil
-	cur.ResetPending = false
-	cur.ResetError = ""
-	s.dbs[db] = cur
-	return s.commitLocked()
-}
-
-// Build records the outcome of a build's post-build reset on a single db.
-// If resetOK, semantics match Reset; otherwise LastBuild is still written
-// (the image is new) but LastApply is preserved and ResetPending is set.
-func (s *Store) Build(db, project string, source Source, durationMs int64, resetOK bool, resetErr string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cur := s.dbs[db]
-	cur.Name = db
-	cur.LastBuild = &BuildEvent{
-		At:         time.Now(),
-		Source:     source,
-		DurationMs: durationMs,
-		Project:    project,
-	}
-	if resetOK {
-		cur.LastApply = nil
-		cur.ResetPending = false
-		cur.ResetError = ""
-		cur.LastReset = &Event{At: time.Now(), Source: source, DurationMs: durationMs}
-	} else {
-		cur.ResetPending = true
-		cur.ResetError = resetErr
-	}
 	s.dbs[db] = cur
 	return s.commitLocked()
 }

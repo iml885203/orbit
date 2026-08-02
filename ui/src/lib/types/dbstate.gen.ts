@@ -21,21 +21,6 @@ export interface Event {
   durationMs?: number /* int64 */;
 }
 /**
- * BuildEvent extends Event with the project that produced the image
- * baseline this db mirrors. Build is the only kind that doesn't 1:1
- * correspond to a db name on the CLI surface.
- * Fields are duplicated rather than embedded because tygo emits embedded
- * fields as a nested object (BuildEvent { Event: Event }), whereas Go's
- * encoding/json flattens them — the wire shape then disagrees with the
- * generated TS type. Flattening on the Go side keeps both ends consistent.
- */
-export interface BuildEvent {
-  at: string;
-  source: Source;
-  durationMs?: number /* int64 */;
-  project: string;
-}
-/**
  * DBState is the most-recent snapshot of one database's lifecycle.
  * Fields requiring a held Store.mu for read are documented below.
  */
@@ -54,13 +39,6 @@ export interface DBState {
    */
   baselineAt?: Event;
   lastReset?: Event;
-  lastBuild?: BuildEvent;
-  /**
-   * ResetPending: build's image step succeeded but the post-build
-   * reset for this db failed. Cleared on next successful Reset.
-   */
-  resetPending?: boolean;
-  resetError?: string;
 }
 /**
  * Snapshot is the wire shape returned by GET /api/db-state and pushed

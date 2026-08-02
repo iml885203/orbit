@@ -100,7 +100,7 @@ and destructive-operation rules. Deeper references live in the repository's
 
 ## Safety
 
-- Ask before `orbit sqlserver reset` or `orbit sqlserver publish --force`; these may discard
+- Ask before `orbit sqlserver reset` or `orbit sqlserver publish --allow-data-loss`; these may discard
   local data.
 - Treat `orbit switch` as destructive when resources are running: it stops
   them. Never pass `--yes` on the user's behalf without their intent.

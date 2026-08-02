@@ -20,21 +20,6 @@ type Event struct {
 	DurationMs int64     `json:"durationMs,omitempty"`
 }
 
-// BuildEvent extends Event with the project that produced the image
-// baseline this db mirrors. Build is the only kind that doesn't 1:1
-// correspond to a db name on the CLI surface.
-//
-// Fields are duplicated rather than embedded because tygo emits embedded
-// fields as a nested object (BuildEvent { Event: Event }), whereas Go's
-// encoding/json flattens them — the wire shape then disagrees with the
-// generated TS type. Flattening on the Go side keeps both ends consistent.
-type BuildEvent struct {
-	At         time.Time `json:"at"`
-	Source     Source    `json:"source"`
-	DurationMs int64     `json:"durationMs,omitempty"`
-	Project    string    `json:"project"`
-}
-
 // DBState is the most-recent snapshot of one database's lifecycle.
 // Fields requiring a held Store.mu for read are documented below.
 type DBState struct {
@@ -49,30 +34,17 @@ type DBState struct {
 	// BaselineAt records when reset's internal clean state was refreshed.
 	BaselineAt *Event `json:"baselineAt,omitempty"`
 
-	LastReset *Event      `json:"lastReset,omitempty"`
-	LastBuild *BuildEvent `json:"lastBuild,omitempty"`
-
-	// ResetPending: build's image step succeeded but the post-build
-	// reset for this db failed. Cleared on next successful Reset.
-	ResetPending bool   `json:"resetPending,omitempty"`
-	ResetError   string `json:"resetError,omitempty"`
+	LastReset *Event `json:"lastReset,omitempty"`
 }
 
 // DerivedState collapses the event log into a display state and reason:
-// reset_pending (a post-build reset failed — needs attention) beats
 // modified (a local apply sits on top of the baseline) beats baseline.
-// Single owner of this precedence for Go consumers. (The UI dropped its
-// dbBadge mirror when apply/reset retired; the fields survive for
-// version-skew history only.)
+// Single owner of this precedence for Go consumers.
 func (d DBState) DerivedState() (state, reason string) {
-	switch {
-	case d.ResetPending:
-		return "reset_pending", d.ResetError
-	case d.LastApply != nil:
+	if d.LastApply != nil {
 		return "modified", ""
-	default:
-		return "baseline", ""
 	}
+	return "baseline", ""
 }
 
 // Snapshot is the wire shape returned by GET /api/db-state and pushed

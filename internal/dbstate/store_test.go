@@ -33,44 +33,6 @@ func TestStore_ApplyThenReset_ClearsLastApply(t *testing.T) {
 	}
 }
 
-func TestStore_BuildWithResetFailure_PreservesLastApply(t *testing.T) {
-	s, err := New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = s.Apply("AppDB", SourceCLI, 100)
-	_ = s.Build("AppDB", "dbproject.development", SourceUI, 600_000, false, "container not running")
-
-	snap := s.Snapshot()
-	got := snap.DBs["AppDB"]
-	if got.LastApply == nil {
-		t.Error("failed reset must preserve LastApply")
-	}
-	if got.LastBuild == nil || got.LastBuild.Project != "dbproject.development" {
-		t.Error("LastBuild must still be written when image step succeeded")
-	}
-	if !got.ResetPending || got.ResetError == "" {
-		t.Error("ResetPending must be set with ResetError when reset fails")
-	}
-}
-
-func TestStore_BuildWithResetSuccess_ClearsLastApply(t *testing.T) {
-	s, err := New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = s.Apply("AppDB", SourceCLI, 100)
-	_ = s.Build("AppDB", "dbproject.development", SourceUI, 600_000, true, "")
-
-	got := s.Snapshot().DBs["AppDB"]
-	if got.LastApply != nil {
-		t.Error("successful Build must clear LastApply")
-	}
-	if got.ResetPending {
-		t.Error("successful Build must clear ResetPending")
-	}
-}
-
 func TestStore_PersistAndReload(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := New(dir)

@@ -22,8 +22,8 @@ func (f *dbFeature) dbResources(_ context.Context) []daemon.ResourceSnapshot {
 }
 
 // snapshotDatabases derives a per-database state from the dbstate event
-// log: baseline (matches the image), modified (a local apply sits on top),
-// or reset_pending (a post-build reset failed and needs attention).
+// log: baseline (matches the published schema) or modified (a local apply
+// sits on top).
 func snapshotDatabases(snap dbstate.Snapshot, parent string) []daemon.ResourceSnapshot {
 	out := make([]daemon.ResourceSnapshot, 0, len(snap.DBs))
 	for name, db := range snap.DBs {
@@ -34,9 +34,6 @@ func snapshotDatabases(snap dbstate.Snapshot, parent string) []daemon.ResourceSn
 		}
 		if db.LastReset != nil {
 			props["last_reset"] = fmt.Sprintf("%s (%s)", db.LastReset.At.Format(time.RFC3339), db.LastReset.Source)
-		}
-		if db.LastBuild != nil {
-			props["last_build"] = fmt.Sprintf("%s (%s)", db.LastBuild.At.Format(time.RFC3339), db.LastBuild.Project)
 		}
 		out = append(out, daemon.ResourceSnapshot{
 			Name:        name,

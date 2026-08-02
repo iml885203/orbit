@@ -86,11 +86,11 @@ orbit sqlserver publish <dbname>
 You're narrowing a column, dropping a table, or similar. Either accept the loss:
 
 ```bash
-orbit sqlserver publish <dbname> --force     # shows scope and asks for confirmation
+orbit sqlserver publish <dbname> --allow-data-loss     # shows scope and asks for confirmation
 ```
 
 or refactor the change in smaller steps. For an already reviewed
-non-interactive run, use `--force --yes`. To discard local data and apply the
+non-interactive run, use `--allow-data-loss --yes`. To discard local data and apply the
 latest schema, run `orbit sqlserver reset <dbname>`.
 
 ### My SP disappeared after restarting the configured SQL Server target

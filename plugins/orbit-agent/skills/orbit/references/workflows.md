@@ -81,11 +81,11 @@ schema impact. Use `orbit sqlserver publish <database|project> --json` (or
 data remain blocked. Ask before:
 
 - `orbit sqlserver reset`
-- `orbit sqlserver publish --force`
+- `orbit sqlserver publish --allow-data-loss`
 
 State the database target and expected data impact in the confirmation. A
 forced publish requested with `--json` does not run; its envelope returns one
-`destructive: true` manual command that preserves `--force` and the selected
+`destructive: true` manual command that preserves `--allow-data-loss` and the selected
 scope. Execute that exact command only after approval; Orbit asks for
 confirmation again before publishing.
 

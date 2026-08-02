@@ -51,12 +51,12 @@ build`) and publishes the dacpac straight to the configured target's published
 port with the host `sqlpackage` — no image rebuild, no
 container-side tooling, native arm64 on Apple Silicon. It is idempotent:
 an unchanged project converges to a no-op in seconds, and data is always
-preserved (destructive changes are blocked unless `--force`).
+preserved (destructive changes are blocked unless `--allow-data-loss`).
 
 Agents and scripts can use `orbit sqlserver publish <db> --json` for this
 ordinary path. Success returns an `orbit.cli.v1` envelope naming every
 published database. A forced publish never runs in JSON mode: the error
-envelope preserves the selected scope and `--force` as a
+envelope preserves the selected scope and `--allow-data-loss` as a
 `destructive: true` manual action, without `--yes`, so a person still sees the
 confirmation prompt.
 
@@ -64,9 +64,9 @@ The database schema converges to the project: adding, changing, or deleting a
 stored procedure, table, or other project object produces the corresponding
 create, alter, or drop. Drops that could lose data are reported by
 `orbit sqlserver diff`
-and blocked by publish until the user explicitly passes `--force`. A forced
+and blocked by publish until the user explicitly passes `--allow-data-loss`. A forced
 publish shows every affected database and asks for confirmation; use
-`--force --yes` only after reviewing the impact when running non-interactively.
+`--allow-data-loss --yes` only after reviewing the impact when running non-interactively.
 
 Requirements (checked by `orbit doctor`): the .NET SDK and sqlpackage on
 the host — `dotnet tool install -g microsoft.sqlpackage`.

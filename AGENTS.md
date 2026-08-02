@@ -14,7 +14,7 @@ This file is agent-specific guidance. Project conventions live in [docs/CODE_CON
 
 ### Ask first
 - Editing `~/.orbit/settings.json` directly — use the UI/CLI path instead.
-- Destructive ops: `docker volume rm`, `orbit sqlserver reset` (returns one DB to a clean latest-schema state, discarding local data changes), `orbit sqlserver publish --force` (allows data-loss schema changes). The former image-build flow and container-side apply have been removed; publish/reset run entirely on the host.
+- Destructive ops: `docker volume rm`, `orbit sqlserver reset` (returns one DB to a clean latest-schema state, discarding local data changes), `orbit sqlserver publish --allow-data-loss` (allows data-loss schema changes). The former image-build flow and container-side apply have been removed; publish/reset run entirely on the host.
 
 ### Never
 - `git push --force`, `git commit --no-verify`.

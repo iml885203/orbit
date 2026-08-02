@@ -32,7 +32,7 @@ func dbPublishCmd() *cobra.Command {
 		Long: `Build the SQL project on the host and publish the dacpac straight to the
 configured SQL Server target — no image rebuild, no container-side tooling.
 Idempotent: an unchanged project converges to a no-op in seconds. Data is
-preserved; destructive changes are blocked unless --force.
+preserved; destructive changes are blocked unless --allow-data-loss.
 
 The argument may be a database name or a project name (both appear in
 ` + "`orbit sqlserver list`" + `); a project publishes each of its databases.
@@ -54,17 +54,19 @@ host dotnet SDK and sqlpackage
 		},
 		RunE: runDBPublish,
 	}
-	cmd.Flags().BoolVar(&publishForce, "force", false, "allow schema changes that can permanently delete data")
+	cmd.Flags().BoolVar(&publishForce, "allow-data-loss", false, "allow schema changes that can permanently delete data")
+	cmd.Flags().BoolVar(&publishForce, "force", false, "deprecated alias for --allow-data-loss")
+	_ = cmd.Flags().MarkHidden("force")
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
-	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --force without prompting")
+	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --allow-data-loss without prompting")
 	return cmd
 }
 
 func runDBPublish(_ *cobra.Command, args []string) error {
 	if publishYes && !publishForce {
-		return fmt.Errorf("--yes requires --force")
+		return fmt.Errorf("--yes requires --allow-data-loss")
 	}
 	// Input validation outranks the destructive-command recommendation: a
 	// malformed argument is a plain input error in every output mode, decided
@@ -176,7 +178,7 @@ func dbPublishCommand(args []string, jsonOutput, includeYes bool) string {
 		parts = append(parts, fmt.Sprintf("--parallel=%d", publishParallel))
 	}
 	if publishForce {
-		parts = append(parts, "--force")
+		parts = append(parts, "--allow-data-loss")
 	}
 	if includeYes && publishYes {
 		parts = append(parts, "--yes")
@@ -377,7 +379,7 @@ func publishOne(client *daemon.Client, opts sqlpublish.Opts, baselineOnCreate bo
 	if !res.OK {
 		postDBStateEvent(client, "publish", dbName, dbstate.SourceCLI, "error", res.DurationMs, res.Err.Error())
 		if res.Code == sqlpublish.CodePublishBlockedDataLoss {
-			return fmt.Errorf("publish blocked: possible data loss — rerun with --force to override: %w", res.Err)
+			return fmt.Errorf("publish blocked: possible data loss — rerun with --allow-data-loss to override: %w", res.Err)
 		}
 		return res.Err
 	}

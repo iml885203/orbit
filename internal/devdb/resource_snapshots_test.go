@@ -11,9 +11,8 @@ import (
 func TestSnapshotDatabases_DerivesStates(t *testing.T) {
 	at := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
 	snap := dbstate.Snapshot{DBs: map[string]dbstate.DBState{
-		"CatalogDB":   {Name: "CatalogDB"},
-		"OrdersDB":    {Name: "OrdersDB", LastApply: &dbstate.Event{At: at, Source: "cli"}},
-		"InventoryDB": {Name: "InventoryDB", ResetPending: true, ResetError: "sql-server not ready"},
+		"CatalogDB": {Name: "CatalogDB"},
+		"OrdersDB":  {Name: "OrdersDB", LastApply: &dbstate.Event{At: at, Source: "cli"}},
 	}}
 
 	states := map[string]daemon.ResourceSnapshot{}
@@ -28,8 +27,5 @@ func TestSnapshotDatabases_DerivesStates(t *testing.T) {
 	}
 	if states["OrdersDB"].State != "modified" || states["OrdersDB"].Properties["last_apply"] == "" {
 		t.Errorf("OrdersDB snapshot wrong: %+v", states["OrdersDB"])
-	}
-	if states["InventoryDB"].State != "reset_pending" || states["InventoryDB"].StateReason != "sql-server not ready" {
-		t.Errorf("InventoryDB snapshot wrong: %+v", states["InventoryDB"])
 	}
 }

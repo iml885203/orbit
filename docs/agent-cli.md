@@ -178,7 +178,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
 | `orbit uninstall --json` | Previews binary artifacts and whether user data is preserved; `--yes` is required before removal. |
-| `orbit sqlserver publish <database|project> --json` | Runs the ordinary data-preserving publish and returns `databases`, `published`, and `data_loss_allowed: false`. `--all` and `--parallel` use the same envelope. `--force --json` never publishes; it returns one manual `destructive: true` action that preserves the scope and `--force` but removes `--yes` so a person still confirms. |
+| `orbit sqlserver publish <database|project> --json` | Runs the ordinary data-preserving publish and returns `databases`, `published`, and `data_loss_allowed: false`. `--all` and `--parallel` use the same envelope. `--allow-data-loss --json` never publishes; it returns one manual `destructive: true` action that preserves the scope and `--allow-data-loss` but removes `--yes` so a person still confirms. |
 | `orbit sqlserver list --json` | Returns the configured SQL projects and their databases in `data`. |
 | `orbit sqlserver diff --json` | Returns per-database drift in the envelope; `--script` adds the change script to `data`. |
 | `orbit sqlserver reset --json` | Never resets: refuses with the stable `json_unsupported_destructive_command` error so data loss stays a human decision. |

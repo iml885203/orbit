@@ -87,7 +87,7 @@ func TestForcedPublishJSONPreservesDestructiveIntentForManualApproval(t *testing
 		t.Fatalf("actions = %+v", got.RecommendedActions)
 	}
 	action := got.RecommendedActions[0]
-	if action.Command != "orbit sqlserver publish --all --parallel=4 --force" || !action.Destructive {
+	if action.Command != "orbit sqlserver publish --all --parallel=4 --allow-data-loss" || !action.Destructive {
 		t.Fatalf("manual replacement = %+v", action)
 	}
 }
