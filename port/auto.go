@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/iml885203/orbit/config"
 )
@@ -24,6 +25,7 @@ type autoPortSpec struct {
 	runtimeName     string
 	label           string
 	preferred       int
+	current         int
 	target          int
 	existing        ExistingContainerPort
 	apply           func(int)
@@ -60,6 +62,58 @@ func ResolveAutoPorts(cfg *config.Config, existing ExistingContainerPort, runtim
 				Actual:    actual,
 			})
 		}
+	}
+	return resolutions, nil
+}
+
+// RefreshStaleAutoPorts re-selects only the auto ports whose selected host
+// port can no longer be bound and whose owning resource is inactive — the
+// `preferred:` contract promises relocation at any start, not only at the
+// first resolution. Active resources are often the listener on their own
+// ports, so their selections are kept and reserved; a refreshed selection
+// can never steal them. Fixed ports keep their hard-conflict semantics.
+func RefreshStaleAutoPorts(cfg *config.Config, active func(resource string) bool, runtimeReserved ...int) ([]AutoResolution, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+	reserved := fixedPorts(cfg, runtimeReserved)
+	specs := autoPortSpecs(cfg, nil)
+	sort.Slice(specs, func(i, j int) bool {
+		if specs[i].resource != specs[j].resource {
+			return specs[i].resource < specs[j].resource
+		}
+		return specs[i].label < specs[j].label
+	})
+
+	var stale []autoPortSpec
+	for _, spec := range specs {
+		// Sidecar specs are named "parent/sidecar"; activity belongs to
+		// the parent resource that carries them.
+		owner, _, _ := strings.Cut(spec.resource, "/")
+		if active(owner) || Available(spec.current) {
+			reserved[spec.current] = true
+			continue
+		}
+		stale = append(stale, spec)
+	}
+	var resolutions []AutoResolution
+	for _, spec := range stale {
+		actual, err := resolveAutoPort(spec, reserved)
+		if err != nil {
+			return resolutions, err
+		}
+		reserved[actual] = true
+		if actual == spec.current {
+			continue
+		}
+		spec.apply(actual)
+		spec.updateReadiness(spec.current, actual)
+		resolutions = append(resolutions, AutoResolution{
+			Resource:  spec.resource,
+			Label:     spec.label,
+			Preferred: spec.current,
+			Actual:    actual,
+		})
 	}
 	return resolutions, nil
 }
@@ -137,6 +191,7 @@ func autoPortSpecs(cfg *config.Config, existing ExistingContainerPort) []autoPor
 				runtimeName: name,
 				label:       label,
 				preferred:   definition.PreferredHost(),
+				current:     definition.Host,
 				target:      definition.Target,
 				existing:    existing,
 				apply: func(actual int) {
@@ -161,6 +216,7 @@ func autoPortSpecs(cfg *config.Config, existing ExistingContainerPort) []autoPor
 					runtimeName: name + "-" + sidecar.Name,
 					label:       label,
 					preferred:   definition.PreferredHost(),
+					current:     definition.Host,
 					target:      definition.Target,
 					existing:    existing,
 					apply: func(actual int) {
@@ -183,6 +239,7 @@ func autoPortSpecs(cfg *config.Config, existing ExistingContainerPort) []autoPor
 				resource:  name,
 				label:     label,
 				preferred: definition.PreferredHost(),
+				current:   definition.Host,
 				target:    definition.Target,
 				apply: func(actual int) {
 					next := service.Ports[label]

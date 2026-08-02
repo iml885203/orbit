@@ -211,6 +211,8 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshStaleAutoPorts()
+
 	if req.InfraOnly {
 		containerNames := sortedKeys(s.holder.Load().Containers)
 		s.app.StartServices(containerNames)

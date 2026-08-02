@@ -181,10 +181,11 @@ type e2eStatus struct {
 		Version string `json:"version,omitempty"`
 	} `json:"daemon"`
 	Resources []struct {
-		Name                 string `json:"name"`
-		Kind                 string `json:"kind"`
-		State                string `json:"state"`
-		ExternalRestartCount int    `json:"external_restart_count"`
+		Name                 string         `json:"name"`
+		Kind                 string         `json:"kind"`
+		State                string         `json:"state"`
+		ExternalRestartCount int            `json:"external_restart_count"`
+		Ports                map[string]int `json:"ports"`
 	} `json:"resources"`
 }
 
@@ -2940,6 +2941,62 @@ func TestE2E_UpJSONFailureCarriesResourceEvidence(t *testing.T) {
 	if !strings.Contains(strings.Join(failed.LogTail, "\n"), "boom-evidence") {
 		t.Fatalf("log_tail = %v, want the service's own output", failed.LogTail)
 	}
+}
+
+// Covers: a preferred port grabbed by another process while the daemon is
+// alive relocates on the next `orbit up` instead of failing with a port
+// conflict — the `preferred:` contract holds at every start, not only at
+// daemon boot.
+func TestE2E_UpReselectsPreferredPortTakenWhileDaemonAlive(t *testing.T) {
+	env := setupE2E(t)
+	fixture := "version: \"3\"\n" +
+		"services:\n" +
+		"  api:\n" +
+		"    type: shell\n" +
+		"    path: /tmp\n" +
+		"    command: python3 -m http.server \"$PORT\"\n" +
+		"    ports:\n" +
+		"      http:\n" +
+		"        preferred: 29471\n"
+	if err := os.WriteFile(env.envYaml, []byte(fixture), 0o644); err != nil {
+		t.Fatalf("write fixture env: %v", err)
+	}
+
+	env.run(t, "up", "--json")
+	firstPort := env.resourcePort(t, "api", "http")
+
+	env.run(t, "down", "--json")
+	squatter, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", firstPort))
+	if err != nil {
+		t.Fatalf("occupy port %d: %v", firstPort, err)
+	}
+	defer squatter.Close()
+
+	output, err := env.runNoFail(t, "up", "--json")
+	if err != nil {
+		t.Fatalf("up did not relocate the taken preferred port: %v\n%s", err, output)
+	}
+	secondPort := env.resourcePort(t, "api", "http")
+	if secondPort == firstPort {
+		t.Fatalf("api still on %d after the port was taken", firstPort)
+	}
+	if state := env.serviceState(t, "api"); state != "healthy" {
+		t.Fatalf("api state = %s after relocation, want healthy", state)
+	}
+}
+
+func (e *e2eEnv) resourcePort(t *testing.T, name, label string) int {
+	t.Helper()
+	for _, resource := range e.status(t).Resources {
+		if resource.Name == name {
+			if port, ok := resource.Ports[label]; ok {
+				return port
+			}
+			t.Fatalf("%s has no port labeled %q: %+v", name, label, resource.Ports)
+		}
+	}
+	t.Fatalf("no resource named %q in status", name)
+	return 0
 }
 
 // findOrbitBinary mirrors setupE2E's binary discovery without the docker skip

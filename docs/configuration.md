@@ -259,6 +259,11 @@ receives the conventional `PORT` variable. `orbit status` and
 `orbit open <service>` always use the selected runtime port. A managed
 container keeps the same selected port across daemon restarts.
 
+Selection holds at every start, not only at daemon startup: when another
+process takes a stopped resource's selected port, the next `orbit up`
+relocates that resource instead of failing with a conflict. Running
+resources never move, and an available selection is never reshuffled.
+
 A simple number or `"host:target"` string remains fixed. Environment
 substitution also works inside `preferred` and `target` when a team wants to
 override the preference without changing the file.

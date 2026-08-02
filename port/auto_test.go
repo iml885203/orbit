@@ -107,6 +107,94 @@ containers:
 	}
 }
 
+func TestRefreshStaleAutoPortsMovesOnlyStaleInactivePorts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "env.yaml")
+	source := `version: "3"
+containers:
+  cache:
+    image: redis:7.4-alpine
+    ports:
+      redis: "26379:6379"
+services:
+  api:
+    type: python
+    path: .
+    command: python3 app.py
+    url: http://localhost:28080
+    ports:
+      http:
+        preferred: 28080
+    health_check:
+      type: http
+      path: /health
+      port: 28080
+  worker:
+    type: python
+    path: .
+    command: python3 worker.py
+    ports:
+      http:
+        preferred: 28180
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveAutoPorts(cfg, nil); err != nil {
+		t.Fatal(err)
+	}
+	apiPort := cfg.Services["api"].Ports["http"].Host
+	workerPort := cfg.Services["worker"].Ports["http"].Host
+
+	apiListener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", apiPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer apiListener.Close()
+	workerListener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", workerPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workerListener.Close()
+
+	resolutions, err := RefreshStaleAutoPorts(cfg, func(name string) bool { return name == "worker" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolutions) != 1 || resolutions[0].Resource != "api" {
+		t.Fatalf("resolutions = %+v, want only the stale inactive api port", resolutions)
+	}
+	moved := cfg.Services["api"].Ports["http"].Host
+	if moved == apiPort || moved == workerPort || moved == 26379 {
+		t.Fatalf("api moved to %d (was %d, worker %d)", moved, apiPort, workerPort)
+	}
+	if cfg.Services["api"].HealthCheck.Port != moved {
+		t.Fatalf("api health port = %d, want %d", cfg.Services["api"].HealthCheck.Port, moved)
+	}
+	if cfg.Services["api"].URL != fmt.Sprintf("http://localhost:%d", moved) {
+		t.Fatalf("api URL = %q", cfg.Services["api"].URL)
+	}
+	if cfg.Services["worker"].Ports["http"].Host != workerPort {
+		t.Fatalf("active worker port moved to %d", cfg.Services["worker"].Ports["http"].Host)
+	}
+
+	_ = apiListener.Close()
+	_ = workerListener.Close()
+	stable, err := RefreshStaleAutoPorts(cfg, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stable) != 0 {
+		t.Fatalf("resolutions = %+v, want none when every selection is still bindable", stable)
+	}
+	if cfg.Services["api"].Ports["http"].Host != moved {
+		t.Fatalf("available selection moved from %d to %d", moved, cfg.Services["api"].Ports["http"].Host)
+	}
+}
+
 func listenOnAvailablePort(t *testing.T) net.Listener {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
