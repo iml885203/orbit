@@ -32,6 +32,7 @@ type environmentSelection struct {
 	RunningName           string                    `json:"running_name,omitempty"`
 	RunningPath           string                    `json:"running_path,omitempty"`
 	ManagedSource         *envsync.RepositorySource `json:"managed_source,omitempty"`
+	ManagedSelection      *environmentChoice        `json:"managed_selection,omitempty"`
 	Environments          []environmentChoice       `json:"environments"`
 }
 
@@ -119,13 +120,35 @@ func readEnvironmentSelection() environmentSelection {
 func sameFilePath(left, right string) bool {
 	leftAbs, leftErr := filepath.Abs(left)
 	rightAbs, rightErr := filepath.Abs(right)
-	return leftErr == nil && rightErr == nil && filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	if resolved, err := filepath.EvalSymlinks(leftAbs); err == nil {
+		leftAbs = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(rightAbs); err == nil {
+		rightAbs = resolved
+	}
+	return filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
 }
 
 func activeEnvironmentSelection(selection environmentSelection, configPath string) environmentSelection {
-	if isProjectConfigPath(configPath) {
+	return activeEnvironmentSelectionWithKind(selection, configPath, environmentContextKind(configPath))
+}
+
+func activeEnvironmentSelectionWithKind(selection environmentSelection, configPath, contextKind string) environmentSelection {
+	if contextKind == "" {
+		contextKind = environmentContextKind(configPath)
+	}
+	if contextKind == "project" || contextKind == "explicit" {
+		if selection.SelectedPath != "" {
+			selection.ManagedSelection = &environmentChoice{
+				Name: selection.SelectedName,
+				Path: selection.SelectedPath,
+			}
+		}
 		selection.State = environmentSelectionSelected
-		selection.Source = "project"
+		selection.Source = contextKind
 		selection.SelectedName = projectContextName(configPath)
 		selection.SelectedPath = configPath
 		selection.ManagedSource = nil

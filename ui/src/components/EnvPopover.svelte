@@ -42,6 +42,23 @@
       <button class="close" onclick={close} aria-label="Close">×</button>
     </div>
     <div class="hint">Select an environment to preview it safely.</div>
+    {#if store.daemon.envs?.context}
+      {@const context = store.daemon.envs.context}
+      <section class="context" aria-label="Active environment context">
+        <div class="context-title">
+          <strong>{context.display_name}</strong>
+          <span class="context-kind">{context.kind === 'project' ? 'Project environment' : context.kind === 'explicit' ? 'Explicit config' : 'Managed environment'}</span>
+          {#if !context.available}<span class="unavailable" role="status">Unavailable</span>{/if}
+        </div>
+        <div class="path" title={context.config_path}>{context.config_path}</div>
+        {#if context.project_root}
+          <div class="metadata"><span>Project root</span><code>{context.project_root}</code></div>
+        {/if}
+        {#if context.managed_selection && !context.managed_selection.active}
+          <div class="metadata"><span>Managed selection</span><code>{context.managed_selection.name}</code><em>not active</em></div>
+        {/if}
+      </section>
+    {/if}
     <ul>
       {#each store.daemon.envs?.envs ?? [] as env (env.path)}
         {@const short = envShortName(env.name)}
@@ -111,6 +128,41 @@
     color: var(--dim);
     margin-bottom: var(--space-2);
   }
+  .context {
+    margin-bottom: var(--space-2);
+    padding: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--border));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--blue) 6%, transparent);
+  }
+  .context-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .context-kind, .unavailable {
+    color: var(--blue);
+    font-size: var(--text-xs);
+  }
+  .unavailable { color: var(--red); }
+  .path {
+    margin-top: var(--space-1);
+    color: var(--dim);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .metadata {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+    color: var(--dim);
+    font-size: var(--text-xs);
+  }
+  .metadata code { color: var(--fg); }
+  .metadata em { margin-left: auto; color: var(--yellow); font-style: normal; }
   ul {
     list-style: none;
     margin: 0;

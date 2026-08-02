@@ -22,6 +22,15 @@ describe('EnvSwitcher', () => {
     store.daemon.logModal = { target: null, loading: false }
     store.daemon.envs = {
       running: 0,
+      context: {
+        kind: 'managed',
+        identity: '/envs/development.yaml',
+        display_name: 'development',
+        config_path: '/envs/development.yaml',
+        available: true,
+        running: false,
+        managed_selection: { name: 'development', path: '/envs/development.yaml', active: true },
+      },
       envs: [
         { name: 'development.yaml', path: '/envs/development.yaml', current: true },
         { name: 'example.yaml', path: '/envs/example.yaml', current: false },

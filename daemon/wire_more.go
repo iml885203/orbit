@@ -52,9 +52,10 @@ type EnvInfo struct {
 
 // EnvsResponse is returned by GET /api/envs.
 type EnvsResponse struct {
-	Current string    `json:"current,omitempty"`
-	Running int       `json:"running"` // count of non-stopped services
-	Envs    []EnvInfo `json:"envs"`
+	Current string             `json:"current,omitempty"`
+	Running int                `json:"running"` // count of non-stopped services
+	Envs    []EnvInfo          `json:"envs"`
+	Context EnvironmentContext `json:"context"`
 }
 
 type EnvironmentReconcileResponse struct {

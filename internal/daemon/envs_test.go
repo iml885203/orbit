@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,69 @@ import (
 
 	"github.com/iml885203/orbit/config"
 )
+
+func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	home := OrbitDir()
+	managedDir := filepath.Join(home, "envs")
+	if err := os.MkdirAll(managedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	managed := filepath.Join(managedDir, "development.yaml")
+	projectRoot := filepath.Join(t.TempDir(), "payments")
+	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(projectRoot, "orbit.yaml")
+	for _, path := range []string{managed, project} {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	managed = canonicalEnvironmentPath(managed)
+	project = canonicalEnvironmentPath(project)
+	projectRoot = filepath.Dir(project)
+	if err := os.WriteFile(CurrentEnvPath(), []byte(managed+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	srv.SetConfigPath(project)
+	srv.SetEnvironmentContextKind("project")
+	req := httptest.NewRequest(http.MethodGet, "/api/envs", nil)
+	w := httptest.NewRecorder()
+	srv.handleEnvs(w, req)
+
+	var response EnvsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Context.Kind != "project" ||
+		response.Context.Identity != project ||
+		response.Context.ProjectRoot != projectRoot ||
+		response.Context.DisplayName != "payments" {
+		t.Fatalf("context = %+v", response.Context)
+	}
+	if response.Context.ManagedSelection == nil ||
+		response.Context.ManagedSelection.Path != managed ||
+		response.Context.ManagedSelection.Active {
+		t.Fatalf("managed selection = %+v", response.Context.ManagedSelection)
+	}
+	if len(response.Envs) != 1 || response.Envs[0].Path != managed || response.Envs[0].Current {
+		t.Fatalf("managed environments = %+v", response.Envs)
+	}
+}
+
+func TestEnvironmentContextMarksMissingProjectUnavailable(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	missing := filepath.Join(t.TempDir(), "removed", "orbit.yaml")
+	srv.SetConfigPath(missing)
+	srv.SetEnvironmentContextKind("project")
+
+	context := srv.environmentContext()
+	if context.Available || context.Kind != "project" || context.ConfigPath != missing {
+		t.Fatalf("context = %+v", context)
+	}
+}
 
 func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 	tmp := t.TempDir()
@@ -147,6 +211,9 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(current)
+	if err := os.WriteFile(CurrentEnvPath(), []byte(current+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
 	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target"}`))
 	w := httptest.NewRecorder()
@@ -163,6 +230,41 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 	}
 	if stale, reason := srv.configStale(); stale {
 		t.Fatalf("rolled-back server stayed stale: %s", reason)
+	}
+}
+
+func TestHandleEnvSwitchFromProjectRestoresManagedSelectionOnLaunchFailure(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	envsDir := filepath.Join(OrbitDir(), "envs")
+	if err := os.MkdirAll(envsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	managed := filepath.Join(envsDir, "managed.yaml")
+	project := filepath.Join(t.TempDir(), "orbit.yaml")
+	for _, path := range []string{managed, project} {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(CurrentEnvPath(), []byte(managed+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv.SetConfigPath(project)
+	srv.SetEnvironmentContextKind("project")
+	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
+
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"managed"}`))
+	w := httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500, body=%s", w.Code, w.Body.String())
+	}
+	if selected := canonicalEnvironmentPath(ReadCurrentEnv()); selected != canonicalEnvironmentPath(managed) {
+		t.Fatalf("managed selection = %q, want %q", selected, managed)
+	}
+	if srv.ConfigPath() != project || srv.EnvironmentContextKind() != "project" {
+		t.Fatalf("project context changed: path=%q kind=%q", srv.ConfigPath(), srv.EnvironmentContextKind())
 	}
 }
 

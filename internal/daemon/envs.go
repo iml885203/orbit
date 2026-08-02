@@ -31,15 +31,20 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := s.ConfigPath()
-	dir := filepath.Dir(current)
-	resp := EnvsResponse{Current: current, Envs: []EnvInfo{}}
+	context := s.environmentContext()
+	listRoot := current
+	if context.ManagedSelection != nil {
+		listRoot = context.ManagedSelection.Path
+	}
+	dir := filepath.Dir(listRoot)
+	resp := EnvsResponse{Current: current, Envs: []EnvInfo{}, Context: context}
 
 	for _, name := range ListEnvYamls(dir) {
 		full := filepath.Join(dir, name)
 		info := EnvInfo{
 			Name:    name,
 			Path:    full,
-			Current: full == current,
+			Current: context.Kind == "managed" && canonicalEnvironmentPath(full) == context.ConfigPath,
 		}
 		resp.Envs = append(resp.Envs, info)
 	}
@@ -72,7 +77,11 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(target, ".yaml") {
 			target += ".yaml"
 		}
-		target = filepath.Join(filepath.Dir(s.ConfigPath()), target)
+		selectionRoot := s.ConfigPath()
+		if selection := s.environmentContext().ManagedSelection; selection != nil {
+			selectionRoot = selection.Path
+		}
+		target = filepath.Join(filepath.Dir(selectionRoot), target)
 	}
 	if _, err := os.Stat(target); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "env not found: " + req.Env})
@@ -89,6 +98,8 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	previousPath := s.ConfigPath()
+	previousSelection := ReadCurrentEnv()
+	previousContextKind := s.EnvironmentContextKind()
 	previousCfg := s.holder.Load()
 
 	// Stop everything before swapping config — including containers.
@@ -126,12 +137,13 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
+	s.SetEnvironmentContextKind("managed")
 
 	if err := s.restartLauncher(target); err != nil {
 		s.UpdateConfig(func(tx extension.ConfigTx) error {
@@ -139,7 +151,8 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 			tx.SetConfigPath(previousPath)
 			return nil
 		})
-		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
+		s.SetEnvironmentContextKind(previousContextKind)
+		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "schedule daemon restart: " + err.Error()})
@@ -154,6 +167,17 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		msg = "Stopped " + strconv.Itoa(stopped) + " running items from the previous environment. " + msg
 	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: msg})
+}
+
+func restoreManagedSelection(path string) error {
+	if path == "" {
+		err := os.Remove(CurrentEnvPath())
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return atomicio.WriteFile(CurrentEnvPath(), []byte(path+"\n"), 0644)
 }
 
 // runningCount returns how many services or containers are currently

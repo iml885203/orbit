@@ -12,6 +12,8 @@ type (
 	UpRequest                    = pub.UpRequest
 	DownRequest                  = pub.DownRequest
 	StatusResponse               = pub.StatusResponse
+	EnvironmentContext           = pub.EnvironmentContext
+	ManagedEnvironmentSelection  = pub.ManagedEnvironmentSelection
 	ResourceKind                 = pub.ResourceKind
 	SidecarInfo                  = pub.SidecarInfo
 	ResourceStatus               = pub.ResourceStatus

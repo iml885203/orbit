@@ -216,6 +216,10 @@ func IsDaemonRunning() (int, bool) {
 // ~/.orbit/daemon.log since the fork, so the user does not have to
 // `cat` the log to see why.
 func EnsureDaemon(configPath string, features []string) (*Client, error) {
+	return EnsureDaemonWithContext(configPath, features, "")
+}
+
+func EnsureDaemonWithContext(configPath string, features []string, contextKind string) (*Client, error) {
 	if pid, alive := IsDaemonRunning(); alive {
 		// Verify we can actually connect
 		client := NewClient(DefaultSocketPath())
@@ -255,7 +259,7 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 	// lines written by *this* attempt on failure.
 	logOffset := daemonLogSize()
 
-	pid, err := StartDaemon(configPath, features)
+	pid, err := StartDaemonWithContext(configPath, features, contextKind)
 	if err != nil {
 		return nil, fmt.Errorf("starting daemon: %w", err)
 	}
@@ -312,6 +316,10 @@ func waitForProcessExit(pid int, timeout time.Duration) bool {
 // StartDaemon forks a new daemon process in a new session. Returns the
 // child PID so callers can poll for early exit while waiting for ready.
 func StartDaemon(configPath string, features []string) (int, error) {
+	return StartDaemonWithContext(configPath, features, "")
+}
+
+func StartDaemonWithContext(configPath string, features []string, contextKind string) (int, error) {
 	// Respect explicitly pinned ports, while allowing the default setup to
 	// coexist with another Orbit instance without user configuration. The
 	// child validates the selected port again after the close/fork gap.
@@ -336,6 +344,9 @@ func StartDaemon(configPath string, features []string) (int, error) {
 	}
 
 	args := []string{"daemon", "run", "--config", configPath}
+	if contextKind != "" {
+		args = append(args, "--context-kind", contextKind)
+	}
 	for _, f := range features {
 		args = append(args, "--feature", f)
 	}

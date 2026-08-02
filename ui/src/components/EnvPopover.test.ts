@@ -30,11 +30,41 @@ describe('EnvPopover', () => {
     store.graph.preview = null
     store.daemon.envs = {
       running: 0,
+      context: {
+        kind: 'managed',
+        identity: '/envs/development.yaml',
+        display_name: 'development',
+        config_path: '/envs/development.yaml',
+        available: true,
+        running: false,
+        managed_selection: { name: 'development', path: '/envs/development.yaml', active: true },
+      },
       envs: [
         { name: 'development.yaml', path: '/envs/development.yaml', current: true },
         { name: 'example.yaml', path: '/envs/example.yaml', current: false },
       ],
     }
+  })
+
+  it('shows project provenance and the inactive managed selection', () => {
+    if (!store.daemon.envs) throw new Error('env fixture missing')
+    store.daemon.envs.context = {
+      kind: 'project',
+      identity: '/work/payments/orbit.yaml',
+      display_name: 'payments',
+      config_path: '/work/payments/orbit.yaml',
+      project_root: '/work/payments',
+      available: true,
+      running: true,
+      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+    }
+
+    render(EnvPopover)
+
+    expect(screen.getByText('Project environment')).toBeInTheDocument()
+    expect(screen.getByText('/work/payments/orbit.yaml')).toBeInTheDocument()
+    expect(screen.getByText('/work/payments')).toBeInTheDocument()
+    expect(screen.getByText('not active')).toBeInTheDocument()
   })
 
   it('previews another environment and returns to Services', async () => {

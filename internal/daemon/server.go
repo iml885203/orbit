@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,13 +43,14 @@ type Server struct {
 	// extensions are the registered feature sets; DaemonSetup runs in
 	// ListenAndServe's route setup. resourceContributors is append-only
 	// during that setup, read-only once serving.
-	extensions           []extension.Extension
-	resourceContributors []ResourceContributor
-	settingsPUTHooks     []SettingsPUTHook
-	doctorContributors   []func() []DoctorCheck
-	configPath           string
-	baseline             configBaseline
-	pathMu               sync.RWMutex // guards configPath and baseline (the config itself lives in holder)
+	extensions             []extension.Extension
+	resourceContributors   []ResourceContributor
+	settingsPUTHooks       []SettingsPUTHook
+	doctorContributors     []func() []DoctorCheck
+	configPath             string
+	environmentContextKind string
+	baseline               configBaseline
+	pathMu                 sync.RWMutex // guards configPath, environmentContextKind, and baseline
 	// engineStale closes the handoff window after an API env switch publishes
 	// new config but before the replacement daemon rebuilds the service graph.
 	engineStale atomic.Bool
@@ -390,6 +392,77 @@ func (s *Server) ConfigPath() string {
 	s.pathMu.RLock()
 	defer s.pathMu.RUnlock()
 	return s.configPath
+}
+
+func (s *Server) SetEnvironmentContextKind(kind string) {
+	s.pathMu.Lock()
+	s.environmentContextKind = kind
+	s.pathMu.Unlock()
+}
+
+func (s *Server) EnvironmentContextKind() string {
+	s.pathMu.RLock()
+	defer s.pathMu.RUnlock()
+	return s.environmentContextKind
+}
+
+func (s *Server) environmentContext() EnvironmentContext {
+	s.pathMu.RLock()
+	configPath := s.configPath
+	kind := s.environmentContextKind
+	s.pathMu.RUnlock()
+
+	configPath = canonicalEnvironmentPath(configPath)
+	selectedPath := canonicalEnvironmentPath(ReadCurrentEnv())
+	if kind == "" {
+		if selectedPath != "" && selectedPath == configPath {
+			kind = "managed"
+		} else {
+			kind = "explicit"
+		}
+	}
+	displayName := EnvShortName(configPath)
+	projectRoot := ""
+	if kind == "project" {
+		projectRoot = filepath.Dir(configPath)
+		displayName = filepath.Base(projectRoot)
+	}
+	context := EnvironmentContext{
+		Kind:        kind,
+		Identity:    configPath,
+		DisplayName: displayName,
+		ConfigPath:  configPath,
+		ProjectRoot: projectRoot,
+		Available:   configFileAvailable(configPath),
+		Running:     s.runningCount() > 0,
+	}
+	if selectedPath != "" {
+		context.ManagedSelection = &ManagedEnvironmentSelection{
+			Name:   EnvShortName(selectedPath),
+			Path:   selectedPath,
+			Active: kind == "managed" && selectedPath == configPath,
+		}
+	}
+	return context
+}
+
+func canonicalEnvironmentPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(path); err == nil {
+		path = absolute
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return filepath.Clean(path)
+}
+
+func configFileAvailable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func (s *Server) BaseContext() context.Context {

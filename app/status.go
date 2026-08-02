@@ -40,12 +40,14 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
+			dstatus.Context = status.Context
 			if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath) {
 				configFile = status.ConfigPath
 				cfg, cfgErr = config.Load(configFile)
 				dstatus.DetachedProject = true
 				dstatus.ConfigPath = status.ConfigPath
 				dstatus.RunningEnvironment = projectContextName(status.ConfigPath)
+				dstatus.Context = status.Context
 			}
 			if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
 				if !usesDiscoveredProjectConfig(configFile) {
@@ -61,6 +63,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 				}
 				dstatus.ConfigStale = status.ConfigStale
 				dstatus.ConfigStaleReason = status.ConfigStaleReason
+				dstatus.Context = status.Context
 			}
 		}
 		if v, err := currentDaemonVersion(client); err == nil {
@@ -71,7 +74,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	setup := statusSetupState{Selection: activeEnvironmentSelection(selection, configFile)}
+	setup := statusSetupState{Selection: activeEnvironmentSelectionWithKind(selection, configFile, dstatus.Context.Kind)}
 	if dstatus.ContextMismatch {
 		setup.Selection.ContextSwitchRequired = true
 		setup.Selection.RunningName = dstatus.RunningEnvironment
@@ -509,17 +512,18 @@ type jsonService struct {
 }
 
 type daemonStatus struct {
-	Running            bool   `json:"running"`
-	Version            string `json:"version,omitempty"`
-	OnDisk             string `json:"on_disk,omitempty"`
-	OnDiskPath         string `json:"on_disk_path,omitempty"`
-	UpdateAvailable    bool   `json:"update_available"`
-	ConfigPath         string `json:"config_path,omitempty"`
-	RunningEnvironment string `json:"running_environment,omitempty"`
-	ContextMismatch    bool   `json:"context_mismatch,omitempty"`
-	DetachedProject    bool   `json:"detached_project,omitempty"`
-	ConfigStale        bool   `json:"config_stale,omitempty"`
-	ConfigStaleReason  string `json:"config_stale_reason,omitempty"`
+	Running            bool                      `json:"running"`
+	Version            string                    `json:"version,omitempty"`
+	OnDisk             string                    `json:"on_disk,omitempty"`
+	OnDiskPath         string                    `json:"on_disk_path,omitempty"`
+	UpdateAvailable    bool                      `json:"update_available"`
+	ConfigPath         string                    `json:"config_path,omitempty"`
+	RunningEnvironment string                    `json:"running_environment,omitempty"`
+	ContextMismatch    bool                      `json:"context_mismatch,omitempty"`
+	DetachedProject    bool                      `json:"detached_project,omitempty"`
+	ConfigStale        bool                      `json:"config_stale,omitempty"`
+	ConfigStaleReason  string                    `json:"config_stale_reason,omitempty"`
+	Context            daemon.EnvironmentContext `json:"context,omitempty"`
 }
 
 func writeStatusJSON(

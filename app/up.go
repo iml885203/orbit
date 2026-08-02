@@ -66,14 +66,19 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	contextSwitch, err := switchDiscoveredProjectContext()
 	if err != nil {
+		if errors.Is(err, errProjectContextSwitchDeclined) {
+			fmt.Println("Aborted.")
+			return nil
+		}
 		return err
 	}
+	printProjectEnvironmentContext()
 
 	if cli.JSONOutput {
 		return runUpJSON(args, contextSwitch)
 	}
 
-	client, err := daemon.EnsureDaemon(configFile, groups)
+	client, err := daemon.EnsureDaemonWithContext(configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
@@ -134,7 +139,7 @@ func validateUpSelection(args []string) error {
 }
 
 func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
-	client, err := daemon.EnsureDaemon(configFile, groups)
+	client, err := daemon.EnsureDaemonWithContext(configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return renderDaemonStartError(err)
 	}

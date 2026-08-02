@@ -45,6 +45,7 @@ type lifecycleJSONData struct {
 	TimedOutResources  []string                         `json:"timed_out_resources"`
 	ContextSwitch      *projectContextSwitch            `json:"context_switch,omitempty"`
 	EnvironmentChanges *lifecycleEnvironmentChangesJSON `json:"environment_changes,omitempty"`
+	Context            *daemon.EnvironmentContext       `json:"context,omitempty"`
 }
 
 func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
@@ -75,7 +76,7 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 			}
 		}
 	}
-	return lifecycleJSONData{
+	result := lifecycleJSONData{
 		Operation:          opts.Operation,
 		Message:            opts.Message,
 		RequestedResources: requestedResources,
@@ -86,6 +87,10 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 		ContextSwitch:      opts.ContextSwitch,
 		EnvironmentChanges: opts.EnvironmentChanges,
 	}
+	if opts.FinalStatus != nil {
+		result.Context = &opts.FinalStatus.Context
+	}
+	return result
 }
 
 func lifecycleDownImpacts(status *daemon.StatusResponse, stopped []string) []string {

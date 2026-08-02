@@ -87,6 +87,7 @@ export interface StatusResponse {
    * local config with daemon state.
    */
   config_path: string;
+  context: EnvironmentContext;
   /**
    * ConfigStale means the loaded config has fallen behind reality (env
    * file edited, selection changed, or an API env switch left the
@@ -94,6 +95,21 @@ export interface StatusResponse {
    */
   config_stale?: boolean;
   config_stale_reason?: string;
+}
+export interface EnvironmentContext {
+  kind: string;
+  identity: string;
+  display_name: string;
+  config_path: string;
+  project_root?: string;
+  available: boolean;
+  running: boolean;
+  managed_selection?: ManagedEnvironmentSelection;
+}
+export interface ManagedEnvironmentSelection {
+  name: string;
+  path: string;
+  active: boolean;
 }
 /**
  * ResourceKind identifies how Orbit runs a resource.
@@ -272,6 +288,7 @@ export interface EnvsResponse {
   current?: string;
   running: number /* int */; // count of non-stopped services
   envs: EnvInfo[];
+  context: EnvironmentContext;
 }
 export interface EnvironmentReconcileResponse {
   ok?: boolean;

@@ -193,6 +193,7 @@ func runInspect(_ *cobra.Command, _ []string) error {
 			if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {
 				opts.Status = status
 				opts.ConfigMatchesDaemon = true
+				opts.Selection = activeEnvironmentSelectionWithKind(selection, status.ConfigPath, status.Context.Kind)
 			} else if usesDiscoveredProjectConfig(configFile) {
 				opts.ContextMismatch = true
 				opts.RunningPath = status.ConfigPath

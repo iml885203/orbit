@@ -39,8 +39,10 @@ type envInfoJSONData struct {
 }
 
 type envInfoIdentity struct {
-	Name       string `json:"name"`
-	ConfigPath string `json:"config_path"`
+	Name        string `json:"name"`
+	ConfigPath  string `json:"config_path"`
+	Source      string `json:"source"`
+	ProjectRoot string `json:"project_root,omitempty"`
 }
 
 type envInfoDaemon struct {
@@ -121,10 +123,17 @@ func buildEnvInfoJSONData(
 	}
 	data := envInfoJSONData{
 		Operation:  "env_info",
-		Env:        envInfoIdentity{Name: daemonsrv.EnvShortName(abs), ConfigPath: abs},
+		Env:        envInfoIdentity{Name: daemonsrv.EnvShortName(abs), ConfigPath: abs, Source: environmentContextKind(abs)},
 		Daemon:     daemonInfo,
 		Containers: map[string]envInfoResource{},
 		Services:   map[string]envInfoResource{},
+	}
+	if status != nil && status.Context.Kind != "" {
+		data.Env.Source = status.Context.Kind
+		data.Env.ProjectRoot = status.Context.ProjectRoot
+	} else if data.Env.Source == "project" {
+		data.Env.Name = projectContextName(abs)
+		data.Env.ProjectRoot = filepath.Dir(abs)
 	}
 	for name, container := range cfg.Containers {
 		data.Containers[name] = buildEnvInfoResource(
@@ -194,6 +203,10 @@ func envInfoActions(daemonInfo envInfoDaemon) []cli.JSONAction {
 
 func printEnvInfoHuman(data envInfoJSONData) {
 	fmt.Printf("Environment: %s (%s)\n", data.Env.Name, data.Env.ConfigPath)
+	fmt.Printf("Source: %s\n", data.Env.Source)
+	if data.Env.ProjectRoot != "" {
+		fmt.Printf("Project root: %s\n", data.Env.ProjectRoot)
+	}
 	switch {
 	case data.Daemon.Running && data.Daemon.ConfigMatch:
 		fmt.Println("Daemon: running, serving this environment")

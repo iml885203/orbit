@@ -65,7 +65,9 @@ You can move directly to another project that has its own `orbit.yaml`.
 resources into the current project, and `orbit doctor` checks whether the
 current project is ready. Run `orbit up` to switch projects: Orbit validates
 the new project first, stops the previous resources, and starts the current
-ones. Commands such as `down`, `logs`, and `open` never control resources that
+ones. When the previous project has running resources, Orbit names both
+projects and asks before stopping them; scripts use `orbit up --yes`.
+Commands such as `down`, `logs`, and `open` never control resources that
 belong to the other project.
 
 At this point the whole mental model is:

@@ -24,15 +24,16 @@ import (
 )
 
 var (
-	configFile string
-	groups     []string
-	timeout    time.Duration
-	infraOnly  bool
-	logLines   int
-	follow     bool
-	cliHistID  string
-	cliHistAt  time.Time
-	cliHistCmd string
+	configFile        string
+	groups            []string
+	timeout           time.Duration
+	infraOnly         bool
+	logLines          int
+	follow            bool
+	cliHistID         string
+	cliHistAt         time.Time
+	cliHistCmd        string
+	daemonContextKind string
 )
 
 // extensions holds the feature sets injected by Main — consumed by the
@@ -594,6 +595,7 @@ Resource names, --infra, and --group are separate selection modes and cannot be 
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "start only infrastructure containers")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "exit after duration (e.g. 60s)")
+	cmd.Flags().BoolVarP(&projectContextYes, "yes", "y", false, "confirm stopping resources from another context")
 	return cmd
 }
 
@@ -667,6 +669,8 @@ func daemonCmd() *cobra.Command {
 		RunE:   runDaemon,
 	}
 	runCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
+	runCmd.Flags().StringVar(&daemonContextKind, "context-kind", "", "environment context kind")
+	_ = runCmd.Flags().MarkHidden("context-kind")
 
 	startCmd := &cobra.Command{
 		Use:   "start",
@@ -689,6 +693,8 @@ func daemonCmd() *cobra.Command {
 		RunE:  runDaemonRestart,
 	}
 	restartCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
+	restartCmd.Flags().StringVar(&daemonContextKind, "context-kind", "", "environment context kind")
+	_ = restartCmd.Flags().MarkHidden("context-kind")
 	restartCmd.Flags().DurationVar(&daemonRestartDelay, "handoff-delay", 0, "delay restart for dashboard handoff")
 	_ = restartCmd.Flags().MarkHidden("handoff-delay")
 

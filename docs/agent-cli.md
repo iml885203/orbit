@@ -220,6 +220,13 @@ precedence over a managed environment selected elsewhere. Agents should use
 the reported source and path rather than infer the active config from
 `~/.orbit/envs`.
 
+Daemon-backed responses also expose `context`: `kind`, canonical
+`identity` and `config_path`, `display_name`, availability, running
+state, and (for projects) `project_root`. A managed selection overridden by
+a project remains present under `managed_selection` with `active: false`.
+An explicit `-c <path>` has kind `explicit`, even when its basename is
+`orbit.yaml`.
+
 If another project-local environment is running, status remains successful and
 describes only the current project's configured resources. It sets
 `data.environment.context_switch_required: true`, reports `running_name` and
@@ -229,7 +236,10 @@ during that switch. Operational commands that could control the other
 project's resources fail with `project_context_inactive`; agents should follow
 its sole `orbit up --json` action. A successful switch reports
 `data.context_switch` in the `up` result, including both project names and the
-resources stopped before startup.
+resources stopped before startup. When resources are running, non-interactive
+and JSON switches without `--yes` fail with `confirmation_required` and
+the exact `orbit up --yes --json` action. The target is validated before
+that confirmation and no resource is stopped on refusal.
 Inspect follows the same ownership boundary and never reports the other
 project's resources or dashboard as belonging to the current project.
 

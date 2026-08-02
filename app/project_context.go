@@ -8,6 +8,7 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 )
 
 type projectContextSwitch struct {
@@ -16,6 +17,19 @@ type projectContextSwitch struct {
 	ToName           string   `json:"to_name"`
 	ToPath           string   `json:"to_path"`
 	StoppedResources []string `json:"stopped_resources"`
+}
+
+var projectContextYes bool
+var errProjectContextSwitchDeclined = errors.New("project context switch declined")
+
+func environmentContextKind(configPath string) string {
+	if usesDiscoveredProjectConfig(configPath) {
+		return "project"
+	}
+	if selected := readCurrentEnv(); selected != "" && sameFilePath(selected, configPath) {
+		return "managed"
+	}
+	return "explicit"
 }
 
 type projectContextInactiveError struct {
@@ -81,6 +95,34 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 		ToPath:           configFile,
 		StoppedResources: runningEnvironmentResources(status.Resources),
 	}
+	if len(switched.StoppedResources) > 0 && !projectContextYes {
+		summary := fmt.Sprintf(
+			"Switching from %s to %s stops %d running resource(s): %s.",
+			switched.FromName,
+			switched.ToName,
+			len(switched.StoppedResources),
+			strings.Join(switched.StoppedResources, ", "),
+		)
+		if cli.JSONOutput || !cli.CanPrompt() {
+			nextCommand := commandString()
+			if strings.HasSuffix(nextCommand, " --json") {
+				nextCommand = strings.TrimSuffix(nextCommand, " --json") + " --yes --json"
+			} else {
+				nextCommand += " --yes"
+			}
+			return nil, cli.WithJSONReplacementActions(
+				cli.NewConfirmationRequiredError(summary+" Rerun with --yes to confirm."),
+				[]cli.JSONAction{{
+					Command:     nextCommand,
+					Reason:      "Confirm stopping the running resources before switching contexts.",
+					Destructive: true,
+				}},
+			)
+		}
+		if !cli.Confirm(summary + " Continue?") {
+			return nil, errProjectContextSwitchDeclined
+		}
+	}
 	if !cli.JSONOutput {
 		if len(switched.StoppedResources) == 0 {
 			fmt.Printf("Switching from %s to %s...\n", switched.FromName, switched.ToName)
@@ -97,6 +139,21 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 		return nil, fmt.Errorf("stopping %s before project switch: %w", switched.FromName, err)
 	}
 	return switched, nil
+}
+
+func printProjectEnvironmentContext() {
+	if cli.JSONOutput || !usesDiscoveredProjectConfig(configFile) {
+		return
+	}
+	fmt.Printf("Using project environment: %s\n", projectContextName(configFile))
+	fmt.Printf("Config:       %s\n", configFile)
+	fmt.Printf("Project root: %s\n", filepath.Dir(configFile))
+	if selected := readCurrentEnv(); selected != "" && !sameFilePath(selected, configFile) {
+		fmt.Printf(
+			"Managed environment %s remains selected but is not active.\n",
+			daemonsrv.EnvShortName(selected),
+		)
+	}
 }
 
 func projectContextName(configPath string) string {

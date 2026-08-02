@@ -34,6 +34,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Epoch:             s.epoch(),
 		Resources:         statuses,
 		ConfigPath:        s.ConfigPath(),
+		Context:           s.environmentContext(),
 		ConfigStale:       stale,
 		ConfigStaleReason: staleReason,
 	}
