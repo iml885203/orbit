@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
 func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T) {
@@ -352,6 +353,10 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 	}
 	if stale, reason := srv.configStale(); stale {
 		t.Fatalf("rolled-back server stayed stale: %s", reason)
+	}
+	info, ok := srv.app.Orchestrator.GetServiceInfo("redis")
+	if !ok || info.State != engine.StatePending {
+		t.Fatalf("redis state after rollback = %+v, want pending running intent", info)
 	}
 }
 
