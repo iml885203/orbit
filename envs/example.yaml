@@ -4,15 +4,12 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis:
-        preferred: 26379
-        target: 6379
+      redis: "26379:6379"
 
 services:
   app:
     kind: frontend
     command: python3 -m http.server "$PORT"
     ports:
-      http:
-        preferred: 28080
+      http: 28080
     depends_on: [redis]

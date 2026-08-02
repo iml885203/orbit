@@ -332,9 +332,6 @@ func detectPortConflicts(cfg *Config) []string {
 
 	register := func(name string, ports map[string]PortDef) {
 		for label, pd := range ports {
-			if pd.IsAuto() {
-				continue
-			}
 			if prev, exists := used[pd.Host]; exists {
 				conflicts = append(conflicts, fmt.Sprintf(
 					"port %d conflict: %s.%s vs %s.%s",

@@ -94,7 +94,8 @@ The fastest command is not useful if it leaves the user uncertain about what
 happened. Orbit treats recovery as part of the command contract:
 
 - invalid config is rejected before a working environment is interrupted;
-- occupied movable ports are resolved across the dependency graph;
+- a port conflict names the owning process and the remedy instead of
+  silently moving the resource;
 - a failed dependency identifies the blocked resources and the next useful
   action;
 - switching projects cannot silently control another project's resources;

@@ -62,36 +62,6 @@ func (m *Manager) ContainerName(svc string) string {
 	return ContainerName(m.namespace, svc)
 }
 
-func (m *Manager) ManagedHostPort(ctx context.Context, name string, target int) (int, bool, error) {
-	containerName := m.ContainerName(name)
-	inspect, err := m.cli.ContainerInspect(ctx, containerName, client.ContainerInspectOptions{})
-	if err != nil {
-		if cerrdefs.IsNotFound(err) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("inspecting existing container %s: %w", containerName, err)
-	}
-	labels := inspect.Container.Config.Labels
-	if !inspect.Container.State.Running ||
-		labels[labelManaged] != "true" ||
-		labels[labelService] != name ||
-		!m.matchesNamespace(labels) {
-		return 0, false, nil
-	}
-	containerPort := network.MustParsePort(strconv.Itoa(target) + "/tcp")
-	bindings := inspect.Container.NetworkSettings.Ports[containerPort]
-	if len(bindings) == 0 {
-		return 0, false, nil
-	}
-	host, err := strconv.Atoi(bindings[0].HostPort)
-	if err != nil {
-		return 0, false, fmt.Errorf("parsing published port %q for %s: %w", bindings[0].HostPort, containerName, err)
-	}
-	return host, true, nil
-}
-
-// NewManager creates a new container manager for the given namespace.
-// Pass "" for the default (un-namespaced) instance.
 func NewManager(namespace string) (*Manager, error) {
 	cli, err := dockerctx.NewClient()
 	if err != nil {

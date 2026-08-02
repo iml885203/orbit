@@ -185,7 +185,7 @@ containers:
 | `icon` | string | no | Iconify icon slug for graph dashboard infra logo, e.g. `devicon:postgresql` |
 | `platform` | string | no | Platform override (`linux/amd64` for forced emulation) |
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
-| `ports` | map | no | Fixed `alias: "hostPort:containerPort"` or movable `alias: {preferred, target}`. A single endpoint also supplies an omitted `health_check.port` |
+| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port` |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings |
 | `command` | list | no | Override the image's default command |
@@ -223,52 +223,23 @@ The optional `sqlserver` workflow owns SQL Server Database Project diff,
 publish, and reset semantics because those operations do not map honestly onto
 every database.
 
-### Ports that may move
+### Ports are fixed
 
-Project ports are fixed by default: a conflict remains an error because
-silently moving an API or database can break tools outside Orbit. When callers
-discover an endpoint through Orbit, declare a `preferred` host port instead.
-Orbit keeps it when available and otherwise chooses one that works:
+The file is the single source of truth for where every resource listens:
+Orbit never moves a port. A conflict is an error that names the owning
+process and the remedy, because a silently different address breaks every
+consumer Orbit does not manage — hardcoded env values, bookmarks, test
+configuration. `orbit doctor` reports occupied declared ports with their
+owners before anything starts.
 
-```yaml
-containers:
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      redis:
-        preferred: 26379
-        target: 6379
+Orbit injects `<ALIAS>_PORT` into the host service; a service with one port
+also receives the conventional `PORT` variable.
 
-services:
-  demo-api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http:
-        preferred: 28080
-    health_check:
-      type: http
-      path: /health
-```
-
-Orbit keeps the preferred value when it is available. Otherwise it selects an
-available host port, updates the matching health check and loopback URL, and
-injects `<ALIAS>_PORT` into the host service. A service with one port also
-receives the conventional `PORT` variable. `orbit status` and
-`orbit open <service>` always use the selected runtime port. A managed
-container keeps the same selected port across daemon restarts.
-
-Selection holds at every start, not only at daemon startup: when another
-process takes a stopped resource's selected port, the next `orbit up`
-relocates that resource instead of failing with a conflict. Running
-resources never move, and an available selection is never reshuffled.
-Every `orbit up` announces the moves it sees — a human output line per
-relocated port, and `data.relocated_ports` in `--json`.
-
-A simple number or `"host:target"` string remains fixed. Environment
-substitution also works inside `preferred` and `target` when a team wants to
-override the preference without changing the file.
+The legacy `{preferred, target}` mapping is still parsed and means the same
+fixed port as `"host:target"` — the relocation behavior it used to opt into
+was removed. Environment substitution works inside port values when a team
+wants a machine-specific override without changing the file
+(`http: "${API_PORT:-28080}"`).
 
 ### Infra logos in the dashboard
 
@@ -426,7 +397,7 @@ services:
 | `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
 | `url` | string | no | Canonical URL; `orbit open <service>` uses this. Omit it when an `http` or `https` port already identifies the endpoint |
-| `ports` | map | no | Fixed numbers or movable `{preferred: port}` entries. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
+| `ports` | map | no | Fixed numbers. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
 | `env` | map | no | Process env. `${VAR}` substituted at load time |
 | `build_env` | map | no | dotnet only: env passed to `dotnet build`, not to the running process |
 | `env_toggles` | map | no | Dashboard-controlled on/off flipping of individual env keys |
@@ -452,8 +423,7 @@ services:
     path: ./catalog
     command: python3 main.py
     ports:
-      http:
-        preferred: 3001
+      http: 3001
 
   checkout-api:
     type: python

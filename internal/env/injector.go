@@ -59,20 +59,18 @@ func buildServiceEndpoint(name string, service *config.Service) map[string]strin
 	return map[string]string{key: url}
 }
 
-// InjectServicePorts leaves deliberate environment overrides alone while
-// keeping values derived from an auto-port preference aligned with reality.
+// InjectServicePorts fills port variables from the declared ports while
+// leaving deliberate environment overrides alone.
 func InjectServicePorts(target map[string]string, ports map[string]config.PortDef) {
 	for label, definition := range ports {
 		key := strings.ToUpper(strings.ReplaceAll(label, "-", "_")) + "_PORT"
-		value, exists := target[key]
-		if !exists || definition.IsAuto() && value == fmt.Sprintf("%d", definition.PreferredHost()) {
+		if _, exists := target[key]; !exists {
 			target[key] = fmt.Sprintf("%d", definition.Host)
 		}
 	}
 	if len(ports) == 1 {
 		for _, definition := range ports {
-			value, exists := target["PORT"]
-			if !exists || definition.IsAuto() && value == fmt.Sprintf("%d", definition.PreferredHost()) {
+			if _, exists := target["PORT"]; !exists {
 				target["PORT"] = fmt.Sprintf("%d", definition.Host)
 			}
 		}

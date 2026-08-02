@@ -51,10 +51,9 @@ type envInfoDaemon struct {
 }
 
 type envInfoPort struct {
-	Declared int  `json:"declared,omitempty"`
-	Target   int  `json:"target,omitempty"`
-	Movable  bool `json:"movable,omitempty"`
-	Observed int  `json:"observed,omitempty"`
+	Declared int `json:"declared,omitempty"`
+	Target   int `json:"target,omitempty"`
+	Observed int `json:"observed,omitempty"`
 }
 
 type envInfoURL struct {
@@ -151,10 +150,7 @@ func buildEnvInfoResource(
 	if len(ports) > 0 {
 		resource.Ports = map[string]envInfoPort{}
 		for alias, def := range ports {
-			port := envInfoPort{Declared: def.Host, Target: def.Target, Movable: def.IsAuto()}
-			if port.Movable {
-				port.Declared = def.PreferredHost()
-			}
+			port := envInfoPort{Declared: def.Host, Target: def.Target}
 			if observed != nil {
 				port.Observed = observed.Ports[alias]
 			}
@@ -239,9 +235,6 @@ func printEnvInfoSection(title string, resources map[string]envInfoResource) {
 		for _, alias := range aliases {
 			port := resource.Ports[alias]
 			detail := fmt.Sprintf("    %s: declared %d", alias, port.Declared)
-			if port.Movable {
-				detail += " (movable)"
-			}
 			if port.Observed != 0 {
 				detail += fmt.Sprintf(", observed %d", port.Observed)
 			}

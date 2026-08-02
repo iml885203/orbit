@@ -87,7 +87,7 @@ SQL Server Database Projects 具有額外的 diff、publish、reset semantics，
 視為 command contract 的一部分：
 
 - 無效 config 會在中斷既有可用環境前被拒絕；
-- 可移動 port 發生衝突時，會在整張 dependency graph 一致換成可用值；
+- port 衝突會指出占用的程式與 remedy，而不是默默移動資源；
 - dependency 失敗會指出受阻 resources 與下一個有效動作；
 - 切換專案時不會默默控制另一個專案的 resources；
 - 破壞性 database 操作要求明確確認；

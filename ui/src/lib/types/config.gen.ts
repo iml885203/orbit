@@ -100,8 +100,10 @@ export interface Container {
   kind: string; // frontend | backend | infra
 }
 /**
- * PortDef supports fixed and movable host ports. A preferred mapping opts into
- * relocation when another local process already owns that host port.
+ * PortDef declares a fixed host port. The file is the single source of
+ * truth: Orbit never relocates a port, so a conflict surfaces as an error
+ * naming the owner instead of a silently different address. The legacy
+ * {preferred, target} mapping is still parsed and means the same fixed port.
  */
 export interface PortDef {
   Host: number /* int */;

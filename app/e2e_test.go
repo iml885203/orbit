@@ -2961,11 +2961,10 @@ func TestE2E_UpJSONFailureCarriesResourceEvidence(t *testing.T) {
 	}
 }
 
-// Covers: a preferred port grabbed by another process while the daemon is
-// alive relocates on the next `orbit up` instead of failing with a port
-// conflict — the `preferred:` contract holds at every start, not only at
-// daemon boot.
-func TestE2E_UpReselectsPreferredPortTakenWhileDaemonAlive(t *testing.T) {
+// Covers: declared ports are the contract. When another process grabs a
+// service's port, the next `orbit up` fails with a conflict naming the
+// owner instead of silently moving the service to a different address.
+func TestE2E_UpFailsWithOwnerWhenDeclaredPortTaken(t *testing.T) {
 	env := setupE2E(t)
 	fixture := "version: \"3\"\n" +
 		"services:\n" +
@@ -2974,8 +2973,7 @@ func TestE2E_UpReselectsPreferredPortTakenWhileDaemonAlive(t *testing.T) {
 		"    path: /tmp\n" +
 		"    command: python3 -m http.server \"$PORT\"\n" +
 		"    ports:\n" +
-		"      http:\n" +
-		"        preferred: 29471\n"
+		"      http: 29471\n"
 	if err := os.WriteFile(env.envYaml, []byte(fixture), 0o644); err != nil {
 		t.Fatalf("write fixture env: %v", err)
 	}
@@ -2991,35 +2989,14 @@ func TestE2E_UpReselectsPreferredPortTakenWhileDaemonAlive(t *testing.T) {
 	defer squatter.Close()
 
 	output, err := env.runNoFail(t, "up", "--json")
-	if err != nil {
-		t.Fatalf("up did not relocate the taken preferred port: %v\n%s", err, output)
+	if err == nil {
+		t.Fatalf("up succeeded while the declared port was taken\n%s", output)
 	}
-	envelope := parseE2EEnvelope(t, output)
-	var lifecycle struct {
-		RelocatedPorts []struct {
-			Resource  string `json:"resource"`
-			Label     string `json:"label"`
-			Preferred int    `json:"preferred"`
-			Actual    int    `json:"actual"`
-		} `json:"relocated_ports"`
+	if !strings.Contains(output, "already in use") {
+		t.Fatalf("conflict does not name the owner:\n%s", output)
 	}
-	if err := json.Unmarshal(envelope.Data, &lifecycle); err != nil {
-		t.Fatalf("parse up data: %v\n%s", err, envelope.Data)
-	}
-	if len(lifecycle.RelocatedPorts) != 1 ||
-		lifecycle.RelocatedPorts[0].Resource != "api" ||
-		lifecycle.RelocatedPorts[0].Label != "http" {
-		t.Fatalf("relocated_ports = %+v, want the api http move announced", lifecycle.RelocatedPorts)
-	}
-	secondPort := env.resourcePort(t, "api", "http")
-	if secondPort == firstPort {
-		t.Fatalf("api still on %d after the port was taken", firstPort)
-	}
-	if lifecycle.RelocatedPorts[0].Actual != secondPort {
-		t.Fatalf("relocated_ports actual = %d, status says %d", lifecycle.RelocatedPorts[0].Actual, secondPort)
-	}
-	if state := env.serviceState(t, "api"); state != "healthy" {
-		t.Fatalf("api state = %s after relocation, want healthy", state)
+	if port := env.resourcePort(t, "api", "http"); port != firstPort {
+		t.Fatalf("declared port changed to %d, want %d untouched", port, firstPort)
 	}
 }
 

@@ -125,7 +125,7 @@ func TestLocalPortChecksDetectIPv4LoopbackOwner(t *testing.T) {
 	}
 }
 
-func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
+func TestLocalPortChecksReportOccupiedPortWithOwner(t *testing.T) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 	portNumber := listener.Addr().(*net.TCPAddr).Port
 	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := "version: \"3\"\nservices:\n  api:\n    type: python\n    path: .\n    command: python3 app.py\n    ports:\n      http: \"${ORBIT_AUTO_PORT_DOCTOR_TEST:-" + strconv.Itoa(portNumber) + "}\"\n"
+	source := "version: \"3\"\nservices:\n  api:\n    type: python\n    path: .\n    command: python3 app.py\n    ports:\n      http: " + strconv.Itoa(portNumber) + "\n"
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +143,8 @@ func TestLocalPortChecksTreatOccupiedAutoPortAsRecoverable(t *testing.T) {
 	}
 
 	checks := localPortChecksWithContext(cfg, nil)
-	if len(checks) != 1 || checks[0].Status != daemon.CheckInfo {
-		t.Fatalf("checks = %+v", checks)
+	if len(checks) != 1 || checks[0].Status != daemon.CheckFail || checks[0].Hint == "" {
+		t.Fatalf("checks = %+v, want a hard conflict naming the owner", checks)
 	}
 }
 

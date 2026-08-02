@@ -44,8 +44,7 @@ type App struct {
 	// knows the port the receiver ACTUALLY bound after fallback — config alone
 	// can be wrong once a conflict moved the port. nil (no daemon) means no
 	// injection.
-	TracingEndpoint      func() string
-	runtimeReservedPorts []int
+	TracingEndpoint func() string
 
 	// OnFatal, if set, receives unrecoverable background errors so the
 	// owner can trigger graceful shutdown. Without it, deferred cleanup
@@ -71,17 +70,11 @@ func NewApp(
 	serviceModes map[string]string,
 	detachedDeps map[string][]string,
 	namespace string,
-	runtimeReservedPorts ...int,
 ) (*App, error) {
 	containerMgr, err := container.NewManager(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("initializing container manager: %w", err)
 	}
-	if err := resolveAndLogAutoPorts(cfg, containerMgr, runtimeReservedPorts); err != nil {
-		_ = containerMgr.Close()
-		return nil, err
-	}
-
 	if err := containerMgr.EnsureNetwork(context.Background()); err != nil {
 		slog.Warn("failed to create Docker network", "component", "orbit", "err", err)
 	}
@@ -94,13 +87,12 @@ func NewApp(
 	orch := NewOrchestrator(holder, serviceModes, detachedDeps)
 
 	app := &App{
-		Holder:               holder,
-		ContainerMgr:         containerMgr,
-		ProcessMgr:           processMgr,
-		Orchestrator:         orch,
-		HealthChecker:        healthChecker,
-		Logs:                 logs,
-		runtimeReservedPorts: append([]int(nil), runtimeReservedPorts...),
+		Holder:        holder,
+		ContainerMgr:  containerMgr,
+		ProcessMgr:    processMgr,
+		Orchestrator:  orch,
+		HealthChecker: healthChecker,
+		Logs:          logs,
 	}
 
 	app.wireLogCapture(logs, orch)
@@ -111,33 +103,6 @@ func NewApp(
 	app.Poller = app.newPoller(cfg, orch)
 
 	return app, nil
-}
-
-func (a *App) PrepareConfig(cfg *config.Config) error {
-	return resolveAndLogAutoPorts(cfg, a.ContainerMgr, a.runtimeReservedPorts)
-}
-
-// resolveAndLogAutoPorts is the single owner of "resolve auto ports and
-// announce the selections" — NewApp runs it on the initial config,
-// PrepareConfig on a reconciled one.
-func resolveAndLogAutoPorts(cfg *config.Config, containerMgr *container.Manager, runtimeReserved []int) error {
-	resolutions, err := port.ResolveAutoPorts(cfg, func(name string, target int) (int, bool, error) {
-		return containerMgr.ManagedHostPort(context.Background(), name, target)
-	}, runtimeReserved...)
-	if err != nil {
-		return fmt.Errorf("resolving automatic ports: %w", err)
-	}
-	for _, resolution := range resolutions {
-		slog.Info(
-			"selected available port",
-			"component", "orbit",
-			"name", resolution.Resource,
-			"label", resolution.Label,
-			"preferred", resolution.Preferred,
-			"actual", resolution.Actual,
-		)
-	}
-	return nil
 }
 
 func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {

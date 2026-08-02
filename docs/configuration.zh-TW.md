@@ -179,7 +179,7 @@ containers:
 | `icon` | string | no | graph dashboard infra logo 用的 Iconify icon slug，例如 `devicon:postgresql` |
 | `platform` | string | no | Platform 覆寫（`linux/amd64` 用於強制 emulation） |
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
-| `ports` | map | no | 固定的 `alias: "hostPort:containerPort"` 或可移動的 `alias: {preferred, target}`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
+| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串 |
 | `command` | list | no | 覆寫 image 預設的 command |
@@ -215,50 +215,20 @@ command 會列出名稱並要求 `--container <name>`。其他 database client �
 workflow 擁有 SQL Server Database Project 的 diff、publish 與 reset semantics，
 因為這些操作無法誠實地套用到所有 database。
 
-### 可自動調整的 port
+### Port 以檔案為準
 
-專案 port 預設固定；衝突仍會報錯，因為 API 或資料庫偷偷換 port
-可能破壞 Orbit 以外的工具。若 caller 會透過 Orbit 找到 endpoint，請改用
-`preferred` host port。可用時 Orbit 會採用它，否則會選擇可用的 port：
+檔案是每個資源監聽位置的唯一真相：Orbit 永遠不會移動 port。衝突是一個
+會指出占用程式與 remedy 的錯誤，因為位址被默默換掉會破壞所有 Orbit
+管不到的消費者——寫死的 env 值、書籤、測試設定。`orbit doctor` 會在
+任何東西啟動前，回報已被占用的宣告 port 與其擁有者。
 
-```yaml
-containers:
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      redis:
-        preferred: 26379
-        target: 6379
+Orbit 會把 `<ALIAS>_PORT` 注入 host service；只有一個 port 的 service
+也會收到慣用的 `PORT` 變數。
 
-services:
-  demo-api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http:
-        preferred: 28080
-    health_check:
-      type: http
-      path: /health
-```
-
-偏好 port 可用時 Orbit 會照常使用；若已被占用，Orbit 會選擇可用的
-host port，同步更新 health check 與 loopback URL，並把
-`<ALIAS>_PORT` 注入 host service。只有一個 port 的 service 也會收到
-慣用的 `PORT` 變數。`orbit status` 與 `orbit open <service>` 永遠使用
-實際選定的 runtime port；daemon 重啟後，既有 managed container
-也會沿用相同 port。
-
-選擇在每次啟動時都成立，不是只在 daemon 啟動時：已停止資源的選定 port
-被其他程式占走後，下一次 `orbit up` 會直接為它換 port，而不是回報
-conflict。運行中的資源永遠不會被移動，仍可用的選擇也不會被重新洗牌。
-每次 `orbit up` 都會把看到的搬移喊出來——每個被搬移的 port 一行人類輸出，
-`--json` 則放在 `data.relocated_ports`。
-
-單純的數字或 `"host:target"` 字串仍代表固定 port。若團隊想在不改檔案的
-情況下覆寫偏好值，也可以在 `preferred` 與 `target` 中使用 environment
-substitution。
+舊的 `{preferred, target}` 寫法仍可解析，意義與 `"host:target"` 相同的
+固定 port——它原本代表的搬移行為已移除。若團隊想在不改檔案的情況下做
+機器層級的覆寫，port 值內可以使用 environment substitution
+（`http: "${API_PORT:-28080}"`）。
 
 ### Dashboard 上的 infra logo
 
@@ -413,7 +383,7 @@ services:
 | `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
 | `url` | string | no | 標準 URL；`orbit open <service>` 會用它。已有 `http` 或 `https` port 時可省略 |
-| `ports` | map | no | 固定數字或可移動的 `{preferred: port}`。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
+| `ports` | map | no | 固定數字。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
 | `env` | map | no | Process env。`${VAR}` 在載入時替換 |
 | `build_env` | map | no | 僅 dotnet：傳給 `dotnet build` 的 env，不進執行中的 process |
 | `env_toggles` | map | no | dashboard 控制的單一 env key 開關 |
@@ -438,8 +408,7 @@ services:
     path: ./catalog
     command: python3 main.py
     ports:
-      http:
-        preferred: 3001
+      http: 3001
 
   checkout-api:
     type: python

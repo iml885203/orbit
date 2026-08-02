@@ -39,17 +39,14 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis:
-        preferred: 26379
-        target: 6379
+      redis: "26379:6379"
 
 services:
   app:
     kind: frontend
     command: python3 -m http.server "$PORT"
     ports:
-      http:
-        preferred: 28080
+      http: 28080
     depends_on: [redis]
 ```
 
@@ -63,9 +60,9 @@ orbit down     # 停止環境
 ```
 
 Orbit 會先啟動 Redis 再啟動 host process、等待真實 readiness 而不是把
-「process 存在」當成「可以使用」、把選定的 port 注入為 `PORT`，port 被占用
-時會在整張 graph 一致換成可用值，不需要改設定。編輯 `orbit.yaml` 後再執行
-一次 `orbit up`：Orbit 會先驗證新設定，再中斷任何東西。
+「process 存在」當成「可以使用」、把宣告的 port 注入為 `PORT`。Port 以檔案
+為準、永不移動：衝突時會報錯並指出占用的程式與 remedy。編輯 `orbit.yaml`
+後再執行一次 `orbit up`：Orbit 會先驗證新設定，再中斷任何東西。
 
 [在你的專案使用 Orbit](docs/local-first.zh-TW.md) 完整走過這條路徑，並說明
 如何把驗證過的檔案升級為團隊共享 environment。所有欄位請見

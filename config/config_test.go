@@ -894,50 +894,6 @@ externals:
 	}
 }
 
-func TestLoadMarksOnlyExplicitAutoPortExpressions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "auto-ports.yaml")
-	source := `version: "3"
-containers:
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      redis: "${ORBIT_AUTO_PORT_CONFIG_TEST_REDIS:-26379}:6379"
-    sidecars:
-      - name: ui
-        image: example/ui
-        ports:
-          ui: "${ORBIT_AUTO_PORT_CONFIG_TEST_UI:-28081}:8080"
-services:
-  api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http: "${ORBIT_AUTO_PORT_CONFIG_TEST_HTTP:-28080}"
-      metrics: 29090
-`
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !cfg.Containers["redis"].Ports["redis"].IsAuto() {
-		t.Fatal("container auto port was not marked")
-	}
-	if !cfg.Containers["redis"].Sidecars[0].Ports["ui"].IsAuto() {
-		t.Fatal("sidecar auto port was not marked")
-	}
-	if !cfg.Services["api"].Ports["http"].IsAuto() {
-		t.Fatal("service auto port was not marked")
-	}
-	if cfg.Services["api"].Ports["metrics"].IsAuto() {
-		t.Fatal("fixed service port was marked auto")
-	}
-}
-
 func TestLoadAcceptsReadablePreferredPortMappings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "preferred-ports.yaml")
 	source := `version: "3"
@@ -966,12 +922,12 @@ services:
 		t.Fatal(err)
 	}
 	redis := cfg.Containers["redis"].Ports["redis"]
-	if !redis.IsAuto() || redis.PreferredHost() != 26379 || redis.Host != 26379 || redis.Target != 6379 {
-		t.Fatalf("redis port = %+v, want movable 26379:6379", redis)
+	if redis.Host != 26379 || redis.Target != 6379 {
+		t.Fatalf("redis port = %+v, want fixed 26379:6379", redis)
 	}
 	http := cfg.Services["api"].Ports["http"]
-	if !http.IsAuto() || http.PreferredHost() != 28080 || http.Host != 28080 || http.Target != 28080 {
-		t.Fatalf("http port = %+v, want movable 28080", http)
+	if http.Host != 28080 || http.Target != 28080 {
+		t.Fatalf("http port = %+v, want fixed 28080", http)
 	}
 }
 
@@ -1095,14 +1051,14 @@ services:
 	}
 }
 
-func TestValidateAllowsAutoPortPreferencesToOverlapFixedPorts(t *testing.T) {
+func TestValidateRejectsOverlappingHostPorts(t *testing.T) {
 	cfg := &Config{
 		Containers: map[string]*Container{
-			"fixed": {Ports: map[string]PortDef{"http": {Host: 28080, Target: 28080}}},
-			"auto":  {Ports: map[string]PortDef{"http": {Host: 28080, Target: 8080, auto: true}}},
+			"one":   {Ports: map[string]PortDef{"http": {Host: 28080, Target: 28080}}},
+			"other": {Ports: map[string]PortDef{"http": {Host: 28080, Target: 8080}}},
 		},
 	}
-	if err := Validate(cfg); err != nil {
-		t.Fatalf("auto preference should resolve at runtime: %v", err)
+	if err := Validate(cfg); err == nil {
+		t.Fatal("two resources declaring the same host port must be a config error")
 	}
 }

@@ -54,7 +54,7 @@ func TestBuildEnvInfoReportsDeclaredValuesWithoutADaemon(t *testing.T) {
 	if db.State != "" {
 		t.Fatalf("db state = %q, want none without a daemon", db.State)
 	}
-	if got := db.Ports["pg"]; got.Declared != 15432 || got.Target != 5432 || got.Movable || got.Observed != 0 {
+	if got := db.Ports["pg"]; got.Declared != 15432 || got.Target != 5432 || got.Observed != 0 {
 		t.Fatalf("db pg port = %+v", got)
 	}
 	if !reflect.DeepEqual(db.EnvironmentKeys, []string{"POSTGRES_PASSWORD", "POSTGRES_USER"}) {
@@ -64,7 +64,7 @@ func TestBuildEnvInfoReportsDeclaredValuesWithoutADaemon(t *testing.T) {
 		t.Fatalf("db environment values leaked without --show-secrets: %v", db.Environment)
 	}
 	api := data.Services["api"]
-	if got := api.Ports["http"]; got.Declared != 18080 || !got.Movable || got.Observed != 0 {
+	if got := api.Ports["http"]; got.Declared != 18080 || got.Observed != 0 {
 		t.Fatalf("api http port = %+v", got)
 	}
 	if api.URL == nil || api.URL.Declared != "http://localhost:18080/docs" || api.URL.Observed != "" {

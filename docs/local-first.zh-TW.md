@@ -16,17 +16,14 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis:
-        preferred: 26379
-        target: 6379
+      redis: "26379:6379"
 
 services:
   app:
     kind: frontend
     command: python3 -m http.server "$PORT"
     ports:
-      http:
-        preferred: 28080
+      http: 28080
     depends_on: [redis]
 ```
 
@@ -34,9 +31,8 @@ services:
 已經需要的 Python 3 與 Docker。Orbit 會從 command 推斷 Python，並在
 `orbit.yaml` 所在目錄執行；常見 Node、Bun 與 Go command 也採用相同規則。
 只有 command 無法表達預期 runtime 或 working directory 時，才需要加入
-`type` 或 `path`。`preferred` 表示「可用時採用這個 port，否則
-選擇可用的 port」。Orbit 會把實際選定的 application port 注入為 `PORT`，
-因此發生衝突時不需要修改 config。每個 endpoint 只宣告一次；資源只有一個
+`type` 或 `path`。Port 以檔案為準：Orbit 會把宣告的 port 注入為 `PORT`，衝突時會報錯並指出
+占用的程式——不會有任何東西被默默移動。每個 endpoint 只宣告一次；資源只有一個
 endpoint（或有名為 `http` 的 endpoint）時，Orbit 會先等它可用再啟動
 dependents，並將它重用於 `orbit open` 與 dependency URL。只有 port 已經
 listening 仍不足以證明 application ready 時，才需要明確加入

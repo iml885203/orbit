@@ -43,17 +43,14 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis:
-        preferred: 26379
-        target: 6379
+      redis: "26379:6379"
 
 services:
   app:
     kind: frontend
     command: python3 -m http.server "$PORT"
     ports:
-      http:
-        preferred: 28080
+      http: 28080
     depends_on: [redis]
 ```
 
@@ -67,10 +64,10 @@ orbit down     # stop the environment
 ```
 
 Orbit starts Redis before the host process, waits for real readiness instead
-of equating "process exists" with "ready", injects the selected port as
-`PORT`, and resolves occupied ports across the graph without a config edit.
-After editing `orbit.yaml`, run `orbit up` again: the new config is validated
-before anything is interrupted.
+of equating "process exists" with "ready", and injects the declared port as
+`PORT`. Ports live in the file and never move: a conflict is reported with
+its owning process and the remedy. After editing `orbit.yaml`, run `orbit up`
+again: the new config is validated before anything is interrupted.
 
 [Use Orbit with your project](docs/local-first.md) walks this path and shows
 how to promote the proven file into a shared team environment. Every field is

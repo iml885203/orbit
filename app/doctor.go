@@ -345,17 +345,16 @@ func localPortChecksWithContext(
 	type portEntry struct {
 		port int
 		name string
-		auto bool
 	}
 	var ports []portEntry
 	for name, container := range cfg.Containers {
 		for _, definition := range container.Ports {
-			ports = append(ports, portEntry{port: definition.Host, name: name, auto: definition.IsAuto()})
+			ports = append(ports, portEntry{port: definition.Host, name: name})
 		}
 	}
 	for name, service := range cfg.Services {
 		for _, definition := range service.Ports {
-			ports = append(ports, portEntry{port: definition.Host, name: name, auto: definition.IsAuto()})
+			ports = append(ports, portEntry{port: definition.Host, name: name})
 		}
 	}
 	sort.Slice(ports, func(i, j int) bool { return ports[i].port < ports[j].port })
@@ -379,15 +378,6 @@ func localPortChecksWithContext(
 				check.Message = fmt.Sprintf(
 					"used by %s; Orbit will release it when switching projects",
 					runningName,
-				)
-				checks = append(checks, check)
-				continue
-			}
-			if entry.auto {
-				check.Status = daemon.CheckInfo
-				check.Message = fmt.Sprintf(
-					"preferred port is occupied (%s); Orbit will choose an available port when it starts",
-					entry.name,
 				)
 				checks = append(checks, check)
 				continue

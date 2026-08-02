@@ -1,14 +1,11 @@
 package env
 
 import (
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/port"
 )
 
 func p(port int) config.PortDef {
@@ -153,14 +150,10 @@ services:
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpPort := cfg.Services["api"].Ports["http"]
-	httpPort.Host = 28081
-	cfg.Services["api"].Ports["http"] = httpPort
-
-	resolved := map[string]string{"HTTP_PORT": "explicit", "PORT": "28080"}
+	resolved := map[string]string{"HTTP_PORT": "explicit", "PORT": "29999"}
 	InjectServicePorts(resolved, cfg.Services["api"].Ports)
-	if resolved["PORT"] != "28081" {
-		t.Fatalf("PORT = %q, want 28081", resolved["PORT"])
+	if resolved["PORT"] != "29999" {
+		t.Fatalf("PORT = %q, explicit override must win", resolved["PORT"])
 	}
 	if resolved["HTTP_PORT"] != "explicit" {
 		t.Fatalf("HTTP_PORT override = %q", resolved["HTTP_PORT"])
@@ -206,50 +199,6 @@ func TestBuildEnvInjectsRuntimeServiceURLWithoutOverridingExplicitEnv(t *testing
 		annotated[0].Source != "explicit" ||
 		annotated[0].Dependency != "" {
 		t.Fatalf("annotated explicit override = %+v", annotated)
-	}
-}
-
-func TestBuildEnvInjectsAutoSelectedDependencyURL(t *testing.T) {
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	preferred := listener.Addr().(*net.TCPAddr).Port
-	path := filepath.Join(t.TempDir(), "env.yaml")
-	source := fmt.Sprintf(`version: "3"
-services:
-  catalog-api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http: "${ORBIT_AUTO_PORT_ENV_UPSTREAM_TEST:-%d}"
-  checkout-api:
-    type: python
-    path: .
-    command: python3 app.py
-    depends_on: [catalog-api]
-`, preferred)
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := port.ResolveAutoPorts(cfg, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	actual := cfg.Services["catalog-api"].Ports["http"].Host
-	if actual == preferred {
-		t.Fatalf("occupied preference %d was not moved", preferred)
-	}
-	resolved := BuildEnv(cfg.Services["checkout-api"], cfg, nil)
-	want := fmt.Sprintf("http://localhost:%d", actual)
-	if resolved["CATALOG_API_URL"] != want {
-		t.Fatalf("CATALOG_API_URL = %q, want %q", resolved["CATALOG_API_URL"], want)
 	}
 }
 

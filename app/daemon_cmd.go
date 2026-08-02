@@ -391,16 +391,11 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	envName := strings.TrimSuffix(filepath.Base(configFile), filepath.Ext(configFile))
 	detachedDeps := settings.GetDetachedEdges(envName)
 
-	runtimeReservedPorts := []int{daemon.DashboardPort()}
-	if cfg.TracingPortExplicit() {
-		runtimeReservedPorts = append(runtimeReservedPorts, cfg.TracingOTLPPort())
-	}
 	app, err := engine.NewApp(
 		cfg,
 		settings.GetServiceModes(),
 		detachedDeps,
 		os.Getenv("ORBIT_NAMESPACE"),
-		runtimeReservedPorts...,
 	)
 	if err != nil {
 		return fmt.Errorf("creating app: %w", err)

@@ -56,7 +56,6 @@ func Load(path string) (*Config, error) {
 	applyDefaults(&cfg)
 	populateNames(&cfg)
 	applyPathResolution(&cfg, path)
-	markAutoPorts(data, &cfg)
 
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("validating config: %w", err)

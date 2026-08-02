@@ -109,8 +109,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		printUpSuccessNextStep(nil, nil)
 		return nil
 	}
-	relocationCfg, _ := config.Load(configFile)
-	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args), relocationCfg)
+	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
 }
 
 func upCompletionMessage(args []string) string {
@@ -157,7 +156,6 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		return fmt.Errorf("up failed: %w", err)
 	}
 	names := resp.AffectedResources
-	relocationCfg, _ := config.Load(configFile)
 	finalStatus, err := waitForLifecycleJSON(client, names, "healthy")
 	if err != nil {
 		failure := cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
@@ -177,7 +175,6 @@ func runUpJSON(args []string, contextSwitch *projectContextSwitch) error {
 		FinalStatus:        finalStatus,
 		ContextSwitch:      contextSwitch,
 		EnvironmentChanges: lifecycleEnvironmentChanges(appliedChanges),
-		RelocatedPorts:     relocatedPorts(relocationCfg, finalStatus),
 	}), lifecycleUpSuccessActions(names, finalStatus))
 }
 
@@ -426,7 +423,7 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 	}
 }
 
-func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string, cfg *config.Config) error {
+func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string) error {
 	watch := watchSet(serviceNames)
 	announced := map[string]bool{}
 	return runProgressWait(client, waitOptions{
@@ -449,7 +446,6 @@ func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMe
 				}
 			}
 			if len(done) == len(watch) {
-				printRelocatedPorts(cfg, status)
 				fmt.Println(completionMessage)
 				printUpSuccessNextStep(serviceNames, status)
 				return true, nil

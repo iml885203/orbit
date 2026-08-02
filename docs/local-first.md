@@ -17,17 +17,14 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis:
-        preferred: 26379
-        target: 6379
+      redis: "26379:6379"
 
 services:
   app:
     kind: frontend
     command: python3 -m http.server "$PORT"
     ports:
-      http:
-        preferred: 28080
+      http: 28080
     depends_on: [redis]
 ```
 
@@ -37,9 +34,9 @@ Orbit infers Python from the command and runs it from the directory containing
 `orbit.yaml`; common Node, Bun, and Go commands work the same way. Add `type`
 or `path` only when the command alone cannot express the intended runtime or
 working directory.
-`preferred` means “use this port when available, otherwise choose one that
-works.” Orbit injects the selected application port as `PORT`, so a conflict
-requires no config edit. Each endpoint is declared once: with one endpoint (or
+Ports live in the file: Orbit injects the declared port as `PORT`, and a
+conflict is an error naming the owning process — nothing moves silently.
+Each endpoint is declared once: with one endpoint (or
 an endpoint named `http`), Orbit waits for it before starting dependents and
 reuses it for `orbit open` and dependency URLs. Add an explicit `health_check`
 only when a listening port is not enough to prove application readiness.

@@ -56,10 +56,6 @@ func (s *Server) applyEnvironmentConfig(tx extension.ConfigTx, running map[strin
 	if cfg.PreviewOnly {
 		return fmt.Errorf("preview-only environments cannot be activated")
 	}
-	if err := s.app.PrepareConfig(cfg); err != nil {
-		return err
-	}
-
 	serviceModes := s.settings.GetServiceModes()
 	plan := engine.PlanConfigReconcile(tx.Current(), cfg, running, serviceModes)
 	if plan.RestartRequired {

@@ -167,24 +167,13 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 	return &next
 }
 
-// PortDef supports fixed and movable host ports. A preferred mapping opts into
-// relocation when another local process already owns that host port.
+// PortDef declares a fixed host port. The file is the single source of
+// truth: Orbit never relocates a port, so a conflict surfaces as an error
+// naming the owner instead of a silently different address. The legacy
+// {preferred, target} mapping is still parsed and means the same fixed port.
 type PortDef struct {
-	Host      int
-	Target    int // container-internal port; same as Host if not specified
-	auto      bool
-	preferred int
-}
-
-func (p PortDef) IsAuto() bool {
-	return p.auto
-}
-
-func (p PortDef) PreferredHost() int {
-	if p.auto && p.preferred > 0 {
-		return p.preferred
-	}
-	return p.Host
+	Host   int
+	Target int // container-internal port; same as Host if not specified
 }
 
 func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
@@ -215,29 +204,27 @@ func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
 			return fmt.Errorf("line %d: unknown port field %q%s", key.Line, key.Value, hint)
 		}
 	}
-	var movable struct {
+	var legacyMapping struct {
 		Preferred int `yaml:"preferred"`
 		Target    int `yaml:"target"`
 	}
-	if err := node.Decode(&movable); err != nil {
+	if err := node.Decode(&legacyMapping); err != nil {
 		return fmt.Errorf("line %d: invalid port mapping: %w", node.Line, err)
 	}
-	if movable.Preferred == 0 {
+	if legacyMapping.Preferred == 0 {
 		return fmt.Errorf("line %d: port mapping needs \"preferred\"; use a plain int for a fixed host port", node.Line)
 	}
-	if err := validatePortNumber(movable.Preferred); err != nil {
+	if err := validatePortNumber(legacyMapping.Preferred); err != nil {
 		return fmt.Errorf("line %d: preferred %w", node.Line, err)
 	}
-	if movable.Target == 0 {
-		movable.Target = movable.Preferred
+	if legacyMapping.Target == 0 {
+		legacyMapping.Target = legacyMapping.Preferred
 	}
-	if err := validatePortNumber(movable.Target); err != nil {
+	if err := validatePortNumber(legacyMapping.Target); err != nil {
 		return fmt.Errorf("line %d: target %w", node.Line, err)
 	}
-	p.Host = movable.Preferred
-	p.Target = movable.Target
-	p.auto = true
-	p.preferred = movable.Preferred
+	p.Host = legacyMapping.Preferred
+	p.Target = legacyMapping.Target
 	return nil
 }
 
