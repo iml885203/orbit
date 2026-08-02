@@ -29,12 +29,8 @@ func sortedKeys[V any](m map[string]V) []string {
 // GraphResponse is the response for GET /api/graph.
 type GraphResponse struct {
 	Env string `json:"env"`
-	// PreviewOnly mirrors the env yaml's previewOnly flag so the UI can
-	// switch to the cluster-layout / icon-strip presentation reserved for
-	// preview-only envs without having to cross-look the /api/envs list.
-	PreviewOnly bool `json:"previewOnly"`
 	// Groups maps group name → service names declared in that group. The UI
-	// uses it to cluster service nodes by group (preview-only envs only).
+	// uses it to cluster service nodes by group.
 	// Only groups with at least one service are included. Order is
 	// deterministic (sorted by group name) so the canvas doesn't reshuffle
 	// on each poll.
@@ -79,7 +75,6 @@ type GraphNode struct {
 	LastRestart          *GraphRestart       `json:"last_restart,omitempty"`
 	StartupTime          string              `json:"startup_time,omitempty"`
 	Uptime               string              `json:"uptime,omitempty"`
-	InfraDeps            []InfraDepRef       `json:"infraDeps,omitempty"` // services only — flattened {name, icon} of each depended-on infra container, for icon-strip rendering when infra nodes are hidden
 	// Kafka carries the produces/consumes declarations the node owns.
 	// Services with no declared topics get nil (omitted from JSON);
 	// externals are required by validation to declare at least one
@@ -99,14 +94,6 @@ type GraphPortConflict struct {
 	PID            string `json:"pid,omitempty"`
 	Process        string `json:"process,omitempty"`
 	InspectCommand string `json:"inspect_command"`
-}
-
-// InfraDepRef is a compact reference to one infra container that a service
-// depends on. We pre-resolve the icon server-side so the UI doesn't need to
-// cross-look the containers map per render.
-type InfraDepRef struct {
-	Name string `json:"name"`
-	Icon string `json:"icon,omitempty"`
 }
 
 // EdgeKind distinguishes startup-time synchronous dependencies (the
@@ -162,11 +149,10 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	cfg := s.holder.Load()
 	statuses := statusesByName(s.computeStatuses(cfg))
 	resp := GraphResponse{
-		Env:         envName,
-		PreviewOnly: cfg.PreviewOnly,
-		Groups:      buildGroupInfos(cfg),
-		Nodes:       buildGraphNodes(cfg, statuses),
-		Edges:       append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
+		Env:    envName,
+		Groups: buildGroupInfos(cfg),
+		Nodes:  buildGraphNodes(cfg, statuses),
+		Edges:  append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -188,11 +174,10 @@ func (s *Server) servePreviewGraph(w http.ResponseWriter, envName string) {
 		return
 	}
 	writeJSON(w, http.StatusOK, GraphResponse{
-		Env:         envName,
-		PreviewOnly: cfg.PreviewOnly,
-		Groups:      buildGroupInfos(cfg),
-		Nodes:       buildGraphNodes(cfg, nil),
-		Edges:       append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
+		Env:    envName,
+		Groups: buildGroupInfos(cfg),
+		Nodes:  buildGraphNodes(cfg, nil),
+		Edges:  append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
 	})
 }
 
@@ -249,12 +234,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 	}
 	for _, name := range sortedKeys(cfg.Services) {
 		svc := cfg.Services[name]
-		n := GraphNode{
-			Name:      name,
-			Kind:      svc.ResolveKind(),
-			State:     "pending",
-			InfraDeps: serviceInfraDeps(svc, cfg),
-		}
+		n := GraphNode{Name: name, Kind: svc.ResolveKind(), State: "pending"}
 		if len(svc.Kafka.Produces) > 0 || len(svc.Kafka.Consumes) > 0 {
 			k := svc.Kafka
 			n.Kafka = &k
@@ -350,26 +330,6 @@ func graphPortConflict(conflict *ResourcePortConflict) *GraphPortConflict {
 	}
 }
 
-// serviceInfraDeps flattens a service's depends_on entries that resolve to
-// an infra-kind container into compact {name, icon} pairs. Order matches
-// the depends_on list (yaml authoring order) so the UI strip is stable.
-// Returns nil — not an empty slice — when there are no infra deps, so the
-// JSON omits the field via omitempty.
-func serviceInfraDeps(svc *config.Service, cfg *config.Config) []InfraDepRef {
-	if len(svc.DependsOn) == 0 {
-		return nil
-	}
-	var out []InfraDepRef
-	for _, dep := range svc.DependsOn {
-		c, ok := cfg.Containers[dep]
-		if !ok || c.ResolveKind() != "infra" {
-			continue
-		}
-		out = append(out, InfraDepRef{Name: dep, Icon: infraIconForContainer(c)})
-	}
-	return out
-}
-
 func buildGraphEdges(cfg *config.Config, settings *Settings, envName string) []GraphEdge {
 	edges := make([]GraphEdge, 0)
 	addEdge := func(from, fromKind string, deps []string) {
@@ -462,10 +422,6 @@ func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	// from/to come from the URL path only. The legacy body form
 	// (/api/edges/detach with from/to in JSON) was removed after all clients
 	// migrated to PUT /api/edges/{from}/{to}.

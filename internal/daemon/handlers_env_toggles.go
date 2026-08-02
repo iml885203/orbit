@@ -43,9 +43,6 @@ func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, toggles)
 
 	case http.MethodPut:
-		if srv.rejectIfPreview(w) {
-			return
-		}
 		var req EnvToggleUpdateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid json"})

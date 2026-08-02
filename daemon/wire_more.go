@@ -45,10 +45,9 @@ type TraceLogsResponse struct {
 
 // EnvInfo describes one available env config file.
 type EnvInfo struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Current     bool   `json:"current"`
-	PreviewOnly bool   `json:"previewOnly"`
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Current bool   `json:"current"`
 }
 
 // EnvsResponse is returned by GET /api/envs.

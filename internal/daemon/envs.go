@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -42,13 +41,6 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 			Path:    full,
 			Current: full == current,
 		}
-		// Cheap per-request load: envs dir is small (one file per env)
-		// and YAML parsing is microseconds. Cache by mtime later if it
-		// ever shows up in a profile. Load failures keep PreviewOnly
-		// false — surfaces as a graph fetch error at the right time.
-		if cfg, err := config.Load(full); err == nil {
-			info.PreviewOnly = cfg.PreviewOnly
-		}
 		resp.Envs = append(resp.Envs, info)
 	}
 	sort.Slice(resp.Envs, func(i, j int) bool { return resp.Envs[i].Name < resp.Envs[j].Name })
@@ -60,10 +52,6 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 type EnvSwitchRequest struct {
 	Env string `json:"env"` // short name (no .yaml) OR absolute path
 }
-
-// errEnvPreviewOnly classifies the committed-reload rejection inside the
-// env-switch write transaction so the handler maps it to 409, not 500.
-var errEnvPreviewOnly = errors.New("env is preview-only")
 
 func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
@@ -91,16 +79,9 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load before stopping anything: a preview-only target must reject
-	// pre-flight so the user isn't stranded with the live env stopped
-	// and the switch refused.
-	probeCfg, err := config.Load(target)
+	_, err := config.Load(target)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "load: " + err.Error()})
-		return
-	}
-	if probeCfg.PreviewOnly {
-		writeJSON(w, http.StatusConflict, APIResponse{Error: "env " + EnvShortName(target) + " is preview-only and cannot be activated"})
 		return
 	}
 	if s.restartLauncher == nil {
@@ -132,20 +113,13 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	// Writer-serialized publish. The whole reload→Store→baseline flow is
 	// one critical section: config.Load reads process env that
 	// restartSQLServer mutates, and an unserialized splice could roll
-	// back this switch (lost update). The early Load above was only
-	// preview-rejection validation — the published config must be loaded
+	// back this switch (lost update). The early Load validates the target
+	// before services stop; the published config must still be loaded
 	// inside the lock.
 	err = s.UpdateConfig(func(tx extension.ConfigTx) error {
 		finalCfg, err := tx.Load(target)
 		if err != nil {
 			return fmt.Errorf("load: %w", err)
-		}
-		// Re-validate on the value actually being committed: the probe above
-		// ran before StopAllServices, and the file could have turned
-		// preview-only in between — publishing it would activate an env the
-		// probe just promised to reject (TOCTOU).
-		if finalCfg.PreviewOnly {
-			return errEnvPreviewOnly
 		}
 		tx.Store(finalCfg)
 		tx.SetConfigPath(target)
@@ -154,10 +128,6 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if restoreErr := atomicio.WriteFile(CurrentEnvPath(), []byte(previousPath+"\n"), 0644); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
-		}
-		if errors.Is(err, errEnvPreviewOnly) {
-			writeJSON(w, http.StatusConflict, APIResponse{Error: "env " + EnvShortName(target) + " is preview-only and cannot be activated"})
-			return
 		}
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return

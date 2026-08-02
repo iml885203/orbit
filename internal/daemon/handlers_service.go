@@ -201,10 +201,6 @@ func (s *Server) handleUp(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	var req UpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "invalid request body"})
@@ -390,10 +386,6 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	var req DownRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		req = DownRequest{}
@@ -549,10 +541,6 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	name := strings.TrimPrefix(r.URL.Path, "/api/stop/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
@@ -579,10 +567,6 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	if s.rejectIfPreview(w) {
-		return
-	}
-
 	name := strings.TrimPrefix(r.URL.Path, "/api/restart/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})

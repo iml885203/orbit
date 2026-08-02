@@ -6,7 +6,6 @@ import type { GraphResponse } from '../../lib/types.gen'
 
 const graph: GraphResponse = {
   env: 'local',
-  previewOnly: false,
   groups: [
     { name: 'shop', services: ['web', 'api'] },
     { name: 'data', services: ['redis'] },

@@ -264,7 +264,6 @@ export interface EnvInfo {
   name: string;
   path: string;
   current: boolean;
-  previewOnly: boolean;
 }
 /**
  * EnvsResponse is returned by GET /api/envs.

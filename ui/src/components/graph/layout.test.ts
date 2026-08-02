@@ -4,7 +4,6 @@ import type { GraphResponse } from '../../lib/types.gen'
 
 const graph: GraphResponse = {
   env: 'development',
-  previewOnly: false,
   nodes: [
     { name: 'redis', kind: 'infra', state: 'healthy' },
     { name: 'api',  kind: 'backend', state: 'healthy' },
@@ -34,14 +33,13 @@ describe('layout', () => {
   })
 
   it('handles empty graph', () => {
-    const empty: GraphResponse = { env: 'x', previewOnly: false, nodes: [], edges: [] }
+    const empty: GraphResponse = { env: 'x', nodes: [], edges: [] }
     expect(layout(empty)).toEqual([])
   })
 
   it('places async-connected external nodes above their related consumer service', () => {
     const previewGraph: GraphResponse = {
       env: 'preview',
-      previewOnly: true,
       groups: [
         { name: 'sports', services: ['odds-api', 'event-consumer'] },
         { name: 'platform', services: ['profile-api'] },

@@ -88,6 +88,9 @@ func decodeExtensionSections(cfg *Config, cfgPath string) error {
 	sort.Strings(names) // deterministic first error under multiple typos
 	for _, name := range names {
 		if _, ok := extensionSections.specs[name]; !ok {
+			if name == "previewOnly" {
+				return fmt.Errorf("line %d: previewOnly was removed; delete this field because every environment can now be activated and managed", cfg.Extensions[name].Line)
+			}
 			known := coreTopLevelFields()
 			for k := range extensionSections.specs {
 				known = append(known, k)

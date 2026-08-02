@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"fmt"
 	"net/http"
 	"sort"
 
@@ -52,9 +51,6 @@ func (s *Server) applyEnvironmentConfig(tx extension.ConfigTx, running map[strin
 	cfg, err := tx.Load(s.ConfigPath())
 	if err != nil {
 		return err
-	}
-	if cfg.PreviewOnly {
-		return fmt.Errorf("preview-only environments cannot be activated")
 	}
 	serviceModes := s.settings.GetServiceModes()
 	plan := engine.PlanConfigReconcile(tx.Current(), cfg, running, serviceModes)

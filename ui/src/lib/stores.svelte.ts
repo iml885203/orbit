@@ -53,12 +53,6 @@ class DaemonStore {
   get doctorFailCount() { return this.doctorChecks.filter((c) => c.status === 'fail').length }
   get doctorWarnCount() { return this.doctorChecks.filter((c) => c.status === 'warn').length }
 
-  // True when the active env is preview-only. Components gate mutation
-  // affordances (up/down/stop/restart, toggles, mode switches) on this so
-  // users see disabled buttons instead of 409s from the daemon.
-  get activeEnvIsPreview() {
-    return this.envs?.envs?.find((e) => e.current)?.previewOnly ?? false
-  }
 }
 
 // Group-interior layout mode for the graph canvas: 'rectangle' packs each
@@ -122,14 +116,10 @@ class AppStore {
 
 export const store = new AppStore()
 
-// mutationsDisabled is true when the UI must disable any control that
-// hits a daemon mutation endpoint (up/down/stop/restart, env toggles,
-// mode switch, edge detach, extension mutations). Two cases:
-//   1. Previewing another env's graph (store.graph.isPreviewing).
-//   2. The active env itself is preview-only (store.daemon.activeEnvIsPreview).
-// Components use this instead of OR-ing the two flags at every call site.
+// mutationsDisabled keeps another env's on-disk graph a read-only preview.
+// Activating that environment makes its mutation controls available.
 export function mutationsDisabled(): boolean {
-  return store.graph.isPreviewing || store.daemon.activeEnvIsPreview
+  return store.graph.isPreviewing
 }
 
 // --- Helper functions ---
@@ -156,7 +146,6 @@ export function replaceGraphData(next: GraphResponse) {
 function graphDataKey(graph: GraphResponse): string {
   return JSON.stringify({
     env: graph.env,
-    previewOnly: graph.previewOnly,
     groups: graph.groups ?? [],
     nodes: graph.nodes.map(n => ({
       name: n.name,
@@ -175,7 +164,6 @@ function graphDataKey(graph: GraphResponse): string {
       ports: n.ports ?? {},
       health: n.health ?? null,
       sidecars: n.sidecars ?? [],
-      infraDeps: n.infraDeps ?? [],
       kafka: n.kafka ?? null,
     })),
     edges: graph.edges.map(e => ({

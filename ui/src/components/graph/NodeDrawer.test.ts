@@ -123,7 +123,6 @@ describe('NodeDrawer', () => {
     }
     store.graph.data = {
       env: 'local',
-      previewOnly: false,
       nodes: [
         node,
         { name: 'redis', kind: 'infra', state: 'stopped' },
@@ -155,7 +154,6 @@ describe('NodeDrawer', () => {
     }
     store.graph.data = {
       env: 'local',
-      previewOnly: false,
       nodes: [
         node,
         {
@@ -190,7 +188,6 @@ describe('NodeDrawer', () => {
     }
     store.graph.data = {
       env: 'local',
-      previewOnly: false,
       nodes: [
         node,
         {

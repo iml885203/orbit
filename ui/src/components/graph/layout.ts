@@ -36,25 +36,11 @@ export type PositionedNode =
   | Node<GraphNodeData, 'external'>
 
 /**
- * hiddenInfraNames returns the set of infra container names the canvas
- * should not render. The rule "preview-only envs hide infra nodes" lives
- * here so the layout, the edge filter in GraphView, and any future
- * consumer all share one source of truth. Returns an empty set for
- * regular envs.
- */
-export function hiddenInfraNames(graph: GraphResponse): Set<string> {
-  if (!graph.previewOnly) return new Set()
-  return new Set(graph.nodes.filter(n => n.kind === 'infra').map(n => n.name))
-}
-
-/**
  * layout returns positioned nodes for SvelteFlow rendering.
  *
  * Clustering kicks in whenever the yaml declares `groups:` — the author
  * opted into visual grouping. Envs without groups fall through to flat
- * dagre (the original behaviour). previewOnly is orthogonal: it controls
- * whether infra container nodes appear on the canvas (preview replaces
- * them with the per-service icon strip).
+ * dagre (the original behaviour).
  */
 export function layout(graph: GraphResponse, mode: LayoutMode = 'rectangle'): PositionedNode[] {
   if (graph.nodes.length === 0) return []
@@ -113,8 +99,7 @@ function runDagre(
 }
 
 function flatLayout(graph: GraphResponse): PositionedNode[] {
-  const hidden = hiddenInfraNames(graph)
-  const renderNodes = graph.nodes.filter(n => !hidden.has(n.name))
+  const renderNodes = graph.nodes
   const positions = runDagre(
     renderNodes.map(n => n.name),
     graph.edges,
@@ -159,8 +144,7 @@ function clusteredLayout(graph: GraphResponse, mode: LayoutMode): PositionedNode
     for (const s of g.services) groupOf.set(s, g.name)
   }
 
-  const hidden = hiddenInfraNames(graph)
-  const infraNodes = graph.nodes.filter(n => n.kind === 'infra' && !hidden.has(n.name))
+  const infraNodes = graph.nodes.filter(n => n.kind === 'infra')
   const externalNodes = graph.nodes.filter(n => n.kind === 'external')
   // Services assigned to a group are clustered; the rest fall back to a
   // tail row alongside any visible infra and external nodes.

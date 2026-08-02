@@ -1,6 +1,6 @@
 <script lang="ts">
   import { push } from 'svelte-spa-router'
-  import { Eye, Lock } from '@lucide/svelte'
+  import { Eye } from '@lucide/svelte'
   import { store, toast } from '$lib/stores.svelte'
   import { fetchGraph } from '$lib/api'
   import { envShortName } from '$lib/envName'
@@ -58,7 +58,6 @@
             <span class="name">{short}</span>
             {#if env.current}<span class="badge">current</span>{/if}
             {#if previewing}<span class="badge preview"><Eye size={11} aria-hidden="true" /> preview</span>{/if}
-            {#if env.previewOnly}<span class="lock" aria-label="Preview only"><Lock size={12} /></span>{/if}
           </button>
         </li>
       {/each}
@@ -160,7 +159,6 @@
     color: var(--blue);
     background: color-mix(in srgb, var(--blue) 15%, transparent);
   }
-  .lock { color: var(--dim); flex: none; }
   .footer {
     margin-top: var(--space-2);
     padding-top: var(--space-2);

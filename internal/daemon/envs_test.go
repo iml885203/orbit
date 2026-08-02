@@ -176,34 +176,3 @@ func TestHandleEnvSwitch_InvalidJSON(t *testing.T) {
 		t.Errorf("status = %d, want 400", w.Code)
 	}
 }
-
-func TestHandleEnvSwitch_RejectsPreviewOnly(t *testing.T) {
-	tmp := t.TempDir()
-	envsDir := filepath.Join(tmp, "envs")
-	_ = os.MkdirAll(envsDir, 0755)
-	currentEnv := filepath.Join(envsDir, "current.yaml")
-	if err := os.WriteFile(currentEnv, []byte("version: \"3\"\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	prodEnv := filepath.Join(envsDir, "prod.yaml")
-	if err := os.WriteFile(prodEnv, []byte("version: \"3\"\npreviewOnly: true\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := newTestServer(t, &config.Config{})
-	srv.SetConfigPath(currentEnv)
-
-	body := strings.NewReader(`{"env":"prod"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/env", body)
-	w := httptest.NewRecorder()
-	srv.handleEnvSwitch(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409, body=%s", w.Code, w.Body.String())
-	}
-	// Live config path must be untouched — reject happens before any
-	// state change so the user isn't stranded with everything stopped.
-	if srv.ConfigPath() != currentEnv {
-		t.Errorf("ConfigPath mutated to %q; switch should reject before any state change", srv.ConfigPath())
-	}
-}

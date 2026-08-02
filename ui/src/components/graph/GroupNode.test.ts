@@ -7,7 +7,6 @@ import type { GraphResponse } from '../../lib/types.gen'
 function groupGraph(state: string): GraphResponse {
   return {
     env: 'local',
-    previewOnly: false,
     groups: [{ name: 'app', services: ['api'] }],
     nodes: [{ name: 'api', kind: 'backend', state }],
     edges: [],
@@ -54,7 +53,6 @@ describe('GroupNode', () => {
   it('locks both lifecycle directions while the group is changing', () => {
     store.graph.data = {
       env: 'local',
-      previewOnly: false,
       groups: [{ name: 'app', services: ['api', 'worker'] }],
       nodes: [
         { name: 'api', kind: 'backend', state: 'starting' },
