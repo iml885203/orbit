@@ -13,7 +13,16 @@ func (s *Server) handleEnvironmentReconcile(w http.ResponseWriter, r *http.Reque
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
+	response, err := s.reconcileEnvironment()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, EnvironmentReconcileResponse{Error: err.Error()})
+		return
+	}
+	response.OK = true
+	writeJSON(w, http.StatusOK, response)
+}
 
+func (s *Server) reconcileEnvironment() (EnvironmentReconcileResponse, error) {
 	previouslyRunning := runningResourceNames(s.app.Orchestrator.GetAllServices())
 	running := runningNameSet(previouslyRunning)
 	response := EnvironmentReconcileResponse{
@@ -23,64 +32,69 @@ func (s *Server) handleEnvironmentReconcile(w http.ResponseWriter, r *http.Reque
 		UnavailableResources: []string{},
 		AffectedResources:    []string{},
 	}
-
 	err := s.UpdateConfig(func(tx extension.ConfigTx) error {
-		cfg, err := tx.Load(s.ConfigPath())
-		if err != nil {
-			return err
-		}
-		if cfg.PreviewOnly {
-			return fmt.Errorf("preview-only environments cannot be activated")
-		}
-		if err := s.app.PrepareConfig(cfg); err != nil {
-			return err
-		}
-
-		serviceModes := s.settings.GetServiceModes()
-		plan := engine.PlanConfigReconcile(tx.Current(), cfg, running, serviceModes)
-		if plan.RestartRequired {
-			response.RestartRequired = true
-			return nil
-		}
-		if err := s.app.StopServicesForConfig(plan.Stop); err != nil {
-			return err
-		}
-
-		detached := s.settings.GetDetachedEdges(s.currentEnvName())
-		s.app.ApplyConfig(cfg, detached, serviceModes)
-		s.SetConfigPath(s.ConfigPath())
-		s.engineStale.Store(false)
-		for _, name := range plan.Removed {
-			if running[name] {
-				response.UnavailableResources = append(response.UnavailableResources, name)
-			}
-		}
-		response.RestartedResources = append(response.RestartedResources, plan.Restart...)
-		return nil
+		return s.applyEnvironmentConfig(tx, running, &response)
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, EnvironmentReconcileResponse{Error: err.Error()})
-		return
+		return response, err
 	}
 	if response.RestartRequired {
-		response.OK = true
-		writeJSON(w, http.StatusOK, response)
-		return
+		return response, nil
 	}
-
-	if len(response.RestartedResources) > 0 {
-		affected, err := s.resolveServicesFromRequest(UpRequest{Resources: response.RestartedResources})
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, EnvironmentReconcileResponse{Error: err.Error()})
-			return
-		}
-		response.AffectedResources = affected
-		response.StartedDependencies = additionalResourceNames(response.RestartedResources, affected)
-		s.app.StartServices(affected)
+	if err := s.startReconciledResources(&response); err != nil {
+		return response, err
 	}
 	s.PersistState()
-	response.OK = true
-	writeJSON(w, http.StatusOK, response)
+	return response, nil
+}
+
+func (s *Server) applyEnvironmentConfig(tx extension.ConfigTx, running map[string]bool, response *EnvironmentReconcileResponse) error {
+	cfg, err := tx.Load(s.ConfigPath())
+	if err != nil {
+		return err
+	}
+	if cfg.PreviewOnly {
+		return fmt.Errorf("preview-only environments cannot be activated")
+	}
+	if err := s.app.PrepareConfig(cfg); err != nil {
+		return err
+	}
+
+	serviceModes := s.settings.GetServiceModes()
+	plan := engine.PlanConfigReconcile(tx.Current(), cfg, running, serviceModes)
+	if plan.RestartRequired {
+		response.RestartRequired = true
+		return nil
+	}
+	if err := s.app.StopServicesForConfig(plan.Stop); err != nil {
+		return err
+	}
+
+	detached := s.settings.GetDetachedEdges(s.currentEnvName())
+	s.app.Orchestrator.ApplyConfig(cfg, detached, serviceModes)
+	s.SetConfigPath(s.ConfigPath())
+	s.engineStale.Store(false)
+	for _, name := range plan.Removed {
+		if running[name] {
+			response.UnavailableResources = append(response.UnavailableResources, name)
+		}
+	}
+	response.RestartedResources = append(response.RestartedResources, plan.Restart...)
+	return nil
+}
+
+func (s *Server) startReconciledResources(response *EnvironmentReconcileResponse) error {
+	if len(response.RestartedResources) == 0 {
+		return nil
+	}
+	affected, err := s.resolveServicesFromRequest(UpRequest{Resources: response.RestartedResources})
+	if err != nil {
+		return err
+	}
+	response.AffectedResources = affected
+	response.StartedDependencies = additionalResourceNames(response.RestartedResources, affected)
+	s.app.StartServices(affected)
+	return nil
 }
 
 func runningResourceNames(services []engine.ServiceInfo) []string {

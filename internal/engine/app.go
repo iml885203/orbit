@@ -146,10 +146,6 @@ func (a *App) PrepareConfig(cfg *config.Config) error {
 	return nil
 }
 
-func (a *App) ApplyConfig(cfg *config.Config, detachedDeps map[string][]string, serviceModes map[string]string) {
-	a.Orchestrator.ApplyConfig(cfg, detachedDeps, serviceModes)
-}
-
 func (a *App) wireLogCapture(logs *logging.Multiplexer, orch *Orchestrator) {
 	a.ContainerMgr.OnOutput = func(name, line string) { logs.Write(name, line) }
 	a.ProcessMgr.OnOutput = func(name, line string) { logs.Write(name, line) }
