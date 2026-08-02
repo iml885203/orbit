@@ -114,6 +114,43 @@ Destructive steps that need an explicit go-ahead use the stable
 recommended action is the same command with `--yes`. Emit it only when the
 caller (or its operator) intends the destruction.
 
+### Stable error codes
+
+`error.code` values are part of the versioned contract. The current set:
+
+| Code | Meaning |
+|---|---|
+| `checks_failed` | doctor checks failed; resolve them, then run doctor again |
+| `command_failed` | unclassified failure; act on the hint |
+| `confirmation_required` | a destructive step needs `--yes` |
+| `daemon_unreachable` | Orbit is not running |
+| `dashboard_port_conflict` | the dashboard port is owned by another process |
+| `dependency_blocked` | a required dependency cannot become healthy |
+| `env_mismatch` | the selected config differs from the running daemon's |
+| `env_repo_access` | environment repository access or authentication failed |
+| `env_repo_unavailable` | environment repository unreachable |
+| `environment_changed` | the env file changed; apply before continuing |
+| `environment_schema_newer` | the env schema is newer than this Orbit |
+| `environment_schema_outdated` | the env schema predates this Orbit |
+| `environment_selection_required` | no environment is selected |
+| `init_incomplete` | initialization stopped before finishing |
+| `invalid_argument` | conflicting or unknown command selection |
+| `invalid_environment` | the environment file fails validation |
+| `invalid_environment_schema` | the environment file fails schema validation |
+| `json_unsupported_destructive_command` | this destructive command refuses `--json` |
+| `logs_unavailable` | no buffered output exists for that resource |
+| `not_configured` | the active env does not enable this feature |
+| `orbit_update_pending` | an installed update needs a daemon restart |
+| `project_context_inactive` | a project config was found but the daemon serves another env |
+| `resource_port_conflict` | a resource's host port is owned by another process |
+| `service_start_failed` | a resource failed to become healthy |
+| `service_working_directory_missing` | a host service path does not resolve |
+| `setup_required` | `orbit init` has not completed |
+| `socket_path_too_long` | `ORBIT_HOME` produces an over-long socket path |
+| `timeout` | the wait exceeded `--timeout` |
+| `unknown_group` | `--group` names no defined group |
+| `unknown_resource` | a named resource is not in the env |
+
 ## Converted Commands
 
 These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
@@ -142,6 +179,10 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
 | `orbit uninstall --json` | Previews binary artifacts and whether user data is preserved; `--yes` is required before removal. |
 | `orbit sqlserver publish <database|project> --json` | Runs the ordinary data-preserving publish and returns `databases`, `published`, and `data_loss_allowed: false`. `--all` and `--parallel` use the same envelope. `--force --json` never publishes; it returns one manual `destructive: true` action that preserves the scope and `--force` but removes `--yes` so a person still confirms. |
+| `orbit sqlserver list --json` | Returns the configured SQL projects and their databases in `data`. |
+| `orbit sqlserver diff --json` | Returns per-database drift in the envelope; `--script` adds the change script to `data`. |
+| `orbit sqlserver reset --json` | Never resets: refuses with the stable `json_unsupported_destructive_command` error so data loss stays a human decision. |
+| `orbit init --json` | Returns the setup result in the envelope, with failures carrying the incomplete step. |
 | `orbit trace --json` | Returns recent trace summaries in `data.traces`, newest first. |
 | `orbit trace -f --json` | Streams NDJSON trace-summary events, one JSON object per line. |
 | `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |
@@ -264,6 +305,16 @@ shape for compatibility:
 | `orbit daemon status --json` | Returns the legacy daemon status object. |
 | `orbit history --json` | Keeps its existing history payload. |
 | `orbit history gaps --json` | Keeps its existing history gaps payload. |
+| `orbit tunnel claim/list/release --json` | Emits Tunlease-shaped NDJSON events (`schema_version: 1`, `type` per event) rather than the envelope; errors use the same shape on stdout. |
+
+## Passthrough Commands
+
+These commands wrap an interactive or foreign process, so `--json` (a global
+flag) is accepted but has no effect — output is the wrapped tool's raw stream:
+
+`orbit exec`, `orbit query redis|mongo|postgres`, `orbit topics *`,
+`orbit sqlserver query`, `orbit open`. `orbit seed` prints human progress on
+success; only its failures use the error envelope.
 
 Do not assume every `--json` command has an envelope. Check the command-specific
 contract before parsing.

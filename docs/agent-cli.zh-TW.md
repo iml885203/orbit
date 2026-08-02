@@ -104,6 +104,43 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 時什麼都不會改變；第一個 recommended action 就是加上 `--yes` 的同一個指令。
 只有在 caller（或其操作者）確實想要這個破壞性結果時才執行它。
 
+### 穩定錯誤碼
+
+`error.code` 的值屬於版本化契約。目前的集合：
+
+| Code | 意義 |
+|---|---|
+| `checks_failed` | doctor 檢查失敗；解決後再跑一次 doctor |
+| `command_failed` | 未分類的失敗；依 hint 行動 |
+| `confirmation_required` | 破壞性步驟需要 `--yes` |
+| `daemon_unreachable` | Orbit 沒有在運行 |
+| `dashboard_port_conflict` | dashboard port 被其他 process 占用 |
+| `dependency_blocked` | 必要的 dependency 無法變 healthy |
+| `env_mismatch` | 選定的 config 與運行中 daemon 的不同 |
+| `env_repo_access` | environment repository 存取或認證失敗 |
+| `env_repo_unavailable` | environment repository 連不上 |
+| `environment_changed` | env 檔已變更；先套用再繼續 |
+| `environment_schema_newer` | env schema 比這個 Orbit 新 |
+| `environment_schema_outdated` | env schema 比這個 Orbit 舊 |
+| `environment_selection_required` | 尚未選定 environment |
+| `init_incomplete` | 初始化中途停止 |
+| `invalid_argument` | 衝突或未知的指令選擇 |
+| `invalid_environment` | environment 檔驗證失敗 |
+| `invalid_environment_schema` | environment 檔 schema 驗證失敗 |
+| `json_unsupported_destructive_command` | 這個破壞性指令拒絕 `--json` |
+| `logs_unavailable` | 該資源沒有緩衝的輸出 |
+| `not_configured` | active env 沒有啟用這個功能 |
+| `orbit_update_pending` | 已安裝的更新需要 daemon restart |
+| `project_context_inactive` | 找到 project config 但 daemon 服務別的 env |
+| `resource_port_conflict` | 資源的 host port 被其他 process 占用 |
+| `service_start_failed` | 資源未能變 healthy |
+| `service_working_directory_missing` | host service 的 path 解析不到 |
+| `setup_required` | `orbit init` 尚未完成 |
+| `socket_path_too_long` | `ORBIT_HOME` 產生過長的 socket 路徑 |
+| `timeout` | 等待超過 `--timeout` |
+| `unknown_group` | `--group` 指到不存在的 group |
+| `unknown_resource` | 指名的資源不在 env 裡 |
+
 ## Converted Commands
 
 下列指令在加上 `--json` 時，目前都使用 `orbit.cli.v1` envelope：
@@ -132,6 +169,10 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 | `orbit daemon restart --json` | 回傳先前/新的 daemon 狀態、PID、config path、dashboard URL 與 service shutdown 影響。 |
 | `orbit uninstall --json` | 預覽 binary artifacts 與 user data 是否保留；只有加上 `--yes` 才會移除。 |
 | `orbit sqlserver publish <database|project> --json` | 執行一般的 data-preserving publish，並回傳 `databases`、`published` 與 `data_loss_allowed: false`。`--all`、`--parallel` 使用相同 envelope。`--force --json` 絕不 publish；它只回傳一個保留 scope 與 `--force`、移除 `--yes` 的人工 `destructive: true` action，讓執行的人仍需確認。 |
+| `orbit sqlserver list --json` | 在 `data` 回傳設定的 SQL projects 與其 databases。 |
+| `orbit sqlserver diff --json` | 以 envelope 回傳每個 database 的 drift；`--script` 會把變更腳本加進 `data`。 |
+| `orbit sqlserver reset --json` | 絕不執行 reset：以穩定的 `json_unsupported_destructive_command` 錯誤拒絕，資料遺失永遠由人決定。 |
+| `orbit init --json` | 以 envelope 回傳 setup 結果，失敗時帶出未完成的步驟。 |
 | `orbit trace --json` | 回傳近期 trace summaries 於 `data.traces`，最新在前。 |
 | `orbit trace -f --json` | 串流 NDJSON trace-summary event，一行一個 JSON 物件。 |
 | `orbit trace <id> --json` | 回傳一條完整 trace（summary 欄位 + `spans`）於 `data`。 |
@@ -245,6 +286,16 @@ Host service path 尚未解析或不存在時，會使用穩定的
 | `orbit daemon status --json` | 回傳 legacy daemon status 物件。 |
 | `orbit history --json` | 保持既有的 history payload。 |
 | `orbit history gaps --json` | 保持既有的 history gaps payload。 |
+| `orbit tunnel claim/list/release --json` | 輸出 Tunlease 形狀的 NDJSON 事件（`schema_version: 1`、每事件一個 `type`），不是 envelope；錯誤用同一形狀走 stdout。 |
+
+## Passthrough Commands
+
+以下指令包裝互動式或外部程式，所以（全域的）`--json` 會被接受但沒有效果——
+輸出就是被包裝工具的原始串流：
+
+`orbit exec`、`orbit query redis|mongo|postgres`、`orbit topics *`、
+`orbit sqlserver query`、`orbit open`。`orbit seed` 成功時印人類可讀進度；
+只有失敗會用錯誤 envelope。
 
 不要預設每一個 `--json` 指令都有 envelope。解析前請先確認該指令各自的 contract。
 
