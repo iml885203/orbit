@@ -419,7 +419,9 @@ assert status["ok"] is True
 environment = status["data"]["environment"]
 assert environment["state"] == "selected"
 assert environment["selected_name"] == "dev"
-assert pathlib.Path(environment["selected_path"]) == orbit_home / "envs" / "dev.yaml"
+assert pathlib.Path(environment["selected_path"]) == (
+    orbit_home / "sources" / "team" / "current" / "envs" / "dev.yaml"
+)
 resources = {resource["name"]: resource for resource in status["data"]["resources"]}
 assert set(resources) == {"app", "redis"}
 assert all(resource["state"] == "healthy" for resource in resources.values())
