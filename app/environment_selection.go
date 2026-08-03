@@ -66,7 +66,7 @@ type environmentSelectionRequiredError struct {
 func newEnvironmentSelectionRequiredError(selection environmentSelection) error {
 	next := "orbit source sync"
 	if len(selection.Environments) == 1 {
-		next = environmentSwitchCommand(selection.Environments[0].Name, false)
+		next = environmentSwitchCommand(environmentChoiceSwitchTarget(selection.Environments[0]), false)
 	} else if len(selection.Environments) > 1 {
 		next = "orbit env list"
 	}
@@ -229,12 +229,20 @@ func environmentSelectionActions(selection environmentSelection) []cli.JSONActio
 
 	actions := make([]cli.JSONAction, 0, len(selection.Environments))
 	for _, environment := range selection.Environments {
+		target := environmentChoiceSwitchTarget(environment)
 		actions = append(actions, cli.JSONAction{
-			Command: environmentSwitchCommand(environment.Name, true),
-			Reason:  "Select the " + environment.Name + " environment.",
+			Command: environmentSwitchCommand(target, true),
+			Reason:  "Select the " + target + " environment.",
 		})
 	}
 	return actions
+}
+
+func environmentChoiceSwitchTarget(environment environmentChoice) string {
+	if environment.Identity != "" {
+		return environment.Identity
+	}
+	return environment.Name
 }
 
 func environmentSwitchCommand(name string, jsonOutput bool) string {

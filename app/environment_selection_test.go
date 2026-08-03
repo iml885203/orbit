@@ -47,18 +47,22 @@ func TestEnvironmentSelectionActionsOfferExactChoices(t *testing.T) {
 	actions := environmentSelectionActions(environmentSelection{
 		State: environmentSelectionUnavailable,
 		Environments: []environmentChoice{
-			{Name: "local"},
+			{Identity: "company/e2e", Name: "e2e"},
+			{Identity: "team/e2e", Name: "e2e"},
 			{Name: "team dev"},
 		},
 	})
-	if len(actions) != 2 {
+	if len(actions) != 3 {
 		t.Fatalf("actions = %+v", actions)
 	}
-	if actions[0].Command != "orbit switch local --json" {
+	if actions[0].Command != "orbit switch company/e2e --json" {
 		t.Fatalf("first command = %q", actions[0].Command)
 	}
-	if actions[1].Command != "orbit switch 'team dev' --json" {
+	if actions[1].Command != "orbit switch team/e2e --json" {
 		t.Fatalf("second command = %q", actions[1].Command)
+	}
+	if actions[2].Command != "orbit switch 'team dev' --json" {
+		t.Fatalf("third command = %q", actions[2].Command)
 	}
 }
 
