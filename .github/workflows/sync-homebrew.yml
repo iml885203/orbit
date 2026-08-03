@@ -8,8 +8,8 @@ on:
         required: true
         type: string
     secrets:
-      HOMEBREW_TAP_TOKEN:
-        description: Fine-grained token for the homebrew-tap Actions API
+      PACKAGE_SYNC_APP_PRIVATE_KEY:
+        description: Private key for the package-sync GitHub App
         required: true
   workflow_dispatch:
     inputs:
@@ -24,14 +24,24 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Generate Homebrew sync token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.PACKAGE_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PACKAGE_SYNC_APP_PRIVATE_KEY }}
+          owner: iml885203
+          repositories: homebrew-tap
+          permission-actions: write
+          permission-contents: read
       - uses: ./.github/actions/sync-package-repository
         with:
           repository: iml885203/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           version: ${{ inputs.version }}
       - name: Verify the formula
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
