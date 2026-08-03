@@ -24,7 +24,7 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 	envsDir := filepath.Join(cloneDir, "envs")
 	info, err := os.Stat(envsDir)
 	if err != nil || !info.IsDir() {
-		return Result{}, fmt.Errorf("repo at %s has no envs/ directory", url)
+		return Result{}, missingEnvsDirectoryError(url)
 	}
 
 	result, err := Sync(envsDir, destDir, opts)
@@ -43,4 +43,8 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 		}
 	}
 	return result, nil
+}
+
+func missingEnvsDirectoryError(url string) error {
+	return fmt.Errorf("repo at %s has no envs/ directory", RedactURL(url))
 }

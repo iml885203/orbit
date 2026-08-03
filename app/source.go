@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
@@ -159,6 +160,14 @@ func sourceListCmd() *cobra.Command {
 				if source.Workspace != "" {
 					fmt.Printf("  Workspace: %s\n", source.Workspace)
 				}
+				if source.ResolvedRef != "" || source.Commit != "" {
+					fmt.Printf("  Revision: %s @ %s\n", source.ResolvedRef, source.Commit)
+				}
+				if source.LastSyncError != "" {
+					fmt.Printf("  Sync: failed: %s\n", source.LastSyncError)
+				} else if !source.LastSyncAt.IsZero() {
+					fmt.Printf("  Sync: %s\n", source.LastSyncAt.Format(time.RFC3339))
+				}
 			}
 			return nil
 		},
@@ -190,6 +199,9 @@ func sourceInfoCmd() *cobra.Command {
 			if source.Ref != "" {
 				fmt.Printf("Ref: %s\n", source.Ref)
 			}
+			if source.ResolvedRef != "" {
+				fmt.Printf("Resolved ref: %s\n", source.ResolvedRef)
+			}
 			if source.Commit != "" {
 				fmt.Printf("Commit: %s\n", source.Commit)
 			}
@@ -197,6 +209,11 @@ func sourceInfoCmd() *cobra.Command {
 				fmt.Printf("Workspace: %s\n", source.Workspace)
 			} else {
 				fmt.Println("Workspace: not set")
+			}
+			if source.LastSyncError != "" {
+				fmt.Printf("Last sync: failed: %s\n", source.LastSyncError)
+			} else if !source.LastSyncAt.IsZero() {
+				fmt.Printf("Last sync: %s\n", source.LastSyncAt.Format(time.RFC3339))
 			}
 			fmt.Printf("Environments: %s\n", strings.Join(environments, ", "))
 			return nil

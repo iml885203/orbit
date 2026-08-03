@@ -11,6 +11,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/internal/envsource"
 )
 
 func TestBuildInspectServiceSummaryGroupsStates(t *testing.T) {
@@ -391,6 +392,34 @@ func TestLocalInspectEnvironmentContextDistinguishesConfigKinds(t *testing.T) {
 	}
 	if managedContext.Kind != "managed" || managedContext.ManagedSelection == nil || !managedContext.ManagedSelection.Active {
 		t.Fatalf("managed context = %+v", managedContext)
+	}
+}
+
+func TestLocalInspectEnvironmentContextUsesQualifiedManagedIdentity(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	registry, err := envsource.Load(envsource.RegistryPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, name := range []string{"company", "personal"} {
+		local := t.TempDir()
+		if err := registry.Add(envsource.Source{Name: name, Type: envsource.TypeLocal, Path: local}, index == 0); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(envsource.EnvsDir(home, name), "e2e.yaml")
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target := filepath.Join(envsource.EnvsDir(home, "personal"), "e2e.yaml")
+	selection := environmentSelection{ManagedSelection: &environmentChoice{Identity: "personal/e2e", Name: "e2e", Path: target}}
+	context := localInspectEnvironmentContext(target, selection)
+	if context.Identity != "personal/e2e" || context.ManagedSelection == nil || context.ManagedSelection.Identity != "personal/e2e" || !context.ManagedSelection.Active {
+		t.Fatalf("managed context = %+v", context)
 	}
 }
 

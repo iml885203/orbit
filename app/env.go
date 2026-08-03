@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
@@ -210,8 +211,16 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 				labels = append(labels, "Default")
 			}
 			fmt.Printf("%s  [%s]\n", source.Name, strings.Join(labels, "] ["))
+			fmt.Printf("Location: %s\n", source.Location)
 			if source.Workspace != "" {
 				fmt.Printf("Workspace: %s\n", source.Workspace)
+			}
+			if source.LastSyncError != "" {
+				fmt.Printf("Sync: failed: %s\n", source.LastSyncError)
+			} else if !source.LastSyncAt.IsZero() {
+				fmt.Printf("Sync: %s\n", source.LastSyncAt.Format(time.RFC3339))
+			} else if source.ResolvedRef != "" || source.Commit != "" {
+				fmt.Printf("Revision: %s @ %s\n", source.ResolvedRef, source.Commit)
 			}
 			for _, environment := range source.Environments {
 				marker := "  "

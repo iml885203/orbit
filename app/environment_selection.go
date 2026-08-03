@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
@@ -38,6 +39,7 @@ type environmentSourceChoice struct {
 	ResolvedRef   string              `json:"resolved_ref,omitempty"`
 	Commit        string              `json:"commit,omitempty"`
 	LastSyncError string              `json:"last_sync_error,omitempty"`
+	LastSyncAt    time.Time           `json:"last_sync_at,omitempty"`
 	Environments  []environmentChoice `json:"environments"`
 }
 
@@ -122,7 +124,7 @@ func readEnvironmentSelection() environmentSelection {
 			sourceChoice := environmentSourceChoice{
 				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
 				Default: source.Default, Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
-				LastSyncError: source.LastSyncError, Environments: []environmentChoice{},
+				LastSyncError: source.LastSyncError, LastSyncAt: source.LastSyncAt, Environments: []environmentChoice{},
 			}
 			for _, filename := range daemonsrv.ListEnvYamls(envsource.EnvsDir(daemon.OrbitDir(), source.Name)) {
 				path := filepath.Join(envsource.EnvsDir(daemon.OrbitDir(), source.Name), filename)

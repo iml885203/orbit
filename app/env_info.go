@@ -48,6 +48,7 @@ type envInfoIdentity struct {
 	Location    string `json:"source_location,omitempty"`
 	Workspace   string `json:"workspace,omitempty"`
 	Ref         string `json:"ref,omitempty"`
+	ResolvedRef string `json:"resolved_ref,omitempty"`
 	Commit      string `json:"commit,omitempty"`
 	Selected    bool   `json:"selected"`
 	Running     bool   `json:"running"`
@@ -156,6 +157,7 @@ func buildEnvInfoJSONData(
 		data.Env.Location = source.Location()
 		data.Env.Workspace = source.Workspace
 		data.Env.Ref = source.Ref
+		data.Env.ResolvedRef = source.ResolvedRef
 		data.Env.Commit = source.Commit
 		data.Env.Selected = sameFilePath(abs, readCurrentEnv())
 	}
@@ -241,7 +243,18 @@ func printEnvInfoHuman(data envInfoJSONData) {
 		if data.Env.Workspace != "" {
 			fmt.Printf("Workspace: %s\n", data.Env.Workspace)
 		}
+		if data.Env.Ref != "" || data.Env.ResolvedRef != "" {
+			fmt.Printf("Revision: %s", data.Env.ResolvedRef)
+			if data.Env.Ref != "" && data.Env.Ref != data.Env.ResolvedRef {
+				fmt.Printf(" (requested %s)", data.Env.Ref)
+			}
+			fmt.Println()
+		}
+		if data.Env.Commit != "" {
+			fmt.Printf("Commit: %s\n", data.Env.Commit)
+		}
 	}
+	fmt.Printf("Selected: %t\nRunning: %t\n", data.Env.Selected, data.Env.Running)
 	fmt.Printf("Config: %s\n", data.Env.ConfigPath)
 	if data.Env.ProjectRoot != "" {
 		fmt.Printf("Project root: %s\n", data.Env.ProjectRoot)

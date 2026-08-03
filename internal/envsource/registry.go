@@ -261,8 +261,20 @@ func ContainsPath(orbitHome, sourceName, path string) bool {
 	if path == "" {
 		return false
 	}
-	relative, err := filepath.Rel(EnvsDir(orbitHome, sourceName), path)
+	directory := canonicalPath(EnvsDir(orbitHome, sourceName))
+	path = canonicalPath(path)
+	relative, err := filepath.Rel(directory, path)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func canonicalPath(path string) string {
+	if absolute, err := filepath.Abs(path); err == nil {
+		path = absolute
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return filepath.Clean(path)
 }
 
 func (r *Registry) SourceForPath(orbitHome, path string) (Source, string, bool) {

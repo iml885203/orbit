@@ -166,6 +166,16 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	settings.ApplyToEnv()
+	configuredRegistry, err := sourceRegistry()
+	if err != nil {
+		return err
+	}
+	var configuredDefault *envsource.Source
+	if initSource == "" && initEnvRepo == "" && initPath == "" && initEnvRef == "" {
+		if existing, defaultErr := configuredRegistry.Default(); defaultErr == nil {
+			configuredDefault = &existing
+		}
+	}
 
 	currentURL := settings.Get(settingKeyEnvRepoURL)
 	currentRef := settings.Get(settingKeyEnvRepoRef)
@@ -190,6 +200,11 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		repoRef = initEnvRef
 		explicit = true
 	}
+	if configuredDefault != nil {
+		repoURL = configuredDefault.URL
+		repoRef = configuredDefault.Ref
+		explicit = true
+	}
 	defaultQuickstart := !explicit &&
 		currentURL == "" &&
 		currentRef == "" &&
@@ -207,6 +222,10 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		sourceName = "default"
 	}
 	source := envsource.Source{Name: sourceName, Type: envsource.TypeGit, URL: repoURL, Ref: repoRef}
+	if configuredDefault != nil {
+		source = *configuredDefault
+		sourceName = source.Name
+	}
 	if initPath != "" {
 		normalized, err := envsource.ValidateLocalSource(initPath)
 		if err != nil {
@@ -243,9 +262,12 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		if defaultQuickstart {
 			output.println("  Preparing the Orbit demo")
 		} else {
-			sourceLabel := envsync.RedactURL(repoURL)
-			if repoRef != "" {
-				sourceLabel += " @ " + repoRef
+			sourceLabel := source.Location()
+			if source.Type == envsource.TypeGit {
+				sourceLabel = envsync.RedactURL(sourceLabel)
+			}
+			if source.Ref != "" {
+				sourceLabel += " @ " + source.Ref
 			}
 			output.printf("  Syncing %s → %s\n", sourceLabel, envsDir)
 		}
