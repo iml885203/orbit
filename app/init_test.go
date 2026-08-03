@@ -114,6 +114,15 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	}
 }
 
+func TestRequiresWorkspaceRootIgnoresCommentsAndFallbacks(t *testing.T) {
+	if requiresWorkspaceRoot([]byte("# ${WORKSPACE_ROOT}\nnotes: portable # ${WORKSPACE_ROOT}\npath: ${WORKSPACE_ROOT:-/portable}\n")) {
+		t.Fatal("comments or fallback triggered a required workspace")
+	}
+	if !requiresWorkspaceRoot([]byte("path: ${WORKSPACE_ROOT}/api\n")) {
+		t.Fatal("required workspace reference was missed")
+	}
+}
+
 func unsetEnvForTest(t *testing.T, key string) {
 	t.Helper()
 	value, existed := os.LookupEnv(key)

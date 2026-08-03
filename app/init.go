@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/envsource"
@@ -414,18 +413,11 @@ func configureRequiredWorkspace(
 	settings *daemon.Settings,
 	envPath string,
 ) (bool, string, error) {
-	cfg, err := config.Load(envPath)
+	contents, err := os.ReadFile(envPath)
 	if err != nil {
-		return false, "", nil
+		return false, "", err
 	}
-	var requiredBy []string
-	for _, check := range daemonsrv.ServiceWorkingDirectoryChecks(cfg, nil) {
-		if strings.HasPrefix(check.Hint, `run: orbit source set-workspace `) {
-			name := strings.TrimSuffix(strings.TrimPrefix(check.Name, "Working directory ("), ")")
-			requiredBy = append(requiredBy, name)
-		}
-	}
-	if len(requiredBy) == 0 {
+	if !requiresWorkspaceRoot(contents) {
 		return false, "", nil
 	}
 
@@ -442,8 +434,7 @@ func configureRequiredWorkspace(
 
 	output.println()
 	output.boldln("Step 3: Project workspace")
-	output.printf("  Environment %s needs local project files for %s.\n",
-		daemonsrv.EnvShortName(envPath), strings.Join(requiredBy, ", "))
+	output.printf("  Environment %s needs local project files.\n", daemonsrv.EnvShortName(envPath))
 	root := candidate
 	if !initYes {
 		label := "  Project checkout or workspace root (absolute path)"
@@ -468,6 +459,22 @@ func configureRequiredWorkspace(
 	settings.ApplyToEnv()
 	output.printf("  %s Project workspace: %s\n", cli.Green.Sprint("✓"), root)
 	return true, root, nil
+}
+
+func requiresWorkspaceRoot(contents []byte) bool {
+	for _, line := range strings.Split(string(contents), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if comment := strings.Index(trimmed, " #"); comment >= 0 {
+			trimmed = trimmed[:comment]
+		}
+		if strings.Contains(trimmed, "${WORKSPACE_ROOT}") {
+			return true
+		}
+	}
+	return false
 }
 
 func gitCheckoutRoot(start string) string {
