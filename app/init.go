@@ -456,7 +456,9 @@ func configureRequiredWorkspace(
 	if err := settings.Set("workspace_root", root); err != nil {
 		return false, "", fmt.Errorf("saving workspace root: %w", err)
 	}
-	settings.ApplyToEnv()
+	if err := os.Setenv("WORKSPACE_ROOT", root); err != nil {
+		return false, "", fmt.Errorf("applying workspace root: %w", err)
+	}
 	output.printf("  %s Project workspace: %s\n", cli.Green.Sprint("✓"), root)
 	return true, root, nil
 }

@@ -91,6 +91,9 @@ func TestConfigureRequiredWorkspaceUsesSavedWorkspaceRoot(t *testing.T) {
 	if saved := settings.Get("workspace_root"); saved != root {
 		t.Fatalf("saved workspace = %q, want %q", saved, root)
 	}
+	if applied := os.Getenv("WORKSPACE_ROOT"); applied != root {
+		t.Fatalf("WORKSPACE_ROOT = %q, want %q for init health checks", applied, root)
+	}
 }
 
 func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testing.T) {
