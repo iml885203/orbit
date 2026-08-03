@@ -330,7 +330,7 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
 
 PATH="$(dirname "$orbit_bin"):$PATH" \
-  python3 "$ORBIT_HOME/envs/seeds/mini-shop/smoke.py" \
+  python3 "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
   >"$test_root/mini-shop-smoke.txt"
 
 expected_demo_ref="$(
@@ -394,7 +394,7 @@ assert [action["command"] for action in infrastructure["recommended_actions"]] =
 PY
 
 english_handoff="https://github.com/iml885203/orbit/blob/$expected_demo_ref/docs/local-first.md"
-handoff_file="$ORBIT_HOME/envs/seeds/mini-shop/index.html"
+handoff_file="$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/index.html"
 if ! grep -F "$english_handoff" "$handoff_file" >/dev/null; then
   echo "demo handoff in $handoff_file does not match the Orbit release: $english_handoff" >&2
   exit 1
