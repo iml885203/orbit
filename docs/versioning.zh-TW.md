@@ -40,6 +40,12 @@ Release notes 在 approve release workflow 時輸入，保留於 GitHub Releases
 不再累積在 source tree。內容先描述整個 batch 的使用者成果，個別修正則作為
 支援細節。
 
+Package updates 使用 private `iml885203-package-sync` GitHub App。只將 App
+安裝到 `iml885203/homebrew-tap` 與 `iml885203/scoop-bucket`，並授予
+`Actions: Read and write` 與 `Contents: Read`。將 client ID 設為
+`PACKAGE_SYNC_APP_CLIENT_ID` repository variable，private key 設為
+`PACKAGE_SYNC_APP_PRIVATE_KEY` repository secret。
+
 1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：
 
 - PATCH：向後相容的修正；
