@@ -365,10 +365,12 @@ assert version["ok"] is True
 assert version["schema_version"] == "orbit.cli.v1"
 assert version["data"]["version"]
 assert health["ok"] is True
-status_source = status["data"]["environment"]["managed_source"]
-list_source = env_list["data"]["environment"]["managed_source"]
+status_sources = status["data"]["environment"]["sources"]
+list_sources = env_list["data"]["environment"]["sources"]
+status_source = next(source for source in status_sources if source["default"])
+list_source = next(source for source in list_sources if source["default"])
 assert status_source == list_source
-assert status_source["url"] == "https://github.com/iml885203/orbit-demo.git"
+assert status_source["location"] == "https://github.com/iml885203/orbit-demo.git"
 assert status_source["ref"] == expected_demo_ref
 assert len(status_source["commit"]) == 40
 assert up["recommended_actions"] == [{
