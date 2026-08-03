@@ -234,7 +234,7 @@ jobs:
     with:
       version: ${{ inputs.tag }}
     secrets:
-      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      PACKAGE_SYNC_APP_PRIVATE_KEY: ${{ secrets.PACKAGE_SYNC_APP_PRIVATE_KEY }}
 
   update-scoop:
     needs: release
@@ -242,4 +242,4 @@ jobs:
     with:
       version: ${{ inputs.tag }}
     secrets:
-      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+      PACKAGE_SYNC_APP_PRIVATE_KEY: ${{ secrets.PACKAGE_SYNC_APP_PRIVATE_KEY }}
