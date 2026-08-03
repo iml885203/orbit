@@ -392,7 +392,8 @@ cd "$test_root/project"
 export ORBIT_HOME="$shared_home"
 export ORBIT_NAMESPACE="$shared_namespace"
 printf '\n' | "$orbit_bin" init \
-  --env-repo "file://$test_root/team-env" \
+  --source team \
+  --url "file://$test_root/team-env" \
   --env dev >"$test_root/shared-init.txt"
 grep -F \
   "Project checkout or workspace root (absolute path) [$test_root/project]" \
