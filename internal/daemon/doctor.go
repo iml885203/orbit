@@ -79,7 +79,7 @@ func checkHostTool(c HostToolCheck) DoctorCheck {
 			Name:    c.Name,
 			Status:  status,
 			Message: c.Binary + " not found on PATH" + requiredBy,
-			Hint:    missingRuntimeHint(c),
+			Hint:    c.Hint,
 		}
 	}
 	msg := "found at " + path

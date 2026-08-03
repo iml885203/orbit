@@ -33,6 +33,32 @@ func TestPreflightSelectedEnvironmentStillRequiresInitialization(t *testing.T) {
 	}
 }
 
+func TestPreflightAllowsRuntimeVersionMismatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is POSIX-only")
+	}
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".nvmrc"), []byte("999\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	node := filepath.Join(t.TempDir(), "node")
+	if err := os.WriteFile(node, []byte("#!/bin/sh\necho v22.4.1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(t.TempDir(), "orbit.yaml")
+	config := "version: \"3\"\nservices:\n  web:\n    type: node\n    path: " + project + "\n    command: " + node + " server.js\n"
+	if err := os.WriteFile(envPath, []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previousConfig := configFile
+	configFile = envPath
+	t.Cleanup(func() { configFile = previousConfig })
+
+	if err := preflightOrAbort(true, nil); err != nil {
+		t.Fatalf("runtime version warning blocked startup: %v", err)
+	}
+}
+
 func TestPreflightBlocksUnsatisfiedPythonRequirementsWithSetupAction(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture is POSIX-only")

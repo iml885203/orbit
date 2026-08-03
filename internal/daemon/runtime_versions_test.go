@@ -24,7 +24,7 @@ func TestHostEnvironmentChecksNodeVersionMatchesProject(t *testing.T) {
 	}
 }
 
-func TestHostEnvironmentChecksNodeVersionMismatchHasOneRuntimeConclusion(t *testing.T) {
+func TestHostEnvironmentChecksNodeVersionMismatchWarnsOnce(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".node-version", "20.11.1\n")
 	dir, _ := fakeBin(t, "node", "#!/bin/sh\necho 'v22.4.1'\n")
@@ -32,7 +32,7 @@ func TestHostEnvironmentChecksNodeVersionMismatchHasOneRuntimeConclusion(t *test
 
 	checks := HostEnvironmentChecks(nodeConfig(project))
 	check := runtimeCheck(t, checks, "Node.js")
-	if check.Status != CheckFail {
+	if check.Status != CheckWarn {
 		t.Fatalf("check = %+v", check)
 	}
 	if !strings.Contains(check.Message, "web requires 20.11.1 (.node-version); installed 22.4.1") {
@@ -52,7 +52,7 @@ func TestHostEnvironmentChecksNodeVersionMismatchHasOneRuntimeConclusion(t *test
 	}
 }
 
-func TestHostEnvironmentChecksMissingNodeNamesRequiredVersion(t *testing.T) {
+func TestHostEnvironmentChecksMissingNodeOnlyRequiresInstallation(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".nvmrc", "20\n")
 	t.Setenv("PATH", "")
@@ -61,7 +61,7 @@ func TestHostEnvironmentChecksMissingNodeNamesRequiredVersion(t *testing.T) {
 	if check.Status != CheckFail {
 		t.Fatalf("check = %+v", check)
 	}
-	if !strings.Contains(check.Hint, "web requires 20 (.nvmrc)") {
+	if check.Hint != "Install Node.js: https://nodejs.org/" {
 		t.Fatalf("hint = %q", check.Hint)
 	}
 }
@@ -81,7 +81,7 @@ func TestHostEnvironmentChecksNodeAliasIsHonestWarning(t *testing.T) {
 	}
 }
 
-func TestHostEnvironmentChecksConflictingNodeFilesFail(t *testing.T) {
+func TestHostEnvironmentChecksConflictingNodeFilesWarn(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".nvmrc", "20\n")
 	writeRuntimeFile(t, project, ".node-version", "22\n")
@@ -89,7 +89,7 @@ func TestHostEnvironmentChecksConflictingNodeFilesFail(t *testing.T) {
 	t.Setenv("PATH", dir)
 
 	check := runtimeCheck(t, HostEnvironmentChecks(nodeConfig(project)), "Node.js")
-	if check.Status != CheckFail {
+	if check.Status != CheckWarn {
 		t.Fatalf("check = %+v", check)
 	}
 	if !strings.Contains(check.Message, "requires 20 (.nvmrc)") ||
@@ -126,7 +126,7 @@ func TestHostEnvironmentChecksGoModToolchainBeforeStartup(t *testing.T) {
 	}}
 
 	check := runtimeCheck(t, HostEnvironmentChecks(cfg), "Go")
-	if check.Status != CheckFail {
+	if check.Status != CheckWarn {
 		t.Fatalf("check = %+v", check)
 	}
 	if !strings.Contains(check.Message, "api requires 1.25.1 (go.mod); installed 1.24.6") {
@@ -137,7 +137,7 @@ func TestHostEnvironmentChecksGoModToolchainBeforeStartup(t *testing.T) {
 	}
 }
 
-func TestHostEnvironmentChecksMalformedVersionFileFails(t *testing.T) {
+func TestHostEnvironmentChecksMalformedVersionFileWarns(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".python-version", "\n")
 	dir, _ := fakeBin(t, "python3", "#!/bin/sh\necho 'Python 3.12.4'\n")
@@ -147,12 +147,12 @@ func TestHostEnvironmentChecksMalformedVersionFileFails(t *testing.T) {
 	}}
 
 	check := runtimeCheck(t, HostEnvironmentChecks(cfg), "Python")
-	if check.Status != CheckFail || !strings.Contains(check.Message, "file is empty") {
+	if check.Status != CheckWarn || !strings.Contains(check.Message, "file is empty") {
 		t.Fatalf("check = %+v", check)
 	}
 }
 
-func TestHostEnvironmentChecksMissingRuntimeExposesMalformedVersionFile(t *testing.T) {
+func TestHostEnvironmentChecksMissingRuntimeOnlyRequiresInstallation(t *testing.T) {
 	project := t.TempDir()
 	writeRuntimeFile(t, project, ".python-version", "\n")
 	t.Setenv("PATH", "")
@@ -164,7 +164,7 @@ func TestHostEnvironmentChecksMissingRuntimeExposesMalformedVersionFile(t *testi
 	if check.Status != CheckFail {
 		t.Fatalf("check = %+v", check)
 	}
-	if !strings.Contains(check.Hint, ".python-version: file is empty") {
+	if check.Hint != "Install Python 3: https://www.python.org/downloads/" {
 		t.Fatalf("hint = %q", check.Hint)
 	}
 }

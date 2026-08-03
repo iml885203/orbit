@@ -31,7 +31,8 @@ command，並會確認該 package manager 已安裝。`orbit switch` 會在使�
 Go 的 `go.mod`、`.nvmrc`、`.node-version`、
 `.python-version`、`.bun-version`、`.tool-versions` 的相關項目，以及 .NET
 `global.json`。Orbit 會回報版本不符或互相衝突的宣告，但不會安裝或切換
-runtime。同步 environment repository 需要 Git。
+runtime。這些回報是 warning，不會阻擋 `orbit up`；只有缺少必要 runtime 才會
+阻擋。同步 environment repository 需要 Git。
 
 Windows build 會執行 release smoke test，但目前不承諾與 macOS/Linux
 完全同等。原生 PowerShell installer 會驗證 release checksum 與版本、保留

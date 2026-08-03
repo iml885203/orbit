@@ -2830,7 +2830,7 @@ services:
 	t.Fatalf("prerequisites = %+v", data.Prerequisites)
 }
 
-func TestE2E_SwitchReportsProjectRuntimeVersionMismatch(t *testing.T) {
+func TestE2E_SwitchWarnsAboutProjectRuntimeVersionMismatch(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home, err := os.MkdirTemp("/tmp", "orb-switch-version-")
 	if err != nil {
@@ -2875,7 +2875,7 @@ services:
 		t.Fatalf("human switch failed: %v\n%s", err, human)
 	}
 	for _, evidence := range []string{
-		"setup required before `orbit up`",
+		"review setup before `orbit up`",
 		"Node.js",
 		"web requires 999 (.nvmrc)",
 		"Select the project version of Node.js",
@@ -2903,14 +2903,14 @@ services:
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		t.Fatalf("decode switch data: %v\n%s", err, envelope.Data)
 	}
-	if data.PrerequisitesReady {
-		t.Fatal("switch reported a mismatched project runtime as ready")
+	if !data.PrerequisitesReady {
+		t.Fatal("runtime version warning blocked the selected environment")
 	}
 	count := 0
 	for _, check := range data.Prerequisites {
 		if check.Name == "Node.js" {
 			count++
-			if check.Status != daemon.CheckFail || !strings.Contains(check.Message, "web requires 999 (.nvmrc)") {
+			if check.Status != daemon.CheckWarn || !strings.Contains(check.Message, "web requires 999 (.nvmrc)") {
 				t.Fatalf("Node.js prerequisite = %+v", check)
 			}
 		}

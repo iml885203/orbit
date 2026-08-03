@@ -34,8 +34,9 @@ selected environment before the user runs `orbit up`. Runtime checks honor
 Go's `go.mod`, `.nvmrc`, `.node-version`,
 `.python-version`, `.bun-version`, relevant entries in `.tool-versions`, and
 .NET `global.json`. Orbit reports mismatches and conflicting declarations but
-does not install or switch runtimes. Git is required to sync environment
-repositories.
+does not install or switch runtimes. These reports are warnings and do not
+block `orbit up`; only a missing required runtime does. Git is required to sync
+environment repositories.
 
 Windows builds receive release smoke coverage, but do not yet promise full
 macOS/Linux runtime parity. The native PowerShell installer verifies the

@@ -203,39 +203,6 @@ func dotnetVersionRequirement(service, projectPath string) (HostVersionRequireme
 	return requirement, true
 }
 
-func missingRuntimeHint(tool HostToolCheck) string {
-	if len(tool.Requirements) == 0 {
-		return tool.Hint
-	}
-	if invalid := invalidRequirementSummary(tool.Requirements); invalid != "" {
-		return fmt.Sprintf("Fix the invalid runtime version declaration (%s), then install or select %s. %s", invalid, tool.Name, tool.Hint)
-	}
-	if hasConflictingRequirements(tool.Requirements) {
-		return fmt.Sprintf(
-			"Align the conflicting %s version files in %s, then install or select that version. %s",
-			tool.Name,
-			projectDirectories(tool.Requirements),
-			tool.Hint,
-		)
-	}
-	return fmt.Sprintf(
-		"Install or select %s %s, then retry. %s",
-		tool.Name,
-		requirementSummary(tool.Requirements),
-		tool.Hint,
-	)
-}
-
-func invalidRequirementSummary(requirements []HostVersionRequirement) string {
-	var invalid []string
-	for _, requirement := range requirements {
-		if requirement.ParseError != "" {
-			invalid = append(invalid, filepath.Base(requirement.Source)+": "+requirement.ParseError)
-		}
-	}
-	return strings.Join(invalid, "; ")
-}
-
 func evaluateRuntimeRequirements(tool HostToolCheck, binaryPath, installed, baseMessage string) DoctorCheck {
 	if len(tool.Requirements) == 0 {
 		return DoctorCheck{Name: tool.Name, Status: CheckPass, Message: baseMessage}
@@ -275,9 +242,9 @@ func evaluateRuntimeRequirements(tool HostToolCheck, binaryPath, installed, base
 		}
 		return DoctorCheck{
 			Name:    tool.Name,
-			Status:  CheckFail,
+			Status:  CheckWarn,
 			Message: message,
-			Hint:    runtimeSwitchHint(tool),
+			Hint:    runtimeVersionHint(tool),
 		}
 	}
 	if len(unknown) > 0 {
@@ -394,24 +361,16 @@ func requirementLabel(requirement HostVersionRequirement) string {
 	return requirement.Service + " requires " + requirement.Requested + " (" + source + ")"
 }
 
-func requirementSummary(requirements []HostVersionRequirement) string {
-	labels := make([]string, 0, len(requirements))
-	for _, requirement := range requirements {
-		labels = append(labels, requirementLabel(requirement))
-	}
-	return strings.Join(labels, "; ")
-}
-
-func runtimeSwitchHint(tool HostToolCheck) string {
+func runtimeVersionHint(tool HostToolCheck) string {
 	if hasConflictingRequirements(tool.Requirements) {
 		return fmt.Sprintf(
-			"Align the conflicting %s version files in %s, select that version, then retry",
+			"Align the conflicting %s version files in %s if the project does not run correctly",
 			tool.Name,
 			projectDirectories(tool.Requirements),
 		)
 	}
 	return fmt.Sprintf(
-		"Select the project version of %s in %s, then retry",
+		"Select the project version of %s in %s if the project does not run correctly",
 		tool.Name,
 		projectDirectories(tool.Requirements),
 	)
