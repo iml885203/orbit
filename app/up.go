@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -664,7 +665,12 @@ func isPostStopState(state string) bool {
 // any block start-up.
 func preflightOrAbort(configWithoutManagedEnvironment bool, resourceNames []string) error {
 	if !configWithoutManagedEnvironment {
-		checks := preflight.CheckEnvsReady(envsDestDir(), readCurrentEnv())
+		selected := readCurrentEnv()
+		envsDir := envsDestDir()
+		if _, _, managed := managedSourceForPath(selected); managed {
+			envsDir = filepath.Dir(selected)
+		}
+		checks := preflight.CheckEnvsReady(envsDir, selected)
 		var failures []preflight.Check
 		for _, c := range checks {
 			if !c.OK {

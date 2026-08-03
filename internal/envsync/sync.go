@@ -47,7 +47,7 @@ func Sync(srcDir, destDir string, opts Options) (Result, error) {
 			return err
 		}
 		// Record the slash-normalized form so the Written list (surfaced in
-		// `orbit env sync` output) is identical across platforms; the copy
+		// source-sync output is identical across platforms; the copy
 		// below still uses the OS-native rel.
 		relSlash := filepath.ToSlash(rel)
 		if !strings.HasSuffix(info.Name(), ".yaml") && !strings.HasPrefix(relSlash, "seeds/") {

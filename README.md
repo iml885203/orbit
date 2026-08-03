@@ -4,7 +4,7 @@ Run a mixed stack—host processes and containers—from one declarative
 environment, for local development and E2E testing.
 
 [Install](docs/development.md) · [Configuration](docs/configuration.md) ·
-[Architecture](docs/architecture.md) · [Agent CLI](docs/agent-cli.md) ·
+[Environment sources](docs/environment-sources.md) · [Architecture](docs/architecture.md) · [Agent CLI](docs/agent-cli.md) ·
 [繁體中文](README.zh-TW.md)
 
 > **Pre-1.0 preview:** Orbit is open for early adopters and contributors while
@@ -184,6 +184,7 @@ Core user documentation:
 - [Use Orbit with your project](docs/local-first.md)
 - [Why Orbit](docs/why-orbit.md) — design trade-offs and tool comparisons
 - [Configuration](docs/configuration.md)
+- [Environment sources](docs/environment-sources.md)
 - [Isolated runtime instances](docs/instances.md)
 - [Using Orbit under an E2E test suite](docs/e2e-testing.md)
 - [Tracing](docs/tracing.md)

@@ -27,6 +27,7 @@ type (
 	TraceLogLine                 = pub.TraceLogLine
 	TraceLogsResponse            = pub.TraceLogsResponse
 	EnvInfo                      = pub.EnvInfo
+	EnvironmentSourceInfo        = pub.EnvironmentSourceInfo
 	EnvsResponse                 = pub.EnvsResponse
 	EnvironmentReconcileResponse = pub.EnvironmentReconcileResponse
 	EnvironmentSwitchResponse    = pub.EnvironmentSwitchResponse

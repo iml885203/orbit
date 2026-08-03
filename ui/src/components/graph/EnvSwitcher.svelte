@@ -131,7 +131,7 @@
     if (!pending) return
     const p = pending
     pending = null
-    if (p.kind === 'switch') doSwitch(p.env, true, p.currentIdentity, p.targetIdentity, p.resources)
+    if (p.kind === 'switch') doSwitch(p.targetIdentity || p.env, true, p.currentIdentity, p.targetIdentity, p.resources)
     else if (p.kind === 'down') doDown()
   }
 

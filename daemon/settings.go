@@ -17,7 +17,8 @@ import (
 type Settings struct {
 	// WorkspaceRoot is the directory containing the team's repo checkouts.
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
-	// EnvRepoURL is the git URL `orbit env sync` clones envs from. Only an
+	// EnvRepoURL is retained only so first-run source migration can recover the
+	// legacy Git URL. New writes belong in the environment source registry. Only an
 	// explicitly user-provided URL is stored here; when empty, resolution
 	// falls through to ORBIT_ENV_REPO_URL and the built-in default, so a
 	// default change in a new orbit release reaches users who never overrode.
@@ -229,6 +230,15 @@ func (s *Settings) Set(key, value string) error {
 	return s.saveLocked()
 }
 
+func (s *Settings) ClearLegacyEnvironmentSettings() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.WorkspaceRoot = ""
+	s.EnvRepoURL = ""
+	s.EnvRepoRef = ""
+	return s.saveLocked()
+}
+
 func (s *Settings) SetShowHistory(value *bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -259,9 +269,6 @@ func (s *Settings) GetUserEnv(key string) string {
 func (s *Settings) ApplyToEnv() {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.WorkspaceRoot != "" {
-		_ = os.Setenv("WORKSPACE_ROOT", s.WorkspaceRoot)
-	}
 	for k, v := range s.UserEnv {
 		_ = os.Setenv(k, v)
 	}

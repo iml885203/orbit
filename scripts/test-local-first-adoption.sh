@@ -392,7 +392,8 @@ cd "$test_root/project"
 export ORBIT_HOME="$shared_home"
 export ORBIT_NAMESPACE="$shared_namespace"
 printf '\n' | "$orbit_bin" init \
-  --env-repo "file://$test_root/team-env" \
+  --source team \
+  --url "file://$test_root/team-env" \
   --env dev >"$test_root/shared-init.txt"
 grep -F \
   "Project checkout or workspace root (absolute path) [$test_root/project]" \
@@ -418,7 +419,9 @@ assert status["ok"] is True
 environment = status["data"]["environment"]
 assert environment["state"] == "selected"
 assert environment["selected_name"] == "dev"
-assert pathlib.Path(environment["selected_path"]) == orbit_home / "envs" / "dev.yaml"
+assert pathlib.Path(environment["selected_path"]) == (
+    orbit_home / "sources" / "team" / "current" / "envs" / "dev.yaml"
+)
 resources = {resource["name"]: resource for resource in status["data"]["resources"]}
 assert set(resources) == {"app", "redis"}
 assert all(resource["state"] == "healthy" for resource in resources.values())

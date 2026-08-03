@@ -12,12 +12,12 @@ vi.mock('$lib/api', () => ({ fetchGraph }))
 vi.mock('svelte-spa-router', () => ({ push }))
 
 const liveGraph = {
-  env: 'development',
+  env: 'default/development',
   nodes: [],
   edges: [],
 }
 const previewGraph = {
-  env: 'example',
+  env: 'default/example',
   nodes: [],
   edges: [],
 }
@@ -32,17 +32,17 @@ describe('EnvPopover', () => {
       running: 0,
       context: {
         kind: 'managed',
-        identity: '/envs/development.yaml',
+        identity: 'default/development',
         display_name: 'development',
         config_path: '/envs/development.yaml',
         available: true,
         running: false,
-        managed_selection: { name: 'development', path: '/envs/development.yaml', active: true },
+        managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: true },
       },
-      envs: [
-        { name: 'development.yaml', path: '/envs/development.yaml', current: true },
-        { name: 'example.yaml', path: '/envs/example.yaml', current: false },
-      ],
+      sources: [{ name: 'default', type: 'git', location: 'https://example.com/envs.git', default: true, environments: [
+        { identity: 'default/development', name: 'development', path: '/envs/development.yaml', selected: true, running: false },
+        { identity: 'default/example', name: 'example', path: '/envs/example.yaml', selected: false, running: false },
+      ] }],
     }
   })
 
@@ -56,7 +56,7 @@ describe('EnvPopover', () => {
       project_root: '/work/payments',
       available: true,
       running: true,
-      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+      managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: false },
     }
 
     render(EnvPopover)
@@ -77,13 +77,13 @@ describe('EnvPopover', () => {
       project_root: '/work/missing',
       available: false,
       running: false,
-      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+      managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: false },
     }
 
     render(EnvPopover)
 
     expect(screen.getByRole('status')).toHaveTextContent('Unavailable')
-    expect(screen.getByRole('button', { name: 'Preview managed environment development' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Preview managed environment default/development' })).toBeInTheDocument()
   })
 
   it('previews another environment and returns to Services', async () => {
@@ -92,7 +92,7 @@ describe('EnvPopover', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'example' }))
 
-    expect(fetchGraph).toHaveBeenCalledWith('example')
+    expect(fetchGraph).toHaveBeenCalledWith('default/example')
     expect(store.graph.preview).toStrictEqual(previewGraph)
     expect(store.ui.envPopoverOpen).toBe(false)
     expect(push).toHaveBeenCalledWith('/')

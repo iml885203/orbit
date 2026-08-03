@@ -101,3 +101,10 @@ func TestSyncFromRepo_MissingEnvsDir(t *testing.T) {
 		t.Fatal("expected error when repo has no envs/ dir")
 	}
 }
+
+func TestMissingEnvsDirectoryErrorRedactsCredentials(t *testing.T) {
+	err := missingEnvsDirectoryError("https://user:secret@example.com/envs.git")
+	if strings.Contains(err.Error(), "user") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("credential-bearing URL leaked: %v", err)
+	}
+}

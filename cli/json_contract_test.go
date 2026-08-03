@@ -127,7 +127,7 @@ func TestWriteJSONErrorGivesSchemaMismatchOneAdvancingAction(t *testing.T) {
 			version:     "2",
 			path:        filepath.Join(orbitHome, "envs", "team.yaml"),
 			code:        "environment_schema_outdated",
-			nextCommand: "orbit env sync --json",
+			nextCommand: "orbit source sync --json",
 		},
 		{
 			name:        "Orbit is older",

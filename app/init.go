@@ -10,22 +10,26 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/envsource"
 	"github.com/iml885203/orbit/internal/envsync"
 	"github.com/spf13/cobra"
 )
 
 var (
-	initYes     bool
-	initEnvRepo string
-	initEnvRef  string
-	initEnvName string
+	initYes       bool
+	initEnvRepo   string
+	initEnvRef    string
+	initEnvName   string
+	initSource    string
+	initPath      string
+	initWorkspace string
 )
 
 type initResult struct {
-	WorkspaceRoot string               `json:"workspace_root,omitempty"`
+	WorkspaceRoot string               `json:"workspace_root,omitempty"` // Deprecated: use source.workspace.
+	Source        *envsource.Source    `json:"source,omitempty"`
 	EnvsDir       string               `json:"envs_dir"`
 	EnvRepoURL    string               `json:"env_repo_url,omitempty"`
 	EnvRepoRef    string               `json:"env_repo_ref,omitempty"`
@@ -102,19 +106,49 @@ inside that project and Orbit discovers the nearest orbit.yaml automatically.
 
 For non-interactive setup (CI, scripts):
   orbit init --yes                                         # accept all defaults
-  orbit init --yes --env-repo <url>                        # use a specific env repo
-  orbit init --yes --env-repo <url> --env-ref <ref>        # pin a branch, tag, or commit
-  orbit init --yes --env-repo <url> --env dev              # and pick an env`,
+  orbit init --yes --source team --url <url>               # add a named Git source
+  orbit init --yes --source team --url <url> --ref <ref>   # pin a branch, tag, or commit
+  orbit init --yes --source local --path <dir> --env dev   # use a local source`,
 		RunE: runInit,
 	}
 	cmd.Flags().BoolVarP(&initYes, "yes", "y", false, "accept defaults without prompting")
-	cmd.Flags().StringVar(&initEnvRepo, "env-repo", "", "git URL of the env repo (persists to settings, skips prompt)")
-	cmd.Flags().StringVar(&initEnvRef, "env-ref", "", "repository branch, tag, or commit (persists to settings)")
+	cmd.Flags().StringVar(&initSource, "source", "", "name for the managed environment source")
+	cmd.Flags().StringVar(&initEnvRepo, "url", "", "Git URL of the environment source")
+	cmd.Flags().StringVar(&initPath, "path", "", "local directory containing envs/")
+	cmd.Flags().StringVar(&initEnvRef, "ref", "", "repository branch, tag, or commit")
+	cmd.Flags().StringVar(&initWorkspace, "workspace", "", "local application workspace for this source")
+	cmd.Flags().String("env-repo", "", "deprecated; use --url")
+	cmd.Flags().String("env-ref", "", "deprecated; use --ref")
+	_ = cmd.Flags().MarkHidden("env-repo")
+	_ = cmd.Flags().MarkHidden("env-ref")
 	cmd.Flags().StringVar(&initEnvName, "env", "", "active env short name (e.g. dev); skips the selection prompt")
 	return cmd
 }
 
-func runInit(_ *cobra.Command, _ []string) error {
+func runInit(cmd *cobra.Command, _ []string) error {
+	if cmd != nil {
+		if legacyURL, _ := cmd.Flags().GetString("env-repo"); initEnvRepo == "" {
+			initEnvRepo = legacyURL
+		}
+		if legacyRef, _ := cmd.Flags().GetString("env-ref"); initEnvRef == "" {
+			initEnvRef = legacyRef
+		}
+	}
+	if initEnvRepo != "" && initPath != "" {
+		return cli.NewInvalidArgumentError("--url and --path are mutually exclusive")
+	}
+	if initPath != "" && initEnvRef != "" {
+		return cli.NewInvalidArgumentError("--ref is valid only with --url")
+	}
+	if (initEnvRepo != "" || initPath != "") && initSource == "" {
+		if initYes || cli.JSONOutput {
+			return cli.NewInvalidArgumentError("custom --url or --path requires --source")
+		}
+		initSource = prompt("  Source name: ")
+		if initSource == "" {
+			return cli.NewInvalidArgumentError("source name is required")
+		}
+	}
 	if cli.JSONOutput && !initYes {
 		return fmt.Errorf("--json requires --yes so init never waits for interactive input")
 	}
@@ -131,6 +165,16 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	settings.ApplyToEnv()
+	configuredRegistry, err := sourceRegistry()
+	if err != nil {
+		return err
+	}
+	var configuredDefault *envsource.Source
+	if initSource == "" && initEnvRepo == "" && initPath == "" && initEnvRef == "" {
+		if existing, defaultErr := configuredRegistry.Default(); defaultErr == nil {
+			configuredDefault = &existing
+		}
+	}
 
 	currentURL := settings.Get(settingKeyEnvRepoURL)
 	currentRef := settings.Get(settingKeyEnvRepoRef)
@@ -155,13 +199,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 		repoRef = initEnvRef
 		explicit = true
 	}
-	if explicit && (repoURL != currentURL || repoRef != currentRef) {
-		if err := settings.Set(settingKeyEnvRepoURL, repoURL); err != nil {
-			return fmt.Errorf("saving env repo URL: %w", err)
-		}
-		if err := settings.Set(settingKeyEnvRepoRef, repoRef); err != nil {
-			return fmt.Errorf("saving env repo ref: %w", err)
-		}
+	if configuredDefault != nil {
+		repoURL = configuredDefault.URL
+		repoRef = configuredDefault.Ref
+		explicit = true
 	}
 	defaultQuickstart := !explicit &&
 		currentURL == "" &&
@@ -175,33 +216,73 @@ func runInit(_ *cobra.Command, _ []string) error {
 		output.boldln("Step 1: Environment source")
 	}
 
-	envsDir := envsDestDir()
+	sourceName := initSource
+	if sourceName == "" {
+		sourceName = "default"
+	}
+	source := envsource.Source{Name: sourceName, Type: envsource.TypeGit, URL: repoURL, Ref: repoRef}
+	if configuredDefault != nil {
+		source = *configuredDefault
+		sourceName = source.Name
+	}
+	if initPath != "" {
+		normalized, err := envsource.ValidateLocalSource(initPath)
+		if err != nil {
+			return err
+		}
+		source.Type = envsource.TypeLocal
+		source.URL = ""
+		source.Ref = ""
+		source.Path = normalized
+	}
+	if initWorkspace != "" {
+		normalized, err := envsource.NormalizeExistingDirectory(initWorkspace)
+		if err != nil {
+			return err
+		}
+		source.Workspace = normalized
+	}
+	envsDir := envsource.EnvsDir(daemon.OrbitDir(), sourceName)
+	if source.Location() == "" && len(sourceEnvironmentFiles(envsDestDir())) > 0 {
+		envsDir = envsDestDir()
+	}
 	var syncFailure error
 	var syncWarning string
 	result.EnvsDir = envsDir
-	if repoURL == "" {
+	if source.Location() == "" {
 		warning := "no env repo configured; sync skipped"
 		result.Warnings = append(result.Warnings, warning)
 		output.warnln("  ! no env repo configured — skipping sync")
-		output.faintln("    set one later with `orbit env sync --url <git-url>`")
+		output.faintln("    add one later with `orbit source add <name> --url <git-url>`")
 	} else {
-		result.EnvSource = "remote"
-		result.EnvRepoURL = repoURL
-		result.EnvRepoRef = repoRef
+		result.EnvSource = source.Type
+		result.EnvRepoURL = envsync.RedactURL(source.URL)
+		result.EnvRepoRef = source.Ref
 		if defaultQuickstart {
 			output.println("  Preparing the Orbit demo")
 		} else {
-			sourceLabel := repoURL
-			if repoRef != "" {
-				sourceLabel += " @ " + repoRef
+			sourceLabel := source.Location()
+			if source.Type == envsource.TypeGit {
+				sourceLabel = envsync.RedactURL(sourceLabel)
+			}
+			if source.Ref != "" {
+				sourceLabel += " @ " + source.Ref
 			}
 			output.printf("  Syncing %s → %s\n", sourceLabel, envsDir)
 		}
-		syncRes, err := envsync.SyncFromRepo(repoURL, repoRef, envsDir, envsync.Options{})
+		registry, loadErr := envsource.Load(envsource.RegistryPath(daemon.OrbitDir()))
+		if loadErr != nil {
+			return loadErr
+		}
+		persist := false
+		if _, getErr := registry.Get(source.Name); getErr == nil {
+			persist = true
+		}
+		source, syncRes, err := envsource.Refresh(registry, source, daemon.OrbitDir(), false, persist)
 		if err != nil {
-			err = envRepoSyncError(err)
+			err = sourceSyncError(source, err)
 			syncFailure = err
-			syncWarning = "env sync failed: " + err.Error()
+			syncWarning = "source sync failed: " + err.Error()
 			if defaultQuickstart {
 				output.warnln("  ! Could not prepare the Orbit demo")
 			} else {
@@ -210,7 +291,18 @@ func runInit(_ *cobra.Command, _ []string) error {
 			output.faintln("    Orbit will use an existing synced environment if one is available.")
 		} else {
 			result.SyncedFiles = syncRes.Written
-			result.EnvRepoCommit = syncRes.Source.Commit
+			result.EnvRepoCommit = syncRes.Commit
+			if !persist {
+				if addErr := registry.Add(source, len(registry.List()) == 0); addErr != nil {
+					_ = os.RemoveAll(envsource.SourceDir(daemon.OrbitDir(), source.Name))
+					return addErr
+				}
+			}
+			storedSource, getErr := registry.Get(source.Name)
+			if getErr != nil {
+				return getErr
+			}
+			result.Source = &storedSource
 			if defaultQuickstart {
 				output.printf("  %s Demo environment ready\n", cli.Green.Sprint("✓"))
 			} else {
@@ -232,7 +324,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if len(envFiles) == 0 {
 		result.Warnings = append(result.Warnings, "no environment configs found in "+envsDir)
 		output.warnf("  ! No environment configs found in %s\n", envsDir)
-		output.faintln("    retry `orbit env sync` once the repo is reachable")
+		output.faintln("    retry `orbit source sync " + sourceName + "` once the source is reachable")
 	} else {
 		var chosen string
 		switch {
@@ -270,8 +362,27 @@ func runInit(_ *cobra.Command, _ []string) error {
 		result.ConfigPath = absPath
 
 		var err error
-		workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath)
+		_ = os.Setenv("ORBIT_SOURCE_NAME", source.Name)
+		if source.Workspace != "" {
+			_ = os.Setenv("WORKSPACE_ROOT", source.Workspace)
+			result.WorkspaceRoot = source.Workspace
+		} else {
+			workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath)
+		}
 		if err != nil {
+			return err
+		}
+		if result.WorkspaceRoot != source.Workspace {
+			source.Workspace = result.WorkspaceRoot
+			registry, loadErr := envsource.Load(envsource.RegistryPath(daemon.OrbitDir()))
+			if loadErr != nil {
+				return loadErr
+			}
+			if replaceErr := registry.Replace(source); replaceErr != nil {
+				return replaceErr
+			}
+		}
+		if err := settings.ClearLegacyEnvironmentSettings(); err != nil {
 			return err
 		}
 	}
@@ -302,18 +413,11 @@ func configureRequiredWorkspace(
 	settings *daemon.Settings,
 	envPath string,
 ) (bool, string, error) {
-	cfg, err := config.Load(envPath)
+	contents, err := os.ReadFile(envPath)
 	if err != nil {
-		return false, "", nil
+		return false, "", err
 	}
-	var requiredBy []string
-	for _, check := range daemonsrv.ServiceWorkingDirectoryChecks(cfg, nil) {
-		if check.Hint == `run: orbit settings set workspace-root "$PWD"` {
-			name := strings.TrimSuffix(strings.TrimPrefix(check.Name, "Working directory ("), ")")
-			requiredBy = append(requiredBy, name)
-		}
-	}
-	if len(requiredBy) == 0 {
+	if !requiresWorkspaceRoot(contents) {
 		return false, "", nil
 	}
 
@@ -330,8 +434,7 @@ func configureRequiredWorkspace(
 
 	output.println()
 	output.boldln("Step 3: Project workspace")
-	output.printf("  Environment %s needs local project files for %s.\n",
-		daemonsrv.EnvShortName(envPath), strings.Join(requiredBy, ", "))
+	output.printf("  Environment %s needs local project files.\n", daemonsrv.EnvShortName(envPath))
 	root := candidate
 	if !initYes {
 		label := "  Project checkout or workspace root (absolute path)"
@@ -353,9 +456,27 @@ func configureRequiredWorkspace(
 	if err := settings.Set("workspace_root", root); err != nil {
 		return false, "", fmt.Errorf("saving workspace root: %w", err)
 	}
-	settings.ApplyToEnv()
+	if err := os.Setenv("WORKSPACE_ROOT", root); err != nil {
+		return false, "", fmt.Errorf("applying workspace root: %w", err)
+	}
 	output.printf("  %s Project workspace: %s\n", cli.Green.Sprint("✓"), root)
 	return true, root, nil
+}
+
+func requiresWorkspaceRoot(contents []byte) bool {
+	for _, line := range strings.Split(string(contents), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if comment := strings.Index(trimmed, " #"); comment >= 0 {
+			trimmed = trimmed[:comment]
+		}
+		if strings.Contains(trimmed, "${WORKSPACE_ROOT}") {
+			return true
+		}
+	}
+	return false
 }
 
 func gitCheckoutRoot(start string) string {

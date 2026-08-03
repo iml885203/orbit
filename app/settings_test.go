@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/iml885203/orbit/cli"
@@ -43,16 +42,12 @@ func TestSettings_CoerceValue(t *testing.T) {
 	if err != nil || v != false {
 		t.Errorf("show_history off: v=%v err=%v", v, err)
 	}
-	v, err = coerceSettingsValue("workspace_root", "/work/project")
-	if err != nil || v != "/work/project" {
-		t.Errorf("string passthrough: v=%v err=%v", v, err)
-	}
 	if _, err := coerceSettingsValue("show_history", "maybe"); err == nil {
 		t.Errorf("expected err for bad bool")
 	}
 }
 
-func TestSettingsWorkspaceRootCanBeSetBeforeDaemonStarts(t *testing.T) {
+func TestSettingsRejectsRetiredGlobalWorkspaceRoot(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()
 	t.Setenv("ORBIT_HOME", home)
@@ -62,19 +57,8 @@ func TestSettingsWorkspaceRootCanBeSetBeforeDaemonStarts(t *testing.T) {
 	cli.JSONOutput = false
 	t.Cleanup(func() { cli.JSONOutput = previousJSON })
 
-	if err := runSettingsSet(nil, []string{"workspace-root", root}); err != nil {
-		t.Fatal(err)
-	}
-	got := daemon.LoadSettings(daemon.DefaultSettingsPath())
-	if got.WorkspaceRoot != root {
-		t.Fatalf("workspace root = %q, want %q", got.WorkspaceRoot, root)
-	}
-	file := filepath.Join(root, "not-a-directory")
-	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := runSettingsSet(nil, []string{"workspace-root", file}); err == nil {
-		t.Fatal("settings accepted a file as the workspace root")
+	if err := runSettingsSet(nil, []string{"workspace-root", root}); err == nil {
+		t.Fatal("settings accepted the retired global workspace root")
 	}
 	if err := runSettingsSet(nil, []string{"unknown-key", root}); err == nil {
 		t.Fatal("settings accepted an unknown key")
@@ -126,7 +110,7 @@ func TestSettingsListJSONUsesStableEnvelopeWithoutDaemon(t *testing.T) {
 	if envelope.SchemaVersion != "orbit.cli.v1" || !envelope.OK || envelope.Data.Operation != "settings_list" {
 		t.Fatalf("envelope = %+v", envelope)
 	}
-	if envelope.Data.Settings["workspace_root"] != root {
+	if _, exists := envelope.Data.Settings["workspace_root"]; exists {
 		t.Fatalf("settings = %+v", envelope.Data.Settings)
 	}
 }

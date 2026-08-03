@@ -255,7 +255,7 @@ func localDoctorResponseWithContext(
 	var cfg *config.Config
 	selection := readEnvironmentSelection()
 	if environmentSelectionBlocksConfig(selection, configFile) {
-		hint := "run: orbit env sync"
+		hint := "run: orbit source sync"
 		if len(selection.Environments) == 1 {
 			hint = "run: " + environmentSwitchCommand(selection.Environments[0].Name, false)
 		} else if len(selection.Environments) > 1 {

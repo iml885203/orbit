@@ -46,7 +46,7 @@ docker login <registry-host>
 你還沒跑 `orbit init`（或者 sync 失敗了）。修法：
 
 ```bash
-orbit env sync --url https://git.example.com/your-env-repo.git
+orbit source add team --url https://git.example.com/your-env-repo.git
 orbit switch example
 ```
 
@@ -56,7 +56,7 @@ orbit switch example
 資源、套用更新並恢復這些資源；原本已停止的資源仍會保持停止。
 
 若想先下載團隊更新、暫時不中斷目前環境，可使用
-`orbit env sync --no-apply`，準備好後再套用。
+`orbit source sync <name> --no-apply`，準備好後再套用。
 
 ## SQL Server
 

@@ -75,6 +75,10 @@ export async function fetchEnvs(): Promise<EnvsResponse | null> {
   return getJSON('/api/envs')
 }
 
+export async function mutateSource(action: Record<string, unknown>) {
+	return apiPost('/api/sources', action)
+}
+
 // Polled every status tick — log-only on failure (connection dot covers it).
 export async function fetchGraph(env?: string): Promise<GraphResponse | null> {
   const url = env ? `/api/graph?env=${encodeURIComponent(env)}` : '/api/graph'

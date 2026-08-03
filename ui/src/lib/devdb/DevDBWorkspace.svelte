@@ -22,7 +22,7 @@
   $effect(() => { if (!projects.length) { selectedProjectPath = undefined; return } if (!selectedProjectPath || !projects.some((project) => project.path === selectedProjectPath)) selectedProjectPath = projects.find((project) => project.databases.length)?.path ?? projects[0].path })
 </script>
 {#if projects.length === 0}
-  <div class="empty"><strong>No DB projects found.</strong><p>Check the DB project configuration or run <code>orbit env sync</code>.</p></div>
+  <div class="empty"><strong>No DB projects found.</strong><p>Check the DB project configuration or run <code>orbit source sync</code>.</p></div>
 {:else}
   <div class="workspace"><nav aria-label="Database projects"><DBProjectList {projects} {workspaceRoot} {driftByDB} selectedPath={selectedProjectPath} onSelect={(project) => selectedProjectPath = project.path} /></nav><main>{#if selectedProject}<div class="scene"><DBTankScene state={sceneState} projectName={selectedProject.name} {progressPercent} /></div><DatabaseOperationsList project={selectedProject} {states} {resetStates} {operation} {disabledReason} {driftByDB} {diffingDBs} {onDiff} />{/if}</main></div>
 {/if}

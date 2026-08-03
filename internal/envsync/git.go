@@ -49,27 +49,41 @@ func (e *CloneError) ReportsAmbiguousGitHubAvailability() bool {
 // between fetch and checkout. An empty ref preserves Git's default-branch
 // behavior for user-managed repositories that intentionally track it.
 func CloneAt(url, ref, destDir string) (string, error) {
+	commit, _, err := CloneAtResolved(url, ref, destDir)
+	return commit, err
+}
+
+func CloneAtResolved(url, ref, destDir string) (string, string, error) {
 	if ref == "" {
 		cmd := exec.Command("git", "clone", "--depth", "1", "--quiet", url, destDir)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", &CloneError{URL: url, Err: err, Output: string(out)}
+			return "", "", &CloneError{URL: url, Err: err, Output: string(out)}
 		}
-		return repositoryCommit(url, destDir)
+		commit, err := repositoryCommit(url, destDir)
+		if err != nil {
+			return "", "", err
+		}
+		branch, branchErr := gitIn(destDir, "symbolic-ref", "--short", "HEAD")
+		if branchErr != nil {
+			return "", "", &CloneError{URL: url, Err: branchErr, Output: string(branch)}
+		}
+		return commit, strings.TrimSpace(string(branch)), nil
 	}
 
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", fmt.Errorf("create clone destination: %w", err)
+		return "", "", fmt.Errorf("create clone destination: %w", err)
 	}
 	if out, err := gitIn(destDir, "init", "--quiet"); err != nil {
-		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+		return "", "", &CloneError{URL: url, Err: err, Output: string(out)}
 	}
 	if out, err := gitIn(destDir, "fetch", "--depth", "1", "--quiet", url, ref); err != nil {
-		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+		return "", "", &CloneError{URL: url, Err: err, Output: string(out)}
 	}
 	if out, err := gitIn(destDir, "checkout", "--detach", "--quiet", "FETCH_HEAD"); err != nil {
-		return "", &CloneError{URL: url, Err: err, Output: string(out)}
+		return "", "", &CloneError{URL: url, Err: err, Output: string(out)}
 	}
-	return repositoryCommit(url, destDir)
+	commit, err := repositoryCommit(url, destDir)
+	return commit, ref, err
 }
 
 func repositoryCommit(url, dir string) (string, error) {
@@ -93,4 +107,8 @@ func displayURL(raw string) string {
 	}
 	parsed.User = nil
 	return parsed.String()
+}
+
+func RedactURL(raw string) string {
+	return displayURL(raw)
 }

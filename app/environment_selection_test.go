@@ -67,7 +67,7 @@ func TestEnvironmentSelectionActionsSyncWhenNoChoicesExist(t *testing.T) {
 		State:        environmentSelectionUnavailable,
 		Environments: []environmentChoice{},
 	})
-	if len(actions) != 1 || actions[0].Command != "orbit env sync --json" {
+	if len(actions) != 1 || actions[0].Command != "orbit source sync --json" {
 		t.Fatalf("actions = %+v", actions)
 	}
 }

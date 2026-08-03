@@ -91,6 +91,9 @@ func TestConfigureRequiredWorkspaceUsesSavedWorkspaceRoot(t *testing.T) {
 	if saved := settings.Get("workspace_root"); saved != root {
 		t.Fatalf("saved workspace = %q, want %q", saved, root)
 	}
+	if applied := os.Getenv("WORKSPACE_ROOT"); applied != root {
+		t.Fatalf("WORKSPACE_ROOT = %q, want %q for init health checks", applied, root)
+	}
 }
 
 func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testing.T) {
@@ -111,6 +114,15 @@ func TestConfigureRequiredWorkspaceDoesNotGuessRemoteWorkspaceInYesMode(t *testi
 	}
 	if configured || root != "" || settings.Get("workspace_root") != "" {
 		t.Fatalf("configured = %v, root = %q, saved = %q", configured, root, settings.Get("workspace_root"))
+	}
+}
+
+func TestRequiresWorkspaceRootIgnoresCommentsAndFallbacks(t *testing.T) {
+	if requiresWorkspaceRoot([]byte("# ${WORKSPACE_ROOT}\nnotes: portable # ${WORKSPACE_ROOT}\npath: ${WORKSPACE_ROOT:-/portable}\n")) {
+		t.Fatal("comments or fallback triggered a required workspace")
+	}
+	if !requiresWorkspaceRoot([]byte("path: ${WORKSPACE_ROOT}/api\n")) {
+		t.Fatal("required workspace reference was missed")
 	}
 }
 

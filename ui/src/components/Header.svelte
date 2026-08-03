@@ -1,7 +1,6 @@
 <script lang="ts">
   import { link, router } from 'svelte-spa-router'
   import { store } from '$lib/stores.svelte'
-  import { envShortName } from '$lib/envName'
   import { navItems } from '../routes'
   import { tooltip } from '../lib/tooltip.svelte'
   import { ChevronDown, Eye, Settings } from '@lucide/svelte'
@@ -59,7 +58,7 @@
       aria-haspopup="dialog"
     >
       <span class="env-label">{environmentContext?.kind === 'project' ? 'project' : 'env'}</span>
-      <span class="env-name">{environmentContext?.display_name || envShortName(store.daemon.envs.envs.find(e => e.current)?.name ?? '') || '—'}</span>
+      <span class="env-name">{environmentContext?.display_name || store.daemon.envs.sources.flatMap(source => source.environments).find(env => env.selected)?.identity || '—'}</span>
       {#if environmentContext?.kind === 'project'}
         <span class="context-badge">Project environment</span>
       {:else if environmentContext?.kind === 'explicit'}

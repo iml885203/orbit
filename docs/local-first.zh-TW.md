@@ -108,7 +108,7 @@ Commit 並 push `envs/dev.yaml`。確認共享副本已安全提交後，移除�
 初始化：
 
 ```bash
-orbit init --env-repo https://github.com/you/your-orbit-env.git --env dev
+orbit init --source team --url https://github.com/you/your-orbit-env.git --env dev
 orbit up
 ```
 
@@ -116,7 +116,7 @@ Orbit 只會在 `dev.yaml` 實際證明需要 `${WORKSPACE_ROOT}` 時詢問 work
 請輸入這個 project checkout 的 absolute path；若從 Git checkout 內執行
 init，直接按 Enter 就會採用該 checkout。每位開發者回答一次即可，共享檔案
 不會包含個人電腦的 absolute path。開發 environment repository 時，可以用
-`orbit env sync --path /path/to/your-orbit-env --yes` 測試本機尚未 commit 的
+`orbit source add local --path /path/to/your-orbit-env` 測試本機尚未 commit 的
 檔案。
 
 兩個階段各有一個用途：

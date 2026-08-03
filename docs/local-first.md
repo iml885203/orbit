@@ -119,7 +119,7 @@ the shared copy is safely committed so the team repository becomes the single
 source of truth. Then initialize from the project checkout:
 
 ```bash
-orbit init --env-repo https://github.com/you/your-orbit-env.git --env dev
+orbit init --source team --url https://github.com/you/your-orbit-env.git --env dev
 orbit up
 ```
 
@@ -128,7 +128,7 @@ Orbit asks for the workspace only because `dev.yaml` proves that it needs
 you run init inside a Git checkout, pressing Enter accepts that checkout as the
 default. Each developer answers once; the shared file contains no
 machine-specific absolute path. During environment-repository development,
-`orbit env sync --path /path/to/your-orbit-env --yes` tests local, even
+`orbit source add local --path /path/to/your-orbit-env` tests local, even
 uncommitted files.
 
 The two stages have different jobs:

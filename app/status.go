@@ -705,7 +705,7 @@ func printEnvironmentSelectionRecovery(selection environmentSelection) {
 	fmt.Printf("%s environment %q is no longer available\n",
 		cli.Yellow.Sprint("!"), selection.SelectedName)
 	if len(selection.Environments) == 0 {
-		fmt.Println("  Next: orbit env sync")
+		fmt.Println("  Next: orbit source sync")
 		return
 	}
 	if len(selection.Environments) == 1 {

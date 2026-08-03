@@ -45,17 +45,32 @@ type TraceLogsResponse struct {
 
 // EnvInfo describes one available env config file.
 type EnvInfo struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Current bool   `json:"current"`
+	Identity string `json:"identity"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Selected bool   `json:"selected"`
+	Running  bool   `json:"running"`
+}
+
+type EnvironmentSourceInfo struct {
+	Name          string    `json:"name"`
+	Type          string    `json:"type"`
+	Location      string    `json:"location"`
+	Workspace     string    `json:"workspace,omitempty"`
+	Default       bool      `json:"default"`
+	Ref           string    `json:"ref,omitempty"`
+	ResolvedRef   string    `json:"resolved_ref,omitempty"`
+	Commit        string    `json:"commit,omitempty"`
+	LastSyncError string    `json:"last_sync_error,omitempty"`
+	Environments  []EnvInfo `json:"environments"`
 }
 
 // EnvsResponse is returned by GET /api/envs.
 type EnvsResponse struct {
-	Current string             `json:"current,omitempty"`
-	Running int                `json:"running"` // count of non-stopped services
-	Envs    []EnvInfo          `json:"envs"`
-	Context EnvironmentContext `json:"context"`
+	Current string                  `json:"current,omitempty"`
+	Running int                     `json:"running"` // count of non-stopped services
+	Sources []EnvironmentSourceInfo `json:"sources"`
+	Context EnvironmentContext      `json:"context"`
 }
 
 type EnvironmentSwitchResponse struct {

@@ -253,10 +253,15 @@ func localInspectEnvironmentContext(configPath string, selection environmentSele
 	if resolved, err := filepath.EvalSymlinks(identity); err == nil {
 		identity = resolved
 	}
+	canonicalPath := identity
 	kind := environmentContextKind(configPath)
+	if _, managedIdentity, managed := managedSourceForPath(identity); managed {
+		kind = "managed"
+		identity = managedIdentity
+	}
 	context := daemon.EnvironmentContext{
-		Kind: kind, Identity: identity, ConfigPath: identity,
-		DisplayName: daemonsrv.EnvShortName(identity), Available: true, Running: false,
+		Kind: kind, Identity: identity, ConfigPath: canonicalPath,
+		DisplayName: daemonsrv.EnvShortName(canonicalPath), Available: true, Running: false,
 	}
 	if kind == "project" {
 		context.DisplayName = projectContextName(identity)
@@ -264,9 +269,10 @@ func localInspectEnvironmentContext(configPath string, selection environmentSele
 	}
 	if selection.ManagedSelection != nil {
 		context.ManagedSelection = &daemon.ManagedEnvironmentSelection{
-			Name:   selection.ManagedSelection.Name,
-			Path:   selection.ManagedSelection.Path,
-			Active: kind == "managed" && sameFilePath(selection.ManagedSelection.Path, identity),
+			Identity: selection.ManagedSelection.Identity,
+			Name:     selection.ManagedSelection.Name,
+			Path:     selection.ManagedSelection.Path,
+			Active:   kind == "managed" && sameFilePath(selection.ManagedSelection.Path, canonicalPath),
 		}
 	}
 	return context
@@ -604,7 +610,7 @@ func inspectRecommendedActions(
 		case config.SchemaVersionOlder:
 			if cli.IsManagedEnvironmentPath(mismatch.Path) {
 				actions = append(actions, cli.JSONAction{
-					Command:     "orbit env sync --json",
+					Command:     "orbit source sync --json",
 					Reason:      "Refresh the shared environment file to the supported schema.",
 					Destructive: false,
 				})

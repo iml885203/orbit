@@ -64,9 +64,10 @@ type EnvironmentContext struct {
 }
 
 type ManagedEnvironmentSelection struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Active bool   `json:"active"`
+	Identity string `json:"identity,omitempty"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Active   bool   `json:"active"`
 }
 
 // ResourceKind identifies how Orbit runs a resource.

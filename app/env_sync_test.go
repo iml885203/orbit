@@ -81,7 +81,7 @@ func TestEnvRepoSyncErrorIdentifiesPrivateRepoRemedy(t *testing.T) {
 		source.URL,
 		"gh auth login",
 		"gh auth setup-git",
-		"orbit env sync",
+		"orbit source sync",
 	} {
 		if !strings.Contains(err.Error(), evidence) {
 			t.Errorf("error missing %q: %v", evidence, err)

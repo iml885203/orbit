@@ -53,7 +53,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 
 | Key | Type | Required | Purpose |
 |---|---|---|---|
-| `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit env sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
+| `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit source sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
 | `containers` | map | no | Docker container definitions |
@@ -97,7 +97,7 @@ seed:
 ```
 
 For a shared environment repository, its maintainer commits the schema-3 file
-and users run `orbit env sync`. For a project-local `orbit.yaml`, update the
+and users run `orbit source sync`. For a project-local `orbit.yaml`, update the
 file directly using the mapping above. Credentials referenced by the command
 belong in the container's `environment`, not in seed-specific fields.
 
@@ -562,7 +562,7 @@ Env configs reference project directories via environment variables (e.g.
 default workspace location, set them with `orbit settings`:
 
 ```bash
-orbit settings set workspace-root /path/to/workspace
+orbit source set-workspace <source> /path/to/workspace
 orbit settings set-env API_ROOT /path/to/api
 orbit settings list                              # show current values
 ```
@@ -571,8 +571,8 @@ No supported workflow requires editing `settings.json` by hand. The commands
 validate the path before storing it, so a typo is reported immediately instead
 of surfacing later as a missing service directory.
 
-`workspace-root` is a first-class setting, exported to env configs as
-`WORKSPACE_ROOT`. `orbit init` asks for it only when the selected environment
+The source workspace is exported to its env configs as `WORKSPACE_ROOT`.
+`orbit init` asks for it only when the selected environment
 actually references workspace projects; it never stores an arbitrary current
 directory for a containers-only or self-contained environment. It can be set
 before the daemon starts. Any other referenced variable is stored under
@@ -582,7 +582,7 @@ For reference, the commands above produce:
 
 ```json
 {
-  "workspace_root": "/path/to/workspace",
+  "source": { "name": "team", "workspace": "/path/to/workspace" },
   "user_env": {
     "API_ROOT": "/path/to/api"
   }

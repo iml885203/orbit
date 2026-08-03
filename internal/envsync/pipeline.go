@@ -16,7 +16,7 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cloneDir := filepath.Join(tmp, "repo")
-	commit, err := CloneAt(url, ref, cloneDir)
+	commit, resolvedRef, err := CloneAtResolved(url, ref, cloneDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -24,7 +24,7 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 	envsDir := filepath.Join(cloneDir, "envs")
 	info, err := os.Stat(envsDir)
 	if err != nil || !info.IsDir() {
-		return Result{}, fmt.Errorf("repo at %s has no envs/ directory", url)
+		return Result{}, missingEnvsDirectoryError(url)
 	}
 
 	result, err := Sync(envsDir, destDir, opts)
@@ -32,9 +32,10 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	result.Source = RepositorySource{
-		URL:    displayURL(url),
-		Ref:    ref,
-		Commit: commit,
+		URL:         displayURL(url),
+		Ref:         ref,
+		ResolvedRef: resolvedRef,
+		Commit:      commit,
 	}
 	if !opts.DryRun {
 		if err := writeRepositorySource(destDir, result.Source); err != nil {
@@ -42,4 +43,8 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 		}
 	}
 	return result, nil
+}
+
+func missingEnvsDirectoryError(url string) error {
+	return fmt.Errorf("repo at %s has no envs/ directory", RedactURL(url))
 }

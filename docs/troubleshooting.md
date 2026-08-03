@@ -49,7 +49,7 @@ If you don't have registry access, ask the image owner or your administrator to 
 You haven't run `orbit init` (or the sync failed). Fix:
 
 ```bash
-orbit env sync --url https://git.example.com/your-env-repo.git
+orbit source add team --url https://git.example.com/your-env-repo.git
 orbit switch example
 ```
 
@@ -62,7 +62,7 @@ remain stopped. Daemon-level changes use a full handoff and restore the running
 resources afterward.
 
 If you want to download a team update without interrupting the current
-environment, use `orbit env sync --no-apply`, then apply it when ready.
+environment, use `orbit source sync <name> --no-apply`, then apply it when ready.
 
 ## SQL Server
 

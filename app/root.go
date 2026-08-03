@@ -114,6 +114,9 @@ for the bundled demo or a shared environment repository.`,
 		if configFile == "" {
 			configFile = resolveConfigFile()
 		}
+		if err := applySourceWorkspace(configFile); err != nil {
+			return err
+		}
 		if configContextKind == "" {
 			configContextKind = inferredEnvironmentContextKind(configFile)
 		}
@@ -190,6 +193,7 @@ for the bundled demo or a shared environment repository.`,
 	rootCmd.AddCommand(doctorCmd())
 	rootCmd.AddCommand(initCmd())
 	rootCmd.AddCommand(envCmd())
+	rootCmd.AddCommand(sourceCmd())
 	for _, ext := range extensions {
 		if ext.Commands != nil {
 			rootCmd.AddCommand(ext.Commands()...)
@@ -432,7 +436,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 	}
 	switch top.Name() {
 	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
-		"version", "update", "uninstall", "history", "settings", "trace", "tracing", "instance":
+		"version", "update", "uninstall", "history", "settings", "trace", "tracing", "instance", "source":
 		return false
 	case "env":
 		return cmd.Name() == "toggle" || cmd.Name() == "apply"

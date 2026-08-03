@@ -330,7 +330,7 @@ curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
 
 PATH="$(dirname "$orbit_bin"):$PATH" \
-  python3 "$ORBIT_HOME/envs/seeds/mini-shop/smoke.py" \
+  python3 "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
   >"$test_root/mini-shop-smoke.txt"
 
 expected_demo_ref="$(
@@ -365,10 +365,12 @@ assert version["ok"] is True
 assert version["schema_version"] == "orbit.cli.v1"
 assert version["data"]["version"]
 assert health["ok"] is True
-status_source = status["data"]["environment"]["managed_source"]
-list_source = env_list["data"]["environment"]["managed_source"]
+status_sources = status["data"]["environment"]["sources"]
+list_sources = env_list["data"]["environment"]["sources"]
+status_source = next(source for source in status_sources if source["default"])
+list_source = next(source for source in list_sources if source["default"])
 assert status_source == list_source
-assert status_source["url"] == "https://github.com/iml885203/orbit-demo.git"
+assert status_source["location"] == "https://github.com/iml885203/orbit-demo.git"
 assert status_source["ref"] == expected_demo_ref
 assert len(status_source["commit"]) == 40
 assert up["recommended_actions"] == [{
@@ -394,7 +396,7 @@ assert [action["command"] for action in infrastructure["recommended_actions"]] =
 PY
 
 english_handoff="https://github.com/iml885203/orbit/blob/$expected_demo_ref/docs/local-first.md"
-handoff_file="$ORBIT_HOME/envs/seeds/mini-shop/index.html"
+handoff_file="$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/index.html"
 if ! grep -F "$english_handoff" "$handoff_file" >/dev/null; then
   echo "demo handoff in $handoff_file does not match the Orbit release: $english_handoff" >&2
   exit 1
