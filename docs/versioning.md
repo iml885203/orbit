@@ -42,6 +42,12 @@ Release notes are entered when the release workflow is approved and live in
 GitHub Releases rather than accumulating in the source tree. They describe the
 batch's user outcome first; individual fixes are supporting details.
 
+Package updates use the private `iml885203-package-sync` GitHub App. Install
+the App only on `iml885203/homebrew-tap` and `iml885203/scoop-bucket` with
+`Actions: Read and write` and `Contents: Read`. Configure its client ID as the
+`PACKAGE_SYNC_APP_CLIENT_ID` repository variable and its private key as the
+`PACKAGE_SYNC_APP_PRIVATE_KEY` repository secret.
+
 Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 
 - PATCH releases contain backward-compatible fixes.
