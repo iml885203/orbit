@@ -40,7 +40,7 @@ func WorkspaceRootCheck(root string) (DoctorCheck, bool) {
 		return DoctorCheck{Name: "Workspace Root", Status: CheckWarn, Message: "Not set", Hint: "Set WORKSPACE_ROOT env var or run 'orbit init'"}, false
 	}
 	if _, err := os.Stat(root); err != nil {
-		return DoctorCheck{Name: "Workspace Root", Status: CheckFail, Message: root + " (path not found)", Hint: "Update WORKSPACE_ROOT (or workspace_root in settings) to an existing checkout directory"}, false
+		return DoctorCheck{Name: "Workspace Root", Status: CheckFail, Message: root + " (path not found)", Hint: "Set the source workspace to an existing checkout directory"}, false
 	}
 	return DoctorCheck{Name: "Workspace Root", Status: CheckPass, Message: root}, true
 }

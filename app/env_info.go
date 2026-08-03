@@ -23,7 +23,7 @@ func envInfoCmd() *cobra.Command {
 			"Declared values come from the environment file; observed values come from the\n" +
 			"running daemon and are reported only when it serves this same environment, so\n" +
 			"a caller is never handed another stack's ports as if they were its own.",
-		Args: cobra.NoArgs,
+		Args: cobra.MaximumNArgs(1),
 		RunE: runEnvInfo,
 	}
 	cmd.Flags().BoolVar(&envInfoShowSecrets, "show-secrets", false, "include resource environment values (may contain credentials)")
@@ -39,9 +39,18 @@ type envInfoJSONData struct {
 }
 
 type envInfoIdentity struct {
+	Identity    string `json:"identity"`
 	Name        string `json:"name"`
 	ConfigPath  string `json:"config_path"`
 	Source      string `json:"source"`
+	SourceName  string `json:"source_name,omitempty"`
+	SourceType  string `json:"source_type,omitempty"`
+	Location    string `json:"source_location,omitempty"`
+	Workspace   string `json:"workspace,omitempty"`
+	Ref         string `json:"ref,omitempty"`
+	Commit      string `json:"commit,omitempty"`
+	Selected    bool   `json:"selected"`
+	Running     bool   `json:"running"`
 	ProjectRoot string `json:"project_root,omitempty"`
 }
 
@@ -71,13 +80,24 @@ type envInfoResource struct {
 	Environment     map[string]string      `json:"environment,omitempty"`
 }
 
-func runEnvInfo(_ *cobra.Command, _ []string) error {
-	cfg, err := config.Load(configFile)
+func runEnvInfo(_ *cobra.Command, args []string) error {
+	target := configFile
+	if len(args) == 1 {
+		resolved, err := resolveEnvArg(args[0])
+		if err != nil {
+			return err
+		}
+		target = resolved
+	}
+	if err := applySourceWorkspace(target); err != nil {
+		return err
+	}
+	cfg, err := config.Load(target)
 	if err != nil {
 		return err
 	}
-	daemonInfo, status := observedEnvironmentStatus(configFile)
-	data := buildEnvInfoJSONData(cfg, configFile, daemonInfo, status, envInfoShowSecrets)
+	daemonInfo, status := observedEnvironmentStatus(target)
+	data := buildEnvInfoJSONData(cfg, target, daemonInfo, status, envInfoShowSecrets)
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, envInfoActions(daemonInfo))
 	}
@@ -123,11 +143,23 @@ func buildEnvInfoJSONData(
 	}
 	data := envInfoJSONData{
 		Operation:  "env_info",
-		Env:        envInfoIdentity{Name: daemonsrv.EnvShortName(abs), ConfigPath: abs, Source: environmentContextKind(abs)},
+		Env:        envInfoIdentity{Identity: abs, Name: daemonsrv.EnvShortName(abs), ConfigPath: abs, Source: environmentContextKind(abs)},
 		Daemon:     daemonInfo,
 		Containers: map[string]envInfoResource{},
 		Services:   map[string]envInfoResource{},
 	}
+	if source, identity, managed := managedSourceForPath(abs); managed {
+		data.Env.Identity = identity
+		data.Env.Source = "managed"
+		data.Env.SourceName = source.Name
+		data.Env.SourceType = source.Type
+		data.Env.Location = source.Location()
+		data.Env.Workspace = source.Workspace
+		data.Env.Ref = source.Ref
+		data.Env.Commit = source.Commit
+		data.Env.Selected = sameFilePath(abs, readCurrentEnv())
+	}
+	data.Env.Running = daemonInfo.Running && daemonInfo.ConfigMatch
 	if status != nil && status.Context.Kind != "" {
 		data.Env.Source = status.Context.Kind
 		data.Env.ProjectRoot = status.Context.ProjectRoot
@@ -202,8 +234,15 @@ func envInfoActions(daemonInfo envInfoDaemon) []cli.JSONAction {
 }
 
 func printEnvInfoHuman(data envInfoJSONData) {
-	fmt.Printf("Environment: %s (%s)\n", data.Env.Name, data.Env.ConfigPath)
+	fmt.Printf("Environment: %s\n", data.Env.Identity)
 	fmt.Printf("Source: %s\n", data.Env.Source)
+	if data.Env.SourceName != "" {
+		fmt.Printf("Source name: %s [%s]\nLocation: %s\n", data.Env.SourceName, data.Env.SourceType, data.Env.Location)
+		if data.Env.Workspace != "" {
+			fmt.Printf("Workspace: %s\n", data.Env.Workspace)
+		}
+	}
+	fmt.Printf("Config: %s\n", data.Env.ConfigPath)
 	if data.Env.ProjectRoot != "" {
 		fmt.Printf("Project root: %s\n", data.Env.ProjectRoot)
 	}

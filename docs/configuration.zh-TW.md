@@ -52,7 +52,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 
 | Key | Type | Required | 用途 |
 |---|---|---|---|
-| `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit env sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
+| `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit source sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
 | `containers` | map | no | Docker container 定義 |
@@ -93,7 +93,7 @@ seed:
 ```
 
 shared environment repository 由 maintainer commit schema-3 檔案，使用者再執行
-`orbit env sync`。Project-local `orbit.yaml` 則依上方 mapping 直接修改。
+`orbit source sync`。Project-local `orbit.yaml` 則依上方 mapping 直接修改。
 command 引用的 credentials 應放在 container `environment`，而不是
 seed-specific fields。
 
@@ -537,7 +537,7 @@ env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專
 checkout 不在預設 workspace 位置，請用 `orbit settings` 設定：
 
 ```bash
-orbit settings set workspace-root /path/to/workspace
+orbit source set-workspace <source> /path/to/workspace
 orbit settings set-env API_ROOT /path/to/api
 orbit settings list                              # 顯示目前的值
 ```
@@ -545,7 +545,7 @@ orbit settings list                              # 顯示目前的值
 任何支援的流程都不需要手動編輯 `settings.json`。這些指令會先驗證路徑才寫入，
 所以打錯字會立刻被指出，而不是之後才以「service 目錄不存在」的形式浮現。
 
-`workspace-root` 是 first-class 設定，會以 `WORKSPACE_ROOT` 輸出給 env config。
+Source workspace 會以 `WORKSPACE_ROOT` 輸出給該來源的 env config。
 只有所選 environment 實際引用 workspace projects 時，`orbit init` 才會詢問；
 只有 containers 或自給自足的 environment 不會把任意 current directory 存成
 workspace。它可以在 daemon 尚未啟動時設定。其他引用的變數由 `set-env` 存放在
@@ -555,7 +555,7 @@ workspace。它可以在 daemon 尚未啟動時設定。其他引用的變數由
 
 ```json
 {
-  "workspace_root": "/path/to/workspace",
+  "source": { "name": "team", "workspace": "/path/to/workspace" },
   "user_env": {
     "API_ROOT": "/path/to/api"
   }

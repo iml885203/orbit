@@ -11,7 +11,7 @@ import (
 
 // errWorkspaceRootUnavailable is the shared user-facing hint for every
 // devdb path that needs a workspace root and doesn't have one.
-var errWorkspaceRootUnavailable = errors.New("workspace root unavailable; set WORKSPACE_ROOT or configure workspace_root in settings")
+var errWorkspaceRootUnavailable = errors.New("workspace unavailable; configure it with orbit source set-workspace <source> <path>")
 
 // allProjects resolves only .sqlproj files declared in the sqlserver section.
 // Paths are workspace-relative so the environment has one shared source of

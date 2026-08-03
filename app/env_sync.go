@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
@@ -58,66 +57,24 @@ Use --dry to preview changed files without downloading or applying them.`,
 }
 
 func runEnvSync(_ *cobra.Command, _ []string) error {
-	if envSyncURL != "" && envSyncPath != "" {
-		return fmt.Errorf("--url and --path are mutually exclusive")
-	}
-
-	dest := envsDestDir()
-
-	if envSyncPath != "" {
-		envsDir := filepath.Join(envSyncPath, "envs")
-		if !cli.JSONOutput {
-			fmt.Printf("Checking for environment updates from %s...\n", envSyncPath)
-		}
-		res, err := envsync.Sync(envsDir, dest, envsync.Options{DryRun: envSyncDryRun})
-		if err != nil {
-			return fmt.Errorf("sync: %w", err)
-		}
-		if !envSyncDryRun {
-			if err := envsync.RemoveRepositorySource(dest); err != nil {
-				return err
-			}
-		}
-		if cli.JSONOutput {
-			return finishEnvSync(envSyncPath, dest, res)
-		}
-		printSyncResult(res)
-		return offerEnvironmentApply()
-	}
-
-	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
-	priorURL := settings.Get(settingKeyEnvRepoURL)
-	priorRef := settings.Get(settingKeyEnvRepoRef)
-	repository := resolveEnvRepository(envSyncURL, envSyncRef, priorURL, priorRef)
-	if repository.URL == "" {
-		return fmt.Errorf("no env repo URL configured; pass --url, --path, or run `orbit init`")
-	}
-	if !cli.JSONOutput {
-		fmt.Println("Checking for environment updates...")
-	}
-	res, err := envsync.SyncFromRepo(repository.URL, repository.Ref, dest, envsync.Options{DryRun: envSyncDryRun})
-	if err != nil {
-		return envRepoSyncError(err)
-	}
-	if !cli.JSONOutput {
-		printSyncResult(res)
-	}
-
-	// Built-in URL/ref pairs remain release-owned defaults rather than user
-	// settings, so upgrading Orbit advances the compatible demo revision.
-	// Either explicit flag turns the resolved pair into a user-owned choice.
-	if envSyncURL != "" || envSyncRef != "" {
-		if err := settings.Set(settingKeyEnvRepoURL, repository.URL); err != nil {
-			return fmt.Errorf("saving settings: %w", err)
-		}
-		if err := settings.Set(settingKeyEnvRepoRef, repository.Ref); err != nil {
-			return fmt.Errorf("saving settings: %w", err)
-		}
+	action := cli.JSONAction{Command: "orbit source sync --json", Reason: "Synchronize the default environment source.", Destructive: false}
+	message := "orbit env sync has moved to orbit source sync"
+	switch {
+	case envSyncURL != "":
+		action = cli.JSONAction{Command: "orbit source add <name> --url " + envSyncURL + " --json", Reason: "Add the Git repository as a named source.", Destructive: false}
+		message = "orbit env sync --url no longer changes sources; use orbit source add <name> --url " + envSyncURL
+	case envSyncPath != "":
+		action = cli.JSONAction{Command: "orbit source add <name> --path " + envSyncPath + " --json", Reason: "Add the local directory as a persistent named source.", Destructive: false}
+		message = "orbit env sync --path no longer changes sources; use orbit source add <name> --path " + envSyncPath
+	case envSyncRef != "":
+		action = cli.JSONAction{Command: "orbit source update <name> --ref " + envSyncRef + " --json", Reason: "Update the ref of a named Git source.", Destructive: false}
+		message = "orbit env sync --ref no longer changes sources; use orbit source update <name> --ref " + envSyncRef
 	}
 	if cli.JSONOutput {
-		return finishEnvSync(repository.URL, dest, res)
+		return cli.WithJSONReplacementActions(errors.New(message), []cli.JSONAction{action})
 	}
-	return offerEnvironmentApply()
+	fmt.Println(message)
+	return nil
 }
 
 func envRepoSyncError(err error) error {
@@ -129,10 +86,10 @@ func envRepoSyncError(err error) error {
 		return cli.WithJSONActions(
 			cli.NewEnvRepoAccessError(
 				"Git is required only to sync shared environments, but git was not found on PATH.\n"+
-					"Install Git from https://git-scm.com/downloads, then retry 'orbit env sync'.",
+					"Install Git from https://git-scm.com/downloads, then retry 'orbit source sync'.",
 			),
 			[]cli.JSONAction{{
-				Command:     "orbit env sync --json",
+				Command:     "orbit source sync --json",
 				Reason:      "Retry the environment sync after installing Git.",
 				Destructive: false,
 			}},
@@ -144,18 +101,18 @@ func envRepoSyncError(err error) error {
 	}
 	if cloneErr.ReportsAmbiguousGitHubAvailability() {
 		message += "\nCheck the GitHub owner and repository name first. GitHub uses the same response when a private repository is hidden from your current credentials."
-		message += "\nIf the URL is correct and the repo is private, authenticate Git; otherwise retry with 'orbit init --env-repo <correct-url>' or 'orbit env sync --url <correct-url>'."
+		message += "\nIf the URL is correct and the repo is private, authenticate Git; otherwise update the named source URL."
 		return cli.NewEnvRepoUnavailableError(message)
 	}
 	if cloneErr.IsGitHub() {
-		message += "\nFor a private GitHub repo, run 'gh auth login' and 'gh auth setup-git', then retry 'orbit env sync'."
+		message += "\nFor a private GitHub repo, run 'gh auth login' and 'gh auth setup-git', then retry 'orbit source sync'."
 		return cli.WithJSONActions(cli.NewEnvRepoAccessError(message), []cli.JSONAction{
 			{Command: "gh auth login", Reason: "Authenticate GitHub CLI for private repository access.", Destructive: false},
 			{Command: "gh auth setup-git", Reason: "Configure Git to use the authenticated GitHub CLI credentials.", Destructive: false},
-			{Command: "orbit env sync --json", Reason: "Retry the environment sync after restoring Git access.", Destructive: false},
+			{Command: "orbit source sync --json", Reason: "Retry the environment source sync after restoring Git access.", Destructive: false},
 		})
 	} else {
-		message += "\nVerify the repository URL and Git access, then retry 'orbit env sync'."
+		message += "\nVerify the repository URL and Git access, then retry 'orbit source sync'."
 	}
 	return cli.NewEnvRepoAccessError(message)
 }

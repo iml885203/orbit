@@ -54,7 +54,7 @@ containers without host services.
 ## Environments
 
 ```bash
-orbit env sync --json
+orbit source sync --json
 orbit switch <name> --json
 orbit env list --json
 orbit env info --json

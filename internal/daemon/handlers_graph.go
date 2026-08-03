@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -117,10 +116,10 @@ type GraphEdge struct {
 	EnvVars    []string `json:"env_vars,omitempty"`
 }
 
-// currentEnvName returns the short name of the currently loaded env;
-// thin wrapper over EnvShortName so handlers don't poke at ConfigPath
-// themselves. Empty when no config is loaded yet.
 func (s *Server) currentEnvName() string {
+	if identity, managed := managedEnvironmentIdentity(s.ConfigPath()); managed {
+		return identity
+	}
 	return EnvShortName(s.ConfigPath())
 }
 
@@ -164,19 +163,32 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 // orchestrator state — the daemon manages exactly one live env at a time
 // and preview is a parallel read channel.
 func (s *Server) servePreviewGraph(w http.ResponseWriter, envName string) {
-	dir := filepath.Dir(s.ConfigPath())
-	target := filepath.Join(dir, envName+".yaml")
+	target, identity, workspace, err := resolveManagedSwitchTarget(envName, s.ConfigPath())
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, APIResponse{Error: err.Error()})
+		return
+	}
 	if _, err := os.Stat(target); err != nil {
 		writeJSON(w, http.StatusNotFound, APIResponse{Error: "env not found: " + envName})
 		return
 	}
+	if _, managed := managedEnvironmentIdentity(target); !managed {
+		identity = EnvShortName(target)
+	}
+	previousWorkspace, hadWorkspace := os.LookupEnv("WORKSPACE_ROOT")
+	if workspace == "" {
+		_ = os.Unsetenv("WORKSPACE_ROOT")
+	} else {
+		_ = os.Setenv("WORKSPACE_ROOT", workspace)
+	}
 	cfg, err := config.Load(target)
+	restoreEnvironmentValue("WORKSPACE_ROOT", previousWorkspace, hadWorkspace)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "load: " + err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, GraphResponse{
-		Env:    envName,
+		Env:    identity,
 		Groups: buildGroupInfos(cfg),
 		Nodes:  buildGraphNodes(cfg, nil),
 		Edges:  append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),

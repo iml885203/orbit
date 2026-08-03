@@ -16,7 +16,7 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	cloneDir := filepath.Join(tmp, "repo")
-	commit, err := CloneAt(url, ref, cloneDir)
+	commit, resolvedRef, err := CloneAtResolved(url, ref, cloneDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -32,9 +32,10 @@ func SyncFromRepo(url, ref, destDir string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	result.Source = RepositorySource{
-		URL:    displayURL(url),
-		Ref:    ref,
-		Commit: commit,
+		URL:         displayURL(url),
+		Ref:         ref,
+		ResolvedRef: resolvedRef,
+		Commit:      commit,
 	}
 	if !opts.DryRun {
 		if err := writeRepositorySource(destDir, result.Source); err != nil {

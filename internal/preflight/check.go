@@ -58,7 +58,7 @@ func CheckEnvsReady(envsDir, activeEnvPath string) []Check {
 			Name:    "Env configs",
 			OK:      false,
 			Message: "no *.yaml files in " + envsDir,
-			Fix:     "run `orbit env sync` to pull configs",
+			Fix:     "run `orbit source sync` to pull configs",
 		})
 		return out
 	}

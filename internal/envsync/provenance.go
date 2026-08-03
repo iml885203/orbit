@@ -16,9 +16,10 @@ const provenanceFilename = ".orbit-source.json"
 // the managed environment files. URL is credential-free so the metadata is
 // safe to surface in CLI and daemon JSON.
 type RepositorySource struct {
-	URL    string `json:"url"`
-	Ref    string `json:"ref,omitempty"`
-	Commit string `json:"commit"`
+	URL         string `json:"url"`
+	Ref         string `json:"ref,omitempty"`
+	ResolvedRef string `json:"resolved_ref,omitempty"`
+	Commit      string `json:"commit"`
 }
 
 func ReadRepositorySource(envsDir string) (RepositorySource, error) {

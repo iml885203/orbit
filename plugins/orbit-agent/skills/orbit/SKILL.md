@@ -22,7 +22,7 @@ Then pick the path that matches the user:
 - **Their project already has `orbit.yaml`** — nothing to set up. Run
   `orbit up` from anywhere inside the project; Orbit finds the nearest config.
 - **They have a team environment repository** —
-  `orbit init --yes --env-repo <url> [--env <name>]` records the workspace root,
+  `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
 - **They have neither** — `orbit init --yes` uses the public demo, which is the
   fastest way to show what Orbit does. For a real project, prefer a
@@ -73,7 +73,7 @@ and destructive-operation rules. Deeper references live in the repository's
   containers without host services.
 - Use `orbit instance list --json` to discover named runtimes and their actual
   endpoints. Named-instance ports may differ from the declarations.
-- Use `orbit env sync --json` to refresh shared configuration and
+- Use `orbit source sync [<name>] --json` to refresh shared configuration and
   `orbit switch <name> --json` to select it. With resources running, switch
   returns the stable `confirmation_required` error instead of acting; run the
   recommended `--yes` command only when the user intends to stop that stack.
@@ -117,7 +117,7 @@ and destructive-operation rules. Deeper references live in the repository's
   includes disposing of that instance.
 - Do not remove Docker volumes unless the user explicitly requests it.
 - Do not edit `~/.orbit/settings.json` directly; use `orbit settings`,
-  `orbit init`, or `orbit env sync`.
+  `orbit init`, or `orbit source sync`.
 - Treat environment repositories as executable configuration. Inspect
   unfamiliar commands before starting them.
 - Do not expose logs, environment variables, repository paths, or tunnel

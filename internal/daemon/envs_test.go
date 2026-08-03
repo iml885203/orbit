@@ -13,12 +13,20 @@ import (
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/internal/engine"
+	"github.com/iml885203/orbit/internal/envsource"
 )
 
 func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T) {
 	srv := newTestServer(t, &config.Config{})
 	home := OrbitDir()
-	managedDir := filepath.Join(home, "envs")
+	registry, err := envsource.Load(envsource.RegistryPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(envsource.Source{Name: "default", Type: envsource.TypeGit, URL: "https://example.com/envs.git"}, false); err != nil {
+		t.Fatal(err)
+	}
+	managedDir := envsource.EnvsDir(home, "default")
 	if err := os.MkdirAll(managedDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -61,8 +69,9 @@ func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T
 		response.Context.ManagedSelection.Active {
 		t.Fatalf("managed selection = %+v", response.Context.ManagedSelection)
 	}
-	if len(response.Envs) != 1 || response.Envs[0].Path != managed || response.Envs[0].Current {
-		t.Fatalf("managed environments = %+v", response.Envs)
+	if len(response.Sources) != 1 || len(response.Sources[0].Environments) != 1 ||
+		response.Sources[0].Environments[0].Identity != "default/development" || !response.Sources[0].Environments[0].Selected {
+		t.Fatalf("managed sources = %+v", response.Sources)
 	}
 }
 
@@ -309,6 +318,52 @@ func TestHandleEnvSwitchRequiresRestartLauncherBeforeMutation(t *testing.T) {
 	}
 	if srv.ConfigPath() != current {
 		t.Fatalf("ConfigPath mutated to %q, want %q", srv.ConfigPath(), current)
+	}
+}
+
+func TestHandleEnvSwitchRestoresSourceEnvironmentWhenRestartUnavailable(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	home := OrbitDir()
+	currentDir := envsource.EnvsDir(home, "current-source")
+	targetDir := envsource.EnvsDir(home, "target-source")
+	for _, directory := range []string{currentDir, targetDir} {
+		if err := os.MkdirAll(directory, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	current := filepath.Join(currentDir, "dev.yaml")
+	target := filepath.Join(targetDir, "dev.yaml")
+	for _, path := range []string{current, target} {
+		if err := os.WriteFile(path, []byte("version: \"3\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registry, err := envsource.Load(envsource.RegistryPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(envsource.Source{Name: "current-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/previous"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(envsource.Source{Name: "target-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/target"}, false); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WORKSPACE_ROOT", "/previous")
+	t.Setenv("ORBIT_SOURCE_NAME", "current-source")
+
+	srv.SetConfigPath(current)
+	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"target-source/dev"}`))
+	w := httptest.NewRecorder()
+	srv.handleEnvSwitch(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503, body=%s", w.Code, w.Body.String())
+	}
+	if got := os.Getenv("WORKSPACE_ROOT"); got != "/previous" {
+		t.Fatalf("WORKSPACE_ROOT = %q, want previous value", got)
+	}
+	if got := os.Getenv("ORBIT_SOURCE_NAME"); got != "current-source" {
+		t.Fatalf("ORBIT_SOURCE_NAME = %q, want current-source", got)
 	}
 }
 

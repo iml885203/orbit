@@ -237,7 +237,11 @@ func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []Doct
 			check.Message = "working directory is not a directory: " + path
 		}
 		if pathVariable == "WORKSPACE_ROOT" || pathUsesWorkspaceRoot(path, workspaceRoot) {
-			check.Hint = `run: orbit settings set workspace-root "$PWD"`
+			sourceName := os.Getenv("ORBIT_SOURCE_NAME")
+			if sourceName == "" {
+				sourceName = "<source>"
+			}
+			check.Hint = `run: orbit source set-workspace ` + sourceName + ` "$PWD"`
 		} else if pathVariable != "" {
 			check.Hint = `run: orbit settings set-env ` + pathVariable + ` "$PWD"`
 		} else if unresolved {
@@ -894,13 +898,10 @@ func (s *Server) ResolveWorkspaceRoot() (string, DoctorCheck, bool) {
 }
 
 // resolveWorkspaceRoot returns the configured workspace root, a DoctorCheck
-// describing its state, and whether downstream workspace-root-dependent
+// describing its state, and whether downstream source-workspace-dependent
 // checks should run. ok=false when the root is unset or missing on disk.
 func (s *Server) resolveWorkspaceRoot() (string, DoctorCheck, bool) {
 	root := WorkspaceRootFromEnv()
-	if root == "" {
-		root = s.settings.Get("workspace_root")
-	}
 	check, ok := WorkspaceRootCheck(root)
 	return root, check, ok
 }

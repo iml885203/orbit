@@ -18,8 +18,7 @@ var settingsKeyMap = map[string]struct {
 	jsonKey string
 	kind    string // "string" | "bool"
 }{
-	"workspace-root": {"workspace_root", "string"},
-	"show-history":   {"show_history", "bool"},
+	"show-history": {"show_history", "bool"},
 }
 
 func translateSettingsKey(cliKey string) (string, error) {
@@ -108,12 +107,6 @@ func runSettingsSet(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if jsonKey == "workspace_root" {
-		args[1], err = normalizeWorkspaceRoot(args[1])
-		if err != nil {
-			return err
-		}
-	}
 	value, err := coerceSettingsValue(jsonKey, args[1])
 	if err != nil {
 		return err
@@ -125,13 +118,7 @@ func runSettingsSet(_ *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-		if jsonKey != "workspace_root" {
-			return daemon.ErrDaemonUnreachable
-		}
-		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
-		if err := settings.Set(jsonKey, value.(string)); err != nil {
-			return fmt.Errorf("saving %s: %w", args[0], err)
-		}
+		return daemon.ErrDaemonUnreachable
 	}
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{
@@ -170,12 +157,11 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		}
 	} else {
 		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
-		current = map[string]any{
-			"workspace_root": settings.WorkspaceRoot,
-			"show_history":   settings.ShowHistory,
-			"user_env":       settings.UserEnv,
-		}
+		current = map[string]any{"show_history": settings.ShowHistory, "user_env": settings.UserEnv}
 	}
+	delete(current, "workspace_root")
+	delete(current, "env_repo_url")
+	delete(current, "env_repo_ref")
 
 	cliKeys := make([]string, 0, len(settingsKeyMap))
 	for k := range settingsKeyMap {

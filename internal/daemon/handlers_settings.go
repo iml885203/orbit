@@ -7,9 +7,8 @@ import (
 )
 
 type settingsUpdate struct {
-	WorkspaceRoot *string           `json:"workspace_root,omitempty"`
-	ShowHistory   *bool             `json:"show_history,omitempty"`
-	UserEnv       map[string]string `json:"user_env,omitempty"`
+	ShowHistory *bool             `json:"show_history,omitempty"`
+	UserEnv     map[string]string `json:"user_env,omitempty"`
 }
 
 // handleSettings handles GET (read) and PUT (update) for user settings.
@@ -25,23 +24,6 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var changes []SettingsChange
-		record := func(key string, updated *string) {
-			if updated == nil {
-				return
-			}
-			changes = append(changes, SettingsChange{Key: key, Old: srv.settings.Get(key), New: *updated})
-		}
-		record("workspace_root", update.WorkspaceRoot)
-		if update.WorkspaceRoot != nil {
-			if err := srv.settings.Set("workspace_root", *update.WorkspaceRoot); err != nil {
-				slog.Error("persist workspace_root", "component", "settings", "err", err)
-				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
-				return
-			}
-			// Re-export so ${WORKSPACE_ROOT}/${WORKSPACE_ROOT} substitutions pick
-			// up the new value on the next config load.
-			srv.settings.ApplyToEnv()
-		}
 		if update.ShowHistory != nil {
 			if err := srv.settings.SetShowHistory(update.ShowHistory); err != nil {
 				slog.Error("persist show_history", "component", "settings", "err", err)

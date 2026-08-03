@@ -13,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/atomicio"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/envsource"
 )
 
 // EnvShortName derives the env short name from a config path —
@@ -34,23 +35,27 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 	defer s.environmentTransitionMu.RUnlock()
 	current := s.ConfigPath()
 	context := s.environmentContext()
-	listRoot := current
-	if context.ManagedSelection != nil {
-		listRoot = context.ManagedSelection.Path
-	}
-	dir := filepath.Dir(listRoot)
-	resp := EnvsResponse{Current: current, Envs: []EnvInfo{}, Context: context}
-
-	for _, name := range ListEnvYamls(dir) {
-		full := filepath.Join(dir, name)
-		info := EnvInfo{
-			Name:    name,
-			Path:    full,
-			Current: context.Kind == "managed" && canonicalEnvironmentPath(full) == context.Identity,
+	resp := EnvsResponse{Current: current, Sources: []EnvironmentSourceInfo{}, Context: context}
+	registry, err := loadEnvironmentSourceRegistry()
+	if err == nil {
+		for _, source := range registry.List() {
+			sourceInfo := EnvironmentSourceInfo{
+				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
+				Default: source.Default, Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
+				LastSyncError: source.LastSyncError, Environments: []EnvInfo{},
+			}
+			for _, name := range ListEnvYamls(envsource.EnvsDir(OrbitDir(), source.Name)) {
+				full := filepath.Join(envsource.EnvsDir(OrbitDir(), source.Name), name)
+				identity := envsource.Identity(source.Name, name)
+				sourceInfo.Environments = append(sourceInfo.Environments, EnvInfo{
+					Identity: identity, Name: EnvShortName(name), Path: full,
+					Selected: canonicalEnvironmentPath(full) == canonicalEnvironmentPath(ReadCurrentEnv()),
+					Running:  context.Kind == "managed" && context.Identity == identity && context.Running,
+				})
+			}
+			resp.Sources = append(resp.Sources, sourceInfo)
 		}
-		resp.Envs = append(resp.Envs, info)
 	}
-	sort.Slice(resp.Envs, func(i, j int) bool { return resp.Envs[i].Name < resp.Envs[j].Name })
 	resp.Running = s.runningCount()
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -80,23 +85,41 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := req.Env
-	if !strings.ContainsAny(target, `/\`) {
-		if !strings.HasSuffix(target, ".yaml") {
-			target += ".yaml"
-		}
-		selectionRoot := s.ConfigPath()
-		if selection := s.environmentContext().ManagedSelection; selection != nil {
-			selectionRoot = selection.Path
-		}
-		target = filepath.Join(filepath.Dir(selectionRoot), target)
+	selectionRoot := s.ConfigPath()
+	if selection := s.environmentContext().ManagedSelection; selection != nil {
+		selectionRoot = selection.Path
+	}
+	target, targetIdentity, sourceWorkspace, err := resolveManagedSwitchTarget(req.Env, selectionRoot)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error()})
+		return
 	}
 	if _, err := os.Stat(target); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "env not found: " + req.Env})
 		return
 	}
 
-	_, err := config.Load(target)
+	previousWorkspace, hadWorkspace := os.LookupEnv("WORKSPACE_ROOT")
+	previousSourceName, hadSourceName := os.LookupEnv("ORBIT_SOURCE_NAME")
+	workspaceCommitted := false
+	defer func() {
+		if workspaceCommitted {
+			return
+		}
+		restoreEnvironmentValue("WORKSPACE_ROOT", previousWorkspace, hadWorkspace)
+		restoreEnvironmentValue("ORBIT_SOURCE_NAME", previousSourceName, hadSourceName)
+	}()
+	if sourceWorkspace == "" {
+		_ = os.Unsetenv("WORKSPACE_ROOT")
+	} else {
+		_ = os.Setenv("WORKSPACE_ROOT", sourceWorkspace)
+	}
+	if sourceName, _, parseErr := envsource.ParseIdentity(targetIdentity); parseErr == nil {
+		_ = os.Setenv("ORBIT_SOURCE_NAME", sourceName)
+	} else {
+		_ = os.Unsetenv("ORBIT_SOURCE_NAME")
+	}
+	_, err = config.Load(target)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "load: " + err.Error()})
 		return
@@ -107,7 +130,6 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	}
 	currentContext := s.environmentContext()
 	runningResources := s.runningResourceNames()
-	targetIdentity := canonicalEnvironmentPath(target)
 	if len(runningResources) > 0 &&
 		(!req.Confirmed ||
 			req.CurrentIdentity != currentContext.Identity ||
@@ -199,12 +221,50 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	// Until the delayed replacement process takes over, every status surface
 	// must admit that the in-memory graph still belongs to the previous env.
 	s.engineStale.Store(true)
+	workspaceCommitted = true
 
 	msg := "Switching to " + EnvShortName(target) + " — Orbit is restarting to apply the new environment. Start its resources when the dashboard reconnects."
 	if stopped > 0 {
 		msg = "Stopped " + strconv.Itoa(stopped) + " running items from the previous environment. " + msg
 	}
 	writeJSON(w, http.StatusOK, EnvironmentSwitchResponse{OK: true, Message: msg})
+}
+
+func resolveManagedSwitchTarget(requested, selectionRoot string) (string, string, string, error) {
+	registry, err := loadEnvironmentSourceRegistry()
+	if err != nil {
+		return "", "", "", err
+	}
+	if len(registry.List()) == 0 && !strings.ContainsAny(requested, `/\`) {
+		name := requested
+		if !strings.HasSuffix(name, ".yaml") {
+			name += ".yaml"
+		}
+		if selectionRoot == "" {
+			selectionRoot = filepath.Join(OrbitDir(), "envs", name)
+		}
+		path := filepath.Join(filepath.Dir(selectionRoot), name)
+		return path, canonicalEnvironmentPath(path), "", nil
+	}
+	if filepath.IsAbs(requested) || strings.HasPrefix(requested, ".") || strings.Contains(requested, `\`) {
+		return requested, canonicalEnvironmentPath(requested), "", nil
+	}
+	target, found, err := registry.ResolveManagedEnvironment(OrbitDir(), requested)
+	if err != nil {
+		return "", "", "", err
+	}
+	if !found {
+		return requested, canonicalEnvironmentPath(requested), "", nil
+	}
+	return target.Path, target.Identity, target.Workspace, nil
+}
+
+func restoreEnvironmentValue(name, value string, present bool) {
+	if present {
+		_ = os.Setenv(name, value)
+	} else {
+		_ = os.Unsetenv(name)
+	}
 }
 
 func equalStringSlices(left, right []string) bool {

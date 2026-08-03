@@ -167,6 +167,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/envs", s.handleEnvs)
 	mux.HandleFunc("/api/envs/current", s.handleEnvSwitch)
+	mux.HandleFunc("/api/sources", s.handleSources)
 	mux.HandleFunc("/api/env/reconcile", s.handleEnvironmentReconcile)
 	mux.HandleFunc("/api/graph", s.handleGraph)
 	mux.HandleFunc("/api/resources", s.handleResources)
@@ -415,6 +416,11 @@ func (s *Server) ConfigPath() string {
 
 func (s *Server) SetEnvironmentContext(path, kind string) {
 	identity := canonicalEnvironmentPath(path)
+	if kind == "managed" {
+		if managedIdentity, ok := managedEnvironmentIdentity(path); ok {
+			identity = managedIdentity
+		}
+	}
 	s.pathMu.Lock()
 	s.configPath = path
 	s.environmentContextKind = kind
@@ -435,8 +441,9 @@ func (s *Server) environmentContext() EnvironmentContext {
 		identity = canonicalEnvironmentPath(configPath)
 	}
 	selectedPath := canonicalEnvironmentPath(ReadCurrentEnv())
+	selectedIdentity, _ := managedEnvironmentIdentity(selectedPath)
 	if kind == "" {
-		if selectedPath != "" && selectedPath == identity {
+		if selectedPath != "" && (selectedPath == identity || selectedIdentity == identity) {
 			kind = "managed"
 		} else {
 			kind = "explicit"
@@ -459,12 +466,22 @@ func (s *Server) environmentContext() EnvironmentContext {
 	}
 	if selectedPath != "" {
 		context.ManagedSelection = &ManagedEnvironmentSelection{
-			Name:   EnvShortName(selectedPath),
-			Path:   selectedPath,
-			Active: kind == "managed" && selectedPath == identity,
+			Identity: selectedIdentity,
+			Name:     EnvShortName(selectedPath),
+			Path:     selectedPath,
+			Active:   kind == "managed" && (selectedPath == identity || selectedIdentity == identity),
 		}
 	}
 	return context
+}
+
+func managedEnvironmentIdentity(path string) (string, bool) {
+	registry, err := loadEnvironmentSourceRegistry()
+	if err != nil {
+		return "", false
+	}
+	_, identity, found := registry.SourceForPath(OrbitDir(), path)
+	return identity, found
 }
 
 func canonicalEnvironmentPath(path string) string {

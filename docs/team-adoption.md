@@ -18,7 +18,7 @@ This repo contains the neutral engine, CLI, daemon, and UI, plus optional featur
    checkout:
 
    ```sh
-   orbit init --env-repo <your-env-repo-git-url> --env dev
+   orbit init --source team --url <your-env-repo-git-url> --env dev
    orbit up
    ```
 
@@ -39,13 +39,13 @@ This repo contains the neutral engine, CLI, daemon, and UI, plus optional featur
          http: 8080
    ```
 
-   During development, `orbit env sync --path /path/to/your-env-repo --yes`
+   During development, `orbit source add local --path /path/to/your-env-repo`
    can use local, uncommitted environment files. If the active environment
    changed, sync offers to make it current and restores only the resources
    that were running. Use `--no-apply` only when an interruption must be
    deferred; Orbit prints the exact command to finish later.
 
-The released binary supplies its distribution defaults. A custom build without those defaults can set `env_repo_url` or `ORBIT_ENV_REPO_URL` for `orbit env sync`, and `ORBIT_INSTALL_URL` for `orbit update`. Services, containers, graph, logs, health checks, doctor, and the dashboard otherwise need only the env configuration. Tracing is on by default; an env opts out with an explicit `tracing.enabled: false`.
+The released binary supplies its distribution defaults. Custom teams can add Git or local sources with `orbit source add`; `ORBIT_INSTALL_URL` still configures `orbit update`. Services, containers, graph, logs, health checks, doctor, and the dashboard otherwise need only the env configuration. Tracing is on by default; an env opts out with an explicit `tracing.enabled: false`.
 
 ## Compile-time customization
 

@@ -109,7 +109,7 @@ func TestSettings_SetUserEnvPersistsAndExports(t *testing.T) {
 	}
 }
 
-func TestSettings_WorkspaceRoot(t *testing.T) {
+func TestSettingsPreservesLegacyWorkspaceWithoutApplyingItGlobally(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
 
@@ -118,19 +118,16 @@ func TestSettings_WorkspaceRoot(t *testing.T) {
 		t.Fatalf("set failed: %v", err)
 	}
 
-	// Reload
 	s2 := LoadSettings(path)
 	if s2.Get("workspace_root") != "/test/workspace" {
 		t.Errorf("expected /test/workspace, got %s", s2.Get("workspace_root"))
 	}
 
-	// ApplyToEnv
+	t.Setenv("WORKSPACE_ROOT", "")
 	s2.ApplyToEnv()
-	if got := os.Getenv("WORKSPACE_ROOT"); got != "/test/workspace" {
-		t.Errorf("expected /test/workspace in WORKSPACE_ROOT, got %s", got)
+	if got := os.Getenv("WORKSPACE_ROOT"); got != "" {
+		t.Errorf("legacy workspace leaked into global environment: %s", got)
 	}
-
-	_ = os.Unsetenv("WORKSPACE_ROOT")
 }
 
 // Regression: env_repo_url used to be missing from the Get/Set switches, so

@@ -12,7 +12,8 @@ export interface Settings {
    */
   workspace_root?: string;
   /**
-   * EnvRepoURL is the git URL `orbit env sync` clones envs from. Only an
+   * EnvRepoURL is retained only so first-run source migration can recover the
+   * legacy Git URL. New writes belong in the environment source registry. Only an
    * explicitly user-provided URL is stored here; when empty, resolution
    * falls through to ORBIT_ENV_REPO_URL and the built-in default, so a
    * default change in a new orbit release reaches users who never overrode.
@@ -112,6 +113,7 @@ export interface EnvironmentContext {
   managed_selection?: ManagedEnvironmentSelection;
 }
 export interface ManagedEnvironmentSelection {
+  identity?: string;
   name: string;
   path: string;
   active: boolean;
@@ -282,9 +284,23 @@ export interface TraceLogsResponse {
  * EnvInfo describes one available env config file.
  */
 export interface EnvInfo {
+  identity: string;
   name: string;
   path: string;
-  current: boolean;
+  selected: boolean;
+  running: boolean;
+}
+export interface EnvironmentSourceInfo {
+  name: string;
+  type: string;
+  location: string;
+  workspace?: string;
+  default: boolean;
+  ref?: string;
+  resolved_ref?: string;
+  commit?: string;
+  last_sync_error?: string;
+  environments: EnvInfo[];
 }
 /**
  * EnvsResponse is returned by GET /api/envs.
@@ -292,7 +308,7 @@ export interface EnvInfo {
 export interface EnvsResponse {
   current?: string;
   running: number /* int */; // count of non-stopped services
-  envs: EnvInfo[];
+  sources: EnvironmentSourceInfo[];
   context: EnvironmentContext;
 }
 export interface EnvironmentSwitchResponse {

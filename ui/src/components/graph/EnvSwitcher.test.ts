@@ -12,8 +12,8 @@ vi.mock('$lib/api', () => ({
 }))
 
 const stoppedNode = { name: 'web', kind: 'frontend', state: 'stopped', url: 'http://localhost:3000' }
-const liveGraph = { env: 'development', nodes: [stoppedNode], edges: [] }
-const previewGraph = { env: 'example', nodes: [], edges: [] }
+const liveGraph = { env: 'default/development', nodes: [stoppedNode], edges: [] }
+const previewGraph = { env: 'default/example', nodes: [], edges: [] }
 
 describe('EnvSwitcher', () => {
   beforeEach(() => {
@@ -28,17 +28,17 @@ describe('EnvSwitcher', () => {
       running: 0,
       context: {
         kind: 'managed',
-        identity: '/envs/development.yaml',
+        identity: 'default/development',
         display_name: 'development',
         config_path: '/envs/development.yaml',
         available: true,
         running: false,
-        managed_selection: { name: 'development', path: '/envs/development.yaml', active: true },
+        managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: true },
       },
-      envs: [
-        { name: 'development.yaml', path: '/envs/development.yaml', current: true },
-        { name: 'example.yaml', path: '/envs/example.yaml', current: false },
-      ],
+      sources: [{ name: 'default', type: 'git', location: 'https://example.com/envs.git', default: true, environments: [
+        { identity: 'default/development', name: 'development', path: '/envs/development.yaml', selected: true, running: false },
+        { identity: 'default/example', name: 'example', path: '/envs/example.yaml', selected: false, running: false },
+      ] }],
     }
   })
 
@@ -63,7 +63,7 @@ describe('EnvSwitcher', () => {
       project_root: '/work/payments',
       available: true,
       running: true,
-      managed_selection: { name: 'development', path: '/envs/development.yaml', active: false },
+      managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: false },
     }
     store.daemon.services = {
       web: {
@@ -82,7 +82,7 @@ describe('EnvSwitcher', () => {
         current_context: store.daemon.envs.context,
         target_context: {
           kind: 'managed',
-          identity: '/envs/example.yaml',
+          identity: 'default/example',
           display_name: 'example',
           config_path: '/envs/example.yaml',
           available: true,
@@ -98,14 +98,14 @@ describe('EnvSwitcher', () => {
     store.graph.preview = previewGraph
     await tick()
     await fireEvent.click(screen.getByRole('button', { name: 'Use this env' }))
-    expect(switchEnv).toHaveBeenCalledWith('example', false, '', '', [])
+    expect(switchEnv).toHaveBeenCalledWith('default/example', false, '', '', [])
     expect(screen.getByText(/stop 1 running item from payments/)).toBeInTheDocument()
 	await fireEvent.click(screen.getByRole('button', { name: 'Stop and switch' }))
 	expect(switchEnv).toHaveBeenLastCalledWith(
-	  'example',
+	  'default/example',
 	  true,
 	  '/work/payments/orbit.yaml',
-	  '/envs/example.yaml',
+	  'default/example',
 	  ['web'],
 	)
   })

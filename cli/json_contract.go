@@ -149,7 +149,7 @@ func classify(err error) JSONError {
 				Message:     schemaVersion.Error(),
 				Hint:        "Refresh the shared environment files.",
 				Retryable:   true,
-				NextCommand: "orbit env sync --json",
+				NextCommand: "orbit source sync --json",
 			}
 		case config.SchemaVersionNewer:
 			return JSONError{
@@ -393,7 +393,7 @@ func classify(err error) JSONError {
 			Message:     msg,
 			Hint:        "Verify Git access. For a private GitHub repository, run 'gh auth login' and 'gh auth setup-git', then retry.",
 			Retryable:   true,
-			NextCommand: "orbit env sync --json",
+			NextCommand: "orbit source sync --json",
 		}
 	case errors.Is(err, ErrEnvRepoUnavailable):
 		return JSONError{
@@ -460,7 +460,7 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	}
 	if err.Code == "env_repo_access" {
 		return []JSONAction{{
-			Command:     "orbit env sync --json",
+			Command:     "orbit source sync --json",
 			Reason:      "Retry after restoring Git access to the environment repository.",
 			Destructive: false,
 		}}

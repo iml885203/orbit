@@ -111,7 +111,7 @@ func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
 	}{
 		{
 			name: "older shared environment", version: "2",
-			path: filepath.Join(orbitHome, "envs", "team.yaml"), command: "orbit env sync --json",
+			path: filepath.Join(orbitHome, "envs", "team.yaml"), command: "orbit source sync --json",
 		},
 		{name: "newer environment", version: "4", path: "/tmp/orbit.yaml", command: "orbit update --json"},
 	}

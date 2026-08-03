@@ -173,12 +173,12 @@ dashboard 回報成目前專案所有。
 `orbit switch <env> --json` 指令；這不代表需要重新 init。
 
 `orbit init --yes --json` 不會把 current directory 猜成
-`data.workspace_root`。自給自足的 environment 會省略此欄位。若自訂
+source workspace。自給自足的 environment 會省略此欄位。若自訂
 environment 需要 `${WORKSPACE_ROOT}`，但沒有可證明的 local workspace，
 init 會回傳 `service_working_directory_missing`，且唯一 action 為
-`orbit settings set workspace-root "$PWD" --json`。
+`orbit source set-workspace <source> "$PWD" --json`。
 其他未解析的 path variable 會保留自己的名稱，並指向
-`orbit settings set-env <NAME> "$PWD" --json`；不會產生 workspace-root
+`orbit settings set-env <NAME> "$PWD" --json`；不會產生 source workspace
 action。
 
 當 GitHub 回覆 environment repo 不存在時，Orbit 會回傳
@@ -300,8 +300,8 @@ Inspect payload 包含：
 | State | Blocked | 意義 |
 |---|---:|---|
 | `setup_required` | true | 尚未選到可用 environment；唯一下一步是 `orbit init --yes --json`。 |
-| `selection_required` | true | 先前 selection 已失效；actions 會提供精確的 `orbit switch <env> --json` 選項，沒有候選時則提供 `orbit env sync --json`。 |
-| `config_invalid` | true | 選到的 config 無法載入。較舊的共用 schema 唯一 action 是 `orbit env sync --json`；較新的 schema 唯一 action 是 `orbit update --json`。語法錯誤與未知欄位需要編輯回報的檔案，因此 Orbit 不會回傳沒有推進效果的 `inspect` 自我重試。 |
+| `selection_required` | true | 先前 selection 已失效；actions 會提供精確的 `orbit switch <source>/<env> --json` 選項，沒有候選時則提供 `orbit source sync --json`。 |
+| `config_invalid` | true | 選到的 config 無法載入。較舊的共用 schema 唯一 action 是 `orbit source sync --json`；較新的 schema 唯一 action 是 `orbit update --json`。語法錯誤與未知欄位需要編輯回報的檔案，因此 Orbit 不會回傳沒有推進效果的 `inspect` 自我重試。 |
 | `update_required` | true | 新版 Orbit binary 已安裝，但 daemon 仍執行舊版本；唯一 action 是 `orbit daemon restart --json`。 |
 | `stopped` | true | 已設定 environment 但尚未執行；configured resources 會列為 stopped，唯一 action 是 `orbit up --json`。 |
 | `needs_daemon` | true | running daemon 使用的 env 與選取的 config 不同。 |

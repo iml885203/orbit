@@ -19,7 +19,7 @@ func TestServiceWorkingDirectoryChecksExplainsUnresolvedWorkspace(t *testing.T) 
 	if checks[0].Name != "Working directory (api)" {
 		t.Fatalf("name = %q", checks[0].Name)
 	}
-	if checks[0].Hint != `run: orbit settings set workspace-root "$PWD"` {
+	if checks[0].Hint != `run: orbit source set-workspace <source> "$PWD"` {
 		t.Fatalf("hint = %q", checks[0].Hint)
 	}
 }

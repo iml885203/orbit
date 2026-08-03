@@ -147,14 +147,10 @@ func envUseRecommendedActions(daemonRunning bool) []cli.JSONAction {
 // resolveEnvArg accepts either an explicit path, a bare name ("example"),
 // or a short filename ("example.yaml"), resolving against ~/.orbit/envs/.
 func resolveEnvArg(arg string) (string, error) {
-	candidates := []string{arg}
-	if !strings.ContainsAny(arg, `/\`) {
-		name := arg
-		if !strings.HasSuffix(name, ".yaml") {
-			name += ".yaml"
-		}
-		candidates = append(candidates, filepath.Join(envsDestDir(), name))
+	if managed, found, err := resolveManagedEnvArg(arg); found || err != nil {
+		return managed, err
 	}
+	candidates := []string{arg}
 	for _, c := range candidates {
 		abs, err := filepath.Abs(c)
 		if err != nil {
@@ -165,6 +161,29 @@ func resolveEnvArg(arg string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("env not found: %s (looked under %s)", arg, envsDestDir())
+}
+
+func resolveManagedEnvArg(arg string) (string, bool, error) {
+	registry, err := sourceRegistry()
+	if err != nil {
+		return "", true, err
+	}
+	if len(registry.List()) == 0 {
+		return "", false, nil
+	}
+	target, found, err := registry.ResolveManagedEnvironment(daemon.OrbitDir(), arg)
+	if err != nil {
+		return "", found, err
+	}
+	if !found {
+		return "", false, nil
+	}
+	path := target.Path
+	info, statErr := os.Stat(path)
+	if statErr != nil || info.IsDir() {
+		return "", true, fmt.Errorf("env not found: %s", arg)
+	}
+	return path, true, nil
 }
 
 func runEnvList(_ *cobra.Command, _ []string) error {
@@ -180,10 +199,31 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 	}
 	if len(selection.Environments) == 0 {
 		fmt.Printf("No environments found at %s.\n", envsDestDir())
-		fmt.Println("  Next: orbit env sync")
+		fmt.Println("  Next: orbit source sync")
 		return nil
 	}
 
+	if len(selection.Sources) > 0 {
+		for _, source := range selection.Sources {
+			labels := []string{source.Type}
+			if source.Default {
+				labels = append(labels, "Default")
+			}
+			fmt.Printf("%s  [%s]\n", source.Name, strings.Join(labels, "] ["))
+			if source.Workspace != "" {
+				fmt.Printf("Workspace: %s\n", source.Workspace)
+			}
+			for _, environment := range source.Environments {
+				marker := "  "
+				if environment.Selected {
+					marker = cli.Green.Sprint("* ")
+				}
+				fmt.Printf("%s%s\n", marker, environment.Name)
+			}
+			fmt.Println()
+		}
+		return nil
+	}
 	for _, environment := range selection.Environments {
 		marker := "  "
 		if environment.Selected {
@@ -396,6 +436,8 @@ type switchJSONOptions struct {
 type switchJSONData struct {
 	Operation                  string               `json:"operation"`
 	SelectedEnv                string               `json:"selected_env"`
+	SelectedIdentity           string               `json:"selected_identity,omitempty"`
+	Source                     string               `json:"source,omitempty"`
 	EnvName                    string               `json:"env_name"`
 	PreviousEnvironmentStopped bool                 `json:"previous_environment_stopped"`
 	ConfigPath                 string               `json:"config_path"`
@@ -404,9 +446,17 @@ type switchJSONData struct {
 }
 
 func buildSwitchJSONData(opts switchJSONOptions) switchJSONData {
+	identity := ""
+	sourceName := ""
+	if source, managedIdentity, managed := managedSourceForPath(opts.SelectedEnv); managed {
+		identity = managedIdentity
+		sourceName = source.Name
+	}
 	return switchJSONData{
 		Operation:                  "switch",
 		SelectedEnv:                opts.SelectedEnv,
+		SelectedIdentity:           identity,
+		Source:                     sourceName,
 		EnvName:                    daemonsrv.EnvShortName(opts.SelectedEnv),
 		PreviousEnvironmentStopped: opts.PreviousEnvironmentStopped,
 		ConfigPath:                 opts.ConfigPath,

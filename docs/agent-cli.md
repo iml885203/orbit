@@ -182,7 +182,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit restart --json` | Returns final lifecycle result and verifies restart evidence. |
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |
 | `orbit env use <path> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
-| `orbit env sync --json` | Returns sync source, requested reference, resolved commit, destination, dry-run state, written files, daemon state, apply action, and restored resources. |
+| `orbit source sync [<name>] --json` | Returns per-source results; `--all` continues independent sources and reports every success or failure. |
 | `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit update --json` | Updates the invoked binary and, when an environment is running, reconnects it and returns the resources restored across the handoff. `--rollback` applies the same contract to the previous binary. |
@@ -263,14 +263,14 @@ If the previously selected environment was renamed or removed, status instead
 returns `data.selection_required: true`, a `selection_message`, and exact
 `orbit switch <env> --json` choices; this does not mean setup must be repeated.
 
-`orbit init --yes --json` never invents `data.workspace_root` from the current
+`orbit init --yes --json` never invents a source workspace from the current
 directory. The field is omitted for self-contained environments. If a custom
 environment requires `${WORKSPACE_ROOT}` and no proven local workspace exists,
 init returns `service_working_directory_missing` with the sole action
-`orbit settings set workspace-root "$PWD" --json`.
+`orbit source set-workspace <source> "$PWD" --json`.
 Other unresolved path variables preserve their name and lead to
 `orbit settings set-env <NAME> "$PWD" --json`; they never produce a
-workspace-root action.
+source-workspace action.
 
 When GitHub reports that an environment repository was not found, Orbit returns
 `env_repo_unavailable` without recommended actions. GitHub deliberately uses
@@ -289,7 +289,7 @@ Stable `data.operation` values for converted control commands:
 | `orbit tunnel list --json` | `tunnel_list` |
 | `orbit tunnel release --json` | `tunnel_release` |
 | `orbit env use <path> --json` | `env_use` |
-| `orbit env sync --json` | `env_sync` |
+| `orbit source sync --json` | `source_sync` |
 | `orbit env apply --json` | `env_apply` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
@@ -423,8 +423,8 @@ Stable `readiness.state` values:
 | State | Blocked | Meaning |
 |---|---:|---|
 | `setup_required` | true | No usable environment has been selected; the only next action is `orbit init --yes --json`. |
-| `selection_required` | true | The previous selection is unavailable. Actions contain exact `orbit switch <env> --json` choices, or `orbit env sync --json` when none are available. |
-| `config_invalid` | true | The selected config cannot be loaded. An older shared schema has the sole action `orbit env sync --json`; a newer schema has the sole action `orbit update --json`. Syntax errors and unknown fields require editing the reported file, so Orbit does not return an unchanged `inspect` self-loop. |
+| `selection_required` | true | The previous selection is unavailable. Actions contain exact `orbit switch <source>/<env> --json` choices, or `orbit source sync --json` when none are available. |
+| `config_invalid` | true | The selected config cannot be loaded. An older shared schema has the sole action `orbit source sync --json`; a newer schema has the sole action `orbit update --json`. Syntax errors and unknown fields require editing the reported file, so Orbit does not return an unchanged `inspect` self-loop. |
 | `update_required` | true | A newer Orbit binary is installed but the daemon still runs the previous version; the only action is `orbit daemon restart --json`. |
 | `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
 | `needs_daemon` | true | A running daemon is serving a different env than the selected config. |

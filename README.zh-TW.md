@@ -4,7 +4,7 @@
 也作為 E2E 測試的基底。
 
 [安裝](docs/development.zh-TW.md) · [設定](docs/configuration.zh-TW.md) ·
-[架構](docs/architecture.zh-TW.md) · [Agent CLI](docs/agent-cli.zh-TW.md) ·
+[Environment sources](docs/environment-sources.zh-TW.md) · [架構](docs/architecture.zh-TW.md) · [Agent CLI](docs/agent-cli.zh-TW.md) ·
 [English](README.md)
 
 > **1.0 前預覽版：** Orbit 已開放給 early adopters 與 contributors，但 1.0
@@ -174,6 +174,7 @@ playback。Dashboard 只綁定 loopback。
 - [在你的專案使用 Orbit](docs/local-first.zh-TW.md)
 - [為什麼是 Orbit](docs/why-orbit.zh-TW.md) —— 設計取捨與工具比較
 - [設定](docs/configuration.zh-TW.md)
+- [Environment sources](docs/environment-sources.zh-TW.md)
 - [隔離的 runtime instances](docs/instances.zh-TW.md)
 - [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)
 - [Tracing](docs/tracing.zh-TW.md)

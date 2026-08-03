@@ -58,7 +58,7 @@ func TestEnvRepoAccessJSONPointsToAuthenticationAndRetry(t *testing.T) {
 	if !strings.Contains(got.Error.Hint, "gh auth login") {
 		t.Fatalf("hint = %q", got.Error.Hint)
 	}
-	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit env sync --json" {
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit source sync --json" {
 		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
 	}
 }

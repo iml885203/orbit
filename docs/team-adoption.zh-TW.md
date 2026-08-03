@@ -17,7 +17,7 @@ Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 servic
    commit 後從 project checkout 初始化：
 
    ```sh
-   orbit init --env-repo <your-env-repo-git-url> --env dev
+   orbit init --source team --url <your-env-repo-git-url> --env dev
    orbit up
    ```
 
@@ -38,12 +38,12 @@ Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 servic
          http: 8080
    ```
 
-   開發期間可用 `orbit env sync --path /path/to/your-env-repo --yes` 指向本地、
+   開發期間可用 `orbit source add local --path /path/to/your-env-repo` 指向本地、
    尚未 commit 的 environment files。若目前使用中的 environment 有變更，
    sync 會詢問是否更新，並且只恢復原先運行中的資源。只有必須延後中斷時才
    需要 `--no-apply`；Orbit 會印出之後完成更新的精確指令。
 
-已發行 binary 會提供 distribution defaults。若自訂 build 沒有這些預設，`orbit env sync` 可設定 `env_repo_url` 或 `ORBIT_ENV_REPO_URL`，`orbit update` 可設定 `ORBIT_INSTALL_URL`。其餘 services、containers、graph、logs、health checks、doctor 與 dashboard 只需 env 設定即可運作。Tracing 預設開啟；env 可用明確的 `tracing.enabled: false` opt out。
+已發行 binary 會提供 distribution defaults。團隊可用 `orbit source add` 新增 Git 或本機來源；`orbit update` 仍可用 `ORBIT_INSTALL_URL` 設定下載位置。其餘 services、containers、graph、logs、health checks、doctor 與 dashboard 只需 env 設定即可運作。Tracing 預設開啟；env 可用明確的 `tracing.enabled: false` opt out。
 
 ## 編譯時客製
 
