@@ -128,6 +128,8 @@ orbit status
 orbit open demo-shop
 ```
 
+![Orbit demo dashboard，顯示 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
+
 [Orbit demo](https://github.com/iml885203/orbit-demo) 是一個獨立的
 mini-shop——一個 storefront、三個在 host 上執行並各自使用 SQLite 的
 Python API，以及 container 內的 Redis——由單一 project-root `orbit.yaml`

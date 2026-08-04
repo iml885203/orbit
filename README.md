@@ -137,6 +137,8 @@ orbit status
 orbit open demo-shop
 ```
 
+![Orbit demo dashboard showing the mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
+
 The [Orbit demo](https://github.com/iml885203/orbit-demo) is a standalone
 mini-shop — a storefront, three Python APIs with SQLite databases on the
 host, and Redis in a container — driven by one project-root `orbit.yaml`,
