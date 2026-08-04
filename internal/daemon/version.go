@@ -219,8 +219,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVersionRestart(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Error: "method not allowed"})
+	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	onDisk, _ := detectUpdate(s.version)
