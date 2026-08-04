@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EnvPopover from './EnvPopover.svelte'
+import envPopoverSource from './EnvPopover.svelte?raw'
+import mainPageSource from '../routes/MainPage.svelte?raw'
 import { store } from '$lib/stores.svelte'
 
 const { fetchGraph, push } = vi.hoisted(() => ({
@@ -65,6 +67,18 @@ describe('EnvPopover', () => {
     expect(screen.getByText('/work/payments/orbit.yaml')).toBeInTheDocument()
     expect(screen.getByText('/work/payments')).toBeInTheDocument()
     expect(screen.getByText('not active')).toBeInTheDocument()
+  })
+
+  it('covers page controls while the environment selector is open', () => {
+    const layer = (source: string, selector: string) => Number(
+      source.match(new RegExp(`\\.${selector}\\s*\\{[^}]*z-index:\\s*(\\d+)`, 's'))?.[1],
+    )
+    const toolbarLayer = layer(mainPageSource, 'view-toolbar')
+    const backdropLayer = layer(envPopoverSource, 'backdrop')
+    const popoverLayer = layer(envPopoverSource, 'popover')
+
+    expect(backdropLayer).toBeGreaterThan(toolbarLayer)
+    expect(popoverLayer).toBeGreaterThan(backdropLayer)
   })
 
   it('offers the inactive managed environment when a project config is unavailable', () => {

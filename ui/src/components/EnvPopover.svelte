@@ -187,7 +187,7 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.3);
-    z-index: 9;
+    z-index: 99;
   }
   .popover {
     position: fixed;
@@ -199,7 +199,7 @@
     border-radius: var(--radius-lg);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
     padding: var(--space-3);
-    z-index: 10;
+    z-index: 100;
   }
   .header {
     display: flex;
