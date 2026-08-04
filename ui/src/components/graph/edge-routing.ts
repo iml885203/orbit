@@ -2,6 +2,7 @@ import type { GraphEdge } from '../../lib/types.gen'
 import type { PositionedNode } from './layout'
 import { filterVisibleEdges } from './edge-filter'
 
+// Used by GraphView and DependencyEdge to carry canvas-only attachment ports.
 export type RoutedGraphEdge = GraphEdge & {
   sourceOffset: number
   targetOffset: number
@@ -20,8 +21,8 @@ export function routeDependencyEdges(
   edges: GraphEdge[],
   positions: ReadonlyMap<string, NodePosition>,
 ): RoutedGraphEdge[] {
-  const sourceOffsets = endpointOffsets(edges, edge => `${edge.kind}:${edge.from}`, edge => edge.to, positions)
-  const targetOffsets = endpointOffsets(edges, edge => `${edge.kind}:${edge.to}`, edge => edge.from, positions)
+  const sourceOffsets = endpointOffsets(edges, edge => edge.from, edge => edge.to, positions)
+  const targetOffsets = endpointOffsets(edges, edge => edge.to, edge => edge.from, positions)
 
   return edges.map(edge => ({
     ...edge,

@@ -73,6 +73,22 @@ describe('routeDependencyEdges', () => {
     expect(visible.targetOffset).toBe(0)
   })
 
+  it('separates selected async edges from sync edges at the same endpoint', () => {
+    const mixedEdges: GraphEdge[] = [
+      sync('producer', 'database'),
+      { from: 'producer', to: 'consumer', kind: 'async', topic: 'events', detached: false, detachable: false, env_vars: [] },
+    ]
+    const nodes = layout({
+      env: 'mixed',
+      nodes: ['producer', 'database', 'consumer'].map(name => ({ name, kind: 'backend', state: 'healthy' })),
+      edges: mixedEdges,
+    })
+
+    const routed = routeVisibleDependencyEdges(mixedEdges, 'consumer', nodes)
+    expect(routed).toHaveLength(2)
+    expect(new Set(routed.map(edge => edge.sourceOffset)).size).toBe(2)
+  })
+
   it('composes the orbit-demo layout into six distinct dependency paths', () => {
     const demoGraph: GraphResponse = {
       env: 'orbit-demo',
