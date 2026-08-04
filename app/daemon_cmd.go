@@ -167,7 +167,7 @@ func daemonRestartProgress() func(string) {
 	}
 }
 
-func launchDashboardEnvRestart(configPath string) error {
+func launchDashboardRestart(configPath, contextKind string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding orbit executable: %w", err)
@@ -178,7 +178,7 @@ func launchDashboardEnvRestart(configPath string) error {
 	}
 	defer func() { _ = logFile.Close() }()
 
-	cmd := exec.Command(exe, "daemon", "restart", "--config", configPath, "--context-kind", "managed", "--handoff-delay", "250ms")
+	cmd := exec.Command(exe, "daemon", "restart", "--config", configPath, "--context-kind", contextKind, "--handoff-delay", "250ms")
 	cmd.Dir = filepath.Dir(configPath)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
@@ -466,7 +466,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
 	server.SetEnvironmentContext(configFile, daemonContextKind)
-	server.SetRestartLauncher(launchDashboardEnvRestart)
+	server.SetRestartLauncher(launchDashboardRestart)
 	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
 	app.ProcessMgr.OnStarted = func(_ string) {
 		server.PersistState()

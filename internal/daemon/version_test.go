@@ -1,10 +1,84 @@
 package daemon
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestHandleVersionRestartSchedulesCurrentContext(t *testing.T) {
+	bin := makeBin(t, t.TempDir(), "orbit")
+	withCandidates(t, []string{bin})
+	withProbe(t, func(string) (string, error) {
+		return "v0.9.1 (2026-08-04 12:00:00 +0800)", nil
+	})
+	srv := newTestServer(t, testConfig())
+	srv.version = "v0.8.0 (2026-08-03 12:00:00 +0800)"
+	configPath := filepath.Join(t.TempDir(), "orbit.yaml")
+	srv.SetEnvironmentContext(configPath, "project")
+	var launchedPath, launchedKind string
+	srv.SetRestartLauncher(func(path, kind string) error {
+		launchedPath, launchedKind = path, kind
+		return nil
+	})
+
+	w := httptest.NewRecorder()
+	srv.handleVersionRestart(w, httptest.NewRequest(http.MethodPost, "/api/version/restart", nil))
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", w.Code, w.Body.String())
+	}
+	if launchedPath != configPath || launchedKind != "project" {
+		t.Fatalf("restart context = (%q, %q), want (%q, project)", launchedPath, launchedKind, configPath)
+	}
+	var response APIResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.OK || response.Message == "" {
+		t.Fatalf("response = %+v, want accepted message", response)
+	}
+}
+
+func TestHandleVersionRestartRejectsWhenNoUpdateIsReady(t *testing.T) {
+	bin := makeBin(t, t.TempDir(), "orbit")
+	withCandidates(t, []string{bin})
+	withProbe(t, func(string) (string, error) {
+		return "v0.8.0 (2026-08-03 12:00:00 +0800)", nil
+	})
+	srv := newTestServer(t, testConfig())
+	srv.version = "v0.8.0 (2026-08-03 12:00:00 +0800)"
+
+	w := httptest.NewRecorder()
+	srv.handleVersionRestart(w, httptest.NewRequest(http.MethodPost, "/api/version/restart", nil))
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleVersionRestartSurfacesLaunchFailure(t *testing.T) {
+	bin := makeBin(t, t.TempDir(), "orbit")
+	withCandidates(t, []string{bin})
+	withProbe(t, func(string) (string, error) {
+		return "v0.9.1 (2026-08-04 12:00:00 +0800)", nil
+	})
+	srv := newTestServer(t, testConfig())
+	srv.version = "v0.8.0 (2026-08-03 12:00:00 +0800)"
+	srv.SetRestartLauncher(func(string, string) error { return errors.New("launcher unavailable") })
+
+	w := httptest.NewRecorder()
+	srv.handleVersionRestart(w, httptest.NewRequest(http.MethodPost, "/api/version/restart", nil))
+
+	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "launcher unavailable") {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+}
 
 func TestParseVersionToken(t *testing.T) {
 	cases := []struct {

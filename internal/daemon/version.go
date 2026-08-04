@@ -217,3 +217,24 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+func (s *Server) handleVersionRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Error: "method not allowed"})
+		return
+	}
+	if onDisk, _ := detectUpdate(s.version); onDisk == "" {
+		writeJSON(w, http.StatusConflict, APIResponse{Error: "no installed Orbit update is ready"})
+		return
+	}
+	if s.restartLauncher == nil {
+		writeJSON(w, http.StatusServiceUnavailable, APIResponse{Error: "daemon restart is unavailable in this Orbit build"})
+		return
+	}
+	context := s.environmentContext()
+	if err := s.restartLauncher(context.ConfigPath, context.Kind); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: "schedule daemon restart: " + err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, APIResponse{OK: true, Message: "Orbit is restarting; running resources will be restored"})
+}

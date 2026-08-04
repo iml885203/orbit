@@ -9,9 +9,9 @@ import { toast } from './stores.svelte'
 // toast per poll tick would spam.
 // Exported: the extension module's api calls build on the same
 // toast-aware GET primitive.
-export async function getJSON<T>(path: string, unavailable?: string): Promise<T | null> {
+export async function getJSON<T>(path: string, unavailable?: string, signal?: AbortSignal): Promise<T | null> {
   try {
-    const res = await fetch(path)
+    const res = await fetch(path, { signal })
     if (res.ok) return await res.json()
     console.error(`GET ${path}: HTTP ${res.status}`)
   } catch (e) {
@@ -67,8 +67,12 @@ export async function setEnvToggle(service: string, varName: string, enabled: bo
   return apiPut('/api/env-toggles', { service, var: varName, enabled })
 }
 
-export async function fetchVersion(): Promise<VersionResponse | null> {
-  return getJSON('/api/version')
+export async function fetchVersion(signal?: AbortSignal): Promise<VersionResponse | null> {
+  return getJSON('/api/version', undefined, signal)
+}
+
+export async function restartForUpdate(): Promise<{ ok: boolean; data?: APIResponse }> {
+  return apiPost('/api/version/restart')
 }
 
 export async function fetchEnvs(): Promise<EnvsResponse | null> {

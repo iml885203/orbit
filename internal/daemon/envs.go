@@ -205,7 +205,7 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	}
 	s.SetEnvironmentContext(target, "managed")
 
-	if err := s.restartLauncher(target); err != nil {
+	if err := s.restartLauncher(target, "managed"); err != nil {
 		s.UpdateConfig(func(tx extension.ConfigTx) error {
 			tx.Store(previousCfg)
 			return nil
