@@ -158,6 +158,7 @@
   .layout-toggle {
     display: inline-flex;
     gap: 2px;
+    margin-right: calc(var(--services-view-toggle-width) + var(--space-3));
     padding: 2px;
     background: var(--card);
     border: 1px solid var(--border);

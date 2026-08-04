@@ -65,6 +65,7 @@
 
 <style>
   .services-page {
+    --services-view-toggle-width: 64px;
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
