@@ -4,12 +4,12 @@ import { tick } from 'svelte'
 import VersionBanner from './VersionBanner.svelte'
 import { store } from '$lib/stores.svelte'
 
-const { fetchVersion, restartForUpdate } = vi.hoisted(() => ({
+const { apiPost, fetchVersion } = vi.hoisted(() => ({
+  apiPost: vi.fn(),
   fetchVersion: vi.fn(),
-  restartForUpdate: vi.fn(),
 }))
 
-vi.mock('$lib/api', () => ({ fetchVersion, restartForUpdate }))
+vi.mock('$lib/api', () => ({ apiPost, fetchVersion }))
 
 const installed = 'v0.9.1 (2026-08-04 12:00:00 +0800)'
 
@@ -55,11 +55,12 @@ describe('VersionBanner', () => {
   })
 
   it('shows reconnect progress and confirms the running target version', async () => {
-    restartForUpdate.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
     fetchVersion.mockResolvedValue({ running: installed, update_available: false })
     render(VersionBanner)
 
     await fireEvent.click(screen.getByRole('button', { name: 'Restart now' }))
+    expect(apiPost).toHaveBeenCalledWith('/api/version/restart')
     expect(screen.getByRole('button', { name: 'Restarting…' })).toHaveAttribute('aria-busy', 'true')
     expect(store.ui.versionRestarting).toBe(true)
 
@@ -70,7 +71,7 @@ describe('VersionBanner', () => {
   })
 
   it('offers retry and CLI recovery when restart scheduling fails', async () => {
-    restartForUpdate.mockResolvedValue({ ok: false, data: { error: 'launcher unavailable' } })
+    apiPost.mockResolvedValue({ ok: false, data: { error: 'launcher unavailable' } })
     render(VersionBanner)
 
     await fireEvent.click(screen.getByRole('button', { name: 'Restart now' }))
@@ -82,7 +83,7 @@ describe('VersionBanner', () => {
   })
 
   it('bounds reconnect attempts before showing recovery actions', async () => {
-    restartForUpdate.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
     fetchVersion.mockResolvedValue(null)
     render(VersionBanner)
 
@@ -96,7 +97,7 @@ describe('VersionBanner', () => {
   })
 
   it('aborts probes that never return so reconnect still reaches recovery', async () => {
-    restartForUpdate.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
     fetchVersion.mockImplementation((signal?: AbortSignal) => new Promise((resolve) => {
       signal?.addEventListener('abort', () => resolve(null), { once: true })
     }))

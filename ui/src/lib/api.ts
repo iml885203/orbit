@@ -71,10 +71,6 @@ export async function fetchVersion(signal?: AbortSignal): Promise<VersionRespons
   return getJSON('/api/version', undefined, signal)
 }
 
-export async function restartForUpdate(): Promise<{ ok: boolean; data?: APIResponse }> {
-  return apiPost('/api/version/restart')
-}
-
 export async function fetchEnvs(): Promise<EnvsResponse | null> {
   return getJSON('/api/envs')
 }

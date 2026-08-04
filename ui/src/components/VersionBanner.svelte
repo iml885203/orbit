@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { fetchVersion, restartForUpdate } from '$lib/api'
+  import { apiPost, fetchVersion } from '$lib/api'
   import { store, toast } from '$lib/stores.svelte'
 
   const cmd = 'orbit daemon restart'
@@ -40,7 +40,7 @@
     failure = ''
     phase = 'restarting'
     store.ui.versionRestarting = true
-    const result = await restartForUpdate()
+    const result = await apiPost('/api/version/restart')
     if (!result.ok) {
       store.ui.versionRestarting = false
       failure = result.data?.error ?? 'Orbit could not schedule the restart.'
