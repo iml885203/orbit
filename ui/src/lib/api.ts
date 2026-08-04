@@ -21,18 +21,18 @@ export async function getJSON<T>(path: string, unavailable?: string, signal?: Ab
   return null
 }
 
-export async function apiPost(path: string, body: Record<string, unknown> = {}): Promise<{ ok: boolean; data?: APIResponse }> {
+export async function apiPost<T extends APIResponse = APIResponse>(path: string, body: Record<string, unknown> = {}): Promise<{ ok: boolean; data?: T }> {
   try {
     const res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const data: APIResponse = await res.json()
+    const data: T = await res.json()
     return { ok: res.ok && !data.error, data }
   } catch (e) {
     console.error(`POST ${path}:`, e)
-    return { ok: false, data: { error: (e as Error).message } }
+    return { ok: false, data: { error: (e as Error).message } as T }
   }
 }
 

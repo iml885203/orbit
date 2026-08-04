@@ -32,6 +32,7 @@ type (
 	EnvironmentReconcileResponse = pub.EnvironmentReconcileResponse
 	EnvironmentSwitchResponse    = pub.EnvironmentSwitchResponse
 	VersionResponse              = pub.VersionResponse
+	VersionRestartResponse       = pub.VersionRestartResponse
 	EdgeDetachRequest            = pub.EdgeDetachRequest
 	ServiceModeRequest           = pub.ServiceModeRequest
 	EnvToggleUpdateRequest       = pub.EnvToggleUpdateRequest

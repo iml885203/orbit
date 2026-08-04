@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte'
   import { apiPost, fetchVersion } from '$lib/api'
   import { store, toast } from '$lib/stores.svelte'
+  import type { VersionRestartResponse } from '$lib/types.gen'
 
   const cmd = 'orbit daemon restart'
 
@@ -19,6 +20,12 @@
 
   function wait(delay: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  function failRestart(message: string) {
+    store.ui.versionRestarting = false
+    failure = message
+    phase = 'failed'
   }
 
   async function reconnect(expected: string) {
@@ -40,18 +47,20 @@
     failure = ''
     phase = 'restarting'
     store.ui.versionRestarting = true
-    const result = await apiPost('/api/version/restart')
+    const result = await apiPost<VersionRestartResponse>('/api/version/restart')
     if (!result.ok) {
-      store.ui.versionRestarting = false
-      failure = result.data?.error ?? 'Orbit could not schedule the restart.'
-      phase = 'failed'
+      failRestart(result.data?.error ?? 'Orbit could not schedule the restart.')
       return
     }
-    const next = await reconnect(expected)
+    const scheduled = result.data?.target_version
+    if (!scheduled) {
+      failRestart('Orbit did not report which version was scheduled.')
+      return
+    }
+    targetVersion = scheduled
+    const next = await reconnect(scheduled)
     if (!next) {
-      store.ui.versionRestarting = false
-      failure = 'Orbit did not reconnect with the expected version.'
-      phase = 'failed'
+      failRestart('Orbit did not reconnect with the expected version.')
       return
     }
     store.ui.version = next
@@ -84,7 +93,7 @@
 {:else if version?.update_available && dismissedVersion !== version.on_disk}
   <div class:error={phase === 'failed'} class="banner" role="status" aria-live="polite">
     {#if phase === 'restarting'}
-      <span class="text"><strong>Restarting Orbit…</strong> Reconnecting to <code>{targetToken}</code>.</span>
+      <span class="text"><strong>Restarting Orbit…</strong> Reconnecting to <code>{targetVersion.split(/\s+/)[0]}</code>.</span>
       <button disabled aria-busy="true">Restarting…</button>
     {:else if phase === 'failed'}
       <span class="text">

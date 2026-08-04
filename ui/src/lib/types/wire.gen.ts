@@ -341,6 +341,12 @@ export interface VersionResponse {
   on_disk_path?: string;
   update_available: boolean;
 }
+export interface VersionRestartResponse {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  target_version?: string;
+}
 /**
  * EnvToggleUpdateRequest is the PUT body.
  */

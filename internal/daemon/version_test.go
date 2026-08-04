@@ -36,12 +36,15 @@ func TestHandleVersionRestartSchedulesCurrentContext(t *testing.T) {
 	if launchedPath != configPath || launchedKind != "project" {
 		t.Fatalf("restart context = (%q, %q), want (%q, project)", launchedPath, launchedKind, configPath)
 	}
-	var response APIResponse
+	var response VersionRestartResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if !response.OK || response.Message == "" {
 		t.Fatalf("response = %+v, want accepted message", response)
+	}
+	if response.TargetVersion != "v0.9.1 (2026-08-04 12:00:00 +0800)" {
+		t.Fatalf("target version = %q, want detected installed build", response.TargetVersion)
 	}
 }
 

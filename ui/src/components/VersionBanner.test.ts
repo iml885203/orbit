@@ -55,7 +55,7 @@ describe('VersionBanner', () => {
   })
 
   it('shows reconnect progress and confirms the running target version', async () => {
-    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: installed } })
     fetchVersion.mockResolvedValue({ running: installed, update_available: false })
     render(VersionBanner)
 
@@ -83,7 +83,7 @@ describe('VersionBanner', () => {
   })
 
   it('bounds reconnect attempts before showing recovery actions', async () => {
-    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: installed } })
     fetchVersion.mockResolvedValue(null)
     render(VersionBanner)
 
@@ -97,7 +97,7 @@ describe('VersionBanner', () => {
   })
 
   it('aborts probes that never return so reconnect still reaches recovery', async () => {
-    apiPost.mockResolvedValue({ ok: true, data: { ok: true } })
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: installed } })
     fetchVersion.mockImplementation((signal?: AbortSignal) => new Promise((resolve) => {
       signal?.addEventListener('abort', () => resolve(null), { once: true })
     }))
@@ -109,5 +109,19 @@ describe('VersionBanner', () => {
     expect(fetchVersion).toHaveBeenCalledTimes(3)
     expect(screen.getByRole('status')).toHaveTextContent('Orbit did not reconnect with the expected version')
     expect(store.ui.versionRestarting).toBe(false)
+  })
+
+  it('verifies the build scheduled by the daemon when the banner target is stale', async () => {
+    const scheduled = 'v0.9.2 (2026-08-05 12:00:00 +0800)'
+    apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: scheduled } })
+    fetchVersion.mockResolvedValue({ running: scheduled, update_available: false })
+    render(VersionBanner)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Restart now' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting to v0.9.2')
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Orbit updated to v0.9.2')
+    expect(store.ui.version?.running).toBe(scheduled)
   })
 })
