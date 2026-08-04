@@ -60,7 +60,7 @@ type Server struct {
 	engineStale atomic.Bool
 	// restartLauncher crosses the daemon/app package boundary because only the
 	// assembled binary knows how to replace itself on every supported OS.
-	restartLauncher func(string) error
+	restartLauncher func(string, string) error
 	startedAt       time.Time
 	stateFile       *StateFile
 	history         *history.Recorder
@@ -125,7 +125,7 @@ func NewServer(app *engine.App, holder *config.Holder, stateFile *StateFile, set
 	return srv
 }
 
-func (s *Server) SetRestartLauncher(launcher func(string) error) {
+func (s *Server) SetRestartLauncher(launcher func(string, string) error) {
 	s.restartLauncher = launcher
 }
 
@@ -165,6 +165,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/service-mode/", s.handleServiceMode)
 	mux.HandleFunc("/api/version", s.handleVersion)
+	mux.HandleFunc("/api/version/restart", s.handleVersionRestart)
 	mux.HandleFunc("/api/envs", s.handleEnvs)
 	mux.HandleFunc("/api/envs/current", s.handleEnvSwitch)
 	mux.HandleFunc("/api/sources", s.handleSources)

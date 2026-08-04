@@ -143,9 +143,10 @@ orbit daemon restart
 
 ### After upgrading, Orbit says an update is ready
 This normally means the binary was replaced manually; `orbit update` reconnects
-a running environment automatically. Resource mutations pause so they cannot
-cross versions. Apply the manual replacement with the exact command printed by
-`orbit status`, for example:
+a running environment automatically. In the dashboard, select **Restart now**;
+Orbit reconnects after the daemon handoff and restores the resources that were
+running. If the dashboard cannot reconnect, apply the manual replacement with
+the exact command printed by `orbit status`, for example:
 
 ```bash
 orbit daemon restart

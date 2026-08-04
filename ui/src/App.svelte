@@ -96,7 +96,11 @@
       const v = await fetchVersion()
       if (!v) return
       const prev = store.ui.version
-      if (prev && prev.running === v.running && prev.update_available === v.update_available) return
+      if (prev &&
+        prev.running === v.running &&
+        prev.on_disk === v.on_disk &&
+        prev.on_disk_path === v.on_disk_path &&
+        prev.update_available === v.update_available) return
       store.ui.version = v
     }
     refreshVersion()

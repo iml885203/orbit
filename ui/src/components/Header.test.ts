@@ -10,6 +10,7 @@ describe('Header runtime identity', () => {
     store.daemon.envs = null
     store.graph.preview = null
     store.ui.version = null
+    store.ui.versionRestarting = false
   })
 
   afterEach(() => {
@@ -44,5 +45,14 @@ describe('Header runtime identity', () => {
     const badge = screen.getByLabelText(`Instance ${instanceName}`)
     expect(badge).toHaveAttribute('title', instanceName)
     expect(badge.querySelector('.instance-name')).toHaveTextContent(instanceName)
+  })
+
+  it('labels an expected update handoff as reconnecting instead of disconnected', () => {
+    store.daemon.connected = false
+    store.ui.versionRestarting = true
+    render(Header)
+
+    expect(screen.getByRole('status', { name: 'Restarting and reconnecting' })).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'Disconnected' })).not.toBeInTheDocument()
   })
 })

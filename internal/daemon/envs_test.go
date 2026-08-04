@@ -143,9 +143,10 @@ func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
-	var restartedWith string
-	srv.SetRestartLauncher(func(path string) error {
+	var restartedWith, restartedKind string
+	srv.SetRestartLauncher(func(path, kind string) error {
 		restartedWith = path
+		restartedKind = kind
 		return nil
 	})
 
@@ -162,6 +163,9 @@ func TestHandleEnvSwitch_HappyPath(t *testing.T) {
 	}
 	if restartedWith != target {
 		t.Errorf("restart target = %q, want %q", restartedWith, target)
+	}
+	if restartedKind != "managed" {
+		t.Errorf("restart context kind = %q, want managed", restartedKind)
 	}
 	if strings.Contains(w.Body.String(), "run `orbit daemon restart`") {
 		t.Fatalf("response leaked a manual daemon step: %s", w.Body.String())
@@ -204,7 +208,7 @@ func TestHandleEnvSwitchRequiresServerConfirmationForRunningContext(t *testing.T
 	srv.SetEnvironmentContext(current, "project")
 	srv.app.Orchestrator.OnContainerSeen("redis", true)
 	launched := false
-	srv.SetRestartLauncher(func(string) error {
+	srv.SetRestartLauncher(func(string, string) error {
 		launched = true
 		return nil
 	})
@@ -282,7 +286,7 @@ func TestHandleEnvSwitch_NewPath(t *testing.T) {
 
 	srv := newTestServer(t, &config.Config{})
 	srv.SetConfigPath(currentEnv)
-	srv.SetRestartLauncher(func(string) error { return nil })
+	srv.SetRestartLauncher(func(string, string) error { return nil })
 
 	body := strings.NewReader(`{"env":"newenv"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", body)
@@ -385,7 +389,7 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 	if err := os.WriteFile(CurrentEnvPath(), []byte(current+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
+	srv.SetRestartLauncher(func(string, string) error { return errors.New("launcher unavailable") })
 	currentIdentity := canonicalEnvironmentPath(current)
 	targetIdentity := canonicalEnvironmentPath(target)
 	body := fmt.Sprintf(
@@ -433,7 +437,7 @@ func TestHandleEnvSwitchFromProjectRestoresManagedSelectionOnLaunchFailure(t *te
 	}
 	srv.SetConfigPath(project)
 	srv.SetEnvironmentContext(project, "project")
-	srv.SetRestartLauncher(func(string) error { return errors.New("launcher unavailable") })
+	srv.SetRestartLauncher(func(string, string) error { return errors.New("launcher unavailable") })
 
 	req := httptest.NewRequest(http.MethodPut, "/api/envs/current", strings.NewReader(`{"env":"managed"}`))
 	w := httptest.NewRecorder()

@@ -86,6 +86,7 @@ class UIStore {
   envPopoverOpen = $state(false)
   showHistory = $state(false)
   version = $state<VersionResponse | null>(null)
+  versionRestarting = $state(false)
   // Persisted across reloads so the user's layout preference sticks.
   layoutMode = $state<LayoutMode>(loadLayoutMode())
   serviceView = $state<ServiceView>(loadServiceView())

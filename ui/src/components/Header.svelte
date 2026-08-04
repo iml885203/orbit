@@ -33,9 +33,10 @@
   <span
     class="conn-dot"
     class:disconnected={!store.daemon.connected}
-    use:tooltip={{ content: store.daemon.connected ? 'Connected' : 'Disconnected' }}
+    class:reconnecting={store.ui.versionRestarting}
+    use:tooltip={{ content: store.ui.versionRestarting ? 'Restarting and reconnecting' : store.daemon.connected ? 'Connected' : 'Disconnected' }}
     role="status"
-    aria-label={store.daemon.connected ? 'Connected' : 'Disconnected'}
+    aria-label={store.ui.versionRestarting ? 'Restarting and reconnecting' : store.daemon.connected ? 'Connected' : 'Disconnected'}
   ></span>
 
   <nav aria-label="Primary navigation">
@@ -157,6 +158,10 @@
   .conn-dot.disconnected {
     background: var(--red);
     animation: pulse 1.5s infinite;
+  }
+  .conn-dot.reconnecting {
+    background: var(--yellow);
+    box-shadow: 0 0 5px color-mix(in srgb, var(--yellow) 70%, transparent);
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }

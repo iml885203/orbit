@@ -104,6 +104,13 @@ type VersionResponse struct {
 	UpdateAvailable bool   `json:"update_available"`
 }
 
+type VersionRestartResponse struct {
+	OK            bool   `json:"ok,omitempty"`
+	Error         string `json:"error,omitempty"`
+	Message       string `json:"message,omitempty"`
+	TargetVersion string `json:"target_version,omitempty"`
+}
+
 // SocketHTTPClient creates an http.Client that dials a unix socket.
 func SocketHTTPClient(socketPath string) *http.Client {
 	return SocketHTTPClientWithTimeout(socketPath, 5*time.Second, 2*time.Minute)

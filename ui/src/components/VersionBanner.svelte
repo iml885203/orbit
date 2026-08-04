@@ -1,8 +1,74 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
+  import { apiPost, fetchVersion } from '$lib/api'
   import { store, toast } from '$lib/stores.svelte'
-  import { tooltip } from '../lib/tooltip.svelte'
+  import type { VersionRestartResponse } from '$lib/types.gen'
 
   const cmd = 'orbit daemon restart'
+
+  type Phase = 'ready' | 'restarting' | 'success' | 'failed'
+
+  let phase = $state<Phase>('ready')
+  let targetVersion = $state('')
+  let failure = $state('')
+  let dismissedVersion = $state('')
+  let successTimer: ReturnType<typeof setTimeout> | undefined
+
+  const version = $derived(store.ui.version)
+  const targetToken = $derived(version?.on_disk?.split(/\s+/)[0] ?? '')
+  const runningToken = $derived(version?.running?.split(/\s+/)[0] ?? '')
+
+  function wait(delay: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  function failRestart(message: string) {
+    store.ui.versionRestarting = false
+    failure = message
+    phase = 'failed'
+  }
+
+  async function reconnect(expected: string) {
+    for (const delay of [1000, 2000, 4000]) {
+      await wait(delay)
+      const controller = new AbortController()
+      const deadline = setTimeout(() => controller.abort(), 2000)
+      const next = await fetchVersion(controller.signal)
+      clearTimeout(deadline)
+      if (next?.running === expected) return next
+    }
+    return null
+  }
+
+  async function restart() {
+    const expected = version?.on_disk
+    if (!expected) return
+    targetVersion = expected
+    failure = ''
+    phase = 'restarting'
+    store.ui.versionRestarting = true
+    const result = await apiPost<VersionRestartResponse>('/api/version/restart')
+    if (!result.ok) {
+      failRestart(result.data?.error ?? 'Orbit could not schedule the restart.')
+      return
+    }
+    const scheduled = result.data?.target_version
+    if (!scheduled) {
+      failRestart('Orbit did not report which version was scheduled.')
+      return
+    }
+    targetVersion = scheduled
+    const next = await reconnect(scheduled)
+    if (!next) {
+      failRestart('Orbit did not reconnect with the expected version.')
+      return
+    }
+    store.ui.version = next
+    store.ui.versionRestarting = false
+    phase = 'success'
+    clearTimeout(successTimer)
+    successTimer = setTimeout(() => { phase = 'ready' }, 4000)
+  }
 
   async function copyCmd() {
     try {
@@ -12,18 +78,47 @@
       toast('Copy failed — ' + cmd)
     }
   }
+
+  function dismiss() {
+    if (version?.on_disk) dismissedVersion = version.on_disk
+  }
+
+  onDestroy(() => clearTimeout(successTimer))
 </script>
 
-{#if store.ui.version?.update_available}
-  <div class="banner">
-    <span class="text">
-      {#if store.ui.version.on_disk_path}
-        New orbit at <code>{store.ui.version.on_disk_path}</code>: <code>{store.ui.version.on_disk}</code> — daemon is on <code>{store.ui.version.running}</code>. Restart to pick it up.
-      {:else}
-        New build available: <code>{store.ui.version.on_disk}</code> — daemon is still on <code>{store.ui.version.running}</code>. Restart to pick it up.
-      {/if}
-    </span>
-    <button use:tooltip={{ content: 'Copy restart command' }} onclick={copyCmd}>Copy restart</button>
+{#if phase === 'success'}
+  <div class="banner success" role="status">
+    <span class="text"><strong>Orbit updated to <code>{targetVersion.split(/\s+/)[0]}</code></strong></span>
+  </div>
+{:else if version?.update_available && dismissedVersion !== version.on_disk}
+  <div class:error={phase === 'failed'} class="banner" role="status" aria-live="polite">
+    {#if phase === 'restarting'}
+      <span class="text"><strong>Restarting Orbit…</strong> Reconnecting to <code>{targetVersion.split(/\s+/)[0]}</code>.</span>
+      <button disabled aria-busy="true">Restarting…</button>
+    {:else if phase === 'failed'}
+      <span class="text">
+        <strong>Orbit didn’t restart.</strong> {failure}
+      </span>
+      <div class="actions">
+        <button class="primary" onclick={restart}>Try again</button>
+        <button onclick={copyCmd}>Copy command</button>
+      </div>
+    {:else}
+      <span class="text">
+        <strong>Orbit <code>{targetToken}</code> is ready.</strong>
+        The daemon is still running <code>{runningToken}</code>. Restart Orbit to apply it; running resources will be restored.
+        <details>
+          <summary>Build details</summary>
+          <span>Installed: <code>{version.on_disk}</code></span>
+          <span>Running: <code>{version.running}</code></span>
+          {#if version.on_disk_path}<span>Binary: <code>{version.on_disk_path}</code></span>{/if}
+        </details>
+      </span>
+      <div class="actions">
+        <button class="primary" onclick={restart}>Restart now</button>
+        <button onclick={dismiss}>Later</button>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -38,15 +133,32 @@
     border-bottom: 1px solid rgba(210, 153, 34, 0.25);
     font-size: var(--text-md);
   }
+  .banner.success {
+    background: color-mix(in srgb, var(--green) 10%, transparent);
+    color: var(--green);
+    border-bottom-color: color-mix(in srgb, var(--green) 25%, transparent);
+  }
+  .banner.error {
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+    color: var(--red);
+    border-bottom-color: color-mix(in srgb, var(--red) 25%, transparent);
+  }
   .text { flex: 1; color: var(--dim); }
+  .text strong { color: var(--yellow); }
   .text :global(code) {
     color: var(--yellow);
-    background: rgba(210, 153, 34, 0.12);
+    background: color-mix(in srgb, currentColor 12%, transparent);
     padding: 0.05rem 0.3rem; /* off-grid: intentional tight inline code padding */
     border-radius: 3px; /* off-grid: between 0 and radius-sm */
     font-family: ui-monospace, monospace;
     font-size: var(--text-md);
   }
+  .success .text strong, .success .text :global(code) { color: var(--green); }
+  .error .text strong, .error .text :global(code) { color: var(--red); }
+  details { display: inline; margin-left: var(--space-2); }
+  summary { display: inline; cursor: pointer; color: var(--dim); }
+  details span { display: block; margin-top: var(--space-1); }
+  .actions { display: flex; gap: var(--space-2); }
   button {
     background: transparent;
     color: var(--dim);
@@ -57,4 +169,7 @@
     font-size: var(--text-md);
   }
   button:hover { color: var(--fg); border-color: var(--dim); }
+  button.primary { color: var(--yellow); border-color: currentColor; }
+  .error button.primary { color: var(--red); }
+  button:disabled { cursor: default; opacity: 0.7; }
 </style>
