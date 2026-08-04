@@ -1,6 +1,6 @@
 {
   "name": "orbit-agent",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Operate local development environments safely with Orbit.",
   "author": {
     "name": "Logan Guo"

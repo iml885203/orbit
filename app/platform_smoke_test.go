@@ -59,7 +59,7 @@ func TestPlatformSmokeCleanUserJourney(t *testing.T) {
 		workspace,
 		commandEnv,
 		binary,
-		"init", "--yes", "--env-repo", envRepo, "--env", "quickstart", "--json",
+		"init", "--yes", "--source", "smoke", "--path", envRepo, "--env", "quickstart", "--json",
 	)
 	initEnvelope := decodePlatformSmokeEnvelope(t, initOutput)
 	if !initEnvelope.OK {
