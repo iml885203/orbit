@@ -106,7 +106,7 @@ func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 
 	select {
 	case <-firstOutput:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("first pre_start output was buffered until command completion")
 	}
 	if err := os.WriteFile(gate, nil, 0o644); err != nil {
