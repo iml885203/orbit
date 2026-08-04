@@ -23,7 +23,6 @@
   const activeGraph = $derived(store.graph.active)
   const isPreviewing = $derived(store.graph.isPreviewing)
   const layoutMode = $derived(store.ui.layoutMode)
-  // Toggle only matters when the env has groups to lay out.
 
   const nodes = $derived<ReturnType<typeof layout>>(activeGraph ? layout(activeGraph, layoutMode) : [])
 

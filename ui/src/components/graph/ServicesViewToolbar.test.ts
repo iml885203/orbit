@@ -12,7 +12,7 @@ describe('ServicesViewToolbar', () => {
   it('keeps graph layout and view controls in one toolbar', () => {
     render(ServicesViewToolbar, { props: { hasGroups: true } })
 
-    const toolbar = screen.getByLabelText('Services graph controls')
+    const toolbar = screen.getByLabelText('Services controls')
     expect(toolbar).toContainElement(screen.getByRole('group', { name: 'Group layout' }))
     expect(toolbar).toContainElement(screen.getByRole('group', { name: 'Services view' }))
   })
@@ -27,6 +27,7 @@ describe('ServicesViewToolbar', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Table view' }))
     expect(store.ui.layoutMode).toBe('extend')
     expect(store.ui.serviceView).toBe('table')
+    expect(screen.queryByRole('group', { name: 'Group layout' })).not.toBeInTheDocument()
   })
 
   it('hides layout controls when the graph has no groups', () => {

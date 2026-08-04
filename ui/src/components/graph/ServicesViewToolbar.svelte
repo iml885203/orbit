@@ -6,8 +6,8 @@
   let { hasGroups }: { hasGroups: boolean } = $props()
 </script>
 
-<div class="toolbar" aria-label="Services graph controls">
-  {#if hasGroups}
+<div class="toolbar" aria-label="Services controls">
+  {#if hasGroups && store.ui.serviceView === 'graph'}
     <div class="toggle" role="group" aria-label="Group layout">
       <button
         class:active={store.ui.layoutMode === 'rectangle'}
