@@ -37,6 +37,38 @@ describe('layout', () => {
     expect(layout(empty)).toEqual([])
   })
 
+  it('uses dependency ranks instead of a single-column grid inside connected groups', () => {
+    const demoGraph: GraphResponse = {
+      env: 'orbit-demo',
+      groups: [{ name: 'mini-shop', services: ['demo-shop', 'shop-catalog-api', 'shop-inventory-api', 'shop-order-api'] }],
+      nodes: [
+        { name: 'demo-shop', kind: 'frontend', state: 'healthy' },
+        { name: 'shop-catalog-api', kind: 'backend', state: 'healthy' },
+        { name: 'shop-inventory-api', kind: 'backend', state: 'healthy' },
+        { name: 'shop-order-api', kind: 'backend', state: 'healthy' },
+        { name: 'redis', kind: 'infra', state: 'healthy' },
+      ],
+      edges: [
+        { from: 'demo-shop', to: 'shop-catalog-api', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'demo-shop', to: 'shop-inventory-api', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'demo-shop', to: 'shop-order-api', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'shop-order-api', to: 'shop-catalog-api', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'shop-order-api', to: 'shop-inventory-api', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'shop-inventory-api', to: 'redis', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+      ],
+    }
+
+    const positioned = layout(demoGraph)
+    const positions = Object.fromEntries(positioned.map(node => [node.id, node.position]))
+    const group = positioned.find(node => node.id === 'group:mini-shop')!
+
+    expect(positions['demo-shop'].y).toBeLessThan(positions['shop-order-api'].y)
+    expect(positions['shop-order-api'].y).toBeLessThan(positions['shop-catalog-api'].y)
+    expect(positions['shop-order-api'].y).toBeLessThan(positions['shop-inventory-api'].y)
+    expect(positions['shop-catalog-api'].x).not.toBe(positions['shop-inventory-api'].x)
+    expect(positions['redis'].x + 120).toBe(group.position.x + positions['shop-inventory-api'].x + 120)
+  })
+
   it('places async-connected external nodes above their related consumer service', () => {
     const previewGraph: GraphResponse = {
       env: 'preview',

@@ -172,7 +172,14 @@ function clusteredLayout(graph: GraphResponse, mode: LayoutMode): PositionedNode
   }
   const placedExternals = emitAttachedExternalNodes(out, externalNodes, graph.edges, groupedServicePositions, NODE_WIDTH)
   const unattachedExternals = externalNodes.filter(n => !placedExternals.has(n.name))
-  emitTailRow(out, [...infraNodes, ...orphanSvcs, ...unattachedExternals], clusters, meta)
+  emitTailRow(
+    out,
+    [...infraNodes, ...orphanSvcs, ...unattachedExternals],
+    clusters,
+    meta,
+    graph.edges,
+    groupedServicePositions,
+  )
   return out
 }
 
@@ -200,11 +207,10 @@ function gridColumnsFor(n: number): number {
   return best
 }
 
-// Phase 1: per-group interior layout. 'rectangle' packs services row-major
-// into a near-square grid (see gridColumnsFor) — groups hold many edgeless
-// siblings that dagre would lay out as one wide row. 'extend' keeps the
-// dependency-ordered dagre layout (the original wide-row behaviour). Either
-// way dependency edges still render on top.
+// Phase 1: per-group interior layout. 'rectangle' packs edgeless siblings
+// into a near-square grid, but keeps dependency-connected groups in dagre
+// ranks so distinct edges do not collapse onto a single vertical spine.
+// 'extend' uses dagre for every group.
 function layoutClusters(
   graph: GraphResponse,
   groupedSvcs: Map<string, GraphNode[]>,
@@ -214,7 +220,7 @@ function layoutClusters(
   for (const grp of graph.groups!) {
     const svcs = groupedSvcs.get(grp.name)
     if (!svcs || svcs.length === 0) continue
-    const positions = mode === 'extend'
+    const positions = mode === 'extend' || hasIntraGroupDependencies(graph, svcs)
       ? dagreInteriorPositions(graph, svcs)
       : gridInteriorPositions(svcs)
     let maxX = 0
@@ -231,6 +237,11 @@ function layoutClusters(
     })
   }
   return clusters
+}
+
+function hasIntraGroupDependencies(graph: GraphResponse, svcs: GraphNode[]): boolean {
+  const names = new Set(svcs.map(service => service.name))
+  return graph.edges.some(edge => isSyncEdge(edge) && names.has(edge.from) && names.has(edge.to))
 }
 
 // 'rectangle': row-major near-square grid of top-left positions.
@@ -367,6 +378,8 @@ function emitTailRow(
   tail: GraphNode[],
   clusters: ClusterLayout[],
   meta: InstanceType<typeof dagre.graphlib.Graph>,
+  edges: { from: string; to: string; kind: string }[],
+  groupedServicePositions: ReadonlyMap<string, { x: number; y: number }>,
 ): void {
   if (tail.length === 0) return
   const bottomY = clusters.reduce((acc, c) => {
@@ -374,7 +387,22 @@ function emitTailRow(
     return Math.max(acc, m.y + c.height / 2)
   }, 0) + 120
   const totalWidth = tail.length * NODE_WIDTH + Math.max(0, tail.length - 1) * 60
-  let startX = -totalWidth / 2
+  const clusterLeft = clusters.reduce((left, cluster) => {
+    const node = metaNodeAt(meta, cluster.name)
+    return Math.min(left, node.x - cluster.width / 2)
+  }, Infinity)
+  const clusterRight = clusters.reduce((right, cluster) => {
+    const node = metaNodeAt(meta, cluster.name)
+    return Math.max(right, node.x + cluster.width / 2)
+  }, -Infinity)
+  const clusterCenterX = clusters.length > 0 ? (clusterLeft + clusterRight) / 2 : 0
+  const soleInfra = tail.length === 1 && tail[0].kind === 'infra' ? tail[0] : null
+  const infraSources = soleInfra
+    ? edges.filter(edge => isSyncEdge(edge) && edge.to === soleInfra.name && groupedServicePositions.has(edge.from))
+    : []
+  const sourcePosition = infraSources.length === 1 ? groupedServicePositions.get(infraSources[0].from) : null
+  const tailCenterX = sourcePosition ? sourcePosition.x + NODE_WIDTH / 2 : clusterCenterX
+  let startX = tailCenterX - totalWidth / 2
   for (const n of tail) {
     if (n.kind === 'external') {
       out.push({
