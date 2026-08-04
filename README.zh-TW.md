@@ -1,31 +1,38 @@
 # <img src="ui/public/orbit-logo-badge.svg" width="32" height="32" alt=""> Orbit
 
-用一份宣告式環境設定，同時執行 host processes 與 containers——服務本機開發，
-也作為 E2E 測試的基底。
+把專案需要的所有服務——host processes 與 containers——放進同一個可觀測的
+本機環境。
 
-[安裝](docs/development.zh-TW.md) · [設定](docs/configuration.zh-TW.md) ·
-[Environment sources](docs/environment-sources.zh-TW.md) · [架構](docs/architecture.zh-TW.md) · [Agent CLI](docs/agent-cli.zh-TW.md) ·
-[English](README.md)
+[試玩 demo](#試玩-orbit) · [在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
+[安裝](docs/development.zh-TW.md) · [文件](#文件) · [English](README.md)
 
-> **1.0 前預覽版：** Orbit 已開放給 early adopters 與 contributors，但 1.0
-> UX 與相容性契約仍在打磨中；`v1.0.0` 前可能有 breaking changes。
+![Orbit dashboard，顯示健康的 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
-Orbit 會依 dependency 順序啟動服務、檢查健康狀態、串流 logs，並透過常駐
-daemon 維持環境。人透過 CLI 與 dashboard 操作；coding agents 透過穩定的
-`orbit.cli.v1` JSON contract 操作。同一個環境既服務日常開發，也能作為 E2E
-測試套件的基底——在你的機器或 CI runner 上。
+Orbit 把一份 `orbit.yaml` 變成可重現的 stack，供本機開發、CI 與 coding agents
+共同使用。
 
-- **混合 runtimes：** 在同一張 dependency graph 管理 host processes 與
-  containers。
-- **共享 environments：** 從任何 Git repository 同步有版本的 YAML。
-- **Agent-first 控制：** coding agents 透過有版本的 `orbit.cli.v1` JSON
-  contract 驅動完整生命週期——穩定的 error codes 與可執行的建議動作。
-- **E2E 基底：** 測試套件驗證共用環境，而不是自己重建一份——見
-  [在 E2E 測試底下使用 Orbit](docs/e2e-testing.zh-TW.md)。
-- **本機診斷：** CLI 與 dashboard 都能查看 health、logs、history、traces
-  與設定。
+- **一起啟動：** containers 與 host processes 會依 dependency 順序啟動。
+- **知道什麼真的 ready：** dashboard 與 CLI 集中顯示 health、logs、ports、
+  traces 與失敗原因。
+- **到哪裡都跑同一套：** developers、test suites 與 agents 共用一份有版本的
+  environment definition。
 
-這些選擇背後的設計取捨請見[為什麼是 Orbit](docs/why-orbit.zh-TW.md)。
+## 試玩 Orbit
+
+Demo 需要 Git、Docker、Python 3，以及
+[已安裝的 Orbit CLI](docs/development.zh-TW.md)：
+
+```bash
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
+orbit up
+orbit status
+orbit open demo-shop
+```
+
+[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個小型 storefront，
+包含三個 host APIs、SQLite databases，以及 container 內的 Redis。執行一次
+checkout 就能看到 request 穿過整張 graph；完成後用 `orbit down` 停止環境。
 
 ## 一份檔案描述整個環境
 
@@ -115,29 +122,6 @@ irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 |
 runtimes 或 dependencies；`orbit doctor` 會回報所選 environment 需要什麼與
 明確的修復方式。升級、rollback、移除與平台細節請見
 [安裝與開發](docs/development.zh-TW.md)。
-
-## 試玩 demo
-
-公開 demo 需要 Git、Docker 與 Python 3：
-
-```bash
-git clone https://github.com/iml885203/orbit-demo.git
-cd orbit-demo
-orbit up
-orbit status
-orbit open demo-shop
-```
-
-![Orbit demo dashboard，顯示 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
-
-[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個獨立的
-mini-shop——一個 storefront、三個在 host 上執行並各自使用 SQLite 的
-Python API，以及 container 內的 Redis——由單一 project-root `orbit.yaml`
-驅動，與 Orbit 在真實專案的用法完全一致。在 storefront 中，**Run checkout**
-展示同一個 request 穿過 catalog、inventory、Redis 與 orders；**Try 99 items**
-展示失敗路徑不會建立 order、庫存也維持不變。用 `orbit down` 停止全部資源。
-同一個應用程式也能不透過 Orbit 執行（`./scripts/run-local.sh`），
-清楚呈現 Orbit 幫你省下的是哪些事。
 
 ## 搭配 AI agent
 

@@ -1,35 +1,40 @@
 # <img src="ui/public/orbit-logo-badge.svg" width="32" height="32" alt=""> Orbit
 
-Run a mixed stack—host processes and containers—from one declarative
-environment, for local development and E2E testing.
+Run every service your project needs—host processes and containers—as one
+observable local environment.
 
-[Install](docs/development.md) · [Configuration](docs/configuration.md) ·
-[Environment sources](docs/environment-sources.md) · [Architecture](docs/architecture.md) · [Agent CLI](docs/agent-cli.md) ·
+[Try the demo](#try-orbit) · [Use Orbit with your project](docs/local-first.md) ·
+[Install](docs/development.md) · [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
 
-> **Pre-1.0 preview:** Orbit is open for early adopters and contributors while
-> the 1.0 UX and compatibility contracts are still being finalized. Expect
-> breaking changes before `v1.0.0`.
+![Orbit dashboard showing a healthy mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
-Orbit starts services in dependency order, checks health, streams logs, and
-keeps the environment alive behind a resident daemon. People drive it from the
-CLI and dashboard; coding agents drive it through the stable `orbit.cli.v1`
-JSON contract. The same environment serves daily development and acts as the
-substrate under an E2E suite—on your machine or a CI runner.
+Orbit turns one `orbit.yaml` into a repeatable stack for local development,
+CI, and coding agents.
 
-- **Mixed runtimes:** coordinate host processes and containers in one graph.
-- **Shared environments:** sync versioned YAML from any Git repository.
-- **Agent-first control:** coding agents drive the full lifecycle through the
-  versioned `orbit.cli.v1` JSON contract—stable error codes and executable
-  recommended actions.
-- **E2E substrate:** a test suite verifies the shared environment instead of
-  provisioning its own copy—see
-  [Using Orbit under an E2E test suite](docs/e2e-testing.md).
-- **Local diagnostics:** health, logs, history, traces, and configuration are
-  visible from the CLI and dashboard.
+- **Start together:** dependencies come up in order across containers and host
+  processes.
+- **Know what is ready:** health, logs, ports, traces, and failures are visible
+  from the dashboard and CLI.
+- **Run the same stack everywhere:** developers, test suites, and agents share
+  one versioned environment definition.
 
-See [Why Orbit](docs/why-orbit.md) for the design trade-offs behind these
-choices.
+## Try Orbit
+
+The demo needs Git, Docker, Python 3, and an
+[installed Orbit CLI](docs/development.md):
+
+```bash
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
+orbit up
+orbit status
+orbit open demo-shop
+```
+
+The [Orbit demo](https://github.com/iml885203/orbit-demo) is a small storefront
+with three host APIs, SQLite databases, and Redis in a container. Run a checkout
+to see one request cross the whole graph, then use `orbit down` to stop it.
 
 ## One file describes the environment
 
@@ -124,30 +129,6 @@ own CLI—never a project's runtimes or dependencies; `orbit doctor` reports
 what the selected environment expects and the specific remedy. Upgrade,
 rollback, uninstall, and platform details are in
 [Installation and development](docs/development.md).
-
-## Try the demo
-
-The public demo needs Git, Docker, and Python 3:
-
-```bash
-git clone https://github.com/iml885203/orbit-demo.git
-cd orbit-demo
-orbit up
-orbit status
-orbit open demo-shop
-```
-
-![Orbit demo dashboard showing the mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
-
-The [Orbit demo](https://github.com/iml885203/orbit-demo) is a standalone
-mini-shop — a storefront, three Python APIs with SQLite databases on the
-host, and Redis in a container — driven by one project-root `orbit.yaml`,
-exactly how Orbit works in a real project. In the storefront, **Run
-checkout** shows one request crossing catalog, inventory, Redis, and orders;
-**Try 99 items** shows the failure path commit no order and leave stock
-unchanged. Stop everything with `orbit down`. The same application also runs
-without Orbit (`./scripts/run-local.sh`), which makes visible exactly what
-Orbit takes off your hands.
 
 ## Using Orbit with an AI agent
 

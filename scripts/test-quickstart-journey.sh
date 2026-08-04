@@ -8,7 +8,7 @@ orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 for readme in README.md README.zh-TW.md; do
   demo_section="$(
     awk '
-      /^## (Try the demo|試玩 demo)$/ { capture = 1; next }
+      /^## (Try Orbit|試玩 Orbit)$/ { capture = 1; next }
       capture && /^## / { exit }
       capture { print }
     ' "$repo_root/$readme"
