@@ -1,6 +1,7 @@
 <script lang="ts">
   import EnvSwitcher from '../components/graph/EnvSwitcher.svelte'
   import GraphView from '../components/graph/GraphView.svelte'
+  import ServicesViewToolbar from '../components/graph/ServicesViewToolbar.svelte'
   import ServiceTable from '../components/graph/ServiceTable.svelte'
   import NodeDrawer from '../components/graph/NodeDrawer.svelte'
   import EdgeInfoPopover from '../components/graph/EdgeInfoPopover.svelte'
@@ -9,12 +10,11 @@
   import { push } from 'svelte-spa-router'
   import { hydrateLogs, store } from '$lib/stores.svelte'
   import { fetchLogs } from '$lib/api'
-  import { List, Share2 } from '@lucide/svelte'
-  import { tooltip } from '$lib/tooltip.svelte'
 
   const target = $derived(store.daemon.logModal.target)
   const lines = $derived(target ? (store.daemon.logBuffers[target] ?? []) : [])
   const activeGraph = $derived(store.graph.active)
+  const hasGroups = $derived((activeGraph?.groups?.length ?? 0) > 0)
   const selectedNodeData = $derived(
     store.graph.selectedNode && activeGraph
       ? activeGraph.nodes.find(n => n.name === store.graph.selectedNode) ?? null
@@ -37,10 +37,7 @@
 <section class="services-page" aria-label="Services">
   <EnvSwitcher />
   <div class="view-toolbar">
-    <div class="view-toggle" role="group" aria-label="Services view">
-      <button class:active={store.ui.serviceView === 'graph'} aria-pressed={store.ui.serviceView === 'graph'} aria-label="Graph view" use:tooltip={{ content: 'Graph view' }} onclick={() => store.ui.setServiceView('graph')}><Share2 size={15} /></button>
-      <button class:active={store.ui.serviceView === 'table'} aria-pressed={store.ui.serviceView === 'table'} aria-label="Table view" use:tooltip={{ content: 'Table view' }} onclick={() => store.ui.setServiceView('table')}><List size={15} /></button>
-    </div>
+    <ServicesViewToolbar {hasGroups} />
   </div>
   {#if store.ui.serviceView === 'table' && activeGraph}
     <ServiceTable graph={activeGraph} onSelect={(name) => { store.graph.selectedNode = name }} />
@@ -72,7 +69,4 @@
     position: relative; /* anchors OperationBanner */
   }
   .view-toolbar { position: absolute; top: 52px; right: var(--space-3); z-index: 20; }
-  .view-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
-  .view-toggle button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--dim); cursor: pointer; }
-  .view-toggle button.active { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); }
 </style>

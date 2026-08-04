@@ -3,7 +3,7 @@
   import '@xyflow/svelte/dist/style.css'
   import { store } from '../../lib/stores.svelte'
   import { layout } from './layout'
-  import { LayoutGrid, StretchHorizontal, Activity } from '@lucide/svelte'
+  import { Activity } from '@lucide/svelte'
   import { tooltip } from '../../lib/tooltip.svelte'
   import { liveTraffic } from '../../lib/liveTraffic.svelte'
   import { subscribe } from '../../lib/eventbus'
@@ -23,8 +23,6 @@
   const activeGraph = $derived(store.graph.active)
   const isPreviewing = $derived(store.graph.isPreviewing)
   const layoutMode = $derived(store.ui.layoutMode)
-  // Toggle only matters when the env has groups to lay out.
-  const hasGroups = $derived((activeGraph?.groups?.length ?? 0) > 0)
 
   const nodes = $derived<ReturnType<typeof layout>>(activeGraph ? layout(activeGraph, layoutMode) : [])
 
@@ -91,32 +89,6 @@
             <span>Live</span>
           </button>
         </Panel>
-        {#if hasGroups}
-          <Panel position="top-right">
-            <div class="layout-toggle" role="group" aria-label="Group layout">
-              <button
-                class="lt-btn"
-                class:active={layoutMode === 'rectangle'}
-                aria-pressed={layoutMode === 'rectangle'}
-                aria-label="Rectangle layout"
-                use:tooltip={{ content: 'Rectangle — compact grid' }}
-                onclick={() => store.ui.setLayoutMode('rectangle')}
-              >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                class="lt-btn"
-                class:active={layoutMode === 'extend'}
-                aria-pressed={layoutMode === 'extend'}
-                aria-label="Extended layout"
-                use:tooltip={{ content: 'Extend — wide dependency rows' }}
-                onclick={() => store.ui.setLayoutMode('extend')}
-              >
-                <StretchHorizontal size={15} />
-              </button>
-            </div>
-          </Panel>
-        {/if}
       </SvelteFlow>
     </SvelteFlowProvider>
     {#if isPreviewing}
@@ -155,36 +127,6 @@
   }
   .preview-hint strong { font-family: var(--font-mono); color: var(--blue); }
 
-  .layout-toggle {
-    display: inline-flex;
-    gap: 2px;
-    padding: 2px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md, 6px);
-  }
-  .lt-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--dim);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .lt-btn:hover {
-    color: var(--fg);
-    background: color-mix(in srgb, var(--fg) 8%, transparent);
-  }
-  .lt-btn.active {
-    background: color-mix(in srgb, var(--blue) 22%, var(--card));
-    color: var(--blue);
-  }
   .live-btn {
     display: inline-flex;
     align-items: center;
