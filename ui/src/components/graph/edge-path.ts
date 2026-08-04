@@ -10,6 +10,8 @@ type DependencyPathInput = {
   targetX: number
   targetY: number
   targetPosition?: Position
+  sourceOffset?: number
+  targetOffset?: number
 }
 
 type DependencyPath = {
@@ -23,20 +25,25 @@ const ASYNC_CURVATURE = 0.6
 const ASYNC_BOW = 44
 
 export function buildDependencyPath(input: DependencyPathInput): DependencyPath {
+  const routedInput = {
+    ...input,
+    sourceX: input.sourceX + (input.sourceOffset ?? 0),
+    targetX: input.targetX + (input.targetOffset ?? 0),
+  }
   if (!input.async) {
     const [path, labelX, labelY] = getBezierPath({
-      sourceX: input.sourceX,
-      sourceY: input.sourceY,
-      sourcePosition: input.sourcePosition,
-      targetX: input.targetX,
-      targetY: input.targetY,
-      targetPosition: input.targetPosition,
+      sourceX: routedInput.sourceX,
+      sourceY: routedInput.sourceY,
+      sourcePosition: routedInput.sourcePosition,
+      targetX: routedInput.targetX,
+      targetY: routedInput.targetY,
+      targetPosition: routedInput.targetPosition,
       curvature: SYNC_CURVATURE,
     })
     return { path, labelX, labelY }
   }
 
-  return buildAsyncPath(input)
+  return buildAsyncPath(routedInput)
 }
 
 function buildAsyncPath(input: DependencyPathInput): DependencyPath {

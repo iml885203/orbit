@@ -37,6 +37,28 @@ describe('layout', () => {
     expect(layout(empty)).toEqual([])
   })
 
+  it('leaves flat graph alignment under dagre control', () => {
+    const flat: GraphResponse = {
+      env: 'flat',
+      nodes: [
+        { name: 'root', kind: 'frontend', state: 'healthy' },
+        { name: 'middle', kind: 'backend', state: 'healthy' },
+        { name: 'left', kind: 'backend', state: 'healthy' },
+        { name: 'right', kind: 'backend', state: 'healthy' },
+      ],
+      edges: [
+        { from: 'root', to: 'middle', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'root', to: 'left', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'root', to: 'right', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'middle', to: 'left', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+        { from: 'middle', to: 'right', kind: 'sync', detached: false, detachable: false, env_vars: [] },
+      ],
+    }
+    const positions = Object.fromEntries(layout(flat).map(node => [node.id, node.position]))
+
+    expect(positions['root'].x).not.toBe(positions['middle'].x)
+  })
+
   it('uses dependency ranks instead of a single-column grid inside connected groups', () => {
     const demoGraph: GraphResponse = {
       env: 'orbit-demo',
@@ -65,6 +87,7 @@ describe('layout', () => {
     expect(positions['demo-shop'].y).toBeLessThan(positions['shop-order-api'].y)
     expect(positions['shop-order-api'].y).toBeLessThan(positions['shop-catalog-api'].y)
     expect(positions['shop-order-api'].y).toBeLessThan(positions['shop-inventory-api'].y)
+    expect(positions['demo-shop'].x).toBe(positions['shop-order-api'].x)
     expect(positions['shop-catalog-api'].x).not.toBe(positions['shop-inventory-api'].x)
     expect(positions['redis'].x + 120).toBe(group.position.x + positions['shop-inventory-api'].x + 120)
   })

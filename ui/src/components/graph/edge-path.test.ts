@@ -1,6 +1,13 @@
 import { Position } from '@xyflow/svelte'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildDependencyPath } from './edge-path'
+
+vi.mock('@xyflow/svelte', () => ({
+  Position: { Top: 'top', Bottom: 'bottom' },
+  getBezierPath: ({ sourceX, sourceY, targetX, targetY }: {
+    sourceX: number; sourceY: number; targetX: number; targetY: number
+  }) => [`M${sourceX},${sourceY} L${targetX},${targetY}`, (sourceX + targetX) / 2, (sourceY + targetY) / 2],
+}))
 
 const verticalEdge = {
   id: 'odds-api->settlement-worker:accounts.settlement',
@@ -19,5 +26,13 @@ describe('buildDependencyPath', () => {
 
     expect(async.path).not.toBe(sync.path)
     expect(Math.abs(async.labelX - sync.labelX)).toBeGreaterThanOrEqual(20)
+  })
+
+  it('attaches routed edges to their assigned source and target ports', () => {
+    const left = buildDependencyPath({ ...verticalEdge, async: false, sourceOffset: -48, targetOffset: -24 })
+    const right = buildDependencyPath({ ...verticalEdge, async: false, sourceOffset: 48, targetOffset: 24 })
+
+    expect(left.path).toBe('M52,100 L76,360')
+    expect(right.path).toBe('M148,100 L124,360')
   })
 })

@@ -52,7 +52,7 @@ export function layout(graph: GraphResponse, mode: LayoutMode = 'rectangle'): Po
 
 // Shared dagre options. nodesep/ranksep are passed in by callers because
 // the flat layout wants more breathing room than per-cluster passes do.
-type DagreOpts = { nodesep: number; ranksep: number }
+type DagreOpts = { nodesep: number; ranksep: number; centerSingletonRanks?: boolean }
 
 // Meta-graph node label after dagre.layout: dagre populates x/y in place
 // on each node value. The package's generic typing falls through to
@@ -89,6 +89,7 @@ function runDagre(
     g.setEdge(e.from, e.to)
   }
   dagre.layout(g)
+  if (opts.centerSingletonRanks) centerSingletonRanks(g, nodeNames)
 
   const out = new Map<string, { x: number; y: number }>()
   for (const name of nodeNames) {
@@ -96,6 +97,36 @@ function runDagre(
     out.set(name, { x: p.x, y: p.y })
   }
   return out
+}
+
+function centerSingletonRanks(
+  graph: InstanceType<typeof dagre.graphlib.Graph>,
+  nodeNames: string[],
+): void {
+  const ranks = new Map<number, MetaNode[]>()
+  for (const name of nodeNames) {
+    const node = metaNodeAt(graph, name)
+    const rank = ranks.get(node.y) ?? []
+    rank.push(node)
+    ranks.set(node.y, rank)
+  }
+
+  const widestRank = [...ranks.values()]
+    .filter(rank => rank.length > 1)
+    .map(rank => ({
+      rank,
+      width: Math.max(...rank.map(node => node.x)) - Math.min(...rank.map(node => node.x)),
+    }))
+    .sort((left, right) => right.width - left.width)[0]?.rank
+  if (!widestRank) return
+
+  const centerX = (
+    Math.min(...widestRank.map(node => node.x))
+    + Math.max(...widestRank.map(node => node.x))
+  ) / 2
+  for (const rank of ranks.values()) {
+    if (rank.length === 1) rank[0].x = centerX
+  }
 }
 
 function flatLayout(graph: GraphResponse): PositionedNode[] {
@@ -268,7 +299,7 @@ function dagreInteriorPositions(
   const centres = runDagre(
     svcs.map(s => s.name),
     graph.edges,
-    { nodesep: 40, ranksep: 60 },
+    { nodesep: 40, ranksep: 60, centerSingletonRanks: true },
   )
   const positions = new Map<string, { x: number; y: number }>()
   for (const s of svcs) {
