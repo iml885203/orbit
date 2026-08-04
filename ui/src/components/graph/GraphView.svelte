@@ -8,8 +8,7 @@
   import { liveTraffic } from '../../lib/liveTraffic.svelte'
   import { subscribe } from '../../lib/eventbus'
   import type { TraceSummary } from '../../lib/types.gen'
-  import { filterVisibleEdges } from './edge-filter'
-  import type { GraphEdge } from '../../lib/types.gen'
+  import { dependencyEdgeID, routeVisibleDependencyEdges, type RoutedGraphEdge } from './edge-routing'
   import ServiceNode from './ServiceNode.svelte'
   import GroupNode from './GroupNode.svelte'
   import ExternalNode from './ExternalNode.svelte'
@@ -17,7 +16,7 @@
   import EnvSwitchingOverlay from './EnvSwitchingOverlay.svelte'
   import TracePlaybackBar from './TracePlaybackBar.svelte'
 
-  type GraphEdgeData = GraphEdge & Record<string, unknown>
+  type GraphEdgeData = RoutedGraphEdge & Record<string, unknown>
 
   // Canvas reads the store's `active` getter so the preview-wins rule
   // lives in one place (stores.svelte.ts GraphStore.active).
@@ -31,9 +30,9 @@
 
   const selectedNode = $derived(store.graph.selectedNode)
   const edges = $derived<Edge<GraphEdgeData, 'dep'>[]>(
-    filterVisibleEdges(activeGraph?.edges ?? [], selectedNode)
+    routeVisibleDependencyEdges(activeGraph?.edges ?? [], selectedNode, nodes)
       .map(e => ({
-        id: `${e.from}->${e.to}:${e.kind === 'async' ? e.topic : 'sync'}`,
+        id: dependencyEdgeID(e),
         source: e.from,
         target: e.to,
         type: 'dep',
