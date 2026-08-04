@@ -1,6 +1,6 @@
 ---
 name: orbit-feature-implement
-description: "Implement an Orbit feature request or bug fix end to end from a required GitHub issue number or URL: validate that the issue is open, sufficiently clear, and independently verifiable; create an isolated git worktree; implement and test it; run Orbit code review with sub-agents; open a PR; resolve review and CI failures; merge and close the issue; update local main; and perform exploratory testing. Use when the user asks to implement an Orbit feature or fix an Orbit bug through PR and merge, including prompts such as `/orbit-feature-implement #13`, `implement issue 13`, `fix bug issue 26`, or `實作這個 issue URL`. Do not use for chores, refactors, investigations, open-ended discussions, or requests without an issue identifier."
+description: "Implement an Orbit feature request or bug fix end to end from a required GitHub issue number or URL: validate that the issue is open, sufficiently clear, and independently verifiable; create an isolated git worktree; implement and test it; run Orbit code review with sub-agents; open a PR; resolve review and CI failures; merge and close the issue; update local main; and perform exploratory testing. Use when the user explicitly invokes `/orbit-feature-implement` or asks to implement an Orbit feature or fix an Orbit bug through PR and merge, including prompts such as `/orbit-feature-implement #13`, `implement issue 13 through PR and merge`, `fix bug issue 26 through verified merge`, or `實作這個 issue 並完成 PR 與合併`. Do not use for chores, refactors, investigations, open-ended discussions, requests without an issue identifier, or implementation requests that do not authorize the full PR-and-merge workflow."
 ---
 
 # Orbit Issue Implement
@@ -26,6 +26,7 @@ Write a short intake summary containing the issue goal, classification (feature 
 2. Inspect the current worktree without altering user changes. Fetch the remote and identify the repository's default branch.
 3. Create a new worktree from the current remote default branch. Use a branch named `codex/issue-<number>-<short-slug>` and a narrowly scoped sibling worktree path. Never reuse or clean a dirty worktree.
 4. Establish a baseline by running the relevant existing tests. If the baseline fails, determine whether the failure is pre-existing. Stop and report it when it prevents reliable issue verification.
+5. For a bug, reproduce the reported failure against the untouched baseline before designing the fix. If direct reproduction is impractical, record the concrete evidence for the failure and why reproduction is unavailable. Tie the regression test to the reproduced behavior or established root cause.
 
 ## Implement and verify
 
