@@ -140,6 +140,8 @@
     top: 3.5rem;
     right: var(--space-5);
     width: 320px;
+    max-height: calc(100vh - 4.5rem);
+    overflow-y: auto;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);

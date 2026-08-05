@@ -4,8 +4,6 @@
   import { store, toast } from '$lib/stores.svelte'
   import type { EnvironmentSourceInfo } from '$lib/types.gen'
 
-  type SourceView = EnvironmentSourceInfo & { last_sync_at?: string }
-
   let { onback }: { onback: () => void } = $props()
   let adding = $state(false)
   let busySource = $state('')
@@ -21,7 +19,7 @@
   let editWorkspace = $state('')
   let removingSource = $state('')
 
-  const sources = $derived((store.daemon.envs?.sources ?? []) as SourceView[])
+  const sources = $derived(store.daemon.envs?.sources ?? [])
 
   async function runSourceAction(name: string, action: Record<string, unknown>, success: string) {
     busySource = name
@@ -81,14 +79,14 @@
     }
   }
 
-  function beginEdit(source: SourceView) {
+  function beginEdit(source: EnvironmentSourceInfo) {
     editingSource = editingSource === source.name ? '' : source.name
     editLocation = source.location
     editRef = source.ref ?? ''
     editWorkspace = source.workspace ?? ''
   }
 
-  async function saveSettings(source: SourceView) {
+  async function saveSettings(source: EnvironmentSourceInfo) {
 	if (!editLocation.trim()) {
 	  actionError = `${source.type === 'git' ? 'Git URL' : 'Local directory'} is required.`
 	  return
@@ -114,7 +112,7 @@
     editingSource = ''
   }
 
-  function syncFreshness(source: SourceView) {
+  function syncFreshness(source: EnvironmentSourceInfo) {
     if (source.last_sync_error) return 'Sync failed'
     if (!source.last_sync_at) return 'Never synced'
     const synced = new Date(source.last_sync_at)
@@ -129,14 +127,14 @@
 	return `Synced ${synced.toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' })}`
   }
 
-  function removalBlocker(source: SourceView) {
+  function removalBlocker(source: EnvironmentSourceInfo) {
     const running = source.environments.find((environment) => environment.running)
     if (running) return `Stop or switch away from ${running.identity} before removing this source.`
     if (source.default && sources.length > 1) return 'Open another source’s Manage menu and choose Make default before removing this one.'
     return ''
   }
 
-  async function confirmRemove(source: SourceView) {
+  async function confirmRemove(source: EnvironmentSourceInfo) {
     if (await runSourceAction(source.name, { action: 'remove', name: source.name, confirmed: true }, `Removed ${source.name}`)) {
       removingSource = ''
     }

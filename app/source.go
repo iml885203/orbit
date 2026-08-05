@@ -292,6 +292,20 @@ func sourceSyncCmd() *cobra.Command {
 	return sourceSyncCmdWithDeprecation("")
 }
 
+type sourceSyncOptions struct {
+	all               bool
+	dry               bool
+	yes               bool
+	noApply           bool
+	deprecatedCommand string
+}
+
+type sourceSyncRecord struct {
+	Source  string   `json:"source"`
+	Written []string `json:"written"`
+	Error   string   `json:"error,omitempty"`
+}
+
 func sourceSyncCmdWithDeprecation(deprecatedCommand string) *cobra.Command {
 	var all, dry, yes, noApply bool
 	cmd := &cobra.Command{
@@ -308,75 +322,7 @@ apply it unless --no-apply is set.`,
   orbit source sync --all --no-apply`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if all && len(args) > 0 {
-				return cli.NewInvalidArgumentError("source name and --all are mutually exclusive")
-			}
-			registry, err := sourceRegistry()
-			if err != nil {
-				return err
-			}
-			var sources []envsource.Source
-			switch {
-			case all:
-				sources = registry.List()
-			case len(args) == 1:
-				source, getErr := registry.Get(args[0])
-				if getErr != nil {
-					return getErr
-				}
-				sources = []envsource.Source{source}
-			default:
-				source, getErr := registry.Default()
-				if getErr != nil {
-					return cli.WithJSONReplacementActions(errors.New("no default environment source configured; run 'orbit source --help' to add one"), []cli.JSONAction{{Command: "orbit source --help", Reason: "Choose a copyable Git or local first-source command."}})
-				}
-				sources = []envsource.Source{source}
-			}
-			type syncRecord struct {
-				Source  string   `json:"source"`
-				Written []string `json:"written"`
-				Error   string   `json:"error,omitempty"`
-			}
-			records := make([]syncRecord, 0, len(sources))
-			var failures []error
-			for _, source := range sources {
-				updated, result, syncErr := envsource.Refresh(registry, source, daemon.OrbitDir(), dry, true)
-				record := syncRecord{Source: source.Name, Written: result.Written}
-				if syncErr != nil {
-					record.Error = syncErr.Error()
-					failures = append(failures, sourceSyncError(source, syncErr))
-				} else if !dry {
-					source = updated
-				}
-				records = append(records, record)
-			}
-			if cli.JSONOutput {
-				data := map[string]any{"operation": "source_sync", "dry_run": dry, "sources": records}
-				if deprecatedCommand != "" {
-					data["deprecated_command"] = deprecatedCommand
-					data["replacement_command"] = "orbit source sync"
-				}
-				if len(failures) > 0 {
-					joined := errors.Join(failures...)
-					if err := cli.WriteJSONFailure(os.Stdout, commandString(), data, joined, nil); err != nil {
-						return err
-					}
-					return errCLIJSONAlreadyRendered{err: joined}
-				}
-				return cli.WriteJSONSuccess(os.Stdout, commandString(), data, nil)
-			}
-			for _, record := range records {
-				if record.Error != "" {
-					fmt.Printf("%s: failed: %s\n", record.Source, record.Error)
-				} else {
-					fmt.Printf("%s: synchronized (%d changed files)\n", record.Source, len(record.Written))
-				}
-			}
-			if len(failures) > 0 {
-				return errCLIHumanAlreadyRendered{err: errors.Join(failures...)}
-			}
-			envSyncDryRun, envSyncYes, envSyncNoApply = dry, yes, noApply
-			return offerEnvironmentApply()
+			return runSourceSync(args, sourceSyncOptions{all: all, dry: dry, yes: yes, noApply: noApply, deprecatedCommand: deprecatedCommand})
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "synchronize every source")
@@ -384,6 +330,86 @@ apply it unless --no-apply is set.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm applying active updates without prompting")
 	cmd.Flags().BoolVar(&noApply, "no-apply", false, "synchronize without applying active updates")
 	return cmd
+}
+
+func runSourceSync(args []string, options sourceSyncOptions) error {
+	if options.all && len(args) > 0 {
+		return cli.NewInvalidArgumentError("source name and --all are mutually exclusive")
+	}
+	registry, err := sourceRegistry()
+	if err != nil {
+		return err
+	}
+	sources, err := sourceSyncTargets(registry, args, options.all)
+	if err != nil {
+		return err
+	}
+	records, failures := synchronizeSources(registry, sources, options.dry)
+	if cli.JSONOutput {
+		return writeSourceSyncJSON(records, failures, options)
+	}
+	return writeSourceSyncHuman(records, failures, options)
+}
+
+func sourceSyncTargets(registry *envsource.Registry, args []string, all bool) ([]envsource.Source, error) {
+	if all {
+		return registry.List(), nil
+	}
+	if len(args) == 1 {
+		source, err := registry.Get(args[0])
+		return []envsource.Source{source}, err
+	}
+	source, err := registry.Default()
+	if err != nil {
+		return nil, cli.WithJSONReplacementActions(errors.New("no default environment source configured; run 'orbit source --help' to add one"), []cli.JSONAction{{Command: "orbit source --help", Reason: "Choose a copyable Git or local first-source command."}})
+	}
+	return []envsource.Source{source}, nil
+}
+
+func synchronizeSources(registry *envsource.Registry, sources []envsource.Source, dry bool) ([]sourceSyncRecord, []error) {
+	records := make([]sourceSyncRecord, 0, len(sources))
+	var failures []error
+	for _, source := range sources {
+		_, result, err := envsource.Refresh(registry, source, daemon.OrbitDir(), dry, true)
+		record := sourceSyncRecord{Source: source.Name, Written: result.Written}
+		if err != nil {
+			record.Error = err.Error()
+			failures = append(failures, sourceSyncError(source, err))
+		}
+		records = append(records, record)
+	}
+	return records, failures
+}
+
+func writeSourceSyncJSON(records []sourceSyncRecord, failures []error, options sourceSyncOptions) error {
+	data := map[string]any{"operation": "source_sync", "dry_run": options.dry, "sources": records}
+	if options.deprecatedCommand != "" {
+		data["deprecated_command"] = options.deprecatedCommand
+		data["replacement_command"] = "orbit source sync"
+	}
+	if len(failures) == 0 {
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, nil)
+	}
+	joined := errors.Join(failures...)
+	if err := cli.WriteJSONFailure(os.Stdout, commandString(), data, joined, nil); err != nil {
+		return err
+	}
+	return errCLIJSONAlreadyRendered{err: joined}
+}
+
+func writeSourceSyncHuman(records []sourceSyncRecord, failures []error, options sourceSyncOptions) error {
+	for _, record := range records {
+		if record.Error != "" {
+			fmt.Printf("%s: failed: %s\n", record.Source, record.Error)
+		} else {
+			fmt.Printf("%s: synchronized (%d changed files)\n", record.Source, len(record.Written))
+		}
+	}
+	if len(failures) > 0 {
+		return errCLIHumanAlreadyRendered{err: errors.Join(failures...)}
+	}
+	envSyncDryRun, envSyncYes, envSyncNoApply = options.dry, options.yes, options.noApply
+	return offerEnvironmentApply()
 }
 
 func sourceUpdateCmd() *cobra.Command {
@@ -406,92 +432,12 @@ adding a new source.`,
   orbit source update company --default`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			locationChanged := cmd.Flags().Changed("url") || cmd.Flags().Changed("path") || cmd.Flags().Changed("ref") || clearRef
-			metadataChanged := cmd.Flags().Changed("workspace") || clearWorkspace || makeDefault
-			if !locationChanged && !metadataChanged {
-				return cli.NewInvalidArgumentError("at least one update flag is required")
-			}
-			if cmd.Flags().Changed("url") && cmd.Flags().Changed("path") {
-				return cli.NewInvalidArgumentError("--url and --path are mutually exclusive")
-			}
-			if ref != "" && clearRef {
-				return cli.NewInvalidArgumentError("--ref and --clear-ref are mutually exclusive")
-			}
-			if cmd.Flags().Changed("workspace") && clearWorkspace {
-				return cli.NewInvalidArgumentError("--workspace and --clear-workspace are mutually exclusive")
-			}
-			if cmd.Flags().Changed("url") && strings.TrimSpace(url) == "" {
-				return cli.NewInvalidArgumentError("--url cannot be empty")
-			}
-			if cmd.Flags().Changed("path") && strings.TrimSpace(path) == "" {
-				return cli.NewInvalidArgumentError("--path cannot be empty")
-			}
-			normalizedWorkspace := ""
-			if cmd.Flags().Changed("workspace") {
-				var normalizeErr error
-				normalizedWorkspace, normalizeErr = envsource.NormalizeExistingDirectory(workspace)
-				if normalizeErr != nil {
-					return cli.NewInvalidArgumentError(normalizeErr.Error())
-				}
-			}
-			registry, err := sourceRegistry()
-			if err != nil {
-				return err
-			}
-			source, err := registry.Get(args[0])
-			if err != nil {
-				return err
-			}
-			if url != "" && source.Type != envsource.TypeGit || path != "" && source.Type != envsource.TypeLocal {
-				return cli.NewInvalidArgumentError("changing source type requires adding a new source")
-			}
-			if (cmd.Flags().Changed("ref") || clearRef) && source.Type != envsource.TypeGit {
-				return cli.NewInvalidArgumentError("--ref and --clear-ref are valid only with a Git source")
-			}
-			if url != "" {
-				source.URL = url
-			}
-			if path != "" {
-				normalized, normalizeErr := envsource.ValidateLocalSource(path)
-				if normalizeErr != nil {
-					return normalizeErr
-				}
-				source.Path = normalized
-			}
-			if cmd.Flags().Changed("ref") {
-				source.Ref = ref
-			}
-			if clearRef {
-				source.Ref = ""
-			}
-			if cmd.Flags().Changed("workspace") {
-				source.Workspace = normalizedWorkspace
-			}
-			if clearWorkspace {
-				source.Workspace = ""
-			}
-			if makeDefault {
-				source.Default = true
-			}
-			written := []string{}
-			if locationChanged {
-				var result envsource.SyncResult
-				source, result, err = envsource.ApplyProposedUpdate(registry, source, daemon.OrbitDir(), true)
-				if err != nil {
-					return sourceSyncError(source, err)
-				}
-				written = result.Written
-			}
-			if !locationChanged && metadataChanged {
-				if _, _, err := envsource.ApplyProposedUpdate(registry, source, daemon.OrbitDir(), false); err != nil {
-					return err
-				}
-			}
-			source, err = registry.Get(source.Name)
-			if err != nil {
-				return err
-			}
-			return writeSourceResult("source_update", source, written)
+			return runSourceUpdate(args[0], sourceUpdateOptions{
+				url: url, path: path, ref: ref, workspace: workspace,
+				urlChanged: cmd.Flags().Changed("url"), pathChanged: cmd.Flags().Changed("path"),
+				refChanged: cmd.Flags().Changed("ref"), workspaceChanged: cmd.Flags().Changed("workspace"),
+				clearRef: clearRef, clearWorkspace: clearWorkspace, makeDefault: makeDefault,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&url, "url", "", "replacement Git URL")
@@ -502,6 +448,120 @@ adding a new source.`,
 	cmd.Flags().BoolVar(&clearWorkspace, "clear-workspace", false, "remove the source workspace binding")
 	cmd.Flags().BoolVar(&makeDefault, "default", false, "make this the default source")
 	return cmd
+}
+
+type sourceUpdateOptions struct {
+	url, path, ref, workspace                  string
+	urlChanged, pathChanged, refChanged        bool
+	workspaceChanged, clearRef, clearWorkspace bool
+	makeDefault                                bool
+}
+
+func (options sourceUpdateOptions) locationChanged() bool {
+	return options.urlChanged || options.pathChanged || options.refChanged || options.clearRef
+}
+
+func (options sourceUpdateOptions) metadataChanged() bool {
+	return options.workspaceChanged || options.clearWorkspace || options.makeDefault
+}
+
+func runSourceUpdate(name string, options sourceUpdateOptions) error {
+	normalizedWorkspace, err := validateSourceUpdateOptions(options)
+	if err != nil {
+		return err
+	}
+	registry, err := sourceRegistry()
+	if err != nil {
+		return err
+	}
+	source, err := registry.Get(name)
+	if err != nil {
+		return err
+	}
+	source, err = applySourceUpdateOptions(source, options, normalizedWorkspace)
+	if err != nil {
+		return err
+	}
+	written := []string{}
+	if options.locationChanged() {
+		var result envsource.SyncResult
+		source, result, err = envsource.ApplyProposedUpdate(registry, source, daemon.OrbitDir(), true)
+		if err != nil {
+			return sourceSyncError(source, err)
+		}
+		written = result.Written
+	} else if options.metadataChanged() {
+		if _, _, err := envsource.ApplyProposedUpdate(registry, source, daemon.OrbitDir(), false); err != nil {
+			return err
+		}
+	}
+	source, err = registry.Get(source.Name)
+	if err != nil {
+		return err
+	}
+	return writeSourceResult("source_update", source, written)
+}
+
+func validateSourceUpdateOptions(options sourceUpdateOptions) (string, error) {
+	if !options.locationChanged() && !options.metadataChanged() {
+		return "", cli.NewInvalidArgumentError("at least one update flag is required")
+	}
+	if options.urlChanged && options.pathChanged {
+		return "", cli.NewInvalidArgumentError("--url and --path are mutually exclusive")
+	}
+	if options.ref != "" && options.clearRef {
+		return "", cli.NewInvalidArgumentError("--ref and --clear-ref are mutually exclusive")
+	}
+	if options.workspaceChanged && options.clearWorkspace {
+		return "", cli.NewInvalidArgumentError("--workspace and --clear-workspace are mutually exclusive")
+	}
+	if options.urlChanged && strings.TrimSpace(options.url) == "" {
+		return "", cli.NewInvalidArgumentError("--url cannot be empty")
+	}
+	if options.pathChanged && strings.TrimSpace(options.path) == "" {
+		return "", cli.NewInvalidArgumentError("--path cannot be empty")
+	}
+	if !options.workspaceChanged {
+		return "", nil
+	}
+	workspace, err := envsource.NormalizeExistingDirectory(options.workspace)
+	if err != nil {
+		return "", cli.NewInvalidArgumentError(err.Error())
+	}
+	return workspace, nil
+}
+
+func applySourceUpdateOptions(source envsource.Source, options sourceUpdateOptions, workspace string) (envsource.Source, error) {
+	if options.urlChanged && source.Type != envsource.TypeGit || options.pathChanged && source.Type != envsource.TypeLocal {
+		return source, cli.NewInvalidArgumentError("changing source type requires adding a new source")
+	}
+	if (options.refChanged || options.clearRef) && source.Type != envsource.TypeGit {
+		return source, cli.NewInvalidArgumentError("--ref and --clear-ref are valid only with a Git source")
+	}
+	if options.urlChanged {
+		source.URL = options.url
+	}
+	if options.pathChanged {
+		path, err := envsource.ValidateLocalSource(options.path)
+		if err != nil {
+			return source, err
+		}
+		source.Path = path
+	}
+	if options.refChanged {
+		source.Ref = options.ref
+	} else if options.clearRef {
+		source.Ref = ""
+	}
+	if options.workspaceChanged {
+		source.Workspace = workspace
+	} else if options.clearWorkspace {
+		source.Workspace = ""
+	}
+	if options.makeDefault {
+		source.Default = true
+	}
+	return source, nil
 }
 
 func sourceSetDefaultCmd() *cobra.Command {
