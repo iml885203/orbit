@@ -367,8 +367,8 @@ assert version["data"]["version"]
 assert health["ok"] is True
 status_sources = status["data"]["environment"]["sources"]
 list_sources = env_list["data"]["environment"]["sources"]
-status_source = next(source for source in status_sources if source["default"])
-list_source = next(source for source in list_sources if source["default"])
+status_source = status_sources[0]
+list_source = list_sources[0]
 assert status_source == list_source
 assert status_source["location"] == "https://github.com/iml885203/orbit-demo.git"
 assert status_source["ref"] == expected_demo_ref
