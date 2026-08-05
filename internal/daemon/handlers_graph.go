@@ -38,6 +38,15 @@ type GraphResponse struct {
 	Edges  []GraphEdge `json:"edges"`
 }
 
+// EdgeDetachResponse returns the graph rendered from the same detached-edge
+// snapshot that the mutation installed.
+type EdgeDetachResponse struct {
+	OK      bool          `json:"ok"`
+	Message string        `json:"message"`
+	Error   string        `json:"error,omitempty"`
+	Graph   GraphResponse `json:"graph"`
+}
+
 // GroupInfo is one entry in GraphResponse.Groups. Kept as a slice (not a
 // map) so the order is deterministic without the UI having to re-sort.
 // Color forwards the yaml-provided color so the UI can theme each group
@@ -148,14 +157,17 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	// One immutable snapshot for the whole request — status assembly and
 	// graph builders must render the same config generation.
 	cfg := s.holder.Load()
+	writeJSON(w, http.StatusOK, s.liveGraph(cfg, envName))
+}
+
+func (s *Server) liveGraph(cfg *config.Config, envName string) GraphResponse {
 	statuses := statusesByName(s.computeStatuses(cfg))
-	resp := GraphResponse{
+	return GraphResponse{
 		Env:    envName,
 		Groups: buildGroupInfos(cfg),
 		Nodes:  buildGraphNodes(cfg, statuses),
 		Edges:  append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
 	}
-	writeJSON(w, http.StatusOK, resp)
 }
 
 // servePreviewGraph returns the graph for another env from disk, with all
@@ -482,8 +494,9 @@ func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
 	if req.Detached {
 		action = "detached"
 	}
-	writeJSON(w, http.StatusOK, APIResponse{
+	writeJSON(w, http.StatusOK, EdgeDetachResponse{
 		OK:      true,
 		Message: from + "→" + to + " " + action + ". Takes effect on next `orbit up` or restart.",
+		Graph:   s.liveGraph(s.holder.Load(), envName),
 	})
 }

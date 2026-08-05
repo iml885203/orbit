@@ -68,6 +68,16 @@ export interface GraphResponse {
   edges: GraphEdge[];
 }
 /**
+ * EdgeDetachResponse returns the graph rendered from the same detached-edge
+ * snapshot that the mutation installed.
+ */
+export interface EdgeDetachResponse {
+  ok: boolean;
+  message: string;
+  error?: string;
+  graph: GraphResponse;
+}
+/**
  * GroupInfo is one entry in GraphResponse.Groups. Kept as a slice (not a
  * map) so the order is deterministic without the UI having to re-sort.
  * Color forwards the yaml-provided color so the UI can theme each group

@@ -117,14 +117,14 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			HealthProgress:       hp,
 		})
 	}
-	applyDependencyImpact(cfg, out)
+	applyDependencyImpact(s.app.Orchestrator.DepGraph(), out)
 	return out
 }
 
 // applyDependencyImpact overlays availability on top of lifecycle truth.
 // A process may still be alive while a required dependency is unavailable;
 // clients need that fact without mutating the orchestrator's lifecycle state.
-func applyDependencyImpact(cfg *config.Config, statuses []ResourceStatus) {
+func applyDependencyImpact(dependencies *engine.DepGraph, statuses []ResourceStatus) {
 	index := make(map[string]int, len(statuses))
 	for i := range statuses {
 		index[statuses[i].Name] = i
@@ -137,7 +137,7 @@ func applyDependencyImpact(cfg *config.Config, statuses []ResourceStatus) {
 			return
 		}
 		visiting[name] = true
-		for _, dependency := range cfg.GetDependencies(name) {
+		for _, dependency := range dependencies.DepsOf(name) {
 			visit(dependency)
 		}
 		delete(visiting, name)
@@ -152,7 +152,7 @@ func applyDependencyImpact(cfg *config.Config, statuses []ResourceStatus) {
 		default:
 			return
 		}
-		for _, dependency := range cfg.GetDependencies(name) {
+		for _, dependency := range dependencies.DepsOf(name) {
 			dependencyPosition, exists := index[dependency]
 			if !exists || statuses[dependencyPosition].State == engine.StateHealthy.String() {
 				continue
