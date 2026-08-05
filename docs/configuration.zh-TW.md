@@ -544,7 +544,7 @@ env config 透過環境變數（例如 `WORKSPACE_ROOT`、`API_ROOT`）參照專
 checkout 不在預設 workspace 位置，請用 `orbit settings` 設定：
 
 ```bash
-orbit source set-workspace <source> /path/to/workspace
+orbit source update <source> --workspace /path/to/workspace
 orbit settings set-env API_ROOT /path/to/api
 orbit settings list                              # 顯示目前的值
 ```

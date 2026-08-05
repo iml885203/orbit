@@ -84,6 +84,7 @@ class UIStore {
   toastVisible = $state(false)
   settingsOpen = $state(false)
   envPopoverOpen = $state(false)
+  sourceMigrationNoticeSeen = $state(false)
   showHistory = $state(false)
   version = $state<VersionResponse | null>(null)
   versionRestarting = $state(false)

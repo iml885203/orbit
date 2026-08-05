@@ -40,7 +40,7 @@ Long-form rationale and examples live in [docs/CODE_CONVENTIONS.md](docs/CODE_CO
 
 Discover commands with `orbit --help`; the agent-facing JSON contract is in [docs/agent-cli.md](docs/agent-cli.md). Non-obvious behaviors:
 
-- If `orbit up` errors about missing envs, run `orbit init` or `orbit env sync`.
+- If `orbit up` errors about missing envs, run `orbit init` or `orbit source sync`.
 - `orbit up` auto-starts the daemon; no separate `orbit daemon start` needed.
 
 ## Code review

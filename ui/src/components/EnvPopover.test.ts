@@ -5,12 +5,13 @@ import envPopoverSource from './EnvPopover.svelte?raw'
 import mainPageSource from '../routes/MainPage.svelte?raw'
 import { store } from '$lib/stores.svelte'
 
-const { fetchGraph, push } = vi.hoisted(() => ({
+const { fetchGraph, mutateSource, push } = vi.hoisted(() => ({
   fetchGraph: vi.fn(),
+	mutateSource: vi.fn(),
   push: vi.fn(),
 }))
 
-vi.mock('$lib/api', () => ({ fetchGraph }))
+vi.mock('$lib/api', () => ({ fetchGraph, fetchEnvs: vi.fn(), mutateSource }))
 vi.mock('svelte-spa-router', () => ({ push }))
 
 const liveGraph = {
@@ -27,9 +28,11 @@ const previewGraph = {
 describe('EnvPopover', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+	mutateSource.mockResolvedValue({ ok: true, data: {} })
     store.ui.envPopoverOpen = true
     store.graph.data = liveGraph
     store.graph.preview = null
+    store.ui.sourceMigrationNoticeSeen = false
     store.daemon.envs = {
       running: 0,
       context: {
@@ -122,4 +125,33 @@ describe('EnvPopover', () => {
     expect(store.graph.preview).toBeNull()
     expect(push).toHaveBeenCalledWith('/')
   })
+
+  it('keeps source settings behind a dedicated management view', async () => {
+    render(EnvPopover)
+
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: /Manage sources/ }))
+    expect(screen.getByRole('region', { name: 'Environment source management' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument()
+  })
+
+  it('shows the offline migration outcome until it is dismissed', async () => {
+    if (!store.daemon.envs) throw new Error('env fixture missing')
+    store.daemon.envs.migration = { source_name: 'default', location: 'https://example.com/envs.git', ref: 'main', cached_environments: 2, selection_preserved: true, workspace_preserved: true, offline: true }
+    render(EnvPopover)
+
+    expect(screen.getByRole('status', { name: 'Environment source migration complete' })).toHaveTextContent('default from https://example.com/envs.git at main offline')
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss migration summary' }))
+	expect(mutateSource).toHaveBeenCalledWith({ action: 'ack_migration' })
+    expect(screen.queryByRole('status', { name: 'Environment source migration complete' })).not.toBeInTheDocument()
+  })
+
+	it('keeps the migration summary visible when acknowledgement fails', async () => {
+	  if (!store.daemon.envs) throw new Error('env fixture missing')
+	  store.daemon.envs.migration = { source_name: 'default', location: 'https://example.com/envs.git', cached_environments: 1, selection_preserved: false, workspace_preserved: false, offline: true }
+	  mutateSource.mockResolvedValue({ ok: false, data: { error: 'disk unavailable' } })
+	  render(EnvPopover)
+	  await fireEvent.click(screen.getByRole('button', { name: 'Dismiss migration summary' }))
+	  expect(screen.getByRole('status', { name: 'Environment source migration complete' })).toBeInTheDocument()
+	})
 })

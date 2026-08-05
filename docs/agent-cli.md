@@ -33,6 +33,7 @@ top-level shape:
   "instance": "ci-123",
   "data": {},
   "error": null,
+  "notices": [],
   "recommended_actions": []
 }
 ```
@@ -47,6 +48,7 @@ Fields:
 | `instance` | Named runtime targeted by `--instance`, omitted for the default runtime. |
 | `data` | Command-specific payload on success. |
 | `error` | Structured error payload on failure, otherwise `null`. |
+| `notices` | Structured non-failing events, such as a one-time legacy source migration. |
 | `recommended_actions` | Follow-up commands the agent should consider. |
 
 Every lifecycle command accepts `--instance <name>`. Use `orbit instance list
@@ -267,7 +269,7 @@ returns `data.selection_required: true`, a `selection_message`, and exact
 directory. The field is omitted for self-contained environments. If a custom
 environment requires `${WORKSPACE_ROOT}` and no proven local workspace exists,
 init returns `service_working_directory_missing` with the sole action
-`orbit source set-workspace <source> "$PWD" --json`.
+`orbit source update <source> --workspace "$PWD" --json`.
 Other unresolved path variables preserve their name and lead to
 `orbit settings set-env <NAME> "$PWD" --json`; they never produce a
 source-workspace action.

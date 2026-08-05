@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/internal/engine"
@@ -72,6 +73,76 @@ func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T
 	if len(response.Sources) != 1 || len(response.Sources[0].Environments) != 1 ||
 		response.Sources[0].Environments[0].Identity != "default/development" || !response.Sources[0].Environments[0].Selected {
 		t.Fatalf("managed sources = %+v", response.Sources)
+	}
+}
+
+func TestHandleEnvsReportsSourceSyncFreshness(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	syncedAt := time.Date(2026, time.August, 5, 12, 0, 0, 0, time.UTC)
+	registry, err := envsource.Load(envsource.RegistryPath(OrbitDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(envsource.Source{
+		Name: "team", Type: envsource.TypeGit, URL: "https://example.com/envs.git",
+		ResolvedRef: "main", Commit: "0123456789abcdef", LastSyncAt: syncedAt,
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	srv.handleEnvs(response, httptest.NewRequest(http.MethodGet, "/api/envs", nil))
+	var environments EnvsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &environments); err != nil {
+		t.Fatal(err)
+	}
+	if len(environments.Sources) != 1 || !environments.Sources[0].LastSyncAt.Equal(syncedAt) ||
+		environments.Sources[0].ResolvedRef != "main" || environments.Sources[0].Commit != "0123456789abcdef" {
+		t.Fatalf("source freshness = %+v", environments.Sources)
+	}
+}
+
+func TestHandleEnvsReportsLegacyMigrationOnlyWhenItOccurs(t *testing.T) {
+	srv := newTestServer(t, &config.Config{})
+	settings := LoadSettings(DefaultSettingsPath())
+	if err := settings.Set("env_repo_url", "https://example.com/environments.git"); err != nil {
+		t.Fatal(err)
+	}
+	legacyEnvs := filepath.Join(OrbitDir(), "envs")
+	if err := os.MkdirAll(legacyEnvs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyEnvs, "development.yaml"), []byte("version: \"3\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Status and SSE paths may load the registry before the dashboard does.
+	// The user-facing notice must remain pending until explicitly acknowledged.
+	if _, err := loadEnvironmentSourceRegistry(); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	srv.handleEnvs(response, httptest.NewRequest(http.MethodGet, "/api/envs", nil))
+	var first EnvsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	if first.Migration == nil || first.Migration.SourceName != "default" ||
+		first.Migration.CachedEnvironments != 1 || !first.Migration.Offline {
+		t.Fatalf("migration = %#v", first.Migration)
+	}
+
+	if err := envsource.AcknowledgeLegacyMigrationNotice(OrbitDir()); err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	srv.handleEnvs(response, httptest.NewRequest(http.MethodGet, "/api/envs", nil))
+	var second EnvsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &second); err != nil {
+		t.Fatal(err)
+	}
+	if second.Migration != nil {
+		t.Fatalf("repeated migration = %#v", second.Migration)
 	}
 }
 

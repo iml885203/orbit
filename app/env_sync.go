@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/envsource"
 	"github.com/iml885203/orbit/internal/envsync"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
@@ -32,49 +35,111 @@ var (
 func envSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Refresh shared environment configuration",
-		Long: `Refresh shared environment configuration and make active updates current.
+		Short: "Deprecated compatibility bridge to orbit source sync",
+		Long: `Deprecated: shared environments are now managed with orbit source.
 
-If the running environment changed, Orbit offers to apply the update and
-restores the resources that were running. Use --yes to apply non-interactively,
-or --no-apply when an interruption must be deferred.
+With no repository-changing flags, this command synchronizes the default source
+exactly like "orbit source sync" and prints a deprecation warning. --dry, --yes,
+and --no-apply retain their synchronization behavior.
 
-By default, Orbit uses the source selected during init. Maintainers can use
---url to select and remember another Git repository, or --path to test the
-envs/ directory in a local checkout, including uncommitted changes. A file://
-URL still performs a Git clone and therefore includes only committed changes.
+Repository-changing legacy forms no longer mutate source configuration. Orbit
+rejects them without making changes and provides a concrete orbit source command.
 
-Use --dry to preview changed files without downloading or applying them.`,
+Old to new:
+  orbit env sync                         -> orbit source sync
+  orbit env sync --dry                   -> orbit source sync --dry
+  orbit env sync --url URL               -> orbit source update NAME --url URL
+  orbit env sync --ref REF               -> orbit source update NAME --ref REF
+  orbit env sync --path PATH             -> orbit source update NAME --path PATH
+
+Run "orbit source list" to find NAME. Use "orbit source add" when the source
+does not exist.`,
 		RunE: runEnvSync,
 	}
-	cmd.Flags().StringVar(&envSyncURL, "url", "", "use and remember another environment Git repository")
-	cmd.Flags().StringVar(&envSyncRef, "ref", "", "pin and remember a repository branch, tag, or commit")
-	cmd.Flags().StringVar(&envSyncPath, "path", "", "use a local checkout containing envs/ without remembering it")
+	cmd.Flags().StringVar(&envSyncURL, "url", "", "deprecated; use orbit source update NAME --url URL")
+	cmd.Flags().StringVar(&envSyncRef, "ref", "", "deprecated; use orbit source update NAME --ref REF")
+	cmd.Flags().StringVar(&envSyncPath, "path", "", "deprecated; use orbit source update NAME --path PATH")
 	cmd.Flags().BoolVar(&envSyncDryRun, "dry", false, "preview updates without downloading or applying")
 	cmd.Flags().BoolVarP(&envSyncYes, "yes", "y", false, "confirm applying updates without prompting")
 	cmd.Flags().BoolVar(&envSyncNoApply, "no-apply", false, "download now and defer applying active updates")
 	return cmd
 }
 
-func runEnvSync(_ *cobra.Command, _ []string) error {
-	action := cli.JSONAction{Command: "orbit source sync --json", Reason: "Synchronize the default environment source.", Destructive: false}
-	message := "orbit env sync has moved to orbit source sync"
+func runEnvSync(cmd *cobra.Command, _ []string) error {
+	urlChanged := cmd.Flags().Changed("url")
+	pathChanged := cmd.Flags().Changed("path")
+	refChanged := cmd.Flags().Changed("ref")
+	if urlChanged || pathChanged || refChanged {
+		return legacyEnvSyncSourceChange(urlChanged, pathChanged, refChanged)
+	}
+	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: 'orbit env sync' is deprecated; use 'orbit source sync'.")
+	syncCommand := sourceSyncCmdWithDeprecation("orbit env sync")
+	for name, value := range map[string]bool{
+		"dry": envSyncDryRun, "yes": envSyncYes, "no-apply": envSyncNoApply,
+	} {
+		if value {
+			if err := syncCommand.Flags().Set(name, strconv.FormatBool(value)); err != nil {
+				return err
+			}
+		}
+	}
+	return syncCommand.RunE(syncCommand, nil)
+}
+
+func legacyEnvSyncSourceChange(urlChanged, pathChanged, refChanged bool) error {
+	message := "legacy repository flags cannot be translated without choosing a persistent source; no changes were made"
+	action := cli.JSONAction{
+		Command: "orbit source list --json",
+		Reason:  "List sources and identify the source to update.",
+	}
+	if urlChanged && pathChanged {
+		return cli.WithJSONReplacementActions(cli.NewInvalidArgumentError("--url and --path are mutually exclusive; no changes were made"), []cli.JSONAction{action})
+	}
+	if pathChanged && refChanged {
+		return cli.WithJSONReplacementActions(cli.NewInvalidArgumentError("--ref is valid only with a Git source; no changes were made"), []cli.JSONAction{action})
+	}
+	if urlChanged && strings.TrimSpace(envSyncURL) == "" || pathChanged && strings.TrimSpace(envSyncPath) == "" || refChanged && strings.TrimSpace(envSyncRef) == "" {
+		return cli.WithJSONReplacementActions(cli.NewInvalidArgumentError("legacy repository flags cannot be empty; no changes were made"), []cli.JSONAction{action})
+	}
+	if envSyncDryRun || envSyncYes || envSyncNoApply {
+		return cli.WithJSONReplacementActions(cli.NewInvalidArgumentError(message+"; run the source command explicitly so every flag remains intentional"), []cli.JSONAction{action})
+	}
+	registry, err := sourceRegistry()
+	if err != nil {
+		return err
+	}
+	defaultSource, defaultErr := registry.Default()
 	switch {
-	case envSyncURL != "":
-		action = cli.JSONAction{Command: "orbit source add <name> --url " + envSyncURL + " --json", Reason: "Add the Git repository as a named source.", Destructive: false}
-		message = "orbit env sync --url no longer changes sources; use orbit source add <name> --url " + envSyncURL
-	case envSyncPath != "":
-		action = cli.JSONAction{Command: "orbit source add <name> --path " + envSyncPath + " --json", Reason: "Add the local directory as a persistent named source.", Destructive: false}
-		message = "orbit env sync --path no longer changes sources; use orbit source add <name> --path " + envSyncPath
-	case envSyncRef != "":
-		action = cli.JSONAction{Command: "orbit source update <name> --ref " + envSyncRef + " --json", Reason: "Update the ref of a named Git source.", Destructive: false}
-		message = "orbit env sync --ref no longer changes sources; use orbit source update <name> --ref " + envSyncRef
+	case errors.Is(defaultErr, envsource.ErrNotFound) && urlChanged:
+		command := "orbit source add default --url " + shellquote.Quote(envSyncURL)
+		if envSyncRef != "" {
+			command += " --ref " + shellquote.Quote(envSyncRef)
+		}
+		action = cli.JSONAction{Command: command + " --json", Reason: "Add the legacy Git repository as the first source."}
+		message = "legacy repository flags no longer configure env sync; add the source explicitly with: " + command
+	case errors.Is(defaultErr, envsource.ErrNotFound):
+		message = "legacy repository flags no longer configure env sync; run 'orbit source list', then add a named source"
+	case defaultErr != nil:
+		return defaultErr
+	case urlChanged && defaultSource.Type == envsource.TypeGit:
+		command := "orbit source update " + shellquote.Quote(defaultSource.Name) + " --url " + shellquote.Quote(envSyncURL)
+		if envSyncRef != "" {
+			command += " --ref " + shellquote.Quote(envSyncRef)
+		}
+		action = cli.JSONAction{Command: command + " --json", Reason: "Update and synchronize the default Git source."}
+		message = "legacy repository flags no longer configure env sync; update the default source with: " + command
+	case refChanged && defaultSource.Type == envsource.TypeGit:
+		command := "orbit source update " + shellquote.Quote(defaultSource.Name) + " --ref " + shellquote.Quote(envSyncRef)
+		action = cli.JSONAction{Command: command + " --json", Reason: "Update and synchronize the default Git source."}
+		message = "legacy repository flags no longer configure env sync; update the default source with: " + command
+	case pathChanged && defaultSource.Type == envsource.TypeLocal:
+		command := "orbit source update " + shellquote.Quote(defaultSource.Name) + " --path " + shellquote.Quote(envSyncPath)
+		action = cli.JSONAction{Command: command + " --json", Reason: "Update and synchronize the default local source."}
+		message = "legacy repository flags no longer configure env sync; update the default source with: " + command
+	default:
+		message = "legacy repository flags would change the default source type; run 'orbit source list' and add a new named source"
 	}
-	if cli.JSONOutput {
-		return cli.WithJSONReplacementActions(errors.New(message), []cli.JSONAction{action})
-	}
-	fmt.Println(message)
-	return nil
+	return cli.WithJSONReplacementActions(cli.NewInvalidArgumentError(message), []cli.JSONAction{action})
 }
 
 func envRepoSyncError(err error) error {
@@ -115,106 +180,6 @@ func envRepoSyncError(err error) error {
 		message += "\nVerify the repository URL and Git access, then retry 'orbit source sync'."
 	}
 	return cli.NewEnvRepoAccessError(message)
-}
-
-type envSyncJSONOptions struct {
-	Source        string
-	Destination   string
-	DryRun        bool
-	Result        envsync.Result
-	DaemonRunning bool
-	ApplyAction   string
-	ApplyResult   *environmentApplyResult
-}
-
-type envSyncJSONData struct {
-	Operation     string   `json:"operation"`
-	Source        string   `json:"source"`
-	Destination   string   `json:"destination"`
-	DryRun        bool     `json:"dry_run"`
-	Written       []string `json:"written"`
-	Reference     string   `json:"reference,omitempty"`
-	Commit        string   `json:"commit,omitempty"`
-	DaemonRunning bool     `json:"daemon_running"`
-	ApplyAction   string   `json:"apply_action"`
-	Restored      []string `json:"restored_resources"`
-}
-
-func buildEnvSyncJSONData(opts envSyncJSONOptions) envSyncJSONData {
-	written := []string{}
-	if opts.Result.Written != nil {
-		written = opts.Result.Written
-	}
-	restored := []string{}
-	if opts.ApplyResult != nil {
-		restored = opts.ApplyResult.RestoredResources
-	}
-	return envSyncJSONData{
-		Operation:     "env_sync",
-		Source:        opts.Source,
-		Destination:   opts.Destination,
-		DryRun:        opts.DryRun,
-		Written:       written,
-		Reference:     opts.Result.Source.Ref,
-		Commit:        opts.Result.Source.Commit,
-		DaemonRunning: opts.DaemonRunning,
-		ApplyAction:   opts.ApplyAction,
-		Restored:      restored,
-	}
-}
-
-func envSyncApplyAction(changesPending, daemonRunning, dryRun, noApply, applied bool) string {
-	if applied {
-		return "applied"
-	}
-	if dryRun || !changesPending || !daemonRunning {
-		return "none"
-	}
-	if noApply {
-		return "deferred"
-	}
-	return "recommended"
-}
-
-func envSyncRecommendedActions(applyAction string) []cli.JSONAction {
-	if applyAction != "recommended" {
-		return nil
-	}
-	return []cli.JSONAction{{
-		Command:     "orbit env apply --json",
-		Reason:      "Apply downloaded environment updates and restore running resources.",
-		Destructive: false,
-	}}
-}
-
-func finishEnvSync(source, destination string, syncResult envsync.Result) error {
-	applyResult, err := inspectEnvironmentApply()
-	if err != nil {
-		return err
-	}
-	if envSyncYes && !envSyncDryRun && !envSyncNoApply && applyResult.ChangesPending {
-		applied, applyErr := applyEnvironmentChanges(nil)
-		if applyErr != nil {
-			return applyErr
-		}
-		applyResult = applied
-	}
-	action := envSyncApplyAction(
-		applyResult.ChangesPending,
-		applyResult.DaemonRunning,
-		envSyncDryRun,
-		envSyncNoApply,
-		applyResult.Applied,
-	)
-	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildEnvSyncJSONData(envSyncJSONOptions{
-		Source:        source,
-		Destination:   destination,
-		DryRun:        envSyncDryRun,
-		Result:        syncResult,
-		DaemonRunning: applyResult.DaemonRunning,
-		ApplyAction:   action,
-		ApplyResult:   &applyResult,
-	}), envSyncRecommendedActions(action))
 }
 
 func inspectEnvironmentApply() (environmentApplyResult, error) {
@@ -273,21 +238,6 @@ func offerEnvironmentApply() error {
 	}
 	printEnvironmentApplyResult(result)
 	return nil
-}
-
-func printSyncResult(res envsync.Result) {
-	if len(res.Written) == 0 {
-		fmt.Println("Environment is up to date.")
-		return
-	}
-	message := "Updated"
-	if envSyncDryRun {
-		message = "Would update"
-	}
-	fmt.Printf("%s %d environment file(s):\n", message, len(res.Written))
-	for _, f := range res.Written {
-		fmt.Printf("  %s\n", f)
-	}
 }
 
 type envRepository struct {

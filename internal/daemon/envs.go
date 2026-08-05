@@ -9,9 +9,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/atomicio"
 	"github.com/iml885203/orbit/config"
+	publicdaemon "github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
 	"github.com/iml885203/orbit/internal/envsource"
 )
@@ -31,18 +33,34 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	s.environmentTransitionMu.RLock()
-	defer s.environmentTransitionMu.RUnlock()
+	s.environmentTransitionMu.Lock()
+	defer s.environmentTransitionMu.Unlock()
 	current := s.ConfigPath()
+	registry, _, err := loadEnvironmentSourceRegistryWithMigration()
+	migration, migrationErr := envsource.ReadLegacyMigrationNotice(OrbitDir())
+	if migrationErr != nil {
+		migration = nil
+	}
 	context := s.environmentContext()
 	resp := EnvsResponse{Current: current, Sources: []EnvironmentSourceInfo{}, Context: context}
-	registry, err := loadEnvironmentSourceRegistry()
 	if err == nil {
+		if migration != nil {
+			resp.Migration = &publicdaemon.EnvironmentSourceMigrationInfo{
+				SourceName: migration.SourceName, Location: migration.Location, Ref: migration.Ref, CachedEnvironments: migration.CachedEnvironments,
+				SelectionPreserved: migration.SelectionPreserved, WorkspacePreserved: migration.WorkspacePreserved,
+				Offline: migration.Offline,
+			}
+		}
 		for _, source := range registry.List() {
+			var lastSyncAt *time.Time
+			if !source.LastSyncAt.IsZero() {
+				value := source.LastSyncAt
+				lastSyncAt = &value
+			}
 			sourceInfo := EnvironmentSourceInfo{
 				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
 				Default: source.Default, Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
-				LastSyncError: source.LastSyncError, Environments: []EnvInfo{},
+				LastSyncAt: lastSyncAt, LastSyncError: source.LastSyncError, Environments: []EnvInfo{},
 			}
 			for _, name := range ListEnvYamls(envsource.EnvsDir(OrbitDir(), source.Name)) {
 				full := filepath.Join(envsource.EnvsDir(OrbitDir(), source.Name), name)

@@ -17,6 +17,7 @@ scripts/gen-notice.sh — edit that script, not this file.
 - github.com/felixge/httpsnoop — MIT
 - github.com/go-logr/logr — Apache-2.0
 - github.com/go-logr/stdr — Apache-2.0
+- github.com/gofrs/flock — BSD-3-Clause
 - github.com/golang-sql/civil — Apache-2.0
 - github.com/golang-sql/sqlexp — BSD-3-Clause
 - github.com/google/uuid — BSD-3-Clause
