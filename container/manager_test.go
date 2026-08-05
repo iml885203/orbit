@@ -88,6 +88,7 @@ func newImageTestManager(t *testing.T, api *imageAPIServer) *Manager {
 	}
 	opts := []client.Opt{
 		client.WithHost("tcp://" + endpoint.Host),
+		client.WithScheme("http"),
 		client.WithHTTPClient(httpClient),
 		client.WithAPIVersion("1.52"),
 	}
@@ -373,6 +374,7 @@ func TestImageVerificationDoesNotOccupyPullConcurrencySlot(t *testing.T) {
 	}
 	cli, err := client.New(
 		client.WithHost("tcp://"+endpoint.Host),
+		client.WithScheme("http"),
 		client.WithHTTPClient(server.Client()),
 		client.WithAPIVersion("1.52"),
 	)
@@ -438,6 +440,7 @@ func TestManagerStartsReadyContainerWithoutWaitingForQueuedPull(t *testing.T) {
 	}
 	cli, err := client.New(
 		client.WithHost("tcp://"+endpoint.Host),
+		client.WithScheme("http"),
 		client.WithHTTPClient(server.Client()),
 		client.WithAPIVersion("1.52"),
 	)
