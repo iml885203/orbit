@@ -68,3 +68,8 @@ resolved endpoints, so the harness must consume them instead of assuming the
 ports in the environment file. Keep the same `--instance` target for every
 Orbit command in the run, and clean it after the suite finishes. See
 [Isolated runtime instances](instances.md) for the ownership model.
+
+For a CI Docker daemon or storage driver that is unstable under concurrent
+image extraction, use the bounded pull setting described in
+[Configuration](configuration.md#settings) instead of maintaining a separate
+image pull list.

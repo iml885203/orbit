@@ -13,6 +13,7 @@ func TestLoadMinimalConfig(t *testing.T) {
 version: "3"
 settings:
   shutdown_timeout: 10s
+  image_pull_concurrency: 2
 containers:
   redis:
     image: redis:7.4
@@ -41,6 +42,9 @@ services:
 
 	if cfg.Version != "3" {
 		t.Errorf("version = %q, want %q", cfg.Version, "3")
+	}
+	if got := cfg.Settings.ImagePullConcurrency; got != 2 {
+		t.Errorf("image pull concurrency = %d, want 2", got)
 	}
 	if len(cfg.Containers) != 1 {
 		t.Errorf("containers = %d, want 1", len(cfg.Containers))
@@ -640,6 +644,19 @@ containers:
 		t.Fatal("expected invalid pull policy error, got nil")
 	}
 	t.Logf("Got expected error: %v", err)
+}
+
+func TestInvalidImagePullConcurrency(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+settings:
+  image_pull_concurrency: -1
+`)
+
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "settings.image_pull_concurrency must be zero or positive") {
+		t.Fatalf("error = %v", err)
+	}
 }
 
 func TestSidecarPullPolicy(t *testing.T) {

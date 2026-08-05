@@ -1,11 +1,49 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 )
+
+func TestUpJSONFailurePreservesImagePullDiagnostics(t *testing.T) {
+	reason := "pulling image private.example/app:1 (platform linux/arm64): registry unavailable"
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "api", State: "degraded", StateReason: reason},
+	}}
+	data := buildUpFailureJSONData([]string{"api"}, status, func(string) []string { return nil })
+	var output bytes.Buffer
+	if err := cli.WriteJSONFailure(&output, "orbit up --json", data, errors.New("up failed"), nil); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		SchemaVersion string `json:"schema_version"`
+		OK            bool   `json:"ok"`
+		Data          struct {
+			FailedResources []upFailedResource `json:"failed_resources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SchemaVersion != "orbit.cli.v1" || envelope.OK {
+		t.Fatalf("envelope = %+v", envelope)
+	}
+	if len(envelope.Data.FailedResources) != 1 {
+		t.Fatalf("failed_resources = %+v", envelope.Data.FailedResources)
+	}
+	got := envelope.Data.FailedResources[0]
+	if got.Name != "api" || !strings.Contains(got.StateReason, "private.example/app:1") ||
+		!strings.Contains(got.StateReason, "linux/arm64") || !strings.Contains(got.StateReason, "registry unavailable") {
+		t.Fatalf("pull diagnostics lost from failed resource: %+v", got)
+	}
+}
 
 func TestBuildUpFailureJSONDataCollectsEvidencePerUnhealthyResource(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
