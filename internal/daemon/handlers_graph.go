@@ -38,8 +38,6 @@ type GraphResponse struct {
 	Edges  []GraphEdge `json:"edges"`
 }
 
-// EdgeDetachResponse returns the graph rendered from the same detached-edge
-// snapshot that the mutation installed.
 type EdgeDetachResponse struct {
 	OK      bool          `json:"ok"`
 	Message string        `json:"message"`
@@ -490,13 +488,13 @@ func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
 	// held a stale snapshot until the next `orbit up`.
 	s.app.Orchestrator.UpdateDetachedDeps(s.settings.GetDetachedEdges(envName))
 
-	action := "attached"
+	message := from + "→" + to + " reattached. Dashboard actions updated immediately; future starts require this dependency."
 	if req.Detached {
-		action = "detached"
+		message = from + "→" + to + " detached. Dashboard actions updated immediately; future starts ignore this dependency."
 	}
 	writeJSON(w, http.StatusOK, EdgeDetachResponse{
 		OK:      true,
-		Message: from + "→" + to + " " + action + ". Takes effect on next `orbit up` or restart.",
+		Message: message,
 		Graph:   s.liveGraph(s.holder.Load(), envName),
 	})
 }

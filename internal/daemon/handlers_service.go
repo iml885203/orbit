@@ -117,7 +117,8 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			HealthProgress:       hp,
 		})
 	}
-	applyDependencyImpact(s.app.Orchestrator.DepGraph(), out)
+	dependencies := engine.NewDepGraph(cfg, s.settings.GetDetachedEdges(s.currentEnvName()))
+	applyDependencyImpact(dependencies, out)
 	return out
 }
 

@@ -67,10 +67,6 @@ export interface GraphResponse {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
-/**
- * EdgeDetachResponse returns the graph rendered from the same detached-edge
- * snapshot that the mutation installed.
- */
 export interface EdgeDetachResponse {
   ok: boolean;
   message: string;
