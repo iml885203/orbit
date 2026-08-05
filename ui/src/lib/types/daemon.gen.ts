@@ -67,6 +67,12 @@ export interface GraphResponse {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
+export interface EdgeDetachResponse {
+  ok: boolean;
+  message: string;
+  error?: string;
+  graph: GraphResponse;
+}
 /**
  * GroupInfo is one entry in GraphResponse.Groups. Kept as a slice (not a
  * map) so the order is deterministic without the UI having to re-sort.

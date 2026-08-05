@@ -216,3 +216,53 @@ describe('NodeDrawer', () => {
   })
 
 })
+
+describe('NodeDrawer detached dependency lifecycle', () => {
+  beforeEach(() => {
+    store.graph.preview = null
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 }),
+    )
+  })
+
+  it('starts the selected service after detach and restores the dependency action after reattach', async () => {
+    const blocked = {
+      name: 'shop',
+      kind: 'frontend' as const,
+      state: 'degraded',
+      blockedBy: 'api',
+    }
+    const api = { name: 'api', kind: 'backend' as const, state: 'stopped' }
+    store.graph.data = {
+      env: 'local',
+      nodes: [blocked, api],
+      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false }],
+    }
+    const view = render(NodeDrawer, { props: { node: blocked, onClose: () => {} } })
+
+    expect(view.getByRole('button', { name: 'Start api' })).toBeTruthy()
+
+    const detached = { name: 'shop', kind: 'frontend' as const, state: 'stopped' }
+    store.graph.data = {
+      env: 'local',
+      nodes: [detached, api],
+      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: true }],
+    }
+    await view.rerender({ node: detached, onClose: () => {} })
+    await fireEvent.click(view.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith('/api/up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resources: ['shop'] }),
+    }))
+
+    store.graph.data = {
+      env: 'local',
+      nodes: [blocked, api],
+      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false }],
+    }
+    await view.rerender({ node: blocked, onClose: () => {} })
+    expect(view.getByRole('button', { name: 'Start api' })).toBeTruthy()
+  })
+})

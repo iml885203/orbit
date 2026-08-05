@@ -1,4 +1,4 @@
-import { store, toast } from './stores.svelte'
+import { replaceGraphData, store, toast } from './stores.svelte'
 import { detachEdge } from './api'
 import type { GraphEdge, GraphNode } from './types.gen'
 
@@ -14,6 +14,9 @@ export type EnvironmentActionState = {
   summary: string
   primary: EnvironmentPrimaryAction
 }
+
+const edgeMutationSequence = new Map<string, number>()
+const edgeMutationQueue = new Map<string, Promise<void>>()
 
 export function environmentActionState(nodes: GraphNode[]): EnvironmentActionState {
   const resources = nodes.filter(node => node.kind !== 'external')
@@ -89,18 +92,36 @@ function rootCause(start: GraphNode, nodes: GraphNode[]): GraphNode {
  */
 export async function optimisticDetach(edge: GraphEdge, detached: boolean): Promise<boolean> {
   const env = store.graph.data?.env ?? ''
+  const key = `${env}\0${edge.from}\0${edge.to}`
+  const sequence = (edgeMutationSequence.get(key) ?? 0) + 1
+  edgeMutationSequence.set(key, sequence)
   const apply = (target: boolean) => {
-    if (!store.graph.data) return
+    if (!store.graph.data || store.graph.data.env !== env) return
     const idx = store.graph.data.edges.findIndex(e => e.from === edge.from && e.to === edge.to)
     if (idx >= 0) store.graph.data.edges[idx] = { ...edge, detached: target }
   }
   apply(detached)
-  const { ok, data } = await detachEdge(env, edge.from, edge.to, detached)
+  const previous = edgeMutationQueue.get(key) ?? Promise.resolve()
+  let finishTurn!: () => void
+  const turn = new Promise<void>(resolve => { finishTurn = resolve })
+  edgeMutationQueue.set(key, turn)
+  let result
+  try {
+    await previous
+    if (store.graph.data?.env !== env) return false
+    result = await detachEdge(env, edge.from, edge.to, detached)
+  } finally {
+    finishTurn()
+    if (edgeMutationQueue.get(key) === turn) edgeMutationQueue.delete(key)
+  }
+  const { ok, data } = result
+  if (edgeMutationSequence.get(key) !== sequence || store.graph.data?.env !== env) return ok
   if (!ok) {
     apply(!detached)
     toast(data?.error || 'Failed to update edge')
     return false
   }
+  replaceGraphData(data!.graph)
   toast(data?.message || (detached ? 'Detached' : 'Reattached'))
   return true
 }

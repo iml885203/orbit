@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
 func TestHandleStatus_IncludesHealthProgressWhenAvailable(t *testing.T) {
@@ -117,7 +118,7 @@ func TestApplyDependencyImpact_PropagatesAndRecoversWithoutChangingRuntime(t *te
 		{Name: "shop", State: "healthy"},
 	}
 
-	applyDependencyImpact(cfg, raw)
+	applyDependencyImpact(engine.NewDepGraph(cfg, nil), raw)
 	byName := make(map[string]ResourceStatus, len(raw))
 	for _, status := range raw {
 		byName[status.Name] = status
@@ -136,7 +137,7 @@ func TestApplyDependencyImpact_PropagatesAndRecoversWithoutChangingRuntime(t *te
 		{Name: "orders", State: "degraded", StateReason: `Get "http://localhost:3000/health": EOF`},
 		{Name: "shop", State: "healthy"},
 	}
-	applyDependencyImpact(cfg, afterThreshold)
+	applyDependencyImpact(engine.NewDepGraph(cfg, nil), afterThreshold)
 	byName = make(map[string]ResourceStatus, len(afterThreshold))
 	for _, status := range afterThreshold {
 		byName[status.Name] = status
@@ -153,10 +154,30 @@ func TestApplyDependencyImpact_PropagatesAndRecoversWithoutChangingRuntime(t *te
 		{Name: "orders", State: "healthy"},
 		{Name: "shop", State: "healthy"},
 	}
-	applyDependencyImpact(cfg, recovered)
+	applyDependencyImpact(engine.NewDepGraph(cfg, nil), recovered)
 	for _, status := range recovered {
 		if status.State != "healthy" || status.BlockedBy != "" {
 			t.Fatalf("recovered %s = %+v, want healthy without blocker", status.Name, status)
 		}
+	}
+}
+
+func TestApplyDependencyImpact_SkipsDetachedDependency(t *testing.T) {
+	cfg := &config.Config{
+		Services: map[string]*config.Service{
+			"api":  {Name: "api"},
+			"shop": {Name: "shop", DependsOn: []string{"api"}},
+		},
+		Containers: map[string]*config.Container{},
+	}
+	statuses := []ResourceStatus{
+		{Name: "api", State: "stopped"},
+		{Name: "shop", State: "healthy", Uptime: "10s"},
+	}
+
+	applyDependencyImpact(engine.NewDepGraph(cfg, map[string][]string{"shop": {"api"}}), statuses)
+
+	if got := statuses[1]; got.State != "healthy" || got.BlockedBy != "" || got.Uptime != "10s" {
+		t.Fatalf("shop = %+v, want unchanged runtime status after detach", got)
 	}
 }

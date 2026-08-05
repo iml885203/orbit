@@ -230,6 +230,29 @@ func TestHandleEdgeDetach_HappyPath(t *testing.T) {
 	if !srv.settings.IsEdgeDetached("development", "frontend", "api") {
 		t.Error("edge should be persisted as detached")
 	}
+	var detached EdgeDetachResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &detached); err != nil {
+		t.Fatalf("decode detach response: %v", err)
+	}
+	if len(detached.Graph.Edges) != 1 || !detached.Graph.Edges[0].Detached {
+		t.Fatalf("detach graph edges = %+v, want detached frontend→api", detached.Graph.Edges)
+	}
+
+	body = strings.NewReader(`{"env":"development","detached":false}`)
+	req = httptest.NewRequest(http.MethodPut, "/api/edges/frontend/api", body)
+	w = httptest.NewRecorder()
+	srv.handleEdgeDetach(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("reattach status = %d, want 200, body=%s", w.Code, w.Body.String())
+	}
+	var reattached EdgeDetachResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &reattached); err != nil {
+		t.Fatalf("decode reattach response: %v", err)
+	}
+	if len(reattached.Graph.Edges) != 1 || reattached.Graph.Edges[0].Detached {
+		t.Fatalf("reattach graph edges = %+v, want attached frontend→api", reattached.Graph.Edges)
+	}
 }
 
 func TestHandleEdgeDetach_IgnoresClientEnv(t *testing.T) {
