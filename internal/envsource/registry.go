@@ -142,13 +142,27 @@ func (r *Registry) Add(source Source, makeDefault bool) error {
 }
 
 func (r *Registry) Replace(source Source) error {
+	return r.replace(source, false)
+}
+
+// ReplaceExact persists the complete proposed source, including its default
+// status. Callers use it when a user submits one combined source update.
+func (r *Registry) ReplaceExact(source Source) error {
+	return r.replace(source, true)
+}
+
+func (r *Registry) replace(source Source, exactDefault bool) error {
 	if err := source.Validate(); err != nil {
 		return err
 	}
 	for i := range r.Sources {
 		if r.Sources[i].Name == source.Name {
 			previous := append([]Source(nil), r.Sources...)
-			source.Default = r.Sources[i].Default
+			if !exactDefault {
+				source.Default = r.Sources[i].Default
+			} else if source.Default {
+				r.clearDefault()
+			}
 			r.Sources[i] = source
 			r.sort()
 			if err := r.save(); err != nil {

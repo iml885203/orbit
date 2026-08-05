@@ -38,11 +38,16 @@ orbit source sync env-dev
 orbit source sync --all
 orbit source update company --ref release/2026.08
 orbit source update company --clear-ref
-orbit source set-workspace company /worktrees/company-pr-42
-orbit source clear-workspace company
-orbit source set-default company
+orbit source update company --workspace /worktrees/company-pr-42
+orbit source update company --clear-workspace
+orbit source update company --default
 orbit source remove env-dev
 ```
+
+The normal command set is `add`, `list`/`info`, `sync`, `update`, and `remove`.
+The older `set-default`, `set-workspace`, and `clear-workspace` commands remain
+as deprecated compatibility aliases for one transition period. Metadata-only
+updates do not synchronize source content.
 
 Sync validates a staged cache before replacing the current cache. Failures
 preserve the last valid environments and remain visible in source status.
@@ -81,7 +86,12 @@ orbit init --source env-dev --path /work/orbit-environments \
 ```
 
 Existing single-repository settings, cached environments, selection, and
-workspace migrate once to `default` without network access. Legacy settings
-are removed only after the source and selection are saved. `orbit env sync`
-is now a non-executing migration guide: old flags only return the equivalent
-`orbit source` command.
+workspace migrate once to `default` without network access. Orbit reports what
+it preserved and recommends inspecting and synchronizing the migrated source.
+Legacy settings are removed only after the source and selection are saved.
+
+During the transition period, `orbit env sync` without repository-changing
+flags synchronizes the default source and prints a deprecation warning. Legacy
+`--url`, `--path`, and `--ref` forms never mutate implicitly: they fail and
+return an exact `orbit source` replacement. No accepted flag is silently
+dropped.

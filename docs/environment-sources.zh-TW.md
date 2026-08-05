@@ -32,11 +32,16 @@ orbit source sync env-dev
 orbit source sync --all
 orbit source update company --ref release/2026.08
 orbit source update company --clear-ref
-orbit source set-workspace company /worktrees/company-pr-42
-orbit source clear-workspace company
-orbit source set-default company
+orbit source update company --workspace /worktrees/company-pr-42
+orbit source update company --clear-workspace
+orbit source update company --default
 orbit source remove env-dev
 ```
+
+一般流程只需要 `add`、`list`/`info`、`sync`、`update` 與 `remove`。
+舊的 `set-default`、`set-workspace`、`clear-workspace` 會在一個遷移週期內
+保留為 deprecated compatibility aliases。只修改 metadata 不會同步 source
+內容。
 
 同步會先驗證 staged cache，再替換 current cache。失敗時保留最後有效的
 environments，錯誤會留在 source 狀態；舊 cache versions 保存在 Orbit 管理的
@@ -72,6 +77,10 @@ orbit init --source env-dev --path /work/orbit-environments \
 ```
 
 既有單一 repository 設定、cached environments、selection 與 workspace 會在
-無網路時一次遷移到 `default`。Source 與 selection 成功儲存後才移除舊設定。
-`orbit env sync` 現在是不執行的遷移指南；舊 flags 只回傳等價的
-`orbit source` command。
+無網路時一次遷移到 `default`。Orbit 會回報保留了哪些狀態，並建議檢查及同步
+遷移後的 source。Source 與 selection 成功儲存後才移除舊設定。
+
+遷移期間，不帶 repository 變更 flags 的 `orbit env sync` 仍會同步 default
+source，並顯示 deprecated 提示。舊的 `--url`、`--path`、`--ref` 不會隱含修改
+source；它們會失敗並提供精確的 `orbit source` 替代指令，且不會靜默忽略任何
+已接受的 flag。

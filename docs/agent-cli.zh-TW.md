@@ -29,6 +29,7 @@ orbit logs redis --json
   "instance": "ci-123",
   "data": {},
   "error": null,
+  "notices": [],
   "recommended_actions": []
 }
 ```
@@ -43,6 +44,7 @@ orbit logs redis --json
 | `instance` | `--instance` 指定的 named runtime；default runtime 會省略。 |
 | `data` | 成功時的 command-specific payload。 |
 | `error` | 失敗時的結構化 error payload，否則為 `null`。 |
+| `notices` | 不會使指令失敗的結構化事件，例如一次性的舊 source 遷移。 |
 | `recommended_actions` | Agent 應考慮的後續指令。 |
 
 所有 lifecycle commands 都接受 `--instance <name>`。使用 `orbit instance
@@ -176,7 +178,7 @@ dashboard 回報成目前專案所有。
 source workspace。自給自足的 environment 會省略此欄位。若自訂
 environment 需要 `${WORKSPACE_ROOT}`，但沒有可證明的 local workspace，
 init 會回傳 `service_working_directory_missing`，且唯一 action 為
-`orbit source set-workspace <source> "$PWD" --json`。
+`orbit source update <source> --workspace "$PWD" --json`。
 其他未解析的 path variable 會保留自己的名稱，並指向
 `orbit settings set-env <NAME> "$PWD" --json`；不會產生 source workspace
 action。

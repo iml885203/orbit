@@ -2,14 +2,10 @@
   import { push } from 'svelte-spa-router'
   import { Eye } from '@lucide/svelte'
   import { store, toast } from '$lib/stores.svelte'
-  import { fetchEnvs, fetchGraph, mutateSource } from '$lib/api'
+  import { fetchGraph, mutateSource } from '$lib/api'
+  import SourceManager from './SourceManager.svelte'
 
-  let adding = $state(false)
-  let busySource = $state('')
-  let sourceName = $state('')
-  let sourceType = $state<'git' | 'local'>('git')
-  let sourceLocation = $state('')
-  let sourceWorkspace = $state('')
+  let managingSources = $state(false)
 
   function close() {
     store.ui.envPopoverOpen = false
@@ -32,58 +28,20 @@
     await push('/')
   }
 
-  async function runSourceAction(name: string, action: Record<string, unknown>) {
-    busySource = name
-    try {
-      const result = await mutateSource(action)
-      if (!result.ok) {
-        toast(result.data?.error || `Failed to update ${name}`)
-        return false
-      }
-      store.daemon.envs = await fetchEnvs()
-      toast(result.data?.message || `Updated ${name}`)
-      return true
-    } finally {
-      busySource = ''
-    }
+  async function acknowledgeMigration(review: boolean) {
+	try {
+	  const result = await mutateSource({ action: 'ack_migration' })
+	  if (!result.ok) {
+	    toast(result.data?.error || 'Could not dismiss the migration summary')
+	    return
+	  }
+	  store.ui.sourceMigrationNoticeSeen = true
+	  if (review) managingSources = true
+	} catch {
+	  toast('Could not dismiss the migration summary')
+	}
   }
 
-  async function addSource() {
-    if (!sourceName || !sourceLocation) return
-    const payload: Record<string, unknown> = {
-      action: 'add', name: sourceName, type: sourceType, workspace: sourceWorkspace,
-      [sourceType === 'git' ? 'url' : 'path']: sourceLocation,
-    }
-    if (await runSourceAction(sourceName, payload)) {
-      adding = false
-      sourceName = ''
-      sourceLocation = ''
-      sourceWorkspace = ''
-    }
-  }
-
-  async function editSource(name: string, type: string, current: string) {
-    const location = window.prompt(`New ${type === 'git' ? 'Git URL' : 'local path'} for ${name}`, current)
-    if (!location || location === current) return
-    await runSourceAction(name, { action: 'update', name, type, [type === 'git' ? 'url' : 'path']: location })
-  }
-
-  async function editRef(name: string, current: string) {
-    const ref = window.prompt(`Git ref for ${name} (leave empty to follow the default branch)`, current)
-    if (ref === null || ref === current) return
-    await runSourceAction(name, ref ? { action: 'update', name, ref } : { action: 'update', name, clear_ref: true })
-  }
-
-  async function editWorkspace(name: string, current: string) {
-    const workspace = window.prompt(`Workspace for ${name} (leave empty to clear)`, current)
-    if (workspace === null) return
-    await runSourceAction(name, workspace ? { action: 'set_workspace', name, workspace } : { action: 'clear_workspace', name })
-  }
-
-  async function removeSource(name: string) {
-    if (!window.confirm(`Remove environment source ${name}? A selected stopped environment will be cleared.`)) return
-    await runSourceAction(name, { action: 'remove', name, confirmed: true })
-  }
 </script>
 
 {#if store.ui.envPopoverOpen}
@@ -94,25 +52,24 @@
     onclick={close}
     onkeydown={(e) => e.key === 'Escape' && close()}
   ></div>
-  <div class="popover" role="dialog" aria-label="Environment selector">
+  <div class="popover" class:wide={managingSources} role="dialog" aria-label={managingSources ? 'Environment source manager' : 'Environment selector'}>
+    {#if managingSources}
+      <SourceManager onback={() => managingSources = false} />
+    {:else}
     <div class="header">
       <span class="title">Environments</span>
       <button class="close" onclick={close} aria-label="Close">×</button>
     </div>
     <div class="hint">Select an environment to preview it safely.</div>
-    <div class="source-toolbar">
-      <button class="source-add-toggle" type="button" onclick={() => adding = !adding}>{adding ? 'Cancel adding source' : 'Add source'}</button>
-      <button class="source-add-toggle" type="button" disabled={busySource !== ''} onclick={() => runSourceAction('all sources', { action: 'sync_all' })}>Sync all</button>
-    </div>
-    {#if adding}
-      <form class="source-form" onsubmit={(event) => { event.preventDefault(); addSource() }}>
-        <label>Source name<input bind:value={sourceName} required /></label>
-        <label>Type<select bind:value={sourceType}><option value="git">Git</option><option value="local">Local</option></select></label>
-        <label>{sourceType === 'git' ? 'Git URL' : 'Local path'}<input bind:value={sourceLocation} required /></label>
-        <label>Workspace<input bind:value={sourceWorkspace} placeholder="Optional local checkout" /></label>
-        <button type="submit" disabled={busySource !== ''} aria-busy={busySource !== ''}>Add and sync</button>
-      </form>
+    {#if store.daemon.envs?.migration && !store.ui.sourceMigrationNoticeSeen}
+      {@const migration = store.daemon.envs.migration}
+      <section class="migration-notice" role="status" aria-label="Environment source migration complete">
+        <div><strong>Source migration complete</strong><button type="button" aria-label="Dismiss migration summary" onclick={() => acknowledgeMigration(false)}>×</button></div>
+        <p>Moved your previous environment setup to <code>{migration.source_name}</code> from <code>{migration.location}</code>{migration.ref ? ` at ${migration.ref}` : ''} offline. {migration.cached_environments} cached {migration.cached_environments === 1 ? 'environment was' : 'environments were'} preserved{migration.selection_preserved ? ', including your selection' : ''}{migration.workspace_preserved ? ' and workspace' : ''}.</p>
+        <button type="button" onclick={() => acknowledgeMigration(true)}>Review and sync source</button>
+      </section>
     {/if}
+    <button class="manage-sources" type="button" onclick={() => managingSources = true}>Manage sources <span>{store.daemon.envs?.sources.length ?? 0}</span></button>
     {#if store.daemon.envs?.context}
       {@const context = store.daemon.envs.context}
       <section class="context" aria-label="Active environment context">
@@ -145,18 +102,6 @@
             <span>{source.type}</span>
             {#if source.default}<span class="source-default">default</span>{/if}
           </div>
-          <div class="source-location" title={source.location}>{source.location}</div>
-          {#if source.workspace}<div class="source-location" title={source.workspace}>Workspace: {source.workspace}</div>{/if}
-          {#if source.last_sync_error}<div class="source-error" role="status">{source.last_sync_error}</div>{/if}
-          <div class="source-actions">
-            <button type="button" disabled={busySource !== ''} aria-busy={busySource === source.name} onclick={() => runSourceAction(source.name, { action: 'sync', name: source.name })}>Sync</button>
-            {#if !source.default}<button type="button" disabled={busySource !== ''} onclick={() => runSourceAction(source.name, { action: 'set_default', name: source.name })}>Set default</button>{/if}
-            <button type="button" disabled={busySource !== ''} onclick={() => editSource(source.name, source.type, source.location)}>Edit location</button>
-            {#if source.type === 'git'}<button type="button" disabled={busySource !== ''} onclick={() => editRef(source.name, source.ref || '')}>Edit ref</button>{/if}
-            <button type="button" disabled={busySource !== ''} onclick={() => editWorkspace(source.name, source.workspace || '')}>Workspace</button>
-            {#if source.type === 'git' && source.ref}<button type="button" disabled={busySource !== ''} onclick={() => runSourceAction(source.name, { action: 'update', name: source.name, clear_ref: true })}>Follow default branch</button>{/if}
-            <button type="button" class="danger" disabled={busySource !== ''} onclick={() => removeSource(source.name)}>Remove</button>
-          </div>
           {#each source.environments as env (env.identity)}
             {@const previewing = store.graph.preview?.env === env.identity}
             <button
@@ -179,6 +124,7 @@
     <div class="footer">
       Previewing never stops services. Activate the environment from the Services page.
     </div>
+    {/if}
   </div>
 {/if}
 
@@ -201,6 +147,7 @@
     padding: var(--space-3);
     z-index: 100;
   }
+  .popover.wide { width: min(620px, calc(100vw - 2 * var(--space-5))); }
   .header {
     display: flex;
     align-items: center;
@@ -270,20 +217,18 @@
   .source-group { padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
   .source-group:last-child { border-bottom: 0; }
   .source-header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
-  .source-header span, .source-location { color: var(--dim); font-size: var(--text-xs); }
+  .source-header span { color: var(--dim); font-size: var(--text-xs); }
   .source-default { color: var(--blue) !important; }
-  .source-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .source-error { color: var(--red); font-size: var(--text-xs); }
-  .source-add-toggle, .source-actions button, .source-form button {
+  .manage-sources {
+    display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: var(--space-2);
     border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--fg);
     cursor: pointer; font-size: var(--text-xs); padding: var(--space-1) var(--space-2);
   }
-  .source-form { display: grid; gap: var(--space-2); margin: var(--space-2) 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-  .source-form label { display: grid; gap: var(--space-1); color: var(--dim); font-size: var(--text-xs); }
-  .source-form input, .source-form select { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--fg); padding: var(--space-1); }
-  .source-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0; }
-  .source-toolbar { display: flex; gap: var(--space-1); }
-  .source-actions .danger { color: var(--red); }
+  .manage-sources span { color: var(--dim); }
+  .migration-notice { display: grid; gap: var(--space-2); margin-bottom: var(--space-2); padding: var(--space-2); border: 1px solid color-mix(in srgb, var(--green) 40%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--green) 6%, transparent); }
+  .migration-notice > div { display: flex; align-items: center; justify-content: space-between; }
+  .migration-notice p { margin: 0; color: var(--dim); font-size: var(--text-xs); }
+  .migration-notice button { border: 0; background: none; color: var(--blue); cursor: pointer; padding: 0; text-align: left; }
   .env-row {
     display: flex;
     align-items: center;

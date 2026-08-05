@@ -75,7 +75,10 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 
 In an existing project, add orbit.yaml to the project root and run orbit up.
 Orbit discovers the nearest orbit.yaml automatically; orbit init is only needed
-for the bundled demo or a shared environment repository.`,
+for the bundled demo or a shared environment repository.
+
+An environment is a runnable configuration. A source is a Git repository or
+local directory that provides shared environments; manage it with orbit source.`,
 		Version: buildVersion(),
 	}
 	rootCmd.SetVersionTemplate("{{.Version}}\n")

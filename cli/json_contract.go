@@ -29,7 +29,14 @@ type JSONEnvelope struct {
 	Instance           string       `json:"instance,omitempty"`
 	Data               any          `json:"data,omitempty"`
 	Error              *JSONError   `json:"error,omitempty"`
+	Notices            []JSONNotice `json:"notices,omitempty"`
 	RecommendedActions []JSONAction `json:"recommended_actions,omitempty"`
+}
+
+type JSONNotice struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type JSONError struct {
@@ -88,6 +95,7 @@ func WriteJSONFailure(w io.Writer, command string, data any, err error, actions 
 }
 
 func writeJSON(w io.Writer, payload JSONEnvelope) error {
+	payload.Notices = takeJSONNotices()
 	payload.Instance = os.Getenv("ORBIT_INSTANCE")
 	if payload.Instance != "" {
 		for i := range payload.RecommendedActions {

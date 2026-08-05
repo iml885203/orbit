@@ -299,8 +299,18 @@ export interface EnvironmentSourceInfo {
   ref?: string;
   resolved_ref?: string;
   commit?: string;
+  last_sync_at?: string;
   last_sync_error?: string;
   environments: EnvInfo[];
+}
+export interface EnvironmentSourceMigrationInfo {
+  source_name: string;
+  location: string;
+  ref?: string;
+  cached_environments: number /* int */;
+  selection_preserved: boolean;
+  workspace_preserved: boolean;
+  offline: boolean;
 }
 /**
  * EnvsResponse is returned by GET /api/envs.
@@ -310,6 +320,7 @@ export interface EnvsResponse {
   running: number /* int */; // count of non-stopped services
   sources: EnvironmentSourceInfo[];
   context: EnvironmentContext;
+  migration?: EnvironmentSourceMigrationInfo;
 }
 export interface EnvironmentSwitchResponse {
   ok?: boolean;

@@ -31,6 +31,11 @@ func envCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env",
 		Short: "Manage environment configs",
+		Long: `Inspect and apply runnable environment configurations.
+
+An environment is a runnable configuration. A source is the Git repository or
+local directory that provides shared environments; manage those with
+"orbit source". Select an environment with "orbit switch <source>/<environment>".`,
 	}
 	useCmd := &cobra.Command{
 		Use:    "use <path>",

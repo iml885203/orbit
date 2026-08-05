@@ -4,8 +4,49 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
+
+func TestLegacyMigrationIsSingleAcrossConcurrentEntryPoints(t *testing.T) {
+	orbitHome := t.TempDir()
+	legacyEnvs := t.TempDir()
+	if err := os.WriteFile(filepath.Join(legacyEnvs, "dev.yaml"), []byte("version: \"3\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var clears atomic.Int32
+	legacy := LegacyMigration{URL: "https://example.com/envs.git", EnvsDir: legacyEnvs, Clear: func() error { clears.Add(1); return nil }}
+	results := make(chan *LegacyMigrationResult, 2)
+	errors := make(chan error, 2)
+	var group sync.WaitGroup
+	for range 2 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			_, result, err := LoadMigratingLegacyWithResult(orbitHome, legacy)
+			results <- result
+			errors <- err
+		}()
+	}
+	group.Wait()
+	close(results)
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	migrations := 0
+	for result := range results {
+		if result != nil {
+			migrations++
+		}
+	}
+	if migrations != 1 || clears.Load() != 1 {
+		t.Fatalf("migrations=%d clears=%d", migrations, clears.Load())
+	}
+}
 
 func TestLegacyMigrationRollsBackWhenClearingSettingsFails(t *testing.T) {
 	orbitHome := t.TempDir()
@@ -68,5 +109,46 @@ func TestLegacyMigrationStopsBeforeMutationWhenSelectionCannotBeRead(t *testing.
 	}
 	if _, statErr := os.Stat(SourceDir(orbitHome, "default")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("migration mutated cache: %v", statErr)
+	}
+}
+
+func TestLegacyMigrationReportsPreservedStateOnce(t *testing.T) {
+	orbitHome := t.TempDir()
+	legacyEnvs := t.TempDir()
+	selectionFile := filepath.Join(orbitHome, "current")
+	legacySelection := filepath.Join(legacyEnvs, "development.yaml")
+	if err := os.WriteFile(legacySelection, []byte("version: \"3\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(selectionFile, []byte(legacySelection+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	registry, result, err := LoadMigratingLegacyWithResult(orbitHome, LegacyMigration{
+		URL: "https://example.com/environments.git", Workspace: t.TempDir(), EnvsDir: legacyEnvs,
+		Selection: legacySelection, SelectionFile: selectionFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result == nil || result.SourceName != "default" || result.CachedEnvironments != 1 ||
+		result.Location != "https://example.com/environments.git" ||
+		!result.SelectionPreserved || !result.WorkspacePreserved || !result.Offline {
+		t.Fatalf("migration result = %#v", result)
+	}
+	if len(registry.List()) != 1 {
+		t.Fatalf("sources = %#v", registry.List())
+	}
+	pending, err := ReadLegacyMigrationNotice(orbitHome)
+	if err != nil || pending == nil || pending.Location != result.Location {
+		t.Fatalf("pending notice = %#v, %v", pending, err)
+	}
+
+	_, repeated, err := LoadMigratingLegacyWithResult(orbitHome, LegacyMigration{URL: "https://example.com/environments.git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repeated != nil {
+		t.Fatalf("repeated migration result = %#v, want nil", repeated)
 	}
 }

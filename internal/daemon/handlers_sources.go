@@ -59,6 +59,8 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		err = setEnvironmentSourceWorkspace(registry, request.Name, "")
 	case "remove":
 		err = s.removeEnvironmentSource(registry, request)
+	case "ack_migration":
+		err = envsource.AcknowledgeLegacyMigrationNotice(OrbitDir())
 	default:
 		err = fmt.Errorf("unknown source action %q", request.Action)
 	}
@@ -123,6 +125,12 @@ func syncEnvironmentSource(registry *envsource.Registry, name string) error {
 }
 
 func updateEnvironmentSource(registry *envsource.Registry, request sourceMutationRequest) error {
+	if request.Ref != "" && request.ClearRef {
+		return errors.New("ref and clear_ref are mutually exclusive")
+	}
+	if request.Workspace != "" && request.ClearWorkspace {
+		return errors.New("workspace and clear_workspace are mutually exclusive")
+	}
 	source, err := registry.Get(request.Name)
 	if err != nil {
 		return err
@@ -150,11 +158,20 @@ func updateEnvironmentSource(registry *envsource.Registry, request sourceMutatio
 	} else if request.Ref != "" {
 		source.Ref = request.Ref
 	}
-	_, _, err = envsource.Refresh(registry, source, OrbitDir(), false, true)
-	if err != nil {
-		return err
+	if request.ClearWorkspace {
+		source.Workspace = ""
+	} else if request.Workspace != "" {
+		source.Workspace, err = envsource.NormalizeExistingDirectory(request.Workspace)
+		if err != nil {
+			return err
+		}
 	}
-	return nil
+	if request.Default {
+		source.Default = true
+	}
+	contentChanged := request.URL != "" || request.Path != "" || request.Ref != "" || request.ClearRef
+	_, _, err = envsource.ApplyProposedUpdate(registry, source, OrbitDir(), contentChanged)
+	return err
 }
 
 func setEnvironmentSourceWorkspace(registry *envsource.Registry, name, workspace string) error {
