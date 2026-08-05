@@ -13,7 +13,7 @@ import (
 	"github.com/iml885203/orbit/internal/envsource"
 )
 
-func TestSourceHelpTeachesTheCommonWorkflowAndHidesCompatibilityAliases(t *testing.T) {
+func TestSourceHelpTeachesTheSmallCommandSet(t *testing.T) {
 	command := sourceCmd()
 	var output bytes.Buffer
 	command.SetOut(&output)
@@ -28,22 +28,14 @@ func TestSourceHelpTeachesTheCommonWorkflowAndHidesCompatibilityAliases(t *testi
 		"orbit source add company",
 		"orbit source sync --all",
 		"orbit switch company/development",
-		"Advanced configuration uses \"orbit source update\"",
 	} {
 		if !strings.Contains(help, want) {
 			t.Errorf("source help missing %q:\n%s", want, help)
 		}
 	}
-	for _, alias := range []string{"set-default", "set-workspace", "clear-workspace"} {
-		if strings.Contains(help, "  "+alias+" ") {
-			t.Errorf("compatibility alias %q appears as a primary command:\n%s", alias, help)
-		}
-		found, _, err := command.Find([]string{alias})
-		if err != nil {
-			t.Fatalf("compatibility alias %q is unavailable: %v", alias, err)
-		}
-		if !found.Hidden || found.Deprecated == "" {
-			t.Errorf("compatibility alias %q hidden=%v deprecated=%q", alias, found.Hidden, found.Deprecated)
+	for _, removed := range []string{"info", "update", "set-default", "set-workspace", "clear-workspace"} {
+		if _, _, err := command.Find([]string{removed}); err == nil {
+			t.Errorf("removed source command %q is still available", removed)
 		}
 	}
 }
@@ -54,9 +46,8 @@ func TestSourcePrimarySubcommandHelpExplainsBehaviorBeforeExecution(t *testing.T
 		want []string
 	}{
 		{name: "add", want: []string{"Exactly one of --url or --path", "validates and synchronizes", "first source"}},
-		{name: "sync", want: []string{"default source", "--all", "--dry"}},
-		{name: "update", want: []string{"metadata only", "do not access the source", "Conflicting flags"}},
-		{name: "remove", want: []string{"running environment", "clears that selection", "never deletes a local source"}},
+		{name: "sync", want: []string{"first source", "--all", "--dry"}},
+		{name: "remove", want: []string{"running environment", "clears that selection", "Orbit chooses the", "never deletes"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			command := sourceCmd()
@@ -76,106 +67,36 @@ func TestSourcePrimarySubcommandHelpExplainsBehaviorBeforeExecution(t *testing.T
 	}
 }
 
-func TestSourceUpdateMetadataDoesNotRefreshContent(t *testing.T) {
-	home := t.TempDir()
-	workspace := t.TempDir()
-	t.Setenv("ORBIT_HOME", home)
-	registry, err := envsource.Load(envsource.RegistryPath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstPath := t.TempDir()
-	targetPath := t.TempDir()
-	if err := registry.Add(envsource.Source{Name: "first", Type: envsource.TypeLocal, Path: firstPath}, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := registry.Add(envsource.Source{Name: "target", Type: envsource.TypeLocal, Path: targetPath}, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.RemoveAll(targetPath); err != nil {
-		t.Fatal(err)
-	}
-
-	command := sourceUpdateCmd()
-	command.SetArgs([]string{"target", "--workspace", workspace, "--default"})
-	if err := command.Execute(); err != nil {
-		t.Fatalf("metadata-only update accessed unavailable source content: %v", err)
-	}
-
-	reloaded, err := envsource.Load(envsource.RegistryPath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	updated, err := reloaded.Get("target")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Workspace != workspace || !updated.Default {
-		t.Fatalf("updated source = %#v", updated)
-	}
-}
-
-func TestSourceUpdateRejectsConflictsBeforeMutation(t *testing.T) {
+func TestSourceRemoveFirstMakesTheNextSourceFirst(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("ORBIT_HOME", home)
 	registry, err := envsource.Load(envsource.RegistryPath(home))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourcePath := t.TempDir()
-	if err := registry.Add(envsource.Source{Name: "local", Type: envsource.TypeLocal, Path: sourcePath}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "first", Type: envsource.TypeLocal, Path: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-
-	command := sourceUpdateCmd()
-	command.SetArgs([]string{"local", "--workspace", t.TempDir(), "--clear-workspace"})
-	if err := command.Execute(); err == nil {
-		t.Fatal("conflicting workspace flags unexpectedly succeeded")
-	}
-	reloaded, err := envsource.Load(envsource.RegistryPath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	unchanged, err := reloaded.Get("local")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if unchanged.Workspace != "" {
-		t.Fatalf("workspace mutated despite conflict: %q", unchanged.Workspace)
-	}
-}
-
-func TestSourceRemoveDefaultReturnsExecutableDiscoveryAction(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("ORBIT_HOME", home)
-	registry, err := envsource.Load(envsource.RegistryPath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := registry.Add(envsource.Source{Name: "first", Type: envsource.TypeLocal, Path: t.TempDir()}, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := registry.Add(envsource.Source{Name: "second", Type: envsource.TypeLocal, Path: t.TempDir()}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "second", Type: envsource.TypeLocal, Path: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 
 	command := sourceRemoveCmd()
 	command.SetArgs([]string{"first"})
-	err = command.Execute()
-	if err == nil {
-		t.Fatal("default source removal unexpectedly succeeded")
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
 	}
-	withActions, ok := err.(interface{ CLIJSONReplacementActions() []cli.JSONAction })
-	if !ok {
-		t.Fatalf("error has no replacement action: %T %v", err, err)
+	reloaded, err := envsource.Load(envsource.RegistryPath(home))
+	if err != nil {
+		t.Fatal(err)
 	}
-	actions := withActions.CLIJSONReplacementActions()
-	if len(actions) != 1 || actions[0].Command != "orbit source list --json" {
-		t.Fatalf("replacement actions = %#v", actions)
+	firstSource, err := reloaded.First()
+	if err != nil || firstSource.Name != "second" {
+		t.Fatalf("first after removal = %#v, %v", firstSource, err)
 	}
 }
 
-func TestEnvSyncWithoutRepositoryFlagsSynchronizesDefaultSource(t *testing.T) {
+func TestEnvSyncWithoutRepositoryFlagsSynchronizesFirstSource(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("ORBIT_HOME", home)
 	resetEnvSyncFlags(t)
@@ -190,7 +111,7 @@ func TestEnvSyncWithoutRepositoryFlagsSynchronizesDefaultSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "local", Type: envsource.TypeLocal, Path: sourceRoot}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "local", Type: envsource.TypeLocal, Path: sourceRoot}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -269,7 +190,7 @@ func TestEnvSyncJSONKeepsDeprecationMetadataInsideTheEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "local", Type: envsource.TypeLocal, Path: sourceRoot}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "local", Type: envsource.TypeLocal, Path: sourceRoot}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -316,12 +237,12 @@ func TestLegacyEnvSyncFlagsFailWithExecutableAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/old.git"}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/old.git"}); err != nil {
 		t.Fatal(err)
 	}
-	envSyncURL = "https://example.com/new repo.git"
-	envSyncRef = "release candidate"
-	err = legacyEnvSyncSourceChange(true, false, true)
+	command := envSyncCmd()
+	command.SetArgs([]string{"--url", "https://example.com/new repo.git", "--ref", "release candidate"})
+	err = command.Execute()
 	if err == nil {
 		t.Fatal("legacy repository flags unexpectedly succeeded")
 	}
@@ -337,7 +258,7 @@ func TestLegacyEnvSyncFlagsFailWithExecutableAction(t *testing.T) {
 	if strings.Contains(action, "<") || strings.Contains(action, ">") {
 		t.Fatalf("recommended action contains unresolved placeholder: %q", action)
 	}
-	for _, want := range []string{"orbit source update company", "--url", "--ref", "--json"} {
+	for _, want := range []string{"orbit source --help"} {
 		if !strings.Contains(action, want) {
 			t.Errorf("recommended action %q missing %q", action, want)
 		}
@@ -368,25 +289,21 @@ func TestEnvSyncHelpIsOnlyAMigrationBridge(t *testing.T) {
 
 func resetEnvSyncFlags(t *testing.T) {
 	t.Helper()
-	previous := []any{envSyncURL, envSyncRef, envSyncPath, envSyncDryRun, envSyncYes, envSyncNoApply, cli.JSONOutput}
-	envSyncURL, envSyncRef, envSyncPath = "", "", ""
+	previous := []any{envSyncDryRun, envSyncYes, envSyncNoApply, cli.JSONOutput}
 	envSyncDryRun, envSyncYes, envSyncNoApply, cli.JSONOutput = false, false, false, false
 	t.Cleanup(func() {
-		envSyncURL = previous[0].(string)
-		envSyncRef = previous[1].(string)
-		envSyncPath = previous[2].(string)
-		envSyncDryRun = previous[3].(bool)
-		envSyncYes = previous[4].(bool)
-		envSyncNoApply = previous[5].(bool)
-		cli.JSONOutput = previous[6].(bool)
+		envSyncDryRun = previous[0].(bool)
+		envSyncYes = previous[1].(bool)
+		envSyncNoApply = previous[2].(bool)
+		cli.JSONOutput = previous[3].(bool)
 	})
 }
 
 func TestLegacyEnvSyncConflictsAreInvalidArguments(t *testing.T) {
 	resetEnvSyncFlags(t)
-	envSyncURL = "https://example.com/environments.git"
-	envSyncPath = "/tmp/environments"
-	err := legacyEnvSyncSourceChange(true, true, false)
+	command := envSyncCmd()
+	command.SetArgs([]string{"--url", "https://example.com/environments.git", "--path", "/tmp/environments"})
+	err := command.Execute()
 	if !errors.Is(err, cli.ErrInvalidArgument) {
 		t.Fatalf("error = %v, want invalid argument", err)
 	}

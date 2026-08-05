@@ -22,7 +22,7 @@ func TestSourceAPIAddsLocalSourceAndPublishesNestedEnvironments(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(local, "envs", "e2e.yaml"), []byte("version: \"3\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	body, err := json.Marshal(sourceMutationRequest{Action: "add", Name: "env-dev", Type: envsource.TypeLocal, Path: local, Default: true})
+	body, err := json.Marshal(sourceMutationRequest{Action: "add", Name: "env-dev", Type: envsource.TypeLocal, Path: local})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestSourceAPIPreservesLocalDirectoryOnRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "env-dev", Type: envsource.TypeLocal, Path: local}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "env-dev", Type: envsource.TypeLocal, Path: local}); err != nil {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "/api/sources", strings.NewReader(`{"action":"remove","name":"env-dev","confirmed":true}`))

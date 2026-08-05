@@ -24,7 +24,6 @@ function source(overrides: Record<string, unknown> = {}) {
     name: 'team',
     type: 'git',
     location: 'https://example.com/team/envs.git',
-    default: true,
     resolved_ref: 'main',
     commit: '1234567890abcdef',
     last_sync_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -62,61 +61,28 @@ describe('SourceManager', () => {
     expect(screen.queryByLabelText(/Branch or tag/)).not.toBeInTheDocument()
   })
 
-  it('submits location, ref, and workspace as one update', async () => {
-    render(SourceManager, { props: { onback: vi.fn() } })
-    await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
-    await fireEvent.input(screen.getByLabelText('Git URL'), { target: { value: 'https://example.com/new.git' } })
-    await fireEvent.input(screen.getByLabelText('Branch or tag'), { target: { value: 'release' } })
-    await fireEvent.input(screen.getByLabelText('Workspace'), { target: { value: '/work/team' } })
-    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-    expect(mutateSource).toHaveBeenCalledTimes(1)
-    expect(mutateSource).toHaveBeenCalledWith(expect.objectContaining({ action: 'update', url: 'https://example.com/new.git', ref: 'release', workspace: '/work/team' }))
-  })
-
-  it('updates workspace metadata without claiming a sync', async () => {
-	render(SourceManager, { props: { onback: vi.fn() } })
-	await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
-	await fireEvent.input(screen.getByLabelText('Workspace'), { target: { value: '/work/team' } })
-	await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-	expect(mutateSource).toHaveBeenCalledWith(expect.objectContaining({ action: 'update', workspace: '/work/team' }))
-	expect(store.ui.toastMessage).toBe('Updated team')
-  })
-
-  it('rejects a blank location before sending a mutation', async () => {
-	render(SourceManager, { props: { onback: vi.fn() } })
-	await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
-	await fireEvent.input(screen.getByLabelText('Git URL'), { target: { value: ' ' } })
-	await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-	expect(screen.getByRole('alert')).toHaveTextContent('Git URL is required')
-	expect(mutateSource).not.toHaveBeenCalled()
-  })
-
   it('disables removal when the source owns the running environment', async () => {
     store.daemon.envs = { running: 1, context: { ...context, running: true }, sources: [source({
       environments: [{ identity: 'team/development', name: 'development', path: '/cache/development.yaml', selected: true, running: true }],
     })] }
     render(SourceManager, { props: { onback: vi.fn() } })
-    await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
 
-    expect(screen.getByRole('button', { name: 'Remove source' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent('Stop or switch away from team/development')
   })
 
-  it('requires another default before removing a default source', async () => {
-    store.daemon.envs = { running: 0, context, sources: [source(), source({ name: 'other', default: false, environments: [] })] }
+  it('allows removing the first source without choosing a replacement', async () => {
+    store.daemon.envs = { running: 0, context, sources: [source(), source({ name: 'other', environments: [] })] }
     render(SourceManager, { props: { onback: vi.fn() } })
     const teamCard = screen.getByText('team').closest('article')!
-    await fireEvent.click(within(teamCard).getByRole('button', { name: /Manage/ }))
 
-    expect(within(teamCard).getByRole('button', { name: 'Remove source' })).toBeDisabled()
-    expect(within(teamCard).getByRole('status')).toHaveTextContent('choose Make default')
+    expect(within(teamCard).getByRole('button', { name: 'Remove' })).toBeEnabled()
   })
 
   it('explains selected-environment impact and preserves a local directory', async () => {
     store.daemon.envs = { running: 0, context, sources: [source({ type: 'local', location: '/work/envs' })] }
     render(SourceManager, { props: { onback: vi.fn() } })
-    await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove source' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
 
     const confirmation = screen.getByRole('group', { name: 'Remove source team' })
     expect(confirmation).toHaveTextContent('selected environment team/development will be cleared')
@@ -124,10 +90,9 @@ describe('SourceManager', () => {
   })
 
   it('does not claim an unselected source will clear the selection', async () => {
-    store.daemon.envs = { running: 0, context, sources: [source({ default: false, environments: [] })] }
+    store.daemon.envs = { running: 0, context, sources: [source({ environments: [] })] }
     render(SourceManager, { props: { onback: vi.fn() } })
-    await fireEvent.click(screen.getByRole('button', { name: /Manage/ }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove source' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
 
     expect(screen.getByRole('group', { name: 'Remove source team' })).not.toHaveTextContent('selected environment')
   })

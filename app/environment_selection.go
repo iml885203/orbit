@@ -34,7 +34,6 @@ type environmentSourceChoice struct {
 	Type          string              `json:"type"`
 	Location      string              `json:"location"`
 	Workspace     string              `json:"workspace,omitempty"`
-	Default       bool                `json:"default"`
 	Ref           string              `json:"ref,omitempty"`
 	ResolvedRef   string              `json:"resolved_ref,omitempty"`
 	Commit        string              `json:"commit,omitempty"`
@@ -123,7 +122,7 @@ func readEnvironmentSelection() environmentSelection {
 		for _, source := range registry.List() {
 			sourceChoice := environmentSourceChoice{
 				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
-				Default: source.Default, Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
+				Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
 				LastSyncError: source.LastSyncError, LastSyncAt: source.LastSyncAt, Environments: []environmentChoice{},
 			}
 			for _, filename := range daemonsrv.ListEnvYamls(envsource.EnvsDir(daemon.OrbitDir(), source.Name)) {

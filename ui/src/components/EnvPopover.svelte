@@ -100,7 +100,6 @@
           <div class="source-header">
             <strong>{source.name}</strong>
             <span>{source.type}</span>
-            {#if source.default}<span class="source-default">default</span>{/if}
           </div>
           {#each source.environments as env (env.identity)}
             {@const previewing = store.graph.preview?.env === env.identity}
@@ -220,7 +219,6 @@
   .source-group:last-child { border-bottom: 0; }
   .source-header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
   .source-header span { color: var(--dim); font-size: var(--text-xs); }
-  .source-default { color: var(--blue) !important; }
   .manage-sources {
     display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: var(--space-2);
     border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--fg);

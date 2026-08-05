@@ -24,7 +24,7 @@ func TestHandleEnvsReportsProjectContextAndInactiveManagedSelection(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "default", Type: envsource.TypeGit, URL: "https://example.com/envs.git"}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "default", Type: envsource.TypeGit, URL: "https://example.com/envs.git"}); err != nil {
 		t.Fatal(err)
 	}
 	managedDir := envsource.EnvsDir(home, "default")
@@ -86,7 +86,7 @@ func TestHandleEnvsReportsSourceSyncFreshness(t *testing.T) {
 	if err := registry.Add(envsource.Source{
 		Name: "team", Type: envsource.TypeGit, URL: "https://example.com/envs.git",
 		ResolvedRef: "main", Commit: "0123456789abcdef", LastSyncAt: syncedAt,
-	}, false); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,10 +417,10 @@ func TestHandleEnvSwitchRestoresSourceEnvironmentWhenRestartUnavailable(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "current-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/previous"}, true); err != nil {
+	if err := registry.Add(envsource.Source{Name: "current-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/previous"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "target-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/target"}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "target-source", Type: envsource.TypeLocal, Path: t.TempDir(), Workspace: "/target"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("WORKSPACE_ROOT", "/previous")

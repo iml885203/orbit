@@ -59,7 +59,7 @@ func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {
 			}
 			sourceInfo := EnvironmentSourceInfo{
 				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
-				Default: source.Default, Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
+				Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,
 				LastSyncAt: lastSyncAt, LastSyncError: source.LastSyncError, Environments: []EnvInfo{},
 			}
 			for _, name := range ListEnvYamls(envsource.EnvsDir(OrbitDir(), source.Name)) {

@@ -2,58 +2,44 @@
 
 [English](./environment-sources.md) · [繁體中文](./environment-sources.zh-TW.md)
 
-An environment source distributes managed Orbit environments. Each source is
-either a Git repository or a persistent local directory containing `envs/`.
-It may bind one local application workspace shared by all its environments.
-Managed environments use `<source>/<environment>` identities throughout CLI
-JSON, daemon APIs, runtime state, and the dashboard. Different sources may
-contain the same short name. A bare name resolves only from the default source.
-Project `orbit.yaml` and explicit `-c <path>` configs remain independent.
+An environment source is a Git repository or local directory containing
+`envs/`. Add it once, then sync it whenever you want the latest environments.
+Managed environments use `<source>/<environment>` identities; bare names come
+from the first source. Project `orbit.yaml` and explicit `-c <path>` configs
+remain independent.
 
 ## Add sources
 
 ```sh
 orbit source add company \
-  --url https://github.com/example/company-environments.git \
-  --workspace /work/company \
-  --default
+  --url https://github.com/example/company-environments.git
 
 orbit source add env-dev \
-  --path /work/orbit-environments \
-  --workspace /work/company
+  --path /work/orbit-environments
 ```
 
 Without `--ref`, Git sync follows the repository default branch and reports
-the resolved branch and commit. Local sync includes uncommitted files. Source
-and workspace paths may be the same, but Orbit never infers one from the
-other. Removing a local source never changes its user-owned directory.
+the resolved branch and commit. Local sync includes uncommitted files. Removing
+a local source never changes its user-owned directory.
 
 ## Manage and synchronize
 
 ```sh
 orbit source list
-orbit source info company
 orbit source sync
 orbit source sync env-dev
 orbit source sync --all
-orbit source update company --ref release/2026.08
-orbit source update company --clear-ref
-orbit source update company --workspace /worktrees/company-pr-42
-orbit source update company --clear-workspace
-orbit source update company --default
 orbit source remove env-dev
 ```
 
-The normal command set is `add`, `list`/`info`, `sync`, `update`, and `remove`.
-The older `set-default`, `set-workspace`, and `clear-workspace` commands remain
-as deprecated compatibility aliases for one transition period. Metadata-only
-updates do not synchronize source content.
+The command set is `add`, `list`, `sync`, and `remove`. To change a
+source's location, remove it and add it again. Git and local sources use the
+same workflow.
 
 Sync validates a staged cache before replacing the current cache. Failures
 preserve the last valid environments and remain visible in source status.
 Previous cache versions remain in Orbit-owned storage. `sync --all` attempts
-every source and fails if any source fails. Only an update to the source that
-owns the active managed environment can require `orbit env apply`.
+every source and fails if any source fails.
 
 ## Select, inspect, and remove
 
@@ -73,8 +59,8 @@ switch or down even if a newer cache removes it.
 
 A source owning a running environment cannot be removed. Removing the source
 of a selected stopped environment requires confirmation or `--yes` and clears
-the selection. A default source cannot be removed while another source exists;
-set its replacement first. Orbit never guesses a replacement.
+the selection. When the first source is removed, Orbit automatically uses the
+next source for bare environment names.
 
 ## Initialization and migration
 
@@ -91,7 +77,7 @@ it preserved and recommends inspecting and synchronizing the migrated source.
 Legacy settings are removed only after the source and selection are saved.
 
 During the transition period, `orbit env sync` without repository-changing
-flags synchronizes the default source and prints a deprecation warning. Legacy
+flags synchronizes the first source and prints a deprecation warning. Legacy
 `--url`, `--path`, and `--ref` forms never mutate implicitly: they fail and
-return an exact `orbit source` replacement. No accepted flag is silently
+point to the explicit remove-and-add workflow. No accepted flag is silently
 dropped.

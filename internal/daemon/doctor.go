@@ -241,7 +241,7 @@ func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []Doct
 			if sourceName == "" {
 				sourceName = "<source>"
 			}
-			check.Hint = `run: orbit source update ` + sourceName + ` --workspace "$PWD"`
+			check.Hint = `remove source ` + sourceName + ` and add it again with --workspace "$PWD"`
 		} else if pathVariable != "" {
 			check.Hint = `run: orbit settings set-env ` + pathVariable + ` "$PWD"`
 		} else if unresolved {

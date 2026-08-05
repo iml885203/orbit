@@ -70,7 +70,7 @@ func TestRefreshFailurePreservesStoredLocationAndRollsBackActivatedCache(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(refreshed, true); err != nil {
+	if err := registry.Add(refreshed); err != nil {
 		t.Fatal(err)
 	}
 

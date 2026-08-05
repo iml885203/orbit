@@ -212,9 +212,6 @@ func runEnvList(_ *cobra.Command, _ []string) error {
 	if len(selection.Sources) > 0 {
 		for _, source := range selection.Sources {
 			labels := []string{source.Type}
-			if source.Default {
-				labels = append(labels, "Default")
-			}
 			fmt.Printf("%s  [%s]\n", source.Name, strings.Join(labels, "] ["))
 			fmt.Printf("Location: %s\n", source.Location)
 			if source.Workspace != "" {

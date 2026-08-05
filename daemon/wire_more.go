@@ -57,7 +57,6 @@ type EnvironmentSourceInfo struct {
 	Type          string     `json:"type"`
 	Location      string     `json:"location"`
 	Workspace     string     `json:"workspace,omitempty"`
-	Default       bool       `json:"default"`
 	Ref           string     `json:"ref,omitempty"`
 	ResolvedRef   string     `json:"resolved_ref,omitempty"`
 	Commit        string     `json:"commit,omitempty"`

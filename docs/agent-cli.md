@@ -268,11 +268,11 @@ returns `data.selection_required: true`, a `selection_message`, and exact
 `orbit init --yes --json` never invents a source workspace from the current
 directory. The field is omitted for self-contained environments. If a custom
 environment requires `${WORKSPACE_ROOT}` and no proven local workspace exists,
-init returns `service_working_directory_missing` with the sole action
-`orbit source update <source> --workspace "$PWD" --json`.
+init returns `service_working_directory_missing` and explains that the source
+must be removed and added again with `--workspace "$PWD"`.
 Other unresolved path variables preserve their name and lead to
 `orbit settings set-env <NAME> "$PWD" --json`; they never produce a
-source-workspace action.
+source-workspace instruction.
 
 When GitHub reports that an environment repository was not found, Orbit returns
 `env_repo_unavailable` without recommended actions. GitHub deliberately uses

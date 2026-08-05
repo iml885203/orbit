@@ -570,7 +570,7 @@ Env configs reference project directories via environment variables (e.g.
 default workspace location, set them with `orbit settings`:
 
 ```bash
-orbit source update <source> --workspace /path/to/workspace
+# For WORKSPACE_ROOT, remove the source and add it again with --workspace.
 orbit settings set-env API_ROOT /path/to/api
 orbit settings list                              # show current values
 ```

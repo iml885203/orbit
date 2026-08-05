@@ -177,11 +177,11 @@ dashboard 回報成目前專案所有。
 `orbit init --yes --json` 不會把 current directory 猜成
 source workspace。自給自足的 environment 會省略此欄位。若自訂
 environment 需要 `${WORKSPACE_ROOT}`，但沒有可證明的 local workspace，
-init 會回傳 `service_working_directory_missing`，且唯一 action 為
-`orbit source update <source> --workspace "$PWD" --json`。
+init 會回傳 `service_working_directory_missing`，並說明需移除 source，然後用
+`--workspace "$PWD"` 重新新增。
 其他未解析的 path variable 會保留自己的名稱，並指向
 `orbit settings set-env <NAME> "$PWD" --json`；不會產生 source workspace
-action。
+提示。
 
 當 GitHub 回覆 environment repo 不存在時，Orbit 會回傳
 `env_repo_unavailable`，且不提供 recommended actions。GitHub 對拼錯／不存在

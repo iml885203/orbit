@@ -12,17 +12,14 @@ import (
 )
 
 type sourceMutationRequest struct {
-	Action         string `json:"action"`
-	Name           string `json:"name"`
-	Type           string `json:"type,omitempty"`
-	URL            string `json:"url,omitempty"`
-	Path           string `json:"path,omitempty"`
-	Ref            string `json:"ref,omitempty"`
-	Workspace      string `json:"workspace,omitempty"`
-	Default        bool   `json:"default,omitempty"`
-	Confirmed      bool   `json:"confirmed,omitempty"`
-	ClearRef       bool   `json:"clear_ref,omitempty"`
-	ClearWorkspace bool   `json:"clear_workspace,omitempty"`
+	Action    string `json:"action"`
+	Name      string `json:"name"`
+	Type      string `json:"type,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Path      string `json:"path,omitempty"`
+	Ref       string `json:"ref,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+	Confirmed bool   `json:"confirmed,omitempty"`
 }
 
 func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
@@ -49,14 +46,6 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		err = syncEnvironmentSource(registry, request.Name)
 	case "sync_all":
 		err = syncAllEnvironmentSources(registry)
-	case "set_default":
-		err = registry.SetDefault(request.Name)
-	case "update":
-		err = updateEnvironmentSource(registry, request)
-	case "set_workspace":
-		err = setEnvironmentSourceWorkspace(registry, request.Name, request.Workspace)
-	case "clear_workspace":
-		err = setEnvironmentSourceWorkspace(registry, request.Name, "")
 	case "remove":
 		err = s.removeEnvironmentSource(registry, request)
 	case "ack_migration":
@@ -98,7 +87,7 @@ func addEnvironmentSource(registry *envsource.Registry, request sourceMutationRe
 		return err
 	}
 	source = refreshed
-	if err := registry.Add(source, request.Default); err != nil {
+	if err := registry.Add(source); err != nil {
 		_ = os.RemoveAll(envsource.SourceDir(OrbitDir(), source.Name))
 		return err
 	}
@@ -122,71 +111,6 @@ func syncEnvironmentSource(registry *envsource.Registry, name string) error {
 	}
 	_, _, err = envsource.Refresh(registry, source, OrbitDir(), false, true)
 	return err
-}
-
-func updateEnvironmentSource(registry *envsource.Registry, request sourceMutationRequest) error {
-	if request.Ref != "" && request.ClearRef {
-		return errors.New("ref and clear_ref are mutually exclusive")
-	}
-	if request.Workspace != "" && request.ClearWorkspace {
-		return errors.New("workspace and clear_workspace are mutually exclusive")
-	}
-	source, err := registry.Get(request.Name)
-	if err != nil {
-		return err
-	}
-	if request.Type != "" && request.Type != source.Type {
-		return errors.New("changing source type requires adding a new source")
-	}
-	if request.URL != "" {
-		if source.Type != envsource.TypeGit {
-			return errors.New("a local source cannot have a Git URL")
-		}
-		source.URL = request.URL
-	}
-	if request.Path != "" {
-		if source.Type != envsource.TypeLocal {
-			return errors.New("a Git source cannot have a local path")
-		}
-		source.Path, err = envsource.ValidateLocalSource(request.Path)
-		if err != nil {
-			return err
-		}
-	}
-	if request.ClearRef {
-		source.Ref = ""
-	} else if request.Ref != "" {
-		source.Ref = request.Ref
-	}
-	if request.ClearWorkspace {
-		source.Workspace = ""
-	} else if request.Workspace != "" {
-		source.Workspace, err = envsource.NormalizeExistingDirectory(request.Workspace)
-		if err != nil {
-			return err
-		}
-	}
-	if request.Default {
-		source.Default = true
-	}
-	contentChanged := request.URL != "" || request.Path != "" || request.Ref != "" || request.ClearRef
-	_, _, err = envsource.ApplyProposedUpdate(registry, source, OrbitDir(), contentChanged)
-	return err
-}
-
-func setEnvironmentSourceWorkspace(registry *envsource.Registry, name, workspace string) error {
-	source, err := registry.Get(name)
-	if err != nil {
-		return err
-	}
-	if workspace != "" {
-		workspace, err = envsource.NormalizeExistingDirectory(workspace)
-		if err != nil {
-			return err
-		}
-	}
-	source.Workspace = workspace
-	return registry.Replace(source)
 }
 
 func (s *Server) removeEnvironmentSource(registry *envsource.Registry, request sourceMutationRequest) error {

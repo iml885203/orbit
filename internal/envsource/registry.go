@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -31,7 +30,6 @@ type Source struct {
 	Path          string    `json:"path,omitempty"`
 	Ref           string    `json:"ref,omitempty"`
 	Workspace     string    `json:"workspace,omitempty"`
-	Default       bool      `json:"default,omitempty"`
 	ResolvedRef   string    `json:"resolved_ref,omitempty"`
 	Commit        string    `json:"commit,omitempty"`
 	LastSyncAt    time.Time `json:"last_sync_at,omitempty"`
@@ -91,7 +89,6 @@ func Load(path string) (*Registry, error) {
 	if err := registry.validateSnapshot(); err != nil {
 		return nil, err
 	}
-	registry.sort()
 	return registry, nil
 }
 
@@ -109,31 +106,22 @@ func (r *Registry) Get(name string) (Source, error) {
 	return Source{}, fmt.Errorf("%w: %s", ErrNotFound, name)
 }
 
-func (r *Registry) Default() (Source, error) {
-	for _, source := range r.Sources {
-		if source.Default {
-			return source, nil
-		}
+func (r *Registry) First() (Source, error) {
+	if len(r.Sources) == 0 {
+		return Source{}, ErrNotFound
 	}
-	return Source{}, ErrNotFound
+	return r.Sources[0], nil
 }
 
-func (r *Registry) Add(source Source, makeDefault bool) error {
+func (r *Registry) Add(source Source) error {
 	if err := source.Validate(); err != nil {
 		return err
 	}
 	if _, err := r.Get(source.Name); !errors.Is(err, ErrNotFound) {
 		return fmt.Errorf("environment source %q already exists", source.Name)
 	}
-	if len(r.Sources) == 0 || makeDefault {
-		r.clearDefault()
-		source.Default = true
-	} else {
-		source.Default = false
-	}
 	previous := append([]Source(nil), r.Sources...)
 	r.Sources = append(r.Sources, source)
-	r.sort()
 	if err := r.save(); err != nil {
 		r.Sources = previous
 		return err
@@ -142,29 +130,13 @@ func (r *Registry) Add(source Source, makeDefault bool) error {
 }
 
 func (r *Registry) Replace(source Source) error {
-	return r.replace(source, false)
-}
-
-// ReplaceExact persists the complete proposed source, including its default
-// status. Callers use it when a user submits one combined source update.
-func (r *Registry) ReplaceExact(source Source) error {
-	return r.replace(source, true)
-}
-
-func (r *Registry) replace(source Source, exactDefault bool) error {
 	if err := source.Validate(); err != nil {
 		return err
 	}
 	for i := range r.Sources {
 		if r.Sources[i].Name == source.Name {
 			previous := append([]Source(nil), r.Sources...)
-			if !exactDefault {
-				source.Default = r.Sources[i].Default
-			} else if source.Default {
-				r.clearDefault()
-			}
 			r.Sources[i] = source
-			r.sort()
 			if err := r.save(); err != nil {
 				r.Sources = previous
 				return err
@@ -175,28 +147,10 @@ func (r *Registry) replace(source Source, exactDefault bool) error {
 	return fmt.Errorf("%w: %s", ErrNotFound, source.Name)
 }
 
-func (r *Registry) SetDefault(name string) error {
-	if _, err := r.Get(name); err != nil {
-		return err
-	}
-	previous := append([]Source(nil), r.Sources...)
-	for i := range r.Sources {
-		r.Sources[i].Default = r.Sources[i].Name == name
-	}
-	if err := r.save(); err != nil {
-		r.Sources = previous
-		return err
-	}
-	return nil
-}
-
 func (r *Registry) Remove(name string) (Source, error) {
 	for i, source := range r.Sources {
 		if source.Name != name {
 			continue
-		}
-		if source.Default && len(r.Sources) > 1 {
-			return Source{}, fmt.Errorf("environment source %q is default; set another default before removing it", name)
 		}
 		previous := append([]Source(nil), r.Sources...)
 		r.Sources = append(r.Sources[:i], r.Sources[i+1:]...)
@@ -211,7 +165,6 @@ func (r *Registry) Remove(name string) (Source, error) {
 
 func (r *Registry) validateSnapshot() error {
 	seen := map[string]bool{}
-	defaults := 0
 	for _, source := range r.Sources {
 		if err := source.Validate(); err != nil {
 			return fmt.Errorf("invalid environment source: %w", err)
@@ -220,29 +173,8 @@ func (r *Registry) validateSnapshot() error {
 			return fmt.Errorf("duplicate environment source %q", source.Name)
 		}
 		seen[source.Name] = true
-		if source.Default {
-			defaults++
-		}
-	}
-	if len(r.Sources) > 0 && defaults != 1 {
-		return fmt.Errorf("environment source registry has %d defaults; want exactly one", defaults)
 	}
 	return nil
-}
-
-func (r *Registry) clearDefault() {
-	for i := range r.Sources {
-		r.Sources[i].Default = false
-	}
-}
-
-func (r *Registry) sort() {
-	sort.Slice(r.Sources, func(i, j int) bool {
-		if r.Sources[i].Default != r.Sources[j].Default {
-			return r.Sources[i].Default
-		}
-		return r.Sources[i].Name < r.Sources[j].Name
-	})
 }
 
 func (r *Registry) save() error {

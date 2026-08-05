@@ -26,7 +26,7 @@ func (r *Registry) ResolveManagedEnvironment(orbitHome, requested string) (Manag
 			source, err = r.Get(sourceName)
 		}
 	} else {
-		source, err = r.Default()
+		source, err = r.First()
 		environment = strings.TrimSuffix(requested, filepath.Ext(requested))
 	}
 	if err != nil {

@@ -295,7 +295,6 @@ export interface EnvironmentSourceInfo {
   type: string;
   location: string;
   workspace?: string;
-  default: boolean;
   ref?: string;
   resolved_ref?: string;
   commit?: string;

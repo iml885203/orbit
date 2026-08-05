@@ -105,7 +105,7 @@ func LoadMigratingLegacyWithResult(orbitHome string, legacy LegacyMigration) (*R
 			return nil, nil, fmt.Errorf("migrate cached environments: %w", err)
 		}
 	}
-	if err := registry.Add(source, true); err != nil {
+	if err := registry.Add(source); err != nil {
 		_ = os.RemoveAll(SourceDir(orbitHome, source.Name))
 		return nil, nil, fmt.Errorf("migrate environment source: %w", err)
 	}

@@ -7,36 +7,32 @@ import (
 	"testing"
 )
 
-func TestRegistryMaintainsExactlyOneExplicitDefault(t *testing.T) {
+func TestRegistryUsesTheFirstSourceForBareNames(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sources.json")
 	registry, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(Source{Name: "team", Type: TypeGit, URL: "https://example.com/team.git"}, false); err != nil {
+	if err := registry.Add(Source{Name: "team", Type: TypeGit, URL: "https://example.com/team.git"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(Source{Name: "local", Type: TypeLocal, Path: "/work/envs"}, false); err != nil {
+	if err := registry.Add(Source{Name: "local", Type: TypeLocal, Path: "/work/envs"}); err != nil {
 		t.Fatal(err)
 	}
 
-	first, err := registry.Default()
+	first, err := registry.First()
 	if err != nil || first.Name != "team" {
-		t.Fatalf("default = %#v, %v", first, err)
+		t.Fatalf("first = %#v, %v", first, err)
 	}
-	if err := registry.SetDefault("local"); err != nil {
-		t.Fatal(err)
-	}
-
 	reloaded, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := reloaded.Default()
-	if err != nil || got.Name != "local" {
-		t.Fatalf("reloaded default = %#v, %v", got, err)
+	got, err := reloaded.First()
+	if err != nil || got.Name != "team" {
+		t.Fatalf("reloaded first = %#v, %v", got, err)
 	}
-	if listed := reloaded.List(); len(listed) != 2 || listed[0].Name != "local" || !listed[0].Default {
+	if listed := reloaded.List(); len(listed) != 2 || listed[0].Name != "team" {
 		t.Fatalf("ordered sources = %#v", listed)
 	}
 }
@@ -50,7 +46,7 @@ func TestRemoveOwnedRollsBackCacheAndSelectionWhenRegistryCommitFails(t *testing
 		t.Fatal(err)
 	}
 	source := Source{Name: "team", Type: TypeLocal, Path: t.TempDir()}
-	if err := registry.Add(source, true); err != nil {
+	if err := registry.Add(source); err != nil {
 		t.Fatal(err)
 	}
 	cache := SourceDir(orbitHome, source.Name)
@@ -93,26 +89,30 @@ func TestRegistryRejectsNamesThatCouldEscapeOwnedStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"../team", ".", "..", "team/dev", `team\dev`, ""} {
-		err := registry.Add(Source{Name: name, Type: TypeLocal, Path: "/work/envs"}, false)
+		err := registry.Add(Source{Name: name, Type: TypeLocal, Path: "/work/envs"})
 		if err == nil {
 			t.Fatalf("Add(%q) succeeded", name)
 		}
 	}
 }
 
-func TestRegistryRemovalNeverGuessesAnotherDefault(t *testing.T) {
+func TestRegistryRemovalPromotesTheNextSource(t *testing.T) {
 	registry, err := Load(filepath.Join(t.TempDir(), "sources.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(Source{Name: "one", Type: TypeLocal, Path: "/one"}, false); err != nil {
+	if err := registry.Add(Source{Name: "one", Type: TypeLocal, Path: "/one"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(Source{Name: "two", Type: TypeLocal, Path: "/two"}, false); err != nil {
+	if err := registry.Add(Source{Name: "two", Type: TypeLocal, Path: "/two"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := registry.Remove("one"); err == nil {
-		t.Fatal("removing the default with another source should preserve the registry invariant")
+	if _, err := registry.Remove("one"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := registry.First()
+	if err != nil || got.Name != "two" {
+		t.Fatalf("first after removal = %#v, %v", got, err)
 	}
 	if _, err := registry.Remove("missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing removal error = %v", err)

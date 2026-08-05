@@ -16,10 +16,10 @@ func TestManagedEnvironmentResolutionUsesQualifiedIdentityOrDefaultOnly(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/company.git"}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/company.git"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "env-dev", Type: envsource.TypeLocal, Path: t.TempDir()}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "env-dev", Type: envsource.TypeLocal, Path: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, source := range []string{"company", "env-dev"} {
@@ -37,7 +37,7 @@ func TestManagedEnvironmentResolutionUsesQualifiedIdentityOrDefaultOnly(t *testi
 		t.Fatal(err)
 	}
 	if want := filepath.Join(envsource.EnvsDir(home, "company"), "e2e.yaml"); bare != want {
-		t.Fatalf("bare environment = %q, want default source %q", bare, want)
+		t.Fatalf("bare environment = %q, want first source %q", bare, want)
 	}
 	qualified, err := resolveEnvArg("env-dev/e2e")
 	if err != nil {
@@ -55,7 +55,7 @@ func TestEnvironmentSelectionPreservesQualifiedUnavailableIdentity(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/company.git"}, false); err != nil {
+	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/company.git"}); err != nil {
 		t.Fatal(err)
 	}
 	selected := filepath.Join(envsource.EnvsDir(home, "company"), "removed.yaml")
@@ -107,7 +107,7 @@ func TestLegacySingleSourceMigratesOfflineWithSelectionAndWorkspace(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := registry.Default()
+	source, err := registry.First()
 	if err != nil {
 		t.Fatal(err)
 	}

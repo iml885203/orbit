@@ -2,51 +2,37 @@
 
 [English](./environment-sources.md) · [繁體中文](./environment-sources.zh-TW.md)
 
-Environment source 用來散布 Orbit 管理的 environments。每個 source 是含有
-`envs/` 的 Git repository 或持久化本機目錄，也可以綁定一個由全部
-environments 共用的 application workspace。受管理 environment 在 CLI JSON、
-daemon API、runtime state 與 dashboard 都使用 `<source>/<environment>` 身分。
-不同 sources 可以有相同短名稱；裸名稱只從 default source 解析。Project
-`orbit.yaml` 與明確 `-c <path>` config 仍然獨立。
+Environment source 是含有 `envs/` 的 Git repository 或本機目錄。只需新增
+一次，之後想取得最新 environments 時執行同步。受管理 environment 使用
+`<source>/<environment>` 身分；裸名稱來自第一個 source。Project `orbit.yaml`
+與明確 `-c <path>` config 仍然獨立。
 
 ## 新增 sources
 
 ```sh
-orbit source add company --url https://github.com/example/company-environments.git \
-  --workspace /work/company --default
-orbit source add env-dev --path /work/orbit-environments \
-  --workspace /work/company
+orbit source add company --url https://github.com/example/company-environments.git
+orbit source add env-dev --path /work/orbit-environments
 ```
 
 沒有 `--ref` 時會追蹤 repository default branch，並回報解析後的 branch 與
-commit。本機同步包含尚未 commit 的檔案。Source 與 workspace 可為相同路徑，
-但 Orbit 不會互相推論；移除 local source 不會變更使用者目錄。
+commit。本機同步包含尚未 commit 的檔案；移除 local source 不會變更使用者目錄。
 
 ## 管理與同步
 
 ```sh
 orbit source list
-orbit source info company
 orbit source sync
 orbit source sync env-dev
 orbit source sync --all
-orbit source update company --ref release/2026.08
-orbit source update company --clear-ref
-orbit source update company --workspace /worktrees/company-pr-42
-orbit source update company --clear-workspace
-orbit source update company --default
 orbit source remove env-dev
 ```
 
-一般流程只需要 `add`、`list`/`info`、`sync`、`update` 與 `remove`。
-舊的 `set-default`、`set-workspace`、`clear-workspace` 會在一個遷移週期內
-保留為 deprecated compatibility aliases。只修改 metadata 不會同步 source
-內容。
+指令只有 `add`、`list`、`sync` 與 `remove`。若要更換 source 位置，
+移除後重新新增即可；Git 與本機 source 使用同一套流程。
 
 同步會先驗證 staged cache，再替換 current cache。失敗時保留最後有效的
 environments，錯誤會留在 source 狀態；舊 cache versions 保存在 Orbit 管理的
-空間。`sync --all` 會嘗試全部 sources，任一失敗就以失敗結束。只有 active
-managed environment 所屬 source 的更新可能需要 `orbit env apply`。
+空間。`sync --all` 會嘗試全部 sources，任一失敗就以失敗結束。
 
 ## 選擇、檢查與移除
 
@@ -64,8 +50,8 @@ identity 時才顯示觀察值。同步移除 selected、stopped environment 時
 直到 switch 或 down。
 
 不能移除擁有 running environment 的 source。移除 selected、stopped
-environment 所屬 source 需要確認或 `--yes`，並清除 selection。仍有其他
-source 時必須先指定新的 default；Orbit 不會猜測替代項目。
+environment 所屬 source 需要確認或 `--yes`，並清除 selection。移除第一個
+source 時，Orbit 會自動使用下一個 source 解析裸 environment 名稱。
 
 ## 初始化與遷移
 
@@ -80,7 +66,7 @@ orbit init --source env-dev --path /work/orbit-environments \
 無網路時一次遷移到 `default`。Orbit 會回報保留了哪些狀態，並建議檢查及同步
 遷移後的 source。Source 與 selection 成功儲存後才移除舊設定。
 
-遷移期間，不帶 repository 變更 flags 的 `orbit env sync` 仍會同步 default
+遷移期間，不帶 repository 變更 flags 的 `orbit env sync` 仍會同步第一個
 source，並顯示 deprecated 提示。舊的 `--url`、`--path`、`--ref` 不會隱含修改
-source；它們會失敗並提供精確的 `orbit source` 替代指令，且不會靜默忽略任何
-已接受的 flag。
+source；它們會失敗並指向明確的移除後重新新增流程，且不會靜默忽略任何已接受
+的 flag。

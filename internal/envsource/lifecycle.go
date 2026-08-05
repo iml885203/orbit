@@ -49,7 +49,7 @@ func Refresh(registry *Registry, source Source, orbitHome string, dryRun, persis
 	source.LastSyncError = ""
 	source.URL = envsync.RedactURL(source.URL)
 	if persist {
-		if err := registry.ReplaceExact(source); err != nil {
+		if err := registry.Replace(source); err != nil {
 			if rollbackErr := rollbackActivatedCache(orbitHome, source.Name, versionsBefore); rollbackErr != nil {
 				return source, result, errors.Join(err, rollbackErr)
 			}
@@ -57,19 +57,6 @@ func Refresh(registry *Registry, source Source, orbitHome string, dryRun, persis
 		}
 	}
 	return source, result, nil
-}
-
-// ApplyProposedUpdate commits one complete source edit. Content edits validate
-// and activate the proposed source before one registry write; metadata-only
-// edits do not access the source.
-func ApplyProposedUpdate(registry *Registry, source Source, orbitHome string, contentChanged bool) (Source, SyncResult, error) {
-	if contentChanged {
-		return Refresh(registry, source, orbitHome, false, true)
-	}
-	if err := registry.ReplaceExact(source); err != nil {
-		return source, SyncResult{}, err
-	}
-	return source, SyncResult{}, nil
 }
 
 func sourceVersions(orbitHome, name string) map[string]bool {

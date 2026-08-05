@@ -35,7 +35,7 @@ describe('EnvSwitcher', () => {
         running: false,
         managed_selection: { identity: 'default/development', name: 'development', path: '/envs/development.yaml', active: true },
       },
-      sources: [{ name: 'default', type: 'git', location: 'https://example.com/envs.git', default: true, environments: [
+      sources: [{ name: 'default', type: 'git', location: 'https://example.com/envs.git', environments: [
         { identity: 'default/development', name: 'development', path: '/envs/development.yaml', selected: true, running: false },
         { identity: 'default/example', name: 'example', path: '/envs/example.yaml', selected: false, running: false },
       ] }],

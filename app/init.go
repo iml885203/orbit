@@ -169,10 +169,10 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	var configuredDefault *envsource.Source
+	var configuredFirst *envsource.Source
 	if initSource == "" && initEnvRepo == "" && initPath == "" && initEnvRef == "" {
-		if existing, defaultErr := configuredRegistry.Default(); defaultErr == nil {
-			configuredDefault = &existing
+		if existing, firstErr := configuredRegistry.First(); firstErr == nil {
+			configuredFirst = &existing
 		}
 	}
 
@@ -199,9 +199,9 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		repoRef = initEnvRef
 		explicit = true
 	}
-	if configuredDefault != nil {
-		repoURL = configuredDefault.URL
-		repoRef = configuredDefault.Ref
+	if configuredFirst != nil {
+		repoURL = configuredFirst.URL
+		repoRef = configuredFirst.Ref
 		explicit = true
 	}
 	defaultQuickstart := !explicit &&
@@ -221,8 +221,8 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		sourceName = "default"
 	}
 	source := envsource.Source{Name: sourceName, Type: envsource.TypeGit, URL: repoURL, Ref: repoRef}
-	if configuredDefault != nil {
-		source = *configuredDefault
+	if configuredFirst != nil {
+		source = *configuredFirst
 		sourceName = source.Name
 	}
 	if initPath != "" {
@@ -293,7 +293,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			result.SyncedFiles = syncRes.Written
 			result.EnvRepoCommit = syncRes.Commit
 			if !persist {
-				if addErr := registry.Add(source, len(registry.List()) == 0); addErr != nil {
+				if addErr := registry.Add(source); addErr != nil {
 					_ = os.RemoveAll(envsource.SourceDir(daemon.OrbitDir(), source.Name))
 					return addErr
 				}

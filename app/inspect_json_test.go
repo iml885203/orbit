@@ -402,9 +402,9 @@ func TestLocalInspectEnvironmentContextUsesQualifiedManagedIdentity(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index, name := range []string{"company", "personal"} {
+	for _, name := range []string{"company", "personal"} {
 		local := t.TempDir()
-		if err := registry.Add(envsource.Source{Name: name, Type: envsource.TypeLocal, Path: local}, index == 0); err != nil {
+		if err := registry.Add(envsource.Source{Name: name, Type: envsource.TypeLocal, Path: local}); err != nil {
 			t.Fatal(err)
 		}
 		path := filepath.Join(envsource.EnvsDir(home, name), "e2e.yaml")

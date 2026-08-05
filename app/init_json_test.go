@@ -17,7 +17,7 @@ import (
 	"github.com/iml885203/orbit/internal/envsync"
 )
 
-func TestInitReusesExistingDefaultSource(t *testing.T) {
+func TestInitReusesExistingFirstSource(t *testing.T) {
 	if os.Getenv("ORBIT_INIT_EXISTING_SOURCE_HELPER") == "1" {
 		cli.JSONOutput = true
 		initYes = true
@@ -41,10 +41,10 @@ func TestInitReusesExistingDefaultSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(envsource.Source{Name: "local-team", Type: envsource.TypeLocal, Path: local}, true); err != nil {
+	if err := registry.Add(envsource.Source{Name: "local-team", Type: envsource.TypeLocal, Path: local}); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestInitReusesExistingDefaultSource$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInitReusesExistingFirstSource$")
 	cmd.Env = append(os.Environ(), "ORBIT_INIT_EXISTING_SOURCE_HELPER=1", "ORBIT_HOME="+orbitHome)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -52,7 +52,7 @@ func TestInitReusesExistingDefaultSource(t *testing.T) {
 		t.Fatalf("helper failed: %v\nstderr:\n%s\nstdout:\n%s", err, stderr.String(), stdout.String())
 	}
 	if strings.Contains(stdout.String(), "invalid.example") || !strings.Contains(stdout.String(), "local-team") {
-		t.Fatalf("init replaced existing default source: %s", stdout.String())
+		t.Fatalf("init replaced existing first source: %s", stdout.String())
 	}
 }
 
