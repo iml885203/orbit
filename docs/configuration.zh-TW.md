@@ -106,6 +106,7 @@ settings:
   shutdown_timeout: 30s
   health_check_interval: 5s
   docker_poll_interval: 2s
+  image_pull_concurrency: 0
 ```
 
 | Field | Type | Default | 說明 |
@@ -113,11 +114,17 @@ settings:
 | `shutdown_timeout` | duration | `30s` | graceful stop 最多等多久，超過就 SIGKILL |
 | `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` / Docker `healthcheck` probe 多久跑一次 |
 | `docker_poll_interval` | duration | `2s` | container poller 多久呼叫一次 `docker inspect` |
+| `image_pull_concurrency` | int | `0` | 同時拉取不同 Docker image 的上限；`0` 維持無上限平行拉取。同一 image 與 platform 的並行請求一律共用一次 pull |
 | `health_check.timeout` | duration | `5s` | 當 `health_check` 沒指定 `timeout` 時，每次 probe 套用的預設逾時 |
 | `health_check.retries` | int | `12` | `health_check` 未指定時套用的啟動重試次數（以預設 5s interval 計約 1 分鐘）。預算用盡後 Orbit 仍會每 10s 探測，資源恢復時自動回到 healthy |
 | `health_check.failure_threshold` | int | `3` | healthy 資源連續幾次 runtime 探測失敗後才轉為 degraded；一次成功即可恢復。`log` 是僅供 readiness 的一次性檢查，不會持續監測 |
 
 Duration 字串使用 Go 格式：`500ms`、`10s`、`2m`、`1h30m`。
+
+Pull 上限只影響 image 下載與解壓縮的並行數；image inspect、container 建立、
+health check 與 host process 啟動仍彼此獨立。每個 container 在自己的 image ready
+後就會啟動，不必等待環境內所有 image。Docker storage driver 無法穩定處理並行
+解壓縮時可設為 `1`。
 
 ## `tracing`
 

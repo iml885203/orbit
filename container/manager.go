@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/netip"
@@ -36,9 +37,10 @@ const (
 
 // Manager handles Docker container lifecycle.
 type Manager struct {
-	cli       *client.Client
-	namespace string
-	network   string
+	cli        *client.Client
+	namespace  string
+	network    string
+	imagePulls *imagePullCoordinator
 
 	// OnOutput is called for container log lines.
 	OnOutput func(name string, line string)
@@ -68,7 +70,16 @@ func NewManager(namespace string) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connecting to Docker: %w", err)
 	}
-	return &Manager{cli: cli, namespace: namespace, network: NetworkName(namespace)}, nil
+	return &Manager{
+		cli:        cli,
+		namespace:  namespace,
+		network:    NetworkName(namespace),
+		imagePulls: newImagePullCoordinator(),
+	}, nil
+}
+
+func (m *Manager) SetImagePullConcurrency(limit int) {
+	m.imagePulls.SetLimit(limit)
 }
 
 func NetworkName(namespace string) string {
@@ -338,22 +349,67 @@ func (m *Manager) ensureImageAvailable(ctx context.Context, name string, cfg *co
 		}
 	}
 
-	m.narrate(name, "pulling image "+cfg.Image)
-	pullOpts := client.ImagePullOptions{}
-	if cfg.Platform != "" {
-		parts := splitPlatform(cfg.Platform)
-		pullOpts.Platforms = []ocispec.Platform{{OS: parts[0], Architecture: parts[1]}}
+	key := newImagePullKey(cfg.Image, cfg.Platform)
+	pullErr := m.imagePulls.Do(ctx, key, imagePullHooks{
+		Queued:  func() { m.narrate(name, "queued for image pull "+imageDescription(cfg.Image, cfg.Platform)) },
+		Waiting: func() { m.narrate(name, "waiting for in-flight pull "+imageDescription(cfg.Image, cfg.Platform)) },
+	}, func(pullCtx context.Context) error {
+		m.narrate(name, "pulling image "+imageDescription(cfg.Image, cfg.Platform))
+		pullOpts := client.ImagePullOptions{}
+		if cfg.Platform != "" {
+			parts := splitPlatform(cfg.Platform)
+			pullOpts.Platforms = []ocispec.Platform{{OS: parts[0], Architecture: parts[1]}}
+		}
+		if auth := getRegistryAuth(cfg.Image); auth != "" {
+			pullOpts.RegistryAuth = auth
+		}
+		reader, err := m.cli.ImagePull(pullCtx, cfg.Image, pullOpts)
+		if err != nil {
+			return err
+		}
+		if err := consumeImagePullResponse(reader); err != nil {
+			_ = reader.Close()
+			return fmt.Errorf("reading pull response: %w", err)
+		}
+		_ = reader.Close()
+		return nil
+	})
+	if pullErr != nil {
+		return fmt.Errorf("pulling image %s: %w", imageDescription(cfg.Image, cfg.Platform), pullErr)
 	}
-	if auth := getRegistryAuth(cfg.Image); auth != "" {
-		pullOpts.RegistryAuth = auth
-	}
-	reader, err := m.cli.ImagePull(ctx, cfg.Image, pullOpts)
+	exists, err := m.imageExists(ctx, cfg.Image)
 	if err != nil {
-		return fmt.Errorf("pulling image %s: %w", cfg.Image, err)
+		return fmt.Errorf("verifying pulled image %s: %w", imageDescription(cfg.Image, cfg.Platform), err)
 	}
-	_, _ = io.Copy(io.Discard, reader)
-	_ = reader.Close()
+	if !exists {
+		return fmt.Errorf("verifying pulled image %s: image is not available after pull", imageDescription(cfg.Image, cfg.Platform))
+	}
+	m.narrate(name, "image ready "+imageDescription(cfg.Image, cfg.Platform))
 	return nil
+}
+
+func consumeImagePullResponse(reader io.Reader) error {
+	decoder := json.NewDecoder(reader)
+	for {
+		var message struct {
+			Error       string `json:"error"`
+			ErrorDetail struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+		}
+		if err := decoder.Decode(&message); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		if message.ErrorDetail.Message != "" {
+			return errors.New(message.ErrorDetail.Message)
+		}
+		if message.Error != "" {
+			return errors.New(message.Error)
+		}
+	}
 }
 
 func (m *Manager) imageExists(ctx context.Context, imageName string) (bool, error) {

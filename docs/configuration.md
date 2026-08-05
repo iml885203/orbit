@@ -110,6 +110,7 @@ settings:
   shutdown_timeout: 30s
   health_check_interval: 5s
   docker_poll_interval: 2s
+  image_pull_concurrency: 0
 ```
 
 | Field | Type | Default | Description |
@@ -117,11 +118,18 @@ settings:
 | `shutdown_timeout` | duration | `30s` | Max time to wait for graceful stop before SIGKILL |
 | `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` / Docker `healthcheck` probes |
 | `docker_poll_interval` | duration | `2s` | How often the container poller calls `docker inspect` |
+| `image_pull_concurrency` | int | `0` | Maximum distinct Docker image pulls at once; `0` keeps unlimited parallel pulls. Concurrent requests for the same image and platform always share one pull |
 | `health_check.timeout` | duration | `5s` | Per-probe timeout applied when a `health_check` omits `timeout` |
 | `health_check.retries` | int | `12` | Startup retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). After the budget is spent, Orbit keeps probing every 10s and returns the resource to healthy when it recovers |
 | `health_check.failure_threshold` | int | `3` | Consecutive runtime probe failures required before a healthy resource becomes degraded. One successful probe recovers it. `log` checks are readiness-only and are not continuously monitored |
 
 Duration strings accept Go format: `500ms`, `10s`, `2m`, `1h30m`.
+
+The pull limit changes only image download and extraction concurrency. Image
+inspection, container creation, health checks, and host-process startup remain
+independent. Each container starts as soon as its own image is ready; Orbit does
+not wait for every image in the environment. Use `1` for Docker daemons whose
+storage driver performs poorly under concurrent extraction.
 
 ## `tracing`
 

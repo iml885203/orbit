@@ -78,6 +78,7 @@ func NewApp(
 	if err := containerMgr.EnsureNetwork(context.Background()); err != nil {
 		slog.Warn("failed to create Docker network", "component", "orbit", "err", err)
 	}
+	containerMgr.SetImagePullConcurrency(cfg.Settings.ImagePullConcurrency)
 
 	holder := config.NewHolder(cfg)
 	processMgr := process.NewManager()

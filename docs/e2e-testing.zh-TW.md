@@ -60,3 +60,7 @@ ports。宣告 ports 是 preferences；JSON response 會回報解析後的 endpo
 harness 必須使用它們，不能假設 environment 檔裡的 ports。整次執行的每個 Orbit
 command 都要維持相同 `--instance` target，並在 suite 結束後清理。Ownership model
 見[隔離的 runtime instances](instances.zh-TW.md)。
+
+若 CI 的 Docker daemon 或 storage driver 無法穩定處理並行 image 解壓縮，請使用
+[設定](configuration.zh-TW.md#settings)中的 pull 併發上限，而不必另外維護 image
+預拉清單。

@@ -22,6 +22,9 @@ func Validate(cfg *Config) error {
 	if cfg.Settings.DockerPollInterval < 0 {
 		errs = append(errs, "settings.docker_poll_interval must be positive")
 	}
+	if cfg.Settings.ImagePullConcurrency < 0 {
+		errs = append(errs, "settings.image_pull_concurrency must be zero or positive")
+	}
 
 	known := make(map[string]bool)
 	for name := range cfg.Containers {
