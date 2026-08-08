@@ -64,6 +64,14 @@ func containsInOrder(got *[]string, want []string) bool {
 	return i == len(want)
 }
 
+// bufferedPreStartGrace bounds the deadlock a buffered implementation would
+// otherwise cause: it delivers no output until the script exits, and the script
+// waits on a gate that only delivered output opens. Only a failing
+// implementation ever waits this long — a streaming one opens the gate the
+// moment its first line lands — so this is generous on purpose. It replaces a
+// 10s bound that doubled as the assertion and flaked on loaded CI runners.
+const bufferedPreStartGrace = 60 * time.Second
+
 func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 	t.Parallel()
 	skipOnWindows(t)
@@ -72,15 +80,32 @@ func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 	var mu sync.Mutex
 	var got []string
 	var actions []string
-	firstOutput := make(chan struct{})
-	var signalFirstOutput sync.Once
+
+	gate := filepath.Join(t.TempDir(), "continue")
+	openGate := func() {
+		if err := os.WriteFile(gate, nil, 0o644); err != nil {
+			t.Errorf("open pre_start gate: %v", err)
+		}
+	}
+	// Whoever opens the gate first decides the verdict, and sync.Once picks
+	// exactly one winner. Streaming means the callback opens it; buffering
+	// means the grace timer does, leaving streamedWhileRunning unclosed. The
+	// test then asserts an ordering that already happened rather than racing a
+	// deadline.
+	var gateOpened sync.Once
+	streamedWhileRunning := make(chan struct{})
+
 	m.OnOutput = func(name, line string) {
 		mu.Lock()
 		got = append(got, line)
 		mu.Unlock()
-		if line == "first" {
-			signalFirstOutput.Do(func() { close(firstOutput) })
+		if line != "first" {
+			return
 		}
+		gateOpened.Do(func() {
+			close(streamedWhileRunning)
+			openGate()
+		})
 	}
 	m.OnAction = func(name, message string) {
 		mu.Lock()
@@ -88,9 +113,11 @@ func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 		actions = append(actions, message)
 	}
 
-	gate := filepath.Join(t.TempDir(), "continue")
 	first := writePreStartScript(t, "echo first\nwhile [ ! -f \""+gate+"\" ]; do sleep 0.01; done\necho second")
 	second := writePreStartScript(t, "echo third")
+	// Never leave `sleep 30` behind for the rest of the package to compete
+	// with, however this test exits.
+	t.Cleanup(func() { _ = m.Stop("svc", time.Second) })
 	started := make(chan error, 1)
 	go func() {
 		started <- m.Start(
@@ -104,16 +131,16 @@ func TestPreStartStreamsOneCoherentLifecycle(t *testing.T) {
 		)
 	}()
 
-	select {
-	case <-firstOutput:
-	case <-time.After(10 * time.Second):
-		t.Fatal("first pre_start output was buffered until command completion")
-	}
-	if err := os.WriteFile(gate, nil, 0o644); err != nil {
-		t.Fatalf("release pre_start gate: %v", err)
-	}
+	grace := time.AfterFunc(bufferedPreStartGrace, func() { gateOpened.Do(openGate) })
+	defer grace.Stop()
+
 	if err := <-started; err != nil {
 		t.Fatalf("Start: %v", err)
+	}
+	select {
+	case <-streamedWhileRunning:
+	default:
+		t.Fatal("pre_start output was buffered until the script exited")
 	}
 	if err := m.Stop("svc", 200*time.Millisecond); err != nil {
 		t.Fatalf("Stop: %v", err)
