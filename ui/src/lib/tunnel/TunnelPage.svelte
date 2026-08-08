@@ -8,11 +8,22 @@
   let tunnels = $state<TunnelView[]>([])
   let gateway = $state('')
   let loaded = $state(false)
-  // A failed poll must not read as "no tunnels": the empty state invites the
-  // user to create a route, which would fail for the same reason the poll did.
   let reachable = $state(true)
   const availability = $derived(
     devStore.devMeta === null ? 'loading' : tunnelHidden() ? 'unavailable' : 'available',
+  )
+
+  // One state, four mutually exclusive situations. Rendering off `loaded` and
+  // `reachable` separately let a first failed poll claim both "showing the
+  // last known state" and "no state yet" in the same view.
+  //   unreachable — the poll failed and there is nothing to fall back on
+  //   stale       — the poll failed but earlier data is still on screen
+  //   loading     — no data yet, nothing has failed
+  //   ready       — data is current
+  // A failed poll must never render as `ready` with an empty list: that empty
+  // state invites the user to create a route, which fails the same way.
+  const view = $derived(
+    reachable ? (loaded ? 'ready' : 'loading') : loaded ? 'stale' : 'unreachable',
   )
 
   const healthy = $derived(tunnels.filter(t => t.status === 'healthy').length)
@@ -71,17 +82,22 @@
     {/if}
   </header>
 
-  {#if !reachable}
+  {#if view === 'stale' || view === 'unreachable'}
     <div class="page-notice" role="status">
       <strong>Can't reach the tunnel service.</strong>
-      <p>Showing the last known state. Run <code>orbit status</code> to check the environment.</p>
+      <p>
+        {view === 'stale' ? 'Showing the last known state.' : 'No tunnel state has loaded yet.'}
+        Run <code>orbit status</code> to check the environment.
+      </p>
     </div>
   {/if}
 
-  {#if loaded}<TunnelClaimForm onClaimed={refresh} />{/if}
+  {#if view === 'ready' || view === 'stale'}<TunnelClaimForm onClaimed={refresh} />{/if}
 
-  {#if !loaded}
-    <p class="hint">{reachable ? 'Loading…' : 'No tunnel state available yet.'}</p>
+  {#if view === 'loading'}
+    <p class="hint">Loading…</p>
+  {:else if view === 'unreachable'}
+    <!-- Nothing to show, and the empty state would be a lie. -->
   {:else if tunnels.length === 0}
     <div class="empty">
       <div class="empty-wire" aria-hidden="true">

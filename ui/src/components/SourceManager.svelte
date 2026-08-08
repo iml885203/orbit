@@ -182,7 +182,7 @@
   fieldset label.chosen { border-color: var(--blue); }
   fieldset label span { grid-column: 2; }
   label { display: grid; gap: var(--space-1); color: var(--dim); font-size: var(--text-xs); }
-  label > span { color: var(--muted); }
+  label > span { color: var(--dim); }
   input { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--fg); padding: var(--space-2); }
   small, .form-outcome { color: var(--dim); font-size: var(--text-xs); }
   .source-list { display: grid; gap: var(--space-2); max-height: 460px; overflow-y: auto; }

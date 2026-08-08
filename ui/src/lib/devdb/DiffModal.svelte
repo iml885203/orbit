@@ -202,7 +202,7 @@
   .count.create { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
   .count.alter { background: color-mix(in srgb, var(--yellow) 18%, transparent); color: var(--yellow); }
   .count.drop { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
-  .fast-note { margin: 0; color: var(--text-tertiary, var(--dim)); font-size: var(--text-sm); }
+  .fast-note { margin: 0; color: var(--dim); font-size: var(--text-sm); }
   .fast-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
   .fast-actions .primary-action { margin-top: 0; }
 
