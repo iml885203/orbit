@@ -29,7 +29,9 @@ Freeze a preview batch in this order:
 
 1. Complete the related implementation and its strongest practical journey.
 2. Review the combined user-visible difference from the previous release.
-3. Choose the next version, update both plugin manifests, and prepare the
+3. Choose the next version, update both plugin manifests, point
+   `EnvRepoRef` in `cmd/orbit/extensions.go` at the upcoming demo tag so
+   `orbit init` ships the demo paired with this release, and prepare that
    paired demo tag. Its `.orbit-release.json` records the release version and
    exact Orbit candidate commit that the demo journey built. Do not create the
    Orbit tag yet.

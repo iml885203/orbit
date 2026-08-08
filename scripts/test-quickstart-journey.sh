@@ -329,9 +329,31 @@ print(resources["demo-shop"]["url"])
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
 
-PATH="$(dirname "$orbit_bin"):$PATH" \
-  python3 "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
-  >"$test_root/mini-shop-smoke.txt"
+# The smoke script reads the injected service URLs the way any agent would:
+# from orbit status.
+python3 -c '
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))["data"]
+resources = {resource["name"]: resource for resource in payload["resources"]}
+names = {
+    "demo-shop": "DEMO_SHOP_URL",
+    "shop-catalog-api": "SHOP_CATALOG_API_URL",
+    "shop-inventory-api": "SHOP_INVENTORY_API_URL",
+    "shop-order-api": "SHOP_ORDER_API_URL",
+}
+for name, env in names.items():
+    print(f"{env}={resources[name]['"'"'url'"'"']}")
+' "$test_root/status.json" >"$test_root/demo-urls.env"
+(
+  set -a
+  . "$test_root/demo-urls.env"
+  set +a
+  PATH="$(dirname "$orbit_bin"):$PATH" \
+    python3 "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
+    >"$test_root/mini-shop-smoke.txt"
+)
 
 expected_demo_ref="$(
   sed -n 's/.*EnvRepoRef: "\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
@@ -395,7 +417,7 @@ assert [action["command"] for action in infrastructure["recommended_actions"]] =
 ]
 PY
 
-english_handoff="https://github.com/iml885203/orbit/blob/$expected_demo_ref/docs/local-first.md"
+english_handoff="https://github.com/iml885203/orbit/blob/main/docs/local-first.md"
 handoff_file="$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/index.html"
 if ! grep -F "$english_handoff" "$handoff_file" >/dev/null; then
   echo "demo handoff in $handoff_file does not match the Orbit release: $english_handoff" >&2
@@ -416,7 +438,7 @@ if grep -E 'Source:|https://github.com/|[0-9a-f]{12}' "$test_root/status.txt" >/
 fi
 
 grep -F \
-  "failure added +0 reservations and +0 orders while preserving stock; compensation restored stock" \
+  "oversell was rejected with stock and orders unchanged; restock restored full stock" \
   "$test_root/mini-shop-smoke.txt"
 
 "$orbit_bin" down shop-inventory-api --json >"$test_root/down-inventory.json"

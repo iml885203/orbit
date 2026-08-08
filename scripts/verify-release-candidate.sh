@@ -20,4 +20,12 @@ do
   fi
 done
 
+# orbit init must ship the demo paired with this release: the pinned demo
+# ref is the release tag itself, or a suffixed revision of it (vX.Y.Z-fix).
+env_repo_ref="$(sed -n 's/.*EnvRepoRef: "\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
+if [[ "$env_repo_ref" != "$tag" && "$env_repo_ref" != "$tag"-* ]]; then
+  echo "cmd/orbit/extensions.go pins EnvRepoRef $env_repo_ref; expected $tag (or $tag-<suffix>) so orbit init ships the demo paired with this release" >&2
+  exit 1
+fi
+
 echo "release candidate ${tag} is coherent"

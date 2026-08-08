@@ -28,9 +28,11 @@ Preview batch 依照下列順序 freeze：
 
 1. 完成相關 implementation，以及實務上最強的 journey 驗證。
 2. 一次 review 相較於前一版的完整使用者差異。
-3. 決定下一個版本、更新兩份 plugin manifest，並準備配對的 demo tag；此時先不要
-   建立 Orbit tag。Demo tag 內的 `.orbit-release.json` 會記錄 release version
-   與 demo journey 實際 build 的 Orbit candidate commit。
+3. 決定下一個版本、更新兩份 plugin manifest、把 `cmd/orbit/extensions.go`
+   的 `EnvRepoRef` 指向即將建立的 demo tag（讓 `orbit init` 內建與本版配對
+   的 demo），並準備配對的 demo tag；此時先不要建立 Orbit tag。Demo tag 內
+   的 `.orbit-release.json` 會記錄 release version 與 demo journey 實際
+   build 的 Orbit candidate commit。
 4. 準備並 review 對使用者說明的 release notes。
 5. 執行 candidate 與 platform gates，再手動 approve 發布。Release workflow
    只會在所有 gate 通過後建立不可修改的 Orbit tag，失敗的 candidate 不會留下
