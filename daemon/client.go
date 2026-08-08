@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -50,11 +51,44 @@ func Dial(socketPath string) (*Client, error) {
 	return c, nil
 }
 
+// get and do issue requests against the daemon socket. The http client only
+// returns an error before a response arrives, which for a unix socket always
+// means the daemon is gone or not accepting connections — so every transport
+// failure carries ErrDaemonUnreachable and every daemon-backed command shares
+// one recovery path instead of leaking the socket path and syscall text.
+func (c *Client) get(rawURL string) (*http.Response, error) {
+	resp, err := c.http.Get(rawURL)
+	if err != nil {
+		return nil, unreachable(err)
+	}
+	return resp, nil
+}
+
+func (c *Client) do(req *http.Request) (*http.Response, error) {
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, unreachable(err)
+	}
+	return resp, nil
+}
+
+// unreachable tags a transport failure with ErrDaemonUnreachable. net/http
+// wraps everything it reports before a response in *url.Error, so matching
+// that type covers dial, connect, and write failures without inspecting
+// error strings. The cause stays in the chain for diagnostics.
+func unreachable(err error) error {
+	var urlErr *url.Error
+	if !errors.As(err, &urlErr) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrDaemonUnreachable, urlErr.Err)
+}
+
 // Health checks if the daemon is alive.
 func (c *Client) Health() error {
-	resp, err := c.http.Get("http://orbit/api/health")
+	resp, err := c.get("http://orbit/api/health")
 	if err != nil {
-		return fmt.Errorf("daemon not reachable: %w", err)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
@@ -65,7 +99,7 @@ func (c *Client) Health() error {
 
 // Doctor runs health checks via the daemon.
 func (c *Client) Doctor() (*DoctorResponse, error) {
-	resp, err := c.http.Get("http://orbit/api/doctor")
+	resp, err := c.get("http://orbit/api/doctor")
 	if err != nil {
 		return nil, fmt.Errorf("doctor request failed: %w", err)
 	}
@@ -80,7 +114,7 @@ func (c *Client) Doctor() (*DoctorResponse, error) {
 
 // Status returns all service statuses.
 func (c *Client) Status() (*StatusResponse, error) {
-	resp, err := c.http.Get("http://orbit/api/status")
+	resp, err := c.get("http://orbit/api/status")
 	if err != nil {
 		return nil, fmt.Errorf("status request failed: %w", err)
 	}
@@ -96,7 +130,7 @@ func (c *Client) Status() (*StatusResponse, error) {
 // TraceLogs returns the log lines that carry the trace id, joined server-side
 // where both the trace store and log buffers live.
 func (c *Client) TraceLogs(id string) ([]TraceLogLine, error) {
-	resp, err := c.http.Get("http://orbit/api/traces/" + id + "/logs")
+	resp, err := c.get("http://orbit/api/traces/" + id + "/logs")
 	if err != nil {
 		return nil, fmt.Errorf("trace logs request failed: %w", err)
 	}
@@ -114,7 +148,7 @@ func (c *Client) TraceLogs(id string) ([]TraceLogLine, error) {
 
 // Envs returns the list of available env configs and which is current.
 func (c *Client) Envs() (*EnvsResponse, error) {
-	resp, err := c.http.Get("http://orbit/api/envs")
+	resp, err := c.get("http://orbit/api/envs")
 	if err != nil {
 		return nil, fmt.Errorf("envs request failed: %w", err)
 	}
@@ -129,7 +163,7 @@ func (c *Client) Envs() (*EnvsResponse, error) {
 
 // Version returns the daemon's build version and upgrade info.
 func (c *Client) Version() (*VersionResponse, error) {
-	resp, err := c.http.Get("http://orbit/api/version")
+	resp, err := c.get("http://orbit/api/version")
 	if err != nil {
 		return nil, fmt.Errorf("version request failed: %w", err)
 	}
@@ -177,7 +211,7 @@ func (c *Client) Restart(name string) (*APIResponse, error) {
 // Logs returns the last N lines for a service.
 func (c *Client) Logs(name string, lines int) (*LogsResponse, error) {
 	url := fmt.Sprintf("http://orbit/api/logs/%s?lines=%d", name, lines)
-	resp, err := c.http.Get(url)
+	resp, err := c.get(url)
 	if err != nil {
 		return nil, fmt.Errorf("logs request failed: %w", err)
 	}
@@ -198,7 +232,7 @@ func (c *Client) Logs(name string, lines int) (*LogsResponse, error) {
 // Blocks until the context is cancelled or connection drops.
 func (c *Client) StreamLogs(name string, fn func(line string)) error {
 	url := fmt.Sprintf("http://orbit/api/logs/%s/stream", name)
-	resp, err := c.http.Get(url)
+	resp, err := c.get(url)
 	if err != nil {
 		return fmt.Errorf("stream request failed: %w", err)
 	}
@@ -221,7 +255,7 @@ func (c *Client) StreamLogs(name string, fn func(line string)) error {
 // extension-owned calls whose error semantics predate GetDecode and must
 // stay byte-identical. Prefer GetDecode for new calls.
 func (c *Client) Get(path string) (*http.Response, error) {
-	return c.http.Get("http://orbit" + path)
+	return c.get("http://orbit" + path)
 }
 
 // ReadAPIError maps a non-200 response through the daemon error
@@ -257,7 +291,7 @@ func (c *Client) PostDecode(path string, body, out any) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(CLIOriginHeader, "cli")
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return fmt.Errorf("POST %s failed: %w", path, err)
 	}
@@ -275,7 +309,7 @@ func (c *Client) PostDecode(path string, body, out any) error {
 // non-200s through the daemon error contract — the exported read
 // primitive for extension-owned client calls.
 func (c *Client) GetDecode(path string, out any) error {
-	resp, err := c.http.Get("http://orbit" + path)
+	resp, err := c.get("http://orbit" + path)
 	if err != nil {
 		return fmt.Errorf("GET %s failed: %w", path, err)
 	}
@@ -328,7 +362,7 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request to %s failed: %w", path, err)
 	}
@@ -365,7 +399,7 @@ func (c *Client) putJSON(path string, body any) (*APIResponse, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(CLIOriginHeader, "cli")
-	resp, err := c.http.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request to %s failed: %w", path, err)
 	}
@@ -412,7 +446,7 @@ func (c *Client) SetEnvToggle(service, varName string, enabled bool) error {
 
 // GetSettings returns the daemon's current user settings as a flat JSON object.
 func (c *Client) GetSettings() (map[string]any, error) {
-	resp, err := c.http.Get("http://orbit/api/settings")
+	resp, err := c.get("http://orbit/api/settings")
 	if err != nil {
 		return nil, fmt.Errorf("get settings: %w", err)
 	}

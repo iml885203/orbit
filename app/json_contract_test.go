@@ -138,8 +138,27 @@ func TestPrintExecutionErrorHuman(t *testing.T) {
 	var buf bytes.Buffer
 	printExecutionError(&buf, cli.NewUnknownResourceError("missing"))
 
-	if got := buf.String(); got != "Error: unknown resource: missing\n" {
-		t.Fatalf("human error = %q", got)
+	want := "Error: unknown resource: missing\n" +
+		"  Run 'orbit status' to list configured resources.\n" +
+		"  Next: orbit status\n"
+	if got := buf.String(); got != want {
+		t.Fatalf("human error = %q, want %q", got, want)
+	}
+}
+
+// The human path must not advertise the --json spellings that only agents
+// need; both audiences read the same classification, so the suffix is
+// stripped rather than duplicated into a second vocabulary.
+func TestPrintExecutionErrorHumanDropsAgentOnlyJSONSuffix(t *testing.T) {
+	origJSON := cli.JSONOutput
+	t.Cleanup(func() { cli.JSONOutput = origJSON })
+	cli.JSONOutput = false
+
+	var buf bytes.Buffer
+	printExecutionError(&buf, cli.NewUnknownResourceError("missing"))
+
+	if strings.Contains(buf.String(), "--json") {
+		t.Fatalf("human error leaks the agent-only --json suffix:\n%s", buf.String())
 	}
 }
 

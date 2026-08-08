@@ -412,7 +412,7 @@ func TestWriteJSONErrorClassifiesUnknownResource(t *testing.T) {
 	if got.Error.Retryable {
 		t.Fatal("retryable = true, want false")
 	}
-	if got.Error.Hint != "Run 'orbit status --json' to list configured resources." {
+	if got.Error.Hint != "Run 'orbit status' to list configured resources." {
 		t.Fatalf("hint = %q", got.Error.Hint)
 	}
 }

@@ -302,7 +302,7 @@ func classify(err error) JSONError {
 				Retryable: false,
 			}
 		case "unknown_resource":
-			hint := "Run 'orbit status --json' to list configured resources."
+			hint := "Run 'orbit status' to list configured resources."
 			var hintedErr interface{ CLIJSONHint() string }
 			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
 				hint = hintedErr.CLIJSONHint()
@@ -331,7 +331,7 @@ func classify(err error) JSONError {
 		return JSONError{
 			Code:        "unknown_resource",
 			Message:     msg,
-			Hint:        "Run 'orbit status --json' to list configured resources.",
+			Hint:        "Run 'orbit status' to list configured resources.",
 			Retryable:   false,
 			NextCommand: "orbit status --json",
 		}
@@ -448,6 +448,30 @@ func classify(err error) JSONError {
 			NextCommand: "orbit doctor --json",
 		}
 	}
+}
+
+// HumanGuidance returns what classify already derives for the JSON envelope
+// so the human path can say the same thing instead of only naming the
+// failure. nextCommand drops the ` --json` suffix that only agents need.
+//
+// message is set only where classify replaced the raw error text — a
+// transport failure reads as "Orbit is not running.", not as the socket path
+// and syscall that produced it. Empty means the raw error already reads well.
+//
+// The catch-all classification deliberately yields nothing: "run orbit
+// doctor" on every unrecognised error is noise, and points away from the
+// real fix as often as toward it.
+func HumanGuidance(err error) (message, hint, nextCommand string) {
+	classified := classify(err)
+	if classified.Code == "command_failed" {
+		return "", "", ""
+	}
+	if err != nil && classified.Message == err.Error() {
+		message = ""
+	} else {
+		message = classified.Message
+	}
+	return message, classified.Hint, strings.TrimSuffix(classified.NextCommand, " --json")
 }
 
 // IsManagedEnvironmentPath reports whether path belongs to Orbit's synced

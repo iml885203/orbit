@@ -353,14 +353,27 @@ func printExecutionError(w io.Writer, err error) {
 		_, _ = fmt.Fprintf(w, "  → Stop that process or change %s's host port, then run: orbit up\n", portConflict.Resource)
 		return
 	}
-	_, _ = fmt.Fprintf(w, "Error: %v\n", err)
+	headline, hint, classifiedNext := cli.HumanGuidance(err)
+	if headline == "" {
+		headline = err.Error()
+	}
+	_, _ = fmt.Fprintf(w, "Error: %s\n", headline)
 	var withContext interface{ CLIHumanContext() string }
 	if errors.As(err, &withContext) && withContext.CLIHumanContext() != "" {
+		// The error's own context is written for this exact situation, so it
+		// replaces the classified hint rather than stacking a second, vaguer
+		// sentence on top of it.
 		_, _ = fmt.Fprintf(w, "  %s\n", withContext.CLIHumanContext())
+	} else if hint != "" {
+		_, _ = fmt.Fprintf(w, "  %s\n", hint)
 	}
 	var withHumanNext interface{ CLIHumanNextCommand() string }
 	if errors.As(err, &withHumanNext) && withHumanNext.CLIHumanNextCommand() != "" {
 		_, _ = fmt.Fprintf(w, "  Next: %s\n", withHumanNext.CLIHumanNextCommand())
+		return
+	}
+	if classifiedNext != "" {
+		_, _ = fmt.Fprintf(w, "  Next: %s\n", classifiedNext)
 		return
 	}
 	if errors.Is(err, cli.ErrLogsUnavailable) {
