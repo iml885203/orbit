@@ -278,3 +278,24 @@ func TestDialErrorMessageContainsHint(t *testing.T) {
 		t.Errorf("expected hint mentioning 'orbit up' in error, got: %s", err.Error())
 	}
 }
+
+// timeoutError reports itself as a timeout the way net's own errors do, which
+// is what url.Error.Timeout() consults.
+type timeoutError struct{}
+
+func (timeoutError) Error() string { return "context deadline exceeded" }
+func (timeoutError) Timeout() bool { return true }
+
+// The client carries a request deadline, so a daemon that is running but slow
+// fails through the same path as one that is absent. Classifying that as
+// unreachable would answer "run orbit up" to a user whose daemon is already up.
+func TestBusyDaemonIsNotClassifiedAsUnreachable(t *testing.T) {
+	err := unreachable(&url.Error{Op: "Get", URL: "http://orbit/api/status", Err: timeoutError{}})
+
+	if errors.Is(err, ErrDaemonUnreachable) {
+		t.Errorf("a timed-out request was reported as an absent daemon: %v", err)
+	}
+	if !errors.Is(err, ErrDaemonTimeout) {
+		t.Errorf("expected ErrDaemonTimeout, got: %v", err)
+	}
+}

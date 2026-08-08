@@ -376,32 +376,9 @@ func printExecutionError(w io.Writer, err error) {
 		_, _ = fmt.Fprintf(w, "  Next: %s\n", classifiedNext)
 		return
 	}
-	if next := firstRecommendedCommand(err); next != "" {
+	if next := cli.FirstRecommendedCommand(err); next != "" {
 		_, _ = fmt.Fprintf(w, "  Next: %s\n", next)
 	}
-}
-
-// firstRecommendedCommand returns the leading recommended action an error
-// carries for the JSON envelope, spelled for a terminal. An error that can
-// name the command an agent should run next can name it for a person too;
-// replacement actions rank first because they say what supersedes the
-// attempted command.
-func firstRecommendedCommand(err error) string {
-	var replacement interface {
-		CLIJSONReplacementActions() []cli.JSONAction
-	}
-	if errors.As(err, &replacement) {
-		if actions := replacement.CLIJSONReplacementActions(); len(actions) > 0 {
-			return strings.TrimSuffix(actions[0].Command, " --json")
-		}
-	}
-	var withActions interface{ CLIJSONActions() []cli.JSONAction }
-	if errors.As(err, &withActions) {
-		if actions := withActions.CLIJSONActions(); len(actions) > 0 {
-			return strings.TrimSuffix(actions[0].Command, " --json")
-		}
-	}
-	return ""
 }
 
 type errCLIJSONAlreadyRendered struct {

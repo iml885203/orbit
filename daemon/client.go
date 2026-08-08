@@ -37,25 +37,29 @@ func NewClient(socketPath string) *Client {
 // hint, so most callers can just propagate.
 var ErrDaemonUnreachable = errors.New("daemon unreachable")
 
-// Dial creates a client and verifies the daemon is alive. Returns
-// ErrDaemonUnreachable wrapped with the underlying cause and a CLI hint
-// on failure. Use NewClient instead when you intentionally want a client
-// without a health check (e.g. status and doctor commands probe with
-// Health() == nil and continue regardless).
+// ErrDaemonTimeout indicates the daemon accepted the connection but did not
+// answer within the client's deadline. Kept distinct from
+// ErrDaemonUnreachable because the recovery differs: the daemon is running,
+// so telling the user to start it would send them the wrong way.
+var ErrDaemonTimeout = errors.New("daemon did not respond in time")
+
+// Dial creates a client and verifies the daemon is alive, returning the
+// health failure with a CLI hint appended. Health already classifies that
+// failure, so Dial adds the hint only — wrapping ErrDaemonUnreachable a
+// second time would print the sentinel twice. Use NewClient instead when you
+// intentionally want a client without a health check (e.g. status and doctor
+// commands probe with Health() == nil and continue regardless).
 func Dial(socketPath string) (*Client, error) {
 	c := NewClient(socketPath)
 	if err := c.Health(); err != nil {
-		return nil, fmt.Errorf("%w — start with 'orbit up' or 'orbit daemon start': %w",
-			ErrDaemonUnreachable, err)
+		return nil, fmt.Errorf("%w — start with 'orbit up' or 'orbit daemon start'", err)
 	}
 	return c, nil
 }
 
-// get and do issue requests against the daemon socket. The http client only
-// returns an error before a response arrives, which for a unix socket always
-// means the daemon is gone or not accepting connections — so every transport
-// failure carries ErrDaemonUnreachable and every daemon-backed command shares
-// one recovery path instead of leaking the socket path and syscall text.
+// get and do issue requests against the daemon socket, classifying transport
+// failures so every daemon-backed command shares one recovery path instead of
+// leaking the socket path and syscall text.
 func (c *Client) get(rawURL string) (*http.Response, error) {
 	resp, err := c.http.Get(rawURL)
 	if err != nil {
@@ -72,19 +76,29 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// unreachable tags a transport failure with ErrDaemonUnreachable. net/http
-// wraps everything it reports before a response in *url.Error, so matching
-// that type covers dial, connect, and write failures without inspecting
-// error strings. The cause stays in the chain for diagnostics.
+// unreachable classifies a transport failure. net/http wraps everything it
+// reports before a response in *url.Error, so matching that type covers dial,
+// connect, and write failures without inspecting error strings. The cause
+// stays in the chain for diagnostics.
+//
+// Timeouts are split out deliberately: the client carries a request deadline
+// (SocketHTTPClient), so a running-but-busy daemon fails here too. Calling
+// that "not running" would tell the user to start something already started.
 func unreachable(err error) error {
 	var urlErr *url.Error
 	if !errors.As(err, &urlErr) {
 		return err
 	}
+	if urlErr.Timeout() {
+		return fmt.Errorf("%w: %w", ErrDaemonTimeout, urlErr.Err)
+	}
 	return fmt.Errorf("%w: %w", ErrDaemonUnreachable, urlErr.Err)
 }
 
-// Health checks if the daemon is alive.
+// Health checks if the daemon is alive. Both failure modes report as
+// ErrDaemonUnreachable: a daemon that answers its own health check with an
+// error status is no more usable than one that never answered, and callers
+// need a single condition to branch on.
 func (c *Client) Health() error {
 	resp, err := c.get("http://orbit/api/health")
 	if err != nil {
@@ -92,7 +106,7 @@ func (c *Client) Health() error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemon returned %d", resp.StatusCode)
+		return fmt.Errorf("%w: health check returned %d", ErrDaemonUnreachable, resp.StatusCode)
 	}
 	return nil
 }

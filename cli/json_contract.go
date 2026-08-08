@@ -72,7 +72,8 @@ func WriteJSONError(w io.Writer, command string, err error) error {
 // truthful exit result.
 func WriteJSONFailure(w io.Writer, command string, data any, err error, actions []JSONAction) error {
 	classified := classify(err)
-	if replacement, ok := err.(interface{ CLIJSONReplacementActions() []JSONAction }); ok {
+	var replacement interface{ CLIJSONReplacementActions() []JSONAction }
+	if errors.As(err, &replacement) {
 		actions = replacement.CLIJSONReplacementActions()
 		classified.NextCommand = ""
 		if len(actions) > 0 {
@@ -80,8 +81,9 @@ func WriteJSONFailure(w io.Writer, command string, data any, err error, actions 
 		}
 	} else {
 		actions = MergeActions(recommendedActionsForError(classified), actions)
-		if withActions, ok := err.(interface{ CLIJSONActions() []JSONAction }); ok {
-			actions = MergeActions(actions, withActions.CLIJSONActions())
+		var additive interface{ CLIJSONActions() []JSONAction }
+		if errors.As(err, &additive) {
+			actions = MergeActions(actions, additive.CLIJSONActions())
 		}
 	}
 	return writeJSON(w, JSONEnvelope{
@@ -335,7 +337,10 @@ func classify(err error) JSONError {
 			Retryable:   false,
 			NextCommand: "orbit status --json",
 		}
-	case errors.Is(err, ErrTimeout):
+	// A daemon that accepted the connection but ran out the clock is busy,
+	// not absent — the same recovery as any other timeout, and pointedly not
+	// daemon_unreachable's "run orbit up".
+	case errors.Is(err, ErrTimeout), errors.Is(err, daemon.ErrDaemonTimeout):
 		return JSONError{
 			Code:        "timeout",
 			Message:     msg,
@@ -448,30 +453,6 @@ func classify(err error) JSONError {
 			NextCommand: "orbit doctor --json",
 		}
 	}
-}
-
-// HumanGuidance returns what classify already derives for the JSON envelope
-// so the human path can say the same thing instead of only naming the
-// failure. nextCommand drops the ` --json` suffix that only agents need.
-//
-// message is set only where classify replaced the raw error text — a
-// transport failure reads as "Orbit is not running.", not as the socket path
-// and syscall that produced it. Empty means the raw error already reads well.
-//
-// The catch-all classification deliberately yields nothing: "run orbit
-// doctor" on every unrecognised error is noise, and points away from the
-// real fix as often as toward it.
-func HumanGuidance(err error) (message, hint, nextCommand string) {
-	classified := classify(err)
-	if classified.Code == "command_failed" {
-		return "", "", ""
-	}
-	if err != nil && classified.Message == err.Error() {
-		message = ""
-	} else {
-		message = classified.Message
-	}
-	return message, classified.Hint, strings.TrimSuffix(classified.NextCommand, " --json")
 }
 
 // IsManagedEnvironmentPath reports whether path belongs to Orbit's synced
