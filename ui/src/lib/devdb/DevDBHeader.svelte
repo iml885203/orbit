@@ -12,7 +12,7 @@
 </header>
 <style>
   .page-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); }
-  h1 { margin: 0; font-size: var(--text-2xl); } p { margin: 4px 0 0; color: var(--dim); }
+  h1 { margin: 0; font-size: var(--text-xl); } p { margin: 4px 0 0; color: var(--dim); }
   .actions { display: flex; gap: var(--space-2); } button { display: inline-flex; align-items: center; gap: var(--space-1); }
   .progress { margin-top: var(--space-2); color: var(--blue); font-size: var(--text-sm); font-weight: 600; }
   .scope { margin-top: var(--space-1); color: var(--dim); font-size: var(--text-sm); }

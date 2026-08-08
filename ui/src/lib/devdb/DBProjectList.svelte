@@ -82,8 +82,8 @@
   .drift-badge.ok { color: var(--green); background: color-mix(in srgb, var(--green) 15%, transparent); }
   .drift-badge.warn { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 15%, transparent); }
   .drift-badge.err { color: var(--red); background: color-mix(in srgb, var(--red) 15%, transparent); }
-  .drift-badge.muted { color: var(--text-secondary); background: color-mix(in srgb, var(--fg) 7%, transparent); }
-  .drift-badge.stale { border: 1px dashed color-mix(in srgb, var(--fg) 30%, transparent); background: transparent; color: var(--text-secondary); opacity: 0.85; }
+  .drift-badge.muted { color: var(--dim); background: color-mix(in srgb, var(--fg) 7%, transparent); }
+  .drift-badge.stale { border: 1px dashed color-mix(in srgb, var(--fg) 30%, transparent); background: transparent; color: var(--dim); opacity: 0.85; }
   .db-tags { flex-wrap: wrap; gap: var(--space-1); margin-top: 4px; }
   .db-tag { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--dim); background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--border); border-radius: 3px; }
   .root { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

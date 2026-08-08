@@ -115,5 +115,5 @@
 {#if logOpen && devStore.dbOpInFlight}<LogModal service={`${devStore.dbOpInFlight.op} ${dbOpLabel(devStore.dbOpInFlight)}`} lines={devStore.dbOpInFlight.lines} onClose={() => logOpen = false} />{/if}
 {#if diffTarget}<DiffModal database={diffTarget} onResult={(result) => drift.recordResult(result.db, result)} onClose={() => diffTarget = null} />{/if}
 <style>
-  .page { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); } .page-notice { margin: var(--space-4) auto; max-width: 480px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); color: var(--text-secondary); text-align: center; } .page-notice p { margin-bottom: 0; } .page-notice button { margin-top: var(--space-3); }
+  .page { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); } .page-notice { margin: var(--space-4) auto; max-width: 480px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); color: var(--dim); text-align: center; } .page-notice p { margin-bottom: 0; } .page-notice button { margin-top: var(--space-3); }
 </style>

@@ -401,7 +401,7 @@
     background:
       radial-gradient(ellipse at 50% 38%, color-mix(in srgb, white 7%, transparent) 0%, transparent 46%),
       radial-gradient(ellipse at 50% 58%, color-mix(in srgb, var(--blue) 16%, transparent) 0%, transparent 68%),
-      color-mix(in srgb, var(--panel) 44%, transparent);
+      color-mix(in srgb, var(--card) 44%, transparent);
     box-shadow:
       0 0 20px color-mix(in srgb, var(--blue) 20%, transparent),
       inset 0 0 18px color-mix(in srgb, var(--blue) 12%, transparent);

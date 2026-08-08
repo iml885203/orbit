@@ -94,8 +94,8 @@
   header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-3); }
   h2 { margin: 0; font-size: var(--text-xl); } header p { margin: 3px 0 0; color: var(--dim); font-size: var(--text-sm); } header strong { color: var(--dim); font-size: var(--text-sm); }
   .rows { display: flex; flex-direction: column; gap: var(--space-3); }
-  .empty { padding: var(--space-6); border: 1px dashed var(--border); border-radius: var(--radius-lg); text-align: center; color: var(--text-secondary); } .empty p { margin: var(--space-2) 0 0; color: var(--dim); }
+  .empty { padding: var(--space-6); border: 1px dashed var(--border); border-radius: var(--radius-lg); text-align: center; color: var(--dim); } .empty p { margin: var(--space-2) 0 0; color: var(--dim); }
   .drawer .rows { gap: 0; }
   .all-failed { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border)); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--red) 8%, var(--card)); }
-  .all-failed span { color: var(--text-secondary); font-size: var(--text-sm); } .all-failed button { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
+  .all-failed span { color: var(--dim); font-size: var(--text-sm); } .all-failed button { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 </style>

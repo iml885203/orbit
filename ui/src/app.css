@@ -111,6 +111,15 @@ button {
   border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; min-height: 32px;
 }
 button:hover { color: var(--fg); border-color: var(--dim); }
+/* Rest-state hierarchy. Components used .primary/.danger as if this existed,
+   so a destructive Reset sat next to a safe Check with identical borders and
+   text until the pointer arrived — and never differed at all for keyboard
+   users. Tint border and text rather than filling: the intensity that
+   interrupts belongs to status, and a filled row of buttons would read as an
+   error page. ConfirmModal keeps its own filled .btn.primary. */
+button.primary { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--border)); }
+button.primary:hover { color: var(--blue); border-color: var(--blue); }
+button.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
 button.danger:hover { color: var(--red); border-color: var(--red); }
 button:disabled { opacity: 0.3; cursor: not-allowed; }
 button:active { transform: scale(0.96); opacity: 0.8; }

@@ -101,7 +101,7 @@
   .head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; }
   .identity { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   .identity strong { overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
-  .history { display: flex; gap: var(--space-4); min-width: 0; flex-wrap: wrap; color: var(--text-secondary); font-size: var(--text-sm); }
+  .history { display: flex; gap: var(--space-4); min-width: 0; flex-wrap: wrap; color: var(--dim); font-size: var(--text-sm); }
   .history span { display: flex; flex-direction: column; }
   .history small { color: var(--dim); text-transform: uppercase; font-size: var(--text-xs); font-weight: 700; }
   .not-published { color: var(--dim); }
@@ -112,7 +112,7 @@
   .reset-notice strong { color: var(--fg); }
   .action-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
   .helper, .disabled-reason { color: var(--dim); font-size: var(--text-sm); }
-  .disabled-reason { color: var(--text-secondary); }
+  .disabled-reason { color: var(--dim); }
   .actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
   button { display: inline-flex; align-items: center; gap: var(--space-1); }
   button.icon { padding-inline: var(--space-2); }
