@@ -42,7 +42,7 @@ Skills 只放一份在 `.claude/skills/`；Claude Code 直接發現它們，Code
 
 指令用 `orbit --help` 自己查；agent 專用的 JSON contract 在 [docs/agent-cli.zh-TW.md](docs/agent-cli.zh-TW.md)。不明顯的行為：
 
-- 如果 `orbit up` 抱怨缺 env，跑 `orbit init` 或 `orbit env sync`。
+- 如果 `orbit up` 抱怨缺 env，跑 `orbit init` 或 `orbit source sync`。
 - `orbit up` 會自動把 daemon 起起來；不必另外 `orbit daemon start`。
 
 ## Code review
