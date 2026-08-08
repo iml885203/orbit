@@ -7,8 +7,12 @@ export type { AccessLine, TunnelView }
 export type GlobalClaim = GlobalClaimView
 export type TunnelList = TunnelListResponse
 
-export async function fetchTunnels(): Promise<TunnelList> {
-  return (await getJSON<TunnelList>('/api/tunnel', 'tunnel list unavailable')) ?? { tunnels: [] }
+// Returns null on fetch failure (so callers can distinguish "request failed"
+// from "genuinely no tunnels"). No `unavailable` message: this backs a 2s
+// poll, and per getJSON's contract a toast per tick would spam — worse, the
+// 2s cadence outruns the 2.5s auto-hide, so the toast would never clear.
+export async function fetchTunnels(): Promise<TunnelList | null> {
+  return getJSON<TunnelList>('/api/tunnel')
 }
 
 export async function claimTunnel(localPort: number, path: string): Promise<{ ok: boolean; data?: APIResponse }> {

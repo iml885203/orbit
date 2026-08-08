@@ -8,6 +8,9 @@
   let tunnels = $state<TunnelView[]>([])
   let gateway = $state('')
   let loaded = $state(false)
+  // A failed poll must not read as "no tunnels": the empty state invites the
+  // user to create a route, which would fail for the same reason the poll did.
+  let reachable = $state(true)
   const availability = $derived(
     devStore.devMeta === null ? 'loading' : tunnelHidden() ? 'unavailable' : 'available',
   )
@@ -24,6 +27,8 @@
 
   async function refresh() {
     const res = await fetchTunnels()
+    reachable = res !== null
+    if (!res) return
     tunnels = res.tunnels
     gateway = res.gateway ?? ''
     loaded = true
@@ -66,10 +71,17 @@
     {/if}
   </header>
 
+  {#if !reachable}
+    <div class="page-notice" role="status">
+      <strong>Can't reach the tunnel service.</strong>
+      <p>Showing the last known state. Run <code>orbit status</code> to check the environment.</p>
+    </div>
+  {/if}
+
   {#if loaded}<TunnelClaimForm onClaimed={refresh} />{/if}
 
   {#if !loaded}
-    <p class="hint">Loading…</p>
+    <p class="hint">{reachable ? 'Loading…' : 'No tunnel state available yet.'}</p>
   {:else if tunnels.length === 0}
     <div class="empty">
       <div class="empty-wire" aria-hidden="true">
@@ -99,7 +111,7 @@
     padding: var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    color: var(--text-secondary);
+    color: var(--dim);
     text-align: center;
   }
   .page-notice p { margin-bottom: 0; }
