@@ -32,9 +32,9 @@ orbit status
 orbit open demo-shop
 ```
 
-The [Orbit demo](https://github.com/iml885203/orbit-demo) is a small storefront
-with three host APIs, SQLite databases, and Redis in a container. Run a checkout
-to see one request cross the whole graph, then use `orbit down` to stop it.
+The [Orbit demo](https://github.com/iml885203/orbit-demo) is a tiny storefront:
+three host APIs, live stock in a Redis container, and orders in SQLite. Buy a
+mug to see one request cross the whole graph, then use `orbit down` to stop it.
 
 ## One file describes the environment
 

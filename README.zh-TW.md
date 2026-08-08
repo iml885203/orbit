@@ -30,9 +30,9 @@ orbit status
 orbit open demo-shop
 ```
 
-[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個小型 storefront，
-包含三個 host APIs、SQLite databases，以及 container 內的 Redis。執行一次
-checkout 就能看到 request 穿過整張 graph；完成後用 `orbit down` 停止環境。
+[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個迷你 storefront：
+三個 host APIs、放在 Redis container 裡的即時庫存，以及存進 SQLite 的訂單。
+買一個馬克杯就能看到 request 穿過整張 graph；完成後用 `orbit down` 停止環境。
 
 ## 一份檔案描述整個環境
 
