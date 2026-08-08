@@ -322,9 +322,12 @@ func runSwitch(_ *cobra.Command, args []string) error {
 		selection := readEnvironmentSelection()
 		message := err.Error()
 		if len(selection.Environments) > 0 {
+			// Qualified identities, not bare names: two sources may each
+			// define "dev", and "Available: dev, dev" tells the user nothing
+			// they can act on.
 			names := make([]string, 0, len(selection.Environments))
 			for _, environment := range selection.Environments {
-				names = append(names, environment.Name)
+				names = append(names, environmentChoiceSwitchTarget(environment))
 			}
 			message += "\nAvailable: " + strings.Join(names, ", ")
 		}
