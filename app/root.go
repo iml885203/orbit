@@ -98,6 +98,14 @@ local directory that provides shared environments; manage it with orbit source.`
 		if cmd.DisableFlagParsing && len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 			return pflag.ErrHelp
 		}
+		// `orbit --help` never reaches this hook because cobra short-circuits
+		// on the help flag, but `orbit help` and `orbit completion` are real
+		// commands and would hit the setup gate below. Both only read the
+		// command tree, so gating them leaves a fresh install unable to
+		// discover anything.
+		if isCommandTreeQuery(cmd) {
+			return nil
+		}
 		if instanceName != "" {
 			if _, err := instance.Activate(instanceName); err != nil {
 				return cli.NewInvalidArgumentError(err.Error())
@@ -430,6 +438,19 @@ func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {
 	default:
 		return false
 	}
+}
+
+// isCommandTreeQuery reports whether cmd is one of cobra's built-in
+// introspection commands (`help`, `completion`), which print from the command
+// tree alone and touch no environment, daemon, or instance state.
+func isCommandTreeQuery(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "help", "completion":
+			return true
+		}
+	}
+	return false
 }
 
 func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {

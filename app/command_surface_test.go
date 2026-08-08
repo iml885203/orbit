@@ -85,6 +85,25 @@ func TestUnavailableEnvironmentBlocksMutationsButKeepsRecoveryAvailable(t *testi
 	}
 }
 
+func TestCommandTreeQueriesStayUsableBeforeSetup(t *testing.T) {
+	root := &cobra.Command{Use: "orbit"}
+	up := &cobra.Command{Use: "up"}
+	help := &cobra.Command{Use: "help"}
+	completion := &cobra.Command{Use: "completion"}
+	zsh := &cobra.Command{Use: "zsh"}
+	root.AddCommand(up, help, completion)
+	completion.AddCommand(zsh)
+
+	for _, cmd := range []*cobra.Command{help, completion, zsh} {
+		if !isCommandTreeQuery(cmd) {
+			t.Errorf("%s must stay usable before setup", cmd.CommandPath())
+		}
+	}
+	if isCommandTreeQuery(up) {
+		t.Error("up is not a command-tree query and must keep its setup gate")
+	}
+}
+
 func TestContextualHelpHidesCommandsWithoutASelectedEnvironment(t *testing.T) {
 	root := commandVisibilityTestRoot()
 	applyContextualCommandVisibility(root, nil, []extension.Extension{{
