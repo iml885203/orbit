@@ -68,6 +68,49 @@ sqlserver:
 	}
 }
 
+func TestInheritedSQLServerSchemaErrorKeepsSourcePathAndLine(t *testing.T) {
+	tests := []struct {
+		name       string
+		parent     string
+		child      string
+		wantSource string
+		wantLine   string
+	}{
+		{
+			name:       "parent fragment",
+			parent:     "version: \"3\"\n\nsqlserver:\n  target: database\n\n  typo_field: value\n",
+			child:      "extends: base.yaml\n",
+			wantSource: "base.yaml",
+			wantLine:   "line 6: unknown field typo_field",
+		},
+		{
+			name:       "child fragment",
+			parent:     "version: \"3\"\nsqlserver:\n  target: database\n",
+			child:      "extends: base.yaml\nsqlserver:\n\n  typo_field: value\n",
+			wantSource: "child.yaml",
+			wantLine:   "line 4: unknown field typo_field",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			parent := filepath.Join(dir, "base.yaml")
+			child := filepath.Join(dir, "child.yaml")
+			if err := os.WriteFile(parent, []byte(tt.parent), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(child, []byte(tt.child), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := config.Load(child)
+			if err == nil || !strings.Contains(err.Error(), filepath.Join(dir, tt.wantSource)) || !strings.Contains(err.Error(), tt.wantLine) {
+				t.Fatalf("config.Load error = %v, want %s at %s", err, tt.wantLine, tt.wantSource)
+			}
+		})
+	}
+}
+
 func TestValidateSQLServerSectionRequiresExplicitIntent(t *testing.T) {
 	tests := []struct {
 		name   string

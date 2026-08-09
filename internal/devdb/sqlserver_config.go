@@ -30,8 +30,9 @@ type SQLServerProjectConfig struct {
 
 func init() {
 	config.RegisterExtensionSection(sqlServerSection, config.ExtensionSection{
-		Decode:   decodeSQLServerSection,
-		Validate: validateSQLServerSection,
+		Decode:           decodeSQLServerSection,
+		ValidateFragment: validateSQLServerFragment,
+		Validate:         validateSQLServerSection,
 	})
 }
 
@@ -44,6 +45,11 @@ func decodeSQLServerSection(node *yaml.Node, _ string) (any, error) {
 		section.Username = "sa"
 	}
 	return &section, nil
+}
+
+func validateSQLServerFragment(node *yaml.Node) error {
+	var section SQLServerConfig
+	return config.DecodeStrict(node, &section)
 }
 
 func validateSQLServerSection(value any, cfg *config.Config) error {

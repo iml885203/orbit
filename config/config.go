@@ -21,19 +21,15 @@ func Load(path string) (*Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no env selected — run 'orbit init', 'orbit switch <env>', or pass --config")
 	}
-	document, err := loadInheritedDocument(path)
+	_, expanded, err := loadInheritedDocument(path)
 	if err != nil {
 		return nil, err
-	}
-	expanded, err := yaml.Marshal(document)
-	if err != nil {
-		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
 	}
 
 	var header struct {
 		Version string `yaml:"version"`
 	}
-	if err := yaml.Unmarshal(expanded, &header); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &header); err != nil {
 		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
 	}
 	if err := CheckVersion(header.Version, path); err != nil {
@@ -41,7 +37,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	dec := yaml.NewDecoder(strings.NewReader(string(expanded)))
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing env file %s: %w", path, addSchemaFieldGuidance(err, &cfg))

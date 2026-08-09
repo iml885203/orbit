@@ -76,6 +76,46 @@ func TestConfigStale_ParentFileEdited(t *testing.T) {
 	}
 }
 
+func TestConfigStale_ParentMissingAfterTwoChecks(t *testing.T) {
+	dir := t.TempDir()
+	parent := writeTempConfig(t, dir, "base.yaml", "version: \"3\"\n")
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	if err := os.Remove(parent); err != nil {
+		t.Fatal(err)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("first missing check should absorb a transient save: %s", reason)
+	}
+	wantReason := "parent env file missing: " + parent
+	if stale, reason := s.configStale(); !stale || reason != wantReason {
+		t.Fatalf("persistent missing parent: stale=%v reason=%q, want %q", stale, reason, wantReason)
+	}
+}
+
+func TestConfigStale_ParentReappearsBeforeSecondCheck(t *testing.T) {
+	dir := t.TempDir()
+	content := "version: \"3\"\n"
+	parent := writeTempConfig(t, dir, "base.yaml", content)
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	if err := os.Remove(parent); err != nil {
+		t.Fatal(err)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("first missing check should absorb a transient save: %s", reason)
+	}
+	writeTempConfig(t, dir, "base.yaml", content)
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("restored parent reported stale: %s", reason)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("missing counter did not reset: %s", reason)
+	}
+}
+
 func TestConfigStale_TouchWithoutChangeIsNotStale(t *testing.T) {
 	dir := t.TempDir()
 	content := "version: \"3\"\n"

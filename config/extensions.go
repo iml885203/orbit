@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -30,6 +32,9 @@ type ExtensionSection struct {
 	// env file) into the section's value. Returning an error fails the
 	// whole Load — decoders own their section's validation.
 	Decode func(node *yaml.Node, cfgPath string) (any, error)
+	// ValidateFragment checks schema shape only. Inherited fragments may omit
+	// required fields that the merged section's Decode will validate.
+	ValidateFragment func(node *yaml.Node) error
 	// Default, when non-nil, runs if the env file has no such section —
 	// the hook for shared sibling files (e.g. envs/data/claim.yaml).
 	// A nil result means the feature is simply absent for this env.
@@ -80,29 +85,8 @@ func RegisterExtensionSection(name string, spec ExtensionSection) {
 func decodeExtensionSections(cfg *Config, cfgPath string) error {
 	extensionSections.mu.RLock()
 	defer extensionSections.mu.RUnlock()
-
-	names := make([]string, 0, len(cfg.Extensions))
-	for name := range cfg.Extensions {
-		names = append(names, name)
-	}
-	sort.Strings(names) // deterministic first error under multiple typos
-	for _, name := range names {
-		if _, ok := extensionSections.specs[name]; !ok {
-			if name == "previewOnly" {
-				return fmt.Errorf("line %d: previewOnly was removed; delete this field because every environment can now be activated and managed", cfg.Extensions[name].Line)
-			}
-			known := coreTopLevelFields()
-			for k := range extensionSections.specs {
-				known = append(known, k)
-			}
-			sort.Strings(known)
-			node := cfg.Extensions[name]
-			hint := ""
-			if suggestion := closestName(name, known); suggestion != "" {
-				hint = fmt.Sprintf(` (did you mean %q?)`, suggestion)
-			}
-			return fmt.Errorf("line %d: unknown top-level section %s%s (available: %s)", node.Line, name, hint, strings.Join(known, ", "))
-		}
+	if err := validateExtensionSectionNamesLocked(cfg); err != nil {
+		return err
 	}
 
 	for name, spec := range extensionSections.specs {
@@ -135,6 +119,62 @@ func decodeExtensionSections(cfg *Config, cfgPath string) error {
 			cfg.ext = make(map[string]any)
 		}
 		cfg.ext[name] = value
+	}
+	return nil
+}
+
+func validateExtensionSectionNames(cfg *Config) error {
+	extensionSections.mu.RLock()
+	defer extensionSections.mu.RUnlock()
+	return validateExtensionSectionNamesLocked(cfg)
+}
+
+func validateExtensionSectionNamesLocked(cfg *Config) error {
+
+	names := make([]string, 0, len(cfg.Extensions))
+	for name := range cfg.Extensions {
+		names = append(names, name)
+	}
+	sort.Strings(names) // deterministic first error under multiple typos
+	for _, name := range names {
+		if _, ok := extensionSections.specs[name]; !ok {
+			if name == "previewOnly" {
+				return fmt.Errorf("line %d: previewOnly was removed; delete this field because every environment can now be activated and managed", cfg.Extensions[name].Line)
+			}
+			known := coreTopLevelFields()
+			for k := range extensionSections.specs {
+				known = append(known, k)
+			}
+			sort.Strings(known)
+			node := cfg.Extensions[name]
+			hint := ""
+			if suggestion := closestName(name, known); suggestion != "" {
+				hint = fmt.Sprintf(` (did you mean %q?)`, suggestion)
+			}
+			return fmt.Errorf("line %d: unknown top-level section %s%s (available: %s)", node.Line, name, hint, strings.Join(known, ", "))
+		}
+	}
+	return nil
+}
+
+func validateExtensionFragments(cfg *Config) error {
+	extensionSections.mu.RLock()
+	defer extensionSections.mu.RUnlock()
+
+	names := make([]string, 0, len(cfg.Extensions))
+	for name := range cfg.Extensions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		node := cfg.Extensions[name]
+		spec, ok := extensionSections.specs[name]
+		if !ok || spec.ValidateFragment == nil || node.Kind == 0 || node.Tag == "!!null" {
+			continue
+		}
+		if err := spec.ValidateFragment(&node); err != nil {
+			return fmt.Errorf("%s section: %w", name, err)
+		}
 	}
 	return nil
 }
@@ -201,7 +241,52 @@ func DecodeStrict(node *yaml.Node, out any) error {
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
 	dec.KnownFields(true)
-	return addSchemaFieldGuidance(dec.Decode(out), out)
+	err = addSchemaFieldGuidance(dec.Decode(out), out)
+	return remapYAMLLineNumbers(err, authoredYAMLLineMap(raw, node))
+}
+
+var yamlLineNumberPattern = regexp.MustCompile(`\bline ([0-9]+)\b`)
+
+func authoredYAMLLineMap(raw []byte, authored *yaml.Node) map[int]int {
+	var normalized yaml.Node
+	if err := yaml.Unmarshal(raw, &normalized); err != nil || len(normalized.Content) != 1 {
+		return nil
+	}
+	lines := make(map[int]int)
+	var collect func(*yaml.Node, *yaml.Node)
+	collect = func(current, original *yaml.Node) {
+		if current.Line > 0 && original.Line > 0 {
+			lines[current.Line] = original.Line
+		}
+		limit := len(current.Content)
+		if len(original.Content) < limit {
+			limit = len(original.Content)
+		}
+		for i := 0; i < limit; i++ {
+			collect(current.Content[i], original.Content[i])
+		}
+	}
+	collect(normalized.Content[0], authored)
+	return lines
+}
+
+func remapYAMLLineNumbers(err error, authoredLines map[int]int) error {
+	if err == nil || len(authoredLines) == 0 {
+		return err
+	}
+	message := yamlLineNumberPattern.ReplaceAllStringFunc(err.Error(), func(match string) string {
+		parts := yamlLineNumberPattern.FindStringSubmatch(match)
+		generatedLine, conversionErr := strconv.Atoi(parts[1])
+		if conversionErr != nil {
+			return match
+		}
+		authoredLine, ok := authoredLines[generatedLine]
+		if !ok {
+			return match
+		}
+		return "line " + strconv.Itoa(authoredLine)
+	})
+	return schemaGuidanceError{err: err, message: message}
 }
 
 func coreTopLevelFields() []string {

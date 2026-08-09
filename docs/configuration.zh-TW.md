@@ -60,12 +60,14 @@ services。不支援 list append 或 delete marker。
 Inheritance 只允許一層；`extends` 指向的檔案不能再使用 `extends`。Orbit 會先
 分別替換各檔案中的 `${VAR}` 與 `${VAR:-default}`，接著合併，再以 strict mode
 decode 並驗證結果。合併後的所有相對 config paths 都以 child 檔案的目錄為
-基準解析。
+基準解析。例如 `extends: base/shared.yaml` 的 parent 若提供
+`path: ./apps/api`，`apps/api` 會解析到 child 旁，而不是 `base/` 之下。
 
 Parent path 必須是相對路徑。可將抽象 parent 放在 `envs/base/` 這類子目錄，
 避免它出現在可選 environments 中；`orbit source sync` 仍會複製該目錄，並
 透過每個 child 驗證內容。編輯 child 或 parent 都會把執行中的 environment
-標記為 stale。
+標記為 stale。Parent 持續缺失兩次 status 檢查後才會回報，避免 editor
+暫存檔案時產生 false alarm。
 
 尚未支援 `extends` 的 Orbit 版本會把此 key 視為 unknown。Shared environment
 repository 採用前，請先更新所有使用者。

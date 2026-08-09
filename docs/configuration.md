@@ -63,12 +63,15 @@ Inheritance is limited to one level. A file named by `extends` cannot itself
 use `extends`. Orbit substitutes `${VAR}` and `${VAR:-default}` in each file
 before merging, then strictly decodes and validates the combined result. All
 relative config paths in that result are resolved from the child file's
-directory.
+directory. For example, `extends: base/shared.yaml` with an inherited
+`path: ./apps/api` resolves `apps/api` beside the child, not under `base/`.
 
 The parent path must be relative. Put abstract parents under a subdirectory
 such as `envs/base/` so they do not appear as selectable environments;
 `orbit source sync` copies that directory and validates it through each child.
-Editing either the child or its parent marks a running environment stale.
+Editing either the child or its parent marks a running environment stale. A
+missing parent is reported after two consecutive status checks, avoiding a
+false alarm during a transient editor save.
 
 Orbit releases without `extends` support reject the key as unknown. Update
 consumers before adopting it in a shared environment repository.
