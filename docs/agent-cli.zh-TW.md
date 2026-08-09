@@ -338,7 +338,7 @@ resource mutation。這些 mutation 會回傳 `orbit_update_pending`，並且只
 ## Recommended Agent Workflow
 
 本文件負責 JSON contract，不定義 agent decision policy。與版本配對的
-[Orbit skill](../plugins/orbit-agent/skills/orbit/SKILL.md) 是 inspect、action、
+[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md) 是 inspect、action、
 verification、failure recovery、instance targeting 與 destructive operation
 workflow 的唯一來源。JSON response 帶有 `recommended_actions` 時，agent 應先
 遵循它們，再退回臨時 debug。

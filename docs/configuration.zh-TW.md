@@ -19,7 +19,7 @@ Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放
 - [`externals`](#externals)
 - [選用 extension：`sqlserver`](#sqlserver)
 - [Extension 擁有的 section](#extension-擁有的-section)
-- [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
+- [User settings (`~/.orbit/settings.json`)](#user-settings-orbit-settings-json)
 - [變數替換](#變數替換)
 - [底層 runtime 覆寫](#底層-runtime-覆寫)
 
@@ -658,4 +658,4 @@ checkout、agent 與 CI job 應優先使用 `--instance`；詳見
 ## 延伸閱讀
 
 - [docs/architecture.md](architecture.md) —— 這些欄位如何餵給 orchestrator
-- [envs/example.yaml](../envs/example.yaml) —— 完整可執行範例
+- [envs/example.yaml](https://github.com/iml885203/orbit/blob/main/envs/example.yaml) —— 完整可執行範例

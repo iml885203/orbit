@@ -13,6 +13,9 @@ cmd/orbit/dist/
 .superpowers/
 .playwright-cli/
 ui/node_modules/
+website/node_modules/
+website/.vitepress/cache/
+website/.vitepress/dist/
 __pycache__/
 *.pyc
 docs/examples/mini-shop/apps/*/*.db

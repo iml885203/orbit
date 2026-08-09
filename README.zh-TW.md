@@ -1,10 +1,12 @@
-# <img src="ui/public/orbit-logo-badge.svg" width="32" height="32" alt=""> Orbit
+# ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
 把專案需要的所有服務——host processes 與 containers——放進同一個可觀測的
 本機環境。
 
-[試玩 demo](#試玩-orbit) · [在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
-[安裝](docs/development.zh-TW.md) · [文件](#文件) · [English](README.md)
+[官方網站](https://iml885203.github.io/orbit/) · [試玩 demo](#試玩-orbit) ·
+[在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
+[安裝](docs/development.zh-TW.md) · [文件](#文件) ·
+[English](https://iml885203.github.io/orbit/)
 
 ![Orbit dashboard，顯示健康的 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
@@ -37,7 +39,7 @@ orbit open demo-shop
 ## 一份檔案描述整個環境
 
 在你的程式碼旁存一份 `orbit.yaml`
-（[可直接執行的範例](docs/examples/local-first)）：
+（[可直接執行的範例](https://github.com/iml885203/orbit/tree/main/docs/examples/local-first)）：
 
 ```yaml
 version: "3"
@@ -144,7 +146,7 @@ claude plugin install orbit-agent@orbit
 ```
 
 不安裝 plugin 時，讓 agent 直接閱讀
-[skill](plugins/orbit-agent/skills/orbit/SKILL.md) 與
+[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md) 與
 [JSON contract](docs/agent-cli.zh-TW.md)。
 
 ## Dashboard
@@ -182,5 +184,6 @@ playback。Dashboard 只綁定 loopback。
 
 ## License
 
-[MIT](LICENSE)。Binary 內嵌第三方 dependencies，licenses 與 attributions
-列於 [NOTICE](NOTICE)。
+[MIT](https://github.com/iml885203/orbit/blob/main/LICENSE)。Binary 內嵌第三方
+dependencies，licenses 與 attributions 列於
+[NOTICE](https://github.com/iml885203/orbit/blob/main/NOTICE)。
