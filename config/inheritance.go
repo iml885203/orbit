@@ -9,38 +9,48 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func loadInheritedDocument(path string) (*yaml.Node, error) {
-	child, err := readExpandedDocument(path)
+func loadInheritedDocument(path string) (*yaml.Node, string, error) {
+	child, childExpanded, err := readExpandedDocument(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	parentReference, err := takeExtends(child, path)
 	if err != nil || parentReference == "" {
-		return child, err
+		return child, childExpanded, err
 	}
 
 	parentPath, err := resolveExtendedPath(path, parentReference)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	parent, err := readExpandedDocument(parentPath)
+	parent, parentExpanded, err := readExpandedDocument(parentPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading parent env file %s: %w", parentPath, err)
+		return nil, "", fmt.Errorf("loading parent env file %s: %w", parentPath, err)
 	}
 	parentReference, err = takeExtends(parent, parentPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if parentReference != "" {
-		return nil, fmt.Errorf("parsing env file %s: extends may only be used one level deep", parentPath)
+		return nil, "", fmt.Errorf("parsing env file %s: extends may only be used one level deep", parentPath)
+	}
+	if err := validateSourceSchema(path, childExpanded, true); err != nil {
+		return nil, "", err
+	}
+	if err := validateSourceSchema(parentPath, parentExpanded, false); err != nil {
+		return nil, "", err
 	}
 	if nullPath := inheritedNullPath(parent.Content[0], child.Content[0], nil); nullPath != "" {
-		return nil, fmt.Errorf("parsing env file %s: inherited key %s cannot be null; extends does not support delete markers", path, nullPath)
+		return nil, "", fmt.Errorf("parsing env file %s: inherited key %s cannot be null; extends does not support delete markers", path, nullPath)
 	}
 
 	merged := *child
 	merged.Content = []*yaml.Node{mergeYAMLNodes(parent.Content[0], child.Content[0])}
-	return &merged, nil
+	expanded, err := yaml.Marshal(&merged)
+	if err != nil {
+		return nil, "", fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	return &merged, string(expanded), nil
 }
 
 func inheritedNullPath(parent, child *yaml.Node, path []string) string {
@@ -66,19 +76,39 @@ func inheritedNullPath(parent, child *yaml.Node, path []string) string {
 	return ""
 }
 
-func readExpandedDocument(path string) (*yaml.Node, error) {
+func readExpandedDocument(path string) (*yaml.Node, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading config: %w", err)
+		return nil, "", fmt.Errorf("reading config: %w", err)
 	}
+	expanded := substituteEnvVars(string(data))
 	var document yaml.Node
-	if err := yaml.Unmarshal([]byte(substituteEnvVars(string(data))), &document); err != nil {
-		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	if err := yaml.Unmarshal([]byte(expanded), &document); err != nil {
+		return nil, "", fmt.Errorf("parsing env file %s: %w", path, err)
 	}
 	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("parsing env file %s: top-level value must be a mapping", path)
+		return nil, "", fmt.Errorf("parsing env file %s: top-level value must be a mapping", path)
 	}
-	return &document, nil
+	return &document, expanded, nil
+}
+
+func validateSourceSchema(path, expanded string, allowsExtends bool) error {
+	var cfg Config
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return fmt.Errorf("parsing env file %s: %w", path, addSchemaFieldGuidance(err, &cfg))
+	}
+	if allowsExtends {
+		delete(cfg.Extensions, "extends")
+	}
+	if err := validateExtensionSectionNames(&cfg); err != nil {
+		return fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	if err := validateExtensionFragments(&cfg); err != nil {
+		return fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	return nil
 }
 
 func takeExtends(document *yaml.Node, path string) (string, error) {
@@ -134,7 +164,7 @@ func mappingKeyIndex(mapping *yaml.Node, key string) int {
 }
 
 func InheritanceFiles(path string) ([]string, error) {
-	document, err := readExpandedDocument(path)
+	document, _, err := readExpandedDocument(path)
 	if err != nil {
 		return nil, err
 	}

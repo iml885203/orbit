@@ -28,9 +28,10 @@ type configBaseline struct {
 }
 
 type configFileBaseline struct {
-	hash  string
-	mtime time.Time
-	size  int64
+	hash          string
+	mtime         time.Time
+	size          int64
+	missingChecks int
 }
 
 // fileStamp hashes a config file. ok=false when the file can't be read —
@@ -75,35 +76,50 @@ func (s *Server) recordConfigBaselineLocked(path string) {
 // each poll would be wasted work. A touch that doesn't change bytes
 // refreshes the cached stamp so the fast path recovers instead of
 // rehashing forever.
-func (s *Server) fileEdited(configPath, path string, base configFileBaseline) bool {
+func (s *Server) fileEdited(configPath, path string, base configFileBaseline) (bool, string) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return false
+		if !os.IsNotExist(err) || path == configPath {
+			return false, ""
+		}
+		base.missingChecks++
+		if !s.storeFileBaseline(configPath, path, base) || base.missingChecks < 2 {
+			return false, ""
+		}
+		return true, "parent env file missing: " + path
+	}
+	if base.missingChecks > 0 {
+		base.missingChecks = 0
+		s.storeFileBaseline(configPath, path, base)
 	}
 	if info.ModTime().Equal(base.mtime) && info.Size() == base.size {
-		return false
+		return false, ""
 	}
 	hash, mtime, size, ok := fileStamp(path)
 	if !ok {
-		return false
+		return false, ""
 	}
 	if hash == base.hash {
-		s.pathMu.Lock()
-		// Re-check the path under the lock: an env switch may have moved
-		// the baseline to a different file while we hashed this one.
-		if s.configPath == configPath {
-			files := make(map[string]configFileBaseline, len(s.baseline.files))
-			for referencedPath, referencedBaseline := range s.baseline.files {
-				files[referencedPath] = referencedBaseline
-			}
-			current := files[path]
-			current.mtime, current.size = mtime, size
-			files[path] = current
-			s.baseline.files = files
-		}
-		s.pathMu.Unlock()
+		base.mtime, base.size = mtime, size
+		s.storeFileBaseline(configPath, path, base)
+		return false, ""
+	}
+	return true, "env file edited"
+}
+
+func (s *Server) storeFileBaseline(configPath, path string, next configFileBaseline) bool {
+	s.pathMu.Lock()
+	defer s.pathMu.Unlock()
+	current, ok := s.baseline.files[path]
+	if s.configPath != configPath || !ok || current.hash != next.hash {
 		return false
 	}
+	files := make(map[string]configFileBaseline, len(s.baseline.files))
+	for referencedPath, referencedBaseline := range s.baseline.files {
+		files[referencedPath] = referencedBaseline
+	}
+	files[path] = next
+	s.baseline.files = files
 	return true
 }
 
@@ -130,8 +146,8 @@ func (s *Server) configStale() (bool, string) {
 		}
 	}
 	for referencedPath, fileBaseline := range base.files {
-		if s.fileEdited(path, referencedPath, fileBaseline) {
-			return true, "env file edited"
+		if stale, reason := s.fileEdited(path, referencedPath, fileBaseline); stale {
+			return true, reason
 		}
 	}
 	if s.engineStale.Load() {

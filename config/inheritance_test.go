@@ -220,6 +220,26 @@ func TestLoadInheritedResultStillUsesStrictDecodeAndValidation(t *testing.T) {
 	}
 }
 
+func TestLoadStandaloneSchemaErrorKeepsAuthoredLine(t *testing.T) {
+	path := writeOrbitYAML(t, "version: \"3\"\n\nservices:\n  api:\n    type: node\n\n    command: npm start\n    typo: value\n")
+
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), path+": yaml: unmarshal errors:\n  line 8: unknown field typo") {
+		t.Fatalf("Load error = %v, want authored file and line 8", err)
+	}
+}
+
+func TestLoadParentSchemaErrorNamesParentAndAuthoredLine(t *testing.T) {
+	dir := t.TempDir()
+	parent := writeEnvFile(t, dir, "base.yaml", "version: \"3\"\n\nservices:\n  api:\n    type: node\n\n    command: npm start\n    typo: value\n")
+	child := writeEnvFile(t, dir, "child.yaml", "extends: base.yaml\n")
+
+	_, err := Load(child)
+	if err == nil || !strings.Contains(err.Error(), parent+": yaml: unmarshal errors:\n  line 8: unknown field typo") {
+		t.Fatalf("Load error = %v, want parent file and authored line 8", err)
+	}
+}
+
 func TestInheritanceFilesResolvesParentBesideChild(t *testing.T) {
 	dir := t.TempDir()
 	childPath := writeEnvFile(t, dir, "child.yaml", "extends: parents/base.yaml\n")

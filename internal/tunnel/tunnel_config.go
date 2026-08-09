@@ -19,7 +19,11 @@ type ClaimConfig struct {
 // runs on CLI startup paths and per daemon request, both binaries link
 // this package, and the section must be registered before ANY Load.
 func init() {
-	config.RegisterExtensionSection("claim", config.ExtensionSection{Decode: decodeClaimSection, Default: sharedClaimDefault})
+	config.RegisterExtensionSection("claim", config.ExtensionSection{
+		Decode:           decodeClaimSection,
+		ValidateFragment: validateClaimFragment,
+		Default:          sharedClaimDefault,
+	})
 }
 
 // ClaimFrom extracts the env's claim config, if any.
@@ -39,6 +43,11 @@ func decodeClaimSection(node *yaml.Node, _ string) (any, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+func validateClaimFragment(node *yaml.Node) error {
+	var claim ClaimConfig
+	return config.DecodeStrict(node, &claim)
 }
 
 // sharedClaimDefault loads the shared envs/data/claim.yaml convention.
