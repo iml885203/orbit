@@ -165,6 +165,14 @@ func TestLoadRejectsInvalidExtendsAndMissingParent(t *testing.T) {
 			t.Fatalf("Load error = %v, want parent context", err)
 		}
 	})
+
+	t.Run("absolute parent", func(t *testing.T) {
+		path := writeOrbitYAML(t, "extends: "+filepath.ToSlash(filepath.Join(t.TempDir(), "base.yaml"))+"\n")
+		_, err := Load(path)
+		if err == nil || !strings.Contains(err.Error(), "extends must be relative") {
+			t.Fatalf("Load error = %v, want relative path guidance", err)
+		}
+	})
 }
 
 func TestLoadRejectsNullAsInheritedDeleteMarker(t *testing.T) {

@@ -65,6 +65,14 @@ before merging, then strictly decodes and validates the combined result. All
 relative config paths in that result are resolved from the child file's
 directory.
 
+The parent path must be relative. Put abstract parents under a subdirectory
+such as `envs/base/` so they do not appear as selectable environments;
+`orbit source sync` copies that directory and validates it through each child.
+Editing either the child or its parent marks a running environment stale.
+
+Orbit releases without `extends` support reject the key as unknown. Update
+consumers before adopting it in a shared environment repository.
+
 ## Top-level structure
 
 ```yaml

@@ -19,7 +19,10 @@ func loadInheritedDocument(path string) (*yaml.Node, error) {
 		return child, err
 	}
 
-	parentPath := resolveExtendedPath(path, parentReference)
+	parentPath, err := resolveExtendedPath(path, parentReference)
+	if err != nil {
+		return nil, err
+	}
 	parent, err := readExpandedDocument(parentPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading parent env file %s: %w", parentPath, err)
@@ -94,11 +97,11 @@ func takeExtends(document *yaml.Node, path string) (string, error) {
 	return "", nil
 }
 
-func resolveExtendedPath(childPath, parentReference string) string {
+func resolveExtendedPath(childPath, parentReference string) (string, error) {
 	if filepath.IsAbs(parentReference) {
-		return filepath.Clean(parentReference)
+		return "", fmt.Errorf("parsing env file %s: extends must be relative to the extending file", childPath)
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(childPath), parentReference))
+	return filepath.Clean(filepath.Join(filepath.Dir(childPath), parentReference)), nil
 }
 
 func mergeYAMLNodes(parent, child *yaml.Node) *yaml.Node {
@@ -139,5 +142,9 @@ func InheritanceFiles(path string) ([]string, error) {
 	if err != nil || parentReference == "" {
 		return []string{path}, err
 	}
-	return []string{path, resolveExtendedPath(path, parentReference)}, nil
+	parentPath, err := resolveExtendedPath(path, parentReference)
+	if err != nil {
+		return nil, err
+	}
+	return []string{path, parentPath}, nil
 }
