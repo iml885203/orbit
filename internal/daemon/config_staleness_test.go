@@ -61,6 +61,21 @@ func TestConfigStale_FileEdited(t *testing.T) {
 	}
 }
 
+func TestConfigStale_ParentFileEdited(t *testing.T) {
+	dir := t.TempDir()
+	parent := writeTempConfig(t, dir, "base.yaml", "version: \"3\"\n")
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	writeTempConfig(t, dir, "base.yaml", "version: \"3\"\nsettings:\n  shutdown_timeout: 15s\n")
+	advanceModTime(t, parent)
+
+	stale, reason := s.configStale()
+	if !stale || reason != "env file edited" {
+		t.Fatalf("edited parent not detected: stale=%v reason=%q", stale, reason)
+	}
+}
+
 func TestConfigStale_TouchWithoutChangeIsNotStale(t *testing.T) {
 	dir := t.TempDir()
 	content := "version: \"3\"\n"

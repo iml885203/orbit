@@ -9,6 +9,7 @@ Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放
 **目錄**
 
 - [Config 選擇](#config-選擇)
+- [繼承 environment](#繼承-environment)
 - [最上層結構](#最上層結構)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
@@ -37,10 +38,35 @@ Orbit 對每個 command 依以下順序選出一份 config：
 提升為共享 environment repository 後，請移除專案副本，讓共享檔案成為唯一
 真相來源。
 
+## 繼承 environment
+
+當一個 environment 只修改另一個 environment 的部分設定時，使用 `extends`：
+
+```yaml
+extends: backoffice.yaml
+
+services:
+  antares:
+    env:
+      ASPNETCORE_ENVIRONMENT: docker
+      ENFORCE_PERMISSION_CHECKS: "true"
+```
+
+Parent path 以 child 檔案所在目錄為基準解析。每一層 mapping 都依 key 合併：
+child 的值會取代同名 scalar 與 list，child 未出現的 key 則從 parent 繼承。
+因此上述範例只需取代兩個環境變數，不必重複 `antares` 的其他設定或其他
+services。不支援 list append 或 delete marker。
+
+Inheritance 只允許一層；`extends` 指向的檔案不能再使用 `extends`。Orbit 會先
+分別替換各檔案中的 `${VAR}` 與 `${VAR:-default}`，接著合併，再以 strict mode
+decode 並驗證結果。合併後的所有相對 config paths 都以 child 檔案的目錄為
+基準解析。
+
 ## 最上層結構
 
 ```yaml
 version: "3"
+extends: base.yaml     # optional 單層 parent；以此檔案所在目錄為基準
 settings:            # global timing, poll intervals
 tracing:             # optional 內建 OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -53,6 +79,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | Key | Type | Required | 用途 |
 |---|---|---|---|
 | `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit source sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
+| `extends` | string | no | Parent environment 檔案；只允許一層，並以 child 檔案的相對位置解析 |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
 | `containers` | map | no | Docker container 定義 |

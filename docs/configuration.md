@@ -10,6 +10,7 @@ Full YAML schema for an Orbit environment file. A project may keep
 **Contents**
 
 - [Config selection](#config-selection)
+- [Inheriting an environment](#inheriting-an-environment)
 - [Top-level structure](#top-level-structure)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
@@ -38,10 +39,37 @@ repeated flag. `orbit status --json` reports
 happens. Once a local file is promoted to a shared environment repository,
 remove the project copy so the shared file is the single source of truth.
 
+## Inheriting an environment
+
+Use `extends` when an environment changes only part of another environment:
+
+```yaml
+extends: backoffice.yaml
+
+services:
+  antares:
+    env:
+      ASPNETCORE_ENVIRONMENT: docker
+      ENFORCE_PERMISSION_CHECKS: "true"
+```
+
+The parent path is resolved relative to the child file. Mappings merge by key
+at every level: child values replace matching scalar and list values, while
+keys absent from the child are inherited. This lets the example replace two
+environment variables without repeating the rest of `antares` or the other
+services. There is no list append or delete marker.
+
+Inheritance is limited to one level. A file named by `extends` cannot itself
+use `extends`. Orbit substitutes `${VAR}` and `${VAR:-default}` in each file
+before merging, then strictly decodes and validates the combined result. All
+relative config paths in that result are resolved from the child file's
+directory.
+
 ## Top-level structure
 
 ```yaml
 version: "3"
+extends: base.yaml     # optional one-level parent, resolved beside this file
 settings:            # global timing, poll intervals
 tracing:             # optional built-in OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -54,6 +82,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | Key | Type | Required | Purpose |
 |---|---|---|---|
 | `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit source sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
+| `extends` | string | no | Parent environment file; one level only, resolved relative to the child file |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
 | `containers` | map | no | Docker container definitions |

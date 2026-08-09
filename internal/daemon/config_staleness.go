@@ -11,6 +11,8 @@ import (
 	"encoding/hex"
 	"os"
 	"time"
+
+	"github.com/iml885203/orbit/config"
 )
 
 // configBaseline captures what the daemon loaded, for later comparison.
@@ -22,9 +24,13 @@ type configBaseline struct {
 	// flag intentionally diverges from current, so selection-changed
 	// staleness never fires for it (it would be a permanent false alarm).
 	fromCurrent bool
-	hash        string // sha256 of the raw file bytes (pre-substitution)
-	mtime       time.Time
-	size        int64
+	files       map[string]configFileBaseline
+}
+
+type configFileBaseline struct {
+	hash  string
+	mtime time.Time
+	size  int64
 }
 
 // fileStamp hashes a config file. ok=false when the file can't be read —
@@ -46,17 +52,21 @@ func fileStamp(path string) (hash string, mtime time.Time, size int64, ok bool) 
 // recordConfigBaselineLocked snapshots the just-loaded config file. Caller
 // must hold s.pathMu (write) — SetConfigPath is the single choke point.
 func (s *Server) recordConfigBaselineLocked(path string) {
-	hash, mtime, size, ok := fileStamp(path)
-	if !ok {
+	paths, err := config.InheritanceFiles(path)
+	if err != nil {
 		s.baseline = configBaseline{}
 		return
 	}
-	s.baseline = configBaseline{
-		fromCurrent: path == ReadCurrentEnv(),
-		hash:        hash,
-		mtime:       mtime,
-		size:        size,
+	files := make(map[string]configFileBaseline, len(paths))
+	for _, referencedPath := range paths {
+		hash, mtime, size, ok := fileStamp(referencedPath)
+		if !ok {
+			s.baseline = configBaseline{}
+			return
+		}
+		files[referencedPath] = configFileBaseline{hash: hash, mtime: mtime, size: size}
 	}
+	s.baseline = configBaseline{fromCurrent: path == ReadCurrentEnv(), files: files}
 }
 
 // fileEdited reports whether the config file's bytes changed since the
@@ -65,7 +75,7 @@ func (s *Server) recordConfigBaselineLocked(path string) {
 // each poll would be wasted work. A touch that doesn't change bytes
 // refreshes the cached stamp so the fast path recovers instead of
 // rehashing forever.
-func (s *Server) fileEdited(path string, base configBaseline) bool {
+func (s *Server) fileEdited(configPath, path string, base configFileBaseline) bool {
 	info, err := os.Stat(path)
 	if err != nil {
 		return false
@@ -81,8 +91,15 @@ func (s *Server) fileEdited(path string, base configBaseline) bool {
 		s.pathMu.Lock()
 		// Re-check the path under the lock: an env switch may have moved
 		// the baseline to a different file while we hashed this one.
-		if s.configPath == path {
-			s.baseline.mtime, s.baseline.size = mtime, size
+		if s.configPath == configPath {
+			files := make(map[string]configFileBaseline, len(s.baseline.files))
+			for referencedPath, referencedBaseline := range s.baseline.files {
+				files[referencedPath] = referencedBaseline
+			}
+			current := files[path]
+			current.mtime, current.size = mtime, size
+			files[path] = current
+			s.baseline.files = files
 		}
 		s.pathMu.Unlock()
 		return false
@@ -93,14 +110,14 @@ func (s *Server) fileEdited(path string, base configBaseline) bool {
 // configStale reports whether the daemon's loaded config has fallen behind
 // reality, and why — in the spec's order: selection changed, file edited,
 // then the sticky engine flag. Known limits (per the config-holder spec):
-// process-env substitution inputs and the shared data/claim.yaml are not
-// covered.
+// process-env substitution inputs and shared extension data files such as
+// data/claim.yaml are not covered.
 func (s *Server) configStale() (bool, string) {
 	s.pathMu.RLock()
 	path := s.configPath
 	base := s.baseline
 	s.pathMu.RUnlock()
-	if path == "" || base.hash == "" {
+	if path == "" || len(base.files) == 0 {
 		if s.engineStale.Load() {
 			return true, "environment graph needs refresh"
 		}
@@ -112,8 +129,10 @@ func (s *Server) configStale() (bool, string) {
 			return true, "env selection changed"
 		}
 	}
-	if s.fileEdited(path, base) {
-		return true, "env file edited"
+	for referencedPath, fileBaseline := range base.files {
+		if s.fileEdited(path, referencedPath, fileBaseline) {
+			return true, "env file edited"
+		}
 	}
 	if s.engineStale.Load() {
 		return true, "environment graph needs refresh"

@@ -73,3 +73,27 @@ func TestFailedSyncPreservesLastValidCache(t *testing.T) {
 		t.Fatalf("last valid cache changed to %q", data)
 	}
 }
+
+func TestLocalSyncValidatesInheritedEnvironmentInStaging(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	envs := filepath.Join(sourceRoot, "envs")
+	baseDir := filepath.Join(envs, "base")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "shared.yaml"), []byte(validEnvironment), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envs, "e2e.yaml"), []byte("extends: base/shared.yaml\nservices:\n  api:\n    env:\n      MODE: e2e\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	source := Source{Name: "env-dev", Type: TypeLocal, Path: sourceRoot}
+	if _, err := Sync(source, home, false); err != nil {
+		t.Fatalf("Sync inherited environment: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(EnvsDir(home, source.Name), "base", "shared.yaml")); err != nil {
+		t.Fatalf("parent file missing from cache: %v", err)
+	}
+}
