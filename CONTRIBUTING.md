@@ -40,6 +40,8 @@ the stricter Go lint pass.
 
 Project conventions are in [Code conventions](docs/CODE_CONVENTIONS.md) and
 architecture context is in [Architecture](docs/architecture.md).
+Website preview, link validation, navigation, and deployment are documented in
+[Documentation website](docs/website.md).
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 Security reports must follow [SECURITY.md](SECURITY.md), not a public issue.

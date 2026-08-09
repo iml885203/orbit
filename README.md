@@ -1,10 +1,11 @@
-# <img src="ui/public/orbit-logo-badge.svg" width="32" height="32" alt=""> Orbit
+# ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
 Run every service your project needs—host processes and containers—as one
 observable local environment.
 
-[Try the demo](#try-orbit) · [Use Orbit with your project](docs/local-first.md) ·
-[Install](docs/development.md) · [Documentation](#documentation) ·
+[Official website](https://iml885203.github.io/orbit/) · [Try the demo](#try-orbit) ·
+[Use Orbit with your project](docs/local-first.md) · [Install](docs/development.md) ·
+[Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
 
 ![Orbit dashboard showing a healthy mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
@@ -39,7 +40,7 @@ mug to see one request cross the whole graph, then use `orbit down` to stop it.
 ## One file describes the environment
 
 Save an `orbit.yaml` beside your code
-([runnable example](docs/examples/local-first)):
+([runnable example](https://github.com/iml885203/orbit/tree/main/docs/examples/local-first)):
 
 ```yaml
 version: "3"
@@ -151,7 +152,7 @@ claude plugin install orbit-agent@orbit
 ```
 
 Without the plugin, point an agent to
-[the skill](plugins/orbit-agent/skills/orbit/SKILL.md) and
+[the skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md) and
 [the JSON contract](docs/agent-cli.md).
 
 ## Dashboard
@@ -186,8 +187,10 @@ For adopters and contributors:
 - [Development](docs/development.md)
 - [Agent CLI contract](docs/agent-cli.md)
 - [Contributing](CONTRIBUTING.md)
+- [Documentation website maintenance](docs/website.md)
 
 ## License
 
-[MIT](LICENSE). The binary embeds third-party dependencies; their licenses and
-attributions are listed in [NOTICE](NOTICE).
+[MIT](https://github.com/iml885203/orbit/blob/main/LICENSE). The binary embeds
+third-party dependencies; their licenses and attributions are listed in
+[NOTICE](https://github.com/iml885203/orbit/blob/main/NOTICE).

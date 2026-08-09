@@ -20,7 +20,7 @@ Full YAML schema for an Orbit environment file. A project may keep
 - [`externals`](#externals)
 - [Optional extension: `sqlserver`](#sqlserver)
 - [Extension-owned sections](#extension-owned-sections)
-- [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
+- [User settings (`~/.orbit/settings.json`)](#user-settings-orbit-settings-json)
 - [Variable substitution](#variable-substitution)
 - [Low-level runtime overrides](#low-level-runtime-overrides)
 
@@ -692,4 +692,4 @@ Set low-level overrides before `orbit up` — changing them after the daemon is 
 ## See also
 
 - [docs/architecture.md](architecture.md) — how these fields feed the orchestrator
-- [envs/example.yaml](../envs/example.yaml) — complete runnable example
+- [envs/example.yaml](https://github.com/iml885203/orbit/blob/main/envs/example.yaml) — complete runnable example

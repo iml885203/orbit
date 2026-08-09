@@ -47,9 +47,9 @@ Orbit 是本地開發協調器：一份 YAML env 檔描述 containers 與 servic
 
 ## 編譯時客製
 
-當純設定不夠用時，extension contract 仍然可用。團隊可 fork 這個 repo，或將它作為 Go module require，提供自己的 `cmd/orbit`，並將額外的 `extension.Extension` 傳給 `app.Main`。每個 extension 可提供 CLI commands、daemon setup 與 hooks、doctor 與 init 行為，以及 distribution defaults；請見 [extension/extension.go](../extension/extension.go)。
+當純設定不夠用時，extension contract 仍然可用。團隊可 fork 這個 repo，或將它作為 Go module require，提供自己的 `cmd/orbit`，並將額外的 `extension.Extension` 傳給 `app.Main`。每個 extension 可提供 CLI commands、daemon setup 與 hooks、doctor 與 init 行為，以及 distribution defaults；請見 [extension/extension.go](https://github.com/iml885203/orbit/blob/main/extension/extension.go)。
 
-UI build 在 [ui/vite.config.ts](../ui/vite.config.ts) 保留三個編譯時 seam：
+UI build 在 [ui/vite.config.ts](https://github.com/iml885203/orbit/blob/main/ui/vite.config.ts) 保留三個編譯時 seam：
 
 - `ORBIT_UI_EXT` 用團隊的 navigation、routes、panels、settings sections 與 lifecycle hooks 取代 `$ext` module。
 - `ORBIT_UI_TYPES` 取代 generated-types barrel。

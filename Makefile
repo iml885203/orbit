@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs docs-site-dev docs-site-build docs-site-preview docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -108,6 +108,21 @@ test-docs:
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.zh-TW.md >/dev/null
 	@! grep -F 'iml885203/orbit-examples' README.md README.zh-TW.md
 
+docs-site-dev:
+	pnpm --dir website install --frozen-lockfile
+	pnpm --dir website run dev
+
+docs-site-build:
+	pnpm --dir website install --frozen-lockfile
+	pnpm --dir website run build
+
+docs-site-preview: docs-site-build
+	pnpm --dir website run preview
+
+docs-site-check:
+	pnpm --dir website install --frozen-lockfile
+	pnpm --dir website run check
+
 test-release:
 	@version="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' plugins/orbit-agent/.codex-plugin/plugin.json)"; \
 	./scripts/verify-release-candidate.sh "v$$version"
@@ -178,6 +193,7 @@ preflight:
 	go vet ./...
 	$(MAKE) test-install
 	$(MAKE) test-docs
+	$(MAKE) docs-site-check
 	$(MAKE) test-release
 	$(MAKE) verify-types
 	@echo "preflight OK - matches the CI gate"

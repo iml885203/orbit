@@ -49,9 +49,9 @@ The released binary supplies its distribution defaults. Custom teams can add Git
 
 ## Compile-time customization
 
-The extension contract remains available when config alone is insufficient. A team can fork this repo or require it as a Go module, provide its own `cmd/orbit`, and pass additional `extension.Extension` values to `app.Main`. Each extension can contribute CLI commands, daemon setup and hooks, doctor and init behavior, and distribution defaults; see [extension/extension.go](../extension/extension.go).
+The extension contract remains available when config alone is insufficient. A team can fork this repo or require it as a Go module, provide its own `cmd/orbit`, and pass additional `extension.Extension` values to `app.Main`. Each extension can contribute CLI commands, daemon setup and hooks, doctor and init behavior, and distribution defaults; see [extension/extension.go](https://github.com/iml885203/orbit/blob/main/extension/extension.go).
 
-The UI build retains three compile-time seams in [ui/vite.config.ts](../ui/vite.config.ts):
+The UI build retains three compile-time seams in [ui/vite.config.ts](https://github.com/iml885203/orbit/blob/main/ui/vite.config.ts):
 
 - `ORBIT_UI_EXT` replaces the `$ext` module with a team's navigation, routes, panels, settings sections, and lifecycle hooks.
 - `ORBIT_UI_TYPES` replaces the generated-types barrel.

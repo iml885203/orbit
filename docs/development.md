@@ -5,7 +5,7 @@
 Two audiences: **using Orbit** (install alternatives, upgrade / rollback /
 uninstall) and **hacking on Orbit itself** (build from source, dev workflow,
 dashboard hot reload). For the basic day-to-day workflow, see the
-[README](../README.md#common-workflows).
+[website overview](https://iml885203.github.io/orbit/#one-file-describes-the-environment).
 
 ## Using Orbit
 

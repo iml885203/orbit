@@ -29,7 +29,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
+          cache-dependency-path: |
+            ui/pnpm-lock.yaml
+            website/pnpm-lock.yaml
       - run: make preflight
 
   # A 1.0 release gate: dependency vulnerabilities must be caught before a tag,
@@ -52,13 +54,17 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
+          cache-dependency-path: |
+            ui/pnpm-lock.yaml
+            website/pnpm-lock.yaml
       - name: Install dashboard dependencies
         run: pnpm --dir ui install --frozen-lockfile
       - name: Scan Go dependencies
         run: make vulncheck
       - name: Scan dashboard runtime dependencies
         run: pnpm --dir ui audit --prod
+      - name: Scan documentation website dependencies
+        run: pnpm --dir website audit
       - name: Verify third-party notices match shipped dependencies
         run: make test-notice
 
