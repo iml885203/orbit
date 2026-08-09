@@ -329,31 +329,33 @@ print(resources["demo-shop"]["url"])
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "${demo_url%/}/health" >"$test_root/health.json"
 
-# The smoke script reads the injected service URLs the way any agent would:
-# from orbit status.
-python3 -c '
+python3 - \
+  "$test_root/status.json" \
+  "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
+  "$orbit_bin" \
+  >"$test_root/mini-shop-smoke.txt" <<'PY'
 import json
+import os
+import pathlib
+import subprocess
 import sys
 
 payload = json.load(open(sys.argv[1], encoding="utf-8"))["data"]
 resources = {resource["name"]: resource for resource in payload["resources"]}
-names = {
+service_url_variables = {
     "demo-shop": "DEMO_SHOP_URL",
     "shop-catalog-api": "SHOP_CATALOG_API_URL",
     "shop-inventory-api": "SHOP_INVENTORY_API_URL",
     "shop-order-api": "SHOP_ORDER_API_URL",
 }
-for name, env in names.items():
-    print(f"{env}={resources[name]['"'"'url'"'"']}")
-' "$test_root/status.json" >"$test_root/demo-urls.env"
-(
-  set -a
-  . "$test_root/demo-urls.env"
-  set +a
-  PATH="$(dirname "$orbit_bin"):$PATH" \
-    python3 "$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/smoke.py" \
-    >"$test_root/mini-shop-smoke.txt"
+smoke_environment = os.environ.copy()
+for service, variable in service_url_variables.items():
+    smoke_environment[variable] = resources[service]["url"]
+smoke_environment["PATH"] = os.pathsep.join(
+    filter(None, (str(pathlib.Path(sys.argv[3]).parent), smoke_environment.get("PATH")))
 )
+subprocess.run([sys.executable, sys.argv[2]], check=True, env=smoke_environment)
+PY
 
 expected_demo_ref="$(
   sed -n 's/.*EnvRepoRef: "\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
@@ -417,10 +419,10 @@ assert [action["command"] for action in infrastructure["recommended_actions"]] =
 ]
 PY
 
-english_handoff="https://github.com/iml885203/orbit/blob/main/docs/local-first.md"
+canonical_english_handoff="https://github.com/iml885203/orbit/blob/main/docs/local-first.md"
 handoff_file="$ORBIT_HOME/sources/default/current/envs/seeds/mini-shop/index.html"
-if ! grep -F "$english_handoff" "$handoff_file" >/dev/null; then
-  echo "demo handoff in $handoff_file does not match the Orbit release: $english_handoff" >&2
+if ! grep -F "$canonical_english_handoff" "$handoff_file" >/dev/null; then
+  echo "demo handoff in $handoff_file does not point to the canonical Orbit guide: $canonical_english_handoff" >&2
   exit 1
 fi
 
