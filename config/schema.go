@@ -11,7 +11,14 @@ import (
 
 // Config is the top-level orbit.yaml structure.
 type Config struct {
-	Version    string                `yaml:"version"`
+	Version string `yaml:"version"`
+	// Extends exists so the decoder absorbs the `extends:` key, which is
+	// still present in the merged document Load produces — without this
+	// field the inline Extensions map would swallow it and the section
+	// allowlist would reject it as unknown. Load acts on its own header
+	// copy; this field is never read. Semantics live in
+	// docs/configuration.md. Off the wire like Extensions (json:"-").
+	Extends    string                `yaml:"extends" json:"-"`
 	Settings   RuntimeSettings       `yaml:"settings"`
 	Groups     map[string]Group      `yaml:"groups"`
 	Containers map[string]*Container `yaml:"containers"`

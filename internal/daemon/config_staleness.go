@@ -93,8 +93,9 @@ func (s *Server) fileEdited(path string, base configBaseline) bool {
 // configStale reports whether the daemon's loaded config has fallen behind
 // reality, and why — in the spec's order: selection changed, file edited,
 // then the sticky engine flag. Known limits (per the config-holder spec):
-// process-env substitution inputs and the shared data/claim.yaml are not
-// covered.
+// process-env substitution inputs, the shared data/claim.yaml, and the
+// parent file behind an `extends:` are not covered — the baseline stamps
+// only the selected file's bytes.
 func (s *Server) configStale() (bool, string) {
 	s.pathMu.RLock()
 	path := s.configPath

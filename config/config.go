@@ -30,9 +30,21 @@ func Load(path string) (*Config, error) {
 
 	var header struct {
 		Version string `yaml:"version"`
+		Extends string `yaml:"extends"`
 	}
 	if err := yaml.Unmarshal([]byte(expanded), &header); err != nil {
 		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	if header.Extends != "" {
+		expanded, err = applyExtends(expanded, header.Extends, path)
+		if err != nil {
+			return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+		}
+		// Version may be inherited rather than named, so it is read from
+		// the merged document, not the child file alone.
+		if err := yaml.Unmarshal([]byte(expanded), &header); err != nil {
+			return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+		}
 	}
 	if err := CheckVersion(header.Version, path); err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放
 
 - [Config 選擇](#config-選擇)
 - [最上層結構](#最上層結構)
+- [`extends`](#extends)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
 - [`containers`](#containers)
@@ -41,6 +42,7 @@ Orbit 對每個 command 依以下順序選出一份 config：
 
 ```yaml
 version: "3"
+extends:             # optional：從另一個 env 檔繼承全部內容
 settings:            # global timing, poll intervals
 tracing:             # optional 內建 OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -53,6 +55,7 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | Key | Type | Required | 用途 |
 |---|---|---|---|
 | `version` | string | yes | Schema 版本，必須是 `"3"`；受管理的 shared env 用 `orbit source sync` 更新，project-local 檔案由 maintainer 遷移；env 比 Orbit 新時執行 `orbit update` |
+| `extends` | string | no | 本檔繼承的 env 檔路徑，相對於本檔所在目錄解析。僅一層 —— 見 [`extends`](#extends) |
 | `settings` | object | no | 全域 timeout 與 polling 間隔 |
 | `tracing` | object | no | 內建本地 OpenTelemetry receiver（預設開啟 —— 省略整段即自動啟用；加 `enabled: false` 才關閉） |
 | `containers` | map | no | Docker container 定義 |
@@ -96,6 +99,44 @@ shared environment repository 由 maintainer commit schema-3 檔案，使用者�
 `orbit source sync`。Project-local `orbit.yaml` 則依上方 mapping 直接修改。
 command 引用的 credentials 應放在 container `environment`，而不是
 seed-specific fields。
+
+## `extends`
+
+env 檔可以繼承另一個檔案，只寫出差異：
+
+```yaml
+# e2e.yaml
+extends: backoffice.yaml
+
+services:
+  api:
+    env:
+      ASPNETCORE_ENVIRONMENT: Docker
+```
+
+合併規則刻意維持極小：
+
+- Mapping 逐 key 遞迴合併：子檔具名的 key 覆蓋父值（巢狀 mapping 則繼續
+  細化）；子檔未具名的 key 一律繼承。
+- 所有非 mapping 的值 —— scalar、list、明確的 null —— 整值取代。沒有
+  list-append 規則，也沒有刪除標記。
+- 僅一層：被繼承的檔案本身不得再含 `extends`。
+
+路徑必須是相對路徑，相對於子檔所在目錄解析，因此 synced source 的
+`envs/e2e.yaml` 可以繼承同層的 `envs/backoffice.yaml`，或
+`envs/base/backoffice.yaml`。檔案位置有兩層影響：子目錄中的檔案不會出現在
+可選 env 清單；且 `orbit source sync` 會把每個頂層 `*.yaml` 當獨立檔案
+驗證 —— 若父檔本身不是完整合法的 env（例如把 `version` 留給子檔），就
+必須放進 `envs/base/` 這類子目錄。`${VAR}` 替換在合併前對每個檔案獨立
+執行；合併結果與單一檔案走完全相同的驗證，`version` 也因此可以由父檔
+繼承。
+
+兩點營運注意事項：
+
+- 尚未支援 `extends` 的 Orbit 版本會把這個 key 視為未知而拒絕，shared
+  environment repository 採用前，其使用者必須先更新 Orbit。
+- Daemon 的「env file edited」staleness 訊號只監看被選擇的檔案，不含其
+  父檔。編輯父檔後請重新套用 environment（`orbit switch <env>`）。
 
 ## `settings`
 

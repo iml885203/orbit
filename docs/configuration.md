@@ -11,6 +11,7 @@ Full YAML schema for an Orbit environment file. A project may keep
 
 - [Config selection](#config-selection)
 - [Top-level structure](#top-level-structure)
+- [`extends`](#extends)
 - [`settings`](#settings)
 - [`tracing`](#tracing)
 - [`containers`](#containers)
@@ -42,6 +43,7 @@ remove the project copy so the shared file is the single source of truth.
 
 ```yaml
 version: "3"
+extends:             # optional: inherit everything from another env file
 settings:            # global timing, poll intervals
 tracing:             # optional built-in OpenTelemetry receiver
 containers:          # Docker-managed infrastructure
@@ -54,6 +56,7 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | Key | Type | Required | Purpose |
 |---|---|---|---|
 | `version` | string | yes | Schema version. Must be `"3"` — a managed shared env is refreshed with `orbit source sync`, while a project-local file is migrated by its maintainer; when the env is newer than Orbit, run `orbit update` |
+| `extends` | string | no | Path of an env file this one inherits from, resolved relative to this file's directory. One level only — see [`extends`](#extends) |
 | `settings` | object | no | Global timeouts and polling intervals |
 | `tracing` | object | no | Built-in local OpenTelemetry receiver (on by default — an absent section auto-enables it; add `enabled: false` to opt out) |
 | `containers` | map | no | Docker container definitions |
@@ -100,6 +103,49 @@ For a shared environment repository, its maintainer commits the schema-3 file
 and users run `orbit source sync`. For a project-local `orbit.yaml`, update the
 file directly using the mapping above. Credentials referenced by the command
 belong in the container's `environment`, not in seed-specific fields.
+
+## `extends`
+
+An env file can inherit from another and state only what differs:
+
+```yaml
+# e2e.yaml
+extends: backoffice.yaml
+
+services:
+  api:
+    env:
+      ASPNETCORE_ENVIRONMENT: Docker
+```
+
+The merge rules are deliberately small:
+
+- Mappings merge key by key, recursively: a key the child names is
+  overridden (or, for a nested mapping, refined); a key the child does not
+  name is inherited.
+- Every non-mapping value — scalar, list, or explicit null — is replaced
+  wholesale. There is no list-append rule and no delete marker.
+- One level only: the extended file must not itself contain `extends`.
+
+The path must be relative; it resolves against the extending file's
+directory, so a synced source's `envs/e2e.yaml` can extend its sibling
+`envs/backoffice.yaml` or `envs/base/backoffice.yaml`. Placement matters
+twice: files in subdirectories don't appear as selectable envs, and
+`orbit source sync` validates every top-level `*.yaml` standalone — a
+parent that is not a complete valid env on its own (for example one that
+leaves `version` to its children) must therefore live in a subdirectory
+such as `envs/base/`. `${VAR}` substitution runs on each file independently
+before the merge, and the merged result is validated exactly like a single
+file, so `version` may be inherited from the parent.
+
+Two operational notes:
+
+- Orbit releases without `extends` support reject the key as unknown, so a
+  shared environment repository adopting it requires its consumers to update
+  Orbit first.
+- The daemon's "env file edited" staleness signal watches the selected file
+  only, not its parent. After editing a parent, re-apply the environment
+  (`orbit switch <env>`) to pick the change up.
 
 ## `settings`
 
