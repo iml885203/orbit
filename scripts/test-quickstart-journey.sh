@@ -78,16 +78,18 @@ trap cleanup EXIT
 "$orbit_bin" up --help >"$test_root/up-help.txt"
 "$orbit_bin" down --help >"$test_root/down-help.txt"
 grep -F "add orbit.yaml to the project root" "$test_root/root-help.txt" >/dev/null
-for command in doctor down env init logs open restart status switch uninstall up update version; do
+for command in daemon doctor down env init logs open restart service settings status switch tracing uninstall up update version; do
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
 done
-for hidden in daemon edge history inspect service settings tracing; do
-  if grep -E "^[[:space:]]+$hidden[[:space:]]" "$test_root/root-help.txt" >/dev/null; then
-    echo "advanced command $hidden leaked into installed-user root help." >&2
-    exit 1
-  fi
-done
-for command in list sync; do
+grep -F "orbit inspect --json" "$test_root/root-help.txt" >/dev/null
+grep -F "https://iml885203.github.io/orbit/docs/agent-cli" "$test_root/root-help.txt" >/dev/null
+if grep -E "^[[:space:]]+inspect[[:space:]]" "$test_root/root-help.txt" >/dev/null; then
+  echo "agent-only inspect command appeared in the human command list instead of its dedicated signpost." >&2
+  exit 1
+fi
+"$orbit_bin" help inspect >"$test_root/inspect-help.txt"
+grep -F "machine-readable runtime readiness" "$test_root/inspect-help.txt" >/dev/null
+for command in apply info list sync; do
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/env-help.txt" >/dev/null
 done
 grep -F -- "--tail" "$test_root/logs-help.txt" >/dev/null
