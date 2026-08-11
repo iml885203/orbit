@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	"gopkg.in/yaml.v3"
 )
 
 func validSQLServerConfig() (*SQLServerConfig, *config.Config) {
@@ -174,5 +175,113 @@ func TestValidateSQLServerSectionAcceptsExplicitConfig(t *testing.T) {
 	section, cfg := validSQLServerConfig()
 	if err := validateSQLServerSection(section, cfg); err != nil {
 		t.Fatalf("validateSQLServerSection: %v", err)
+	}
+}
+
+func TestValidateSQLServerSectionRejectsDatabaseNamesSharedByProjects(t *testing.T) {
+	section, cfg := validSQLServerConfig()
+	section.Projects = append(section.Projects,
+		SQLServerProjectConfig{Path: "e2e/Accounts/AccountsCopy.sqlproj", Databases: []string{"Accounts"}},
+	)
+	err := validateSQLServerSection(section, cfg)
+	if err == nil || !strings.Contains(err.Error(), `both map database name "Accounts"`) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestValidateSQLServerSectionRejectsSharedProjectNamesWithDistinctDatabases(t *testing.T) {
+	section, cfg := validSQLServerConfig()
+	section.Projects[0].Databases = []string{"AccountsDev"}
+	section.Projects = append(section.Projects,
+		SQLServerProjectConfig{Path: "e2e/Accounts/Accounts.sqlproj", Databases: []string{"AccountsE2E"}},
+	)
+	err := validateSQLServerSection(section, cfg)
+	if err == nil || !strings.Contains(err.Error(), `both use project name "Accounts"`) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestValidateSQLServerSectionRejectsExplicitEmptyDatabaseList(t *testing.T) {
+	section, cfg := validSQLServerConfig()
+	section.Projects[0].Databases = []string{}
+	err := validateSQLServerSection(section, cfg)
+	if err == nil || !strings.Contains(err.Error(), "must contain at least one database name") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestValidateSQLServerSectionRejectsEveryExplicitEmptyDatabaseYAMLForm(t *testing.T) {
+	for _, value := range []string{"[]", "", "null"} {
+		t.Run("value="+value, func(t *testing.T) {
+			var project SQLServerProjectConfig
+			raw := "path: database/Accounts/Accounts.sqlproj\ndatabases: " + value + "\n"
+			if err := yaml.Unmarshal([]byte(raw), &project); err != nil {
+				t.Fatal(err)
+			}
+			section, cfg := validSQLServerConfig()
+			section.Projects = []SQLServerProjectConfig{project}
+			err := validateSQLServerSection(section, cfg)
+			if err == nil || !strings.Contains(err.Error(), "must contain at least one database name") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateSQLServerSectionDerivesDatabaseFromCleanPath(t *testing.T) {
+	section, cfg := validSQLServerConfig()
+	section.Projects[0].Path = "  database/Accounts/Accounts.sqlproj  "
+	if err := validateSQLServerSection(section, cfg); err != nil {
+		t.Fatalf("validateSQLServerSection: %v", err)
+	}
+	if section.Projects[0].Path != "database/Accounts/Accounts.sqlproj" ||
+		len(section.Projects[0].Databases) != 1 || section.Projects[0].Databases[0] != "Accounts" {
+		t.Fatalf("project = %+v", section.Projects[0])
+	}
+}
+
+func TestValidateSQLServerSectionRejectsNamesSharedAcrossProjectAndDatabase(t *testing.T) {
+	tests := []struct {
+		name     string
+		projects []SQLServerProjectConfig
+	}{
+		{
+			name: "later database shadows earlier project",
+			projects: []SQLServerProjectConfig{
+				{Path: "dev/Foo/Foo.sqlproj", Databases: []string{"FooDev"}},
+				{Path: "e2e/Bar/Bar.sqlproj", Databases: []string{"foo"}},
+			},
+		},
+		{
+			name: "later project is shadowed by earlier database",
+			projects: []SQLServerProjectConfig{
+				{Path: "dev/Foo/Foo.sqlproj", Databases: []string{"bar"}},
+				{Path: "e2e/Bar/Bar.sqlproj", Databases: []string{"BarE2E"}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			section, cfg := validSQLServerConfig()
+			section.Projects = test.projects
+			err := validateSQLServerSection(section, cfg)
+			if err == nil || !strings.Contains(err.Error(), "project and database names must be unique across projects") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateSQLServerSectionAllowsOneProjectToNameMultipleDatabases(t *testing.T) {
+	section, cfg := validSQLServerConfig()
+	section.Projects[0].Databases = []string{"AccountsDev", "AccountsE2E"}
+	if err := validateSQLServerSection(section, cfg); err != nil {
+		t.Fatalf("validateSQLServerSection: %v", err)
+	}
+	want := []string{"AccountsDev", "AccountsE2E"}
+	for i, database := range want {
+		if section.Projects[0].Databases[i] != database {
+			t.Fatalf("databases = %v", section.Projects[0].Databases)
+		}
 	}
 }

@@ -25,7 +25,34 @@ type SQLServerConfig struct {
 }
 
 type SQLServerProjectConfig struct {
-	Path string `yaml:"path"`
+	Path                string   `yaml:"path"`
+	Databases           []string `yaml:"databases,omitempty"`
+	databasesConfigured bool
+}
+
+func (project *SQLServerProjectConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("project must be a mapping")
+	}
+	for i := 0; i < len(node.Content); i += 2 {
+		key := node.Content[i]
+		switch key.Value {
+		case "path":
+		case "databases":
+			project.databasesConfigured = true
+		default:
+			return fmt.Errorf("line %d: unknown field %s", key.Line, key.Value)
+		}
+	}
+	type projectConfig SQLServerProjectConfig
+	var decoded projectConfig
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	configured := project.databasesConfigured
+	*project = SQLServerProjectConfig(decoded)
+	project.databasesConfigured = configured
+	return nil
 }
 
 func init() {
@@ -67,7 +94,10 @@ func validateSQLServerSection(value any, cfg *config.Config) error {
 	if len(section.Projects) == 0 {
 		return fmt.Errorf("projects must declare at least one .sqlproj path")
 	}
-	seen := map[string]bool{}
+	seenPaths := map[string]bool{}
+	seenDatabaseProjects := map[string]int{}
+	seenProjectNames := map[string]int{}
+	seenIdentifiers := map[string]int{}
 	for i, project := range section.Projects {
 		clean := filepath.Clean(strings.TrimSpace(project.Path))
 		if clean == "." || clean == "" {
@@ -79,11 +109,50 @@ func validateSQLServerSection(value any, cfg *config.Config) error {
 		if !strings.EqualFold(filepath.Ext(clean), ".sqlproj") {
 			return fmt.Errorf("projects[%d].path %q must point to a .sqlproj file", i, project.Path)
 		}
-		if seen[clean] {
+		if seenPaths[clean] {
 			return fmt.Errorf("projects[%d].path %q is duplicated", i, project.Path)
 		}
-		seen[clean] = true
+		seenPaths[clean] = true
+		projectName := strings.TrimSuffix(filepath.Base(clean), filepath.Ext(clean))
+		projectKey := strings.ToLower(projectName)
+		if previous, exists := seenProjectNames[projectKey]; exists {
+			return fmt.Errorf(
+				"projects[%d].path %q and projects[%d].path %q both use project name %q; .sqlproj basenames must be unique",
+				i, project.Path, previous, section.Projects[previous].Path, projectName,
+			)
+		}
+		seenProjectNames[projectKey] = i
+		if previous, exists := seenIdentifiers[projectKey]; exists && previous != i {
+			return crossProjectSQLNameCollision(i, project.Path, previous, section.Projects[previous].Path, projectName)
+		}
+		seenIdentifiers[projectKey] = i
+		if (project.databasesConfigured || project.Databases != nil) && len(project.Databases) == 0 {
+			return fmt.Errorf("projects[%d].databases must contain at least one database name when specified", i)
+		}
+		normalizedProject := project
+		normalizedProject.Path = clean
+		databases := databaseNamesForProject(normalizedProject)
+		for databaseIndex, rawDatabase := range databases {
+			database := strings.TrimSpace(rawDatabase)
+			if !safeDBName.MatchString(database) {
+				return fmt.Errorf("projects[%d].databases[%d] %q is not a valid database name", i, databaseIndex, rawDatabase)
+			}
+			databaseKey := strings.ToLower(database)
+			if previous, exists := seenDatabaseProjects[databaseKey]; exists {
+				return fmt.Errorf(
+					"projects[%d].path %q and projects[%d].path %q both map database name %q; each database name must map to exactly one .sqlproj",
+					i, project.Path, previous, section.Projects[previous].Path, database,
+				)
+			}
+			if previous, exists := seenIdentifiers[databaseKey]; exists && previous != i {
+				return crossProjectSQLNameCollision(i, project.Path, previous, section.Projects[previous].Path, database)
+			}
+			seenDatabaseProjects[databaseKey] = i
+			seenIdentifiers[databaseKey] = i
+			databases[databaseIndex] = database
+		}
 		section.Projects[i].Path = clean
+		section.Projects[i].Databases = databases
 	}
 	if section.Username == "" {
 		return fmt.Errorf("username is required")
@@ -105,6 +174,21 @@ func validateSQLServerSection(value any, cfg *config.Config) error {
 		return fmt.Errorf("target %q: %w", section.Target, err)
 	}
 	return nil
+}
+
+func crossProjectSQLNameCollision(current int, currentPath string, previous int, previousPath string, name string) error {
+	return fmt.Errorf(
+		"projects[%d].path %q and projects[%d].path %q both expose name %q; project and database names must be unique across projects",
+		current, currentPath, previous, previousPath, name,
+	)
+}
+
+func databaseNamesForProject(project SQLServerProjectConfig) []string {
+	if project.Databases != nil {
+		return append([]string(nil), project.Databases...)
+	}
+	name := strings.TrimSuffix(filepath.Base(project.Path), filepath.Ext(project.Path))
+	return []string{name}
 }
 
 func SQLServerFrom(cfg *config.Config) *SQLServerConfig {

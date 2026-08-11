@@ -74,6 +74,9 @@ func TestTunnelClaimOutputJSONRendersFlagError(t *testing.T) {
 
 func TestTunnelListAndReleaseUseTunleaseFlagAliases(t *testing.T) {
 	list := tunnelListCmd()
+	if !strings.Contains(list.Short, "other owners") {
+		t.Fatalf("list help = %q", list.Short)
+	}
 	if err := list.ParseFlags([]string{"-a", "-g", "gateway.example", "-t", "secret", "-k", "-o", "json"}); err != nil {
 		t.Fatal(err)
 	}
@@ -82,6 +85,9 @@ func TestTunnelListAndReleaseUseTunleaseFlagAliases(t *testing.T) {
 	}
 
 	release := tunnelReleaseCmd()
+	if release.Use != "release [PATH] | --to PORT" {
+		t.Fatalf("release use = %q", release.Use)
+	}
 	if err := release.ParseFlags([]string{"-p", "8080", "-g", "gateway.example", "-t", "secret", "-k", "-o", "json"}); err != nil {
 		t.Fatal(err)
 	}

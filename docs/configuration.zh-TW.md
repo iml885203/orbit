@@ -553,6 +553,7 @@ sqlserver:
   password_env: MSSQL_SA_PASSWORD
   projects:
     - path: database/Accounts/Accounts.sqlproj
+      databases: [AccountsDev, AccountsE2E]
     - path: database/Orders/Orders.sqlproj
 ```
 
@@ -565,7 +566,12 @@ image 初始化時需要 `MSSQL_SA_PASSWORD`；`password_env` 指向同一個 ke
 `target` 指向同一個 env 裡的 container；`username` 預設為 `sa`。
 `password_env` 是 target container 裡存放密碼的環境變數名稱，Orbit
 只在執行時讀取解析後的值，不會儲存或輸出密碼。每個 project path 都是
-workspace-relative 的 `.sqlproj` 檔案。Orbit 不會掃描相鄰目錄，也不會從
+workspace-relative 的 `.sqlproj` 檔案。省略 `databases` 時，Orbit 會從
+`.sqlproj` 檔名推導一個 database name（例如 `Orders.sqlproj` 會得到
+`Orders`）。若一份 project schema 要 publish 到多個 database，請用
+`databases` 明確列出至少一個名稱。每個 database name 只能出現在一個 project 下；
+兩條 project path 若推導出相同 basename，validation 會拒絕，不會靜默指向
+同一個 database。Orbit 不會掃描相鄰目錄，也不會從
 container 名稱或 image 猜測。見 [sql-workflow.zh-TW.md](sql-workflow.zh-TW.md)。
 
 ## Extension 擁有的 section

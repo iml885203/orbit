@@ -52,6 +52,18 @@ var distribution extension.Distribution
 // the dist contents); nil when the build embeds none.
 var dashboardFS fs.FS
 
+const rootCommandDescription = `Run host services and containers as one local development environment.
+
+In an existing project, add orbit.yaml to the project root and run orbit up.
+Orbit discovers the nearest orbit.yaml automatically; orbit init is only needed
+for the bundled demo or a shared environment repository.
+
+An environment is a runnable configuration. A source is a Git repository or
+local directory that provides shared environments; manage it with orbit source.
+
+Agents: run 'orbit inspect --json' for machine-readable runtime readiness.
+Contract: https://iml885203.github.io/orbit/docs/agent-cli`
+
 // Main assembles and runs the orbit CLI. version/buildTime come from the
 // caller's -ldflags -X main.version/-X main.buildTime (each binary's main
 // package owns the ldflags target); ui is the built dashboard the daemon
@@ -69,16 +81,9 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		}
 	}
 	rootCmd := &cobra.Command{
-		Use:   "orbit",
-		Short: "Local development orchestration tool",
-		Long: `Run host services and containers as one local development environment.
-
-In an existing project, add orbit.yaml to the project root and run orbit up.
-Orbit discovers the nearest orbit.yaml automatically; orbit init is only needed
-for the bundled demo or a shared environment repository.
-
-An environment is a runnable configuration. A source is a Git repository or
-local directory that provides shared environments; manage it with orbit source.`,
+		Use:     "orbit",
+		Short:   "Local development orchestration tool",
+		Long:    rootCommandDescription,
 		Version: buildVersion(),
 	}
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
@@ -88,7 +93,7 @@ local directory that provides shared environments; manage it with orbit source.`
 
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides project config and current env)")
 	rootCmd.PersistentFlags().BoolVar(&cli.JSONOutput, "json", false, "output in JSON format")
-	rootCmd.PersistentFlags().StringVar(&instanceName, "instance", "", "target an isolated named runtime")
+	rootCmd.PersistentFlags().StringVar(&instanceName, "instance", "", "target or create an isolated named runtime")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		// A command with DisableFlagParsing (exec) never lets cobra
 		// intercept -h/--help, so a help request would run the daemon
@@ -641,7 +646,11 @@ func upCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "up [resources...]",
 		Short: "Start resources (or all if no args)",
-		Long: `Start containers and host services. Orbit starts everything it needs automatically.
+		Long: `Start containers and host services. Orbit starts dependencies automatically.
+
+With resource names, Orbit starts those resources and their transitive dependencies.
+With --group, Orbit starts the group's services, their transitive dependencies, and
+all configured containers. Use --infra to start only containers.
 
 Examples:
   orbit up                    # start everything (containers + services)
@@ -663,7 +672,9 @@ func downCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "down [resources...]",
 		Short: "Stop resources (or all if no selection is given)",
-		Long: `Stop containers and host services using the same selection modes as orbit up.
+		Long: `Stop containers and host services. Selection does not expand to dependencies:
+resource names stop only those resources, and --group stops only group members. Shared
+dependencies and containers remain running unless selected explicitly or with --infra.
 
 Examples:
   orbit down                    # stop everything
@@ -717,9 +728,8 @@ func openCmd() *cobra.Command {
 
 func daemonCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "daemon",
-		Short:  "Manage the orbit daemon",
-		Hidden: true,
+		Use:   "daemon",
+		Short: "Manage the Orbit daemon",
 	}
 
 	runCmd := &cobra.Command{

@@ -17,14 +17,17 @@ var envInfoShowSecrets bool
 
 func envInfoCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "info",
-		Short: "Show how to reach the environment's resources",
-		Long: "Report the active environment's identity, and each resource's ports and URL.\n\n" +
+		Use:   "info [environment]",
+		Short: "Show declared resource endpoints and environment metadata",
+		Long: "Report the named environment's identity and each declared resource's ports and URL.\n" +
+			"Without an argument, report the active environment. This describes configuration;\n" +
+			"use 'orbit inspect --json' for runtime readiness.\n\n" +
 			"Declared values come from the environment file; observed values come from the\n" +
 			"running daemon and are reported only when it serves this same environment, so\n" +
 			"a caller is never handed another stack's ports as if they were its own.",
-		Args: cobra.MaximumNArgs(1),
-		RunE: runEnvInfo,
+		Example: "  orbit env info\n  orbit env info local/demo\n  orbit env info --json",
+		Args:    cobra.MaximumNArgs(1),
+		RunE:    runEnvInfo,
 	}
 	cmd.Flags().BoolVar(&envInfoShowSecrets, "show-secrets", false, "include resource environment values (may contain credentials)")
 	return cmd

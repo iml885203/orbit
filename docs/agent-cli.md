@@ -91,6 +91,12 @@ Structured errors use this shape:
 Agents should prefer `error.next_command` and `recommended_actions` over
 guessing a recovery path from the message text.
 
+### Executable recommended actions
+
+`recommended_actions[].command` is an executable machine command. It includes
+`--json` when structured output is available and is not intended as terminal
+display text; a UI may derive a human label separately.
+
 Some failures have no command that advances them. `socket_path_too_long` needs
 a shorter `ORBIT_HOME` before any Orbit command can succeed, so it carries a
 hint and no `next_command` or recommended action. Treat a missing
@@ -304,6 +310,13 @@ Stable `data.operation` values for converted control commands:
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
 
+### Settings map fields
+
+`orbit settings list --json` returns `data.settings.env_toggles` and
+`data.settings.user_env` as JSON objects in both daemon-backed and offline
+reads. Empty maps serialize as `{}` rather than disappearing, so consumers can
+distinguish "configured but empty" from a response that violates the contract.
+
 `switch` stops the running environment first, so with resources running and no
 `--yes` it returns `confirmation_required` instead of acting — switching is a
 machine-wide provisioning step, not something a harness should trigger
@@ -416,7 +429,7 @@ The inspect payload contains:
 | `readiness` | Stable decision state with `state`, `blocked`, and `summary`. |
 | `daemon` | Daemon running state, PID, version, upgrade info, and dashboard URL when available. |
 | `environment` | The same `state`, `selected_name`, `selected_path`, and `environments` selection object used by status and env list, plus preview/daemon details when available. |
-| `resources` | Bounded resource summary grouped by state. |
+| `resources` | Bounded summary of the running daemon's resource states. It does not enumerate declared configuration; use `orbit env info --json` for that. |
 | `risks` | Ordered machine-readable risks such as `setup_required`, `environment_selection_required`, `orbit_update_pending`, `config_invalid`, `environment_stopped`, `env_mismatch`, `status_unavailable`, `dependency_readiness_ambiguous`, `resource_degraded`, `resource_converging`, and `resource_stopped`. A dependency-readiness risk is advisory config evidence and can accompany a blocking lifecycle risk. |
 | `recommended_actions` | Safe next commands the agent should consider. |
 
@@ -473,3 +486,9 @@ and destructive-operation workflow. Agents should follow response
 |---|---|
 | `0` | Success. |
 | `1` | Error. In `--json` mode, converted commands still emit structured JSON. |
+
+Exit status reports whether the command itself succeeded, not whether the
+reported environment is ready. In particular, `orbit inspect --json` exits
+`0` with `ok: true` when it successfully reports `readiness.blocked: true`.
+Agents must inspect `data.readiness.blocked`; `orbit status --json` may instead
+exit `1` when the selected state prevents status from being produced.

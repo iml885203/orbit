@@ -578,6 +578,7 @@ sqlserver:
   password_env: MSSQL_SA_PASSWORD
   projects:
     - path: database/Accounts/Accounts.sqlproj
+      databases: [AccountsDev, AccountsE2E]
     - path: database/Orders/Orders.sqlproj
 ```
 
@@ -591,6 +592,12 @@ different bootstrap key, declare both keys on the target container and point
 `password_env` names the target container environment key containing the
 password; Orbit reads its resolved value at runtime without storing or
 printing it. Every project path is a workspace-relative `.sqlproj` file.
+When `databases` is omitted, Orbit derives one database name from the
+`.sqlproj` filename (`Orders.sqlproj` becomes `Orders`). Use `databases` to
+publish one project schema to several explicitly named databases; when present,
+the list must contain at least one name. A database
+name must appear under exactly one project; two project paths with the same
+derived basename are rejected instead of silently targeting the same database.
 Orbit never scans sibling directories or guesses from container names and
 images. See [sql-workflow.md](sql-workflow.md).
 

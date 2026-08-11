@@ -80,11 +80,16 @@ sqlserver:
   password_env: MSSQL_SA_PASSWORD
   projects:
     - path: database/Accounts/Accounts.sqlproj
+      databases: [AccountsDev, AccountsE2E]
     - path: database/Orders/Orders.sqlproj
 ```
 
 `target` names the container that receives publishes. Project entries are
-workspace-relative `.sqlproj` files. There is no image sniffing, conventional
+workspace-relative `.sqlproj` files. By default the database name comes from
+the filename; `databases` explicitly deploys one project to several names.
+When present, `databases` must contain at least one name.
+Each database name must map to one project, so separate project files with the
+same basename are rejected. There is no image sniffing, conventional
 container name, directory scan, or separate per-machine allowlist.
 
 ### The whole env at once: `--all`
@@ -106,8 +111,9 @@ in status, logs, or JSON output.
 
 `orbit sqlserver reset <db>` disconnects active clients, discards local data, and
 applies the latest schema. No setup command is required. Orbit automatically
-chooses a fast restore when available and rebuilds from the SQL project when
-needed.
+chooses a fast restore when available. Without a baseline, reset drops and
+recreates the whole database before publishing the SQL project; the prompt
+states which path will run before any data is removed.
 
 `orbit sqlserver query` is intentionally CLI-only. The dashboard focuses on project
 drift, publish, and reset operations rather than embedding a general SQL

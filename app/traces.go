@@ -38,10 +38,9 @@ var traceRowFmt = fmt.Sprintf("%%-9s %%-%ds %%8s  %%-%ds %%s\n", traceColRoot, t
 // an importance the opt-out does not have.
 func tracingCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "tracing",
-		Short:  "Local tracing status",
-		Long:   "Inspect Orbit's built-in local tracing. Tracing is on by default; opt out per env with `tracing:\n  enabled: false`.",
-		Hidden: true,
+		Use:   "tracing",
+		Short: "Inspect local tracing receiver status",
+		Long:  "Inspect Orbit's built-in local tracing. Tracing is on by default; opt out per env with `tracing:\n  enabled: false`.",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",

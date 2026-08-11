@@ -62,8 +62,8 @@ func tunnelClaimCmd() *cobra.Command {
 func tunnelReleaseCmd() *cobra.Command {
 	var flags tunnelcli.ReleaseFlags
 	cmd := &cobra.Command{
-		Use:   tunnelcli.ReleaseUse,
-		Short: tunnelcli.ReleaseShort,
+		Use:   "release [PATH] | --to PORT",
+		Short: "Release one claimed path or all local claims for a port",
 		Args:  tunnelArgs(cobra.MaximumNArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
 			defer func() { runErr = renderTunnelCommandError(cmd, runErr) }()
@@ -116,7 +116,7 @@ func tunnelListCmd() *cobra.Command {
 	var flags tunnelcli.ListFlags
 	cmd := &cobra.Command{
 		Use:   tunnelcli.ListUse,
-		Short: tunnelcli.ListShort,
+		Short: "List local tunnel claims; --all includes claims from other owners",
 		Args:  tunnelArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) (runErr error) {
 			defer func() { runErr = renderTunnelCommandError(cmd, runErr) }()

@@ -15,9 +15,20 @@ import (
 )
 
 func instanceCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "instance", Short: "Discover and clean isolated runtime instances"}
+	cmd := &cobra.Command{
+		Use:   "instance",
+		Short: "Discover and clean isolated runtime instances",
+		Long: "Discover and clean isolated runtime instances. A named instance is created\n" +
+			"when a lifecycle command first targets it with '--instance <name>'.",
+	}
 	cmd.AddCommand(&cobra.Command{Use: "list", Short: "List named runtime instances", Args: cobra.NoArgs, RunE: runInstanceList})
-	cmd.AddCommand(&cobra.Command{Use: "clean <name>", Short: "Stop and remove a named runtime instance", Args: cobra.ExactArgs(1), RunE: runInstanceClean})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "clean <name>",
+		Short: "Remove a named runtime instance and its local data",
+		Long: "Stop a named runtime instance, then permanently remove its daemon state and\n" +
+			"owned Docker containers, networks, and volumes. Data stored in those volumes is lost.",
+		Args: cobra.ExactArgs(1), RunE: runInstanceClean,
+	})
 	return cmd
 }
 

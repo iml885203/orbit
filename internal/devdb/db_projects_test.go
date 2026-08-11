@@ -69,6 +69,23 @@ func TestAllProjects_ExplicitPaths(t *testing.T) {
 			t.Errorf("without sqlserver.projects the workflow publishes nothing; got %v", projectNames(projects))
 		}
 	})
+
+	t.Run("one project can target several named databases", func(t *testing.T) {
+		cfg := (&config.Config{}).WithExtension(sqlServerSection, &SQLServerConfig{
+			Projects: []SQLServerProjectConfig{{
+				Path:      "DBProject.Payment/PaymentDB/PaymentDB.sqlproj",
+				Databases: []string{"PaymentDev", "PaymentE2E"},
+			}},
+		})
+		projects, err := newTestDBFeature(t, cfg).allProjects()
+		if err != nil {
+			t.Fatalf("allProjects: %v", err)
+		}
+		if len(projects) != 1 || len(projects[0].Databases) != 2 ||
+			projects[0].Databases[0] != "PaymentDev" || projects[0].Databases[1] != "PaymentE2E" {
+			t.Fatalf("projects = %+v", projects)
+		}
+	})
 }
 
 // publishTargetsForDBs feeds both `publish --all` and a single project's

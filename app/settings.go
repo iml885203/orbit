@@ -51,9 +51,8 @@ func coerceSettingsValue(jsonKey, raw string) (any, error) {
 
 func settingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "settings",
-		Short:  "Manage user settings persisted in ~/.orbit/settings.json",
-		Hidden: true,
+		Use:   "settings",
+		Short: "Manage user settings used by environment configs",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "set <key> <value>",
@@ -157,11 +156,16 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		}
 	} else {
 		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
-		current = map[string]any{"show_history": settings.ShowHistory, "user_env": settings.UserEnv}
+		var err error
+		current, err = settings.Snapshot()
+		if err != nil {
+			return err
+		}
 	}
 	delete(current, "workspace_root")
 	delete(current, "env_repo_url")
 	delete(current, "env_repo_ref")
+	normalizeSettingsListMaps(current)
 
 	cliKeys := make([]string, 0, len(settingsKeyMap))
 	for k := range settingsKeyMap {
@@ -206,4 +210,13 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		fmt.Printf("  env.%s = %s\n", name, string(out))
 	}
 	return nil
+}
+
+func normalizeSettingsListMaps(settings map[string]any) {
+	if settings["env_toggles"] == nil {
+		settings["env_toggles"] = map[string]bool{}
+	}
+	if settings["user_env"] == nil {
+		settings["user_env"] = map[string]string{}
+	}
 }

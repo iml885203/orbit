@@ -33,7 +33,9 @@ func uninstallCmd() *cobra.Command {
 	var opts uninstallOptions
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Safely remove Orbit while preserving projects and Docker images",
+		Short: "Remove Orbit from this machine",
+		Long: "Remove the Orbit binary while preserving projects, Docker images, and user data.\n" +
+			"With --purge, Orbit user settings, environments, logs, and state are also removed.",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runUninstall(opts)
 		},

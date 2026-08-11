@@ -36,6 +36,8 @@ preserved; destructive changes are blocked unless --allow-data-loss.
 
 The argument may be a database name or a project name (both appear in
 ` + "`orbit sqlserver list`" + `); a project publishes each of its databases.
+Each database name must map to exactly one project. To publish one schema to
+multiple databases, declare their names on one sqlserver.projects entry.
 
 Projects come from sqlserver.projects in the active environment. Requires the
 host dotnet SDK and sqlpackage
@@ -58,7 +60,7 @@ host dotnet SDK and sqlpackage
 	cmd.Flags().BoolVar(&publishForce, "force", false, "deprecated alias for --allow-data-loss")
 	_ = cmd.Flags().MarkHidden("force")
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
-	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
+	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all or a multi-database project, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
 	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --allow-data-loss without prompting")
 	return cmd

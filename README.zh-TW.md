@@ -131,8 +131,9 @@ Agent 透過同一套 CLI 加上 `--json` 讀取狀態；錯誤帶有穩定 code
 執行的建議動作：
 
 ```bash
-orbit status --json
-orbit doctor --json
+orbit inspect --json       # runtime readiness 決策與安全的下一步
+orbit status --json        # 所選 environment 與目前 resource states
+orbit doctor --json        # host prerequisites 與 setup diagnostics
 orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用表示的憑證
 ```
 

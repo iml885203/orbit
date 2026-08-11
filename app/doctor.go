@@ -21,8 +21,11 @@ import (
 func doctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "Check system health and diagnose common issues",
-		RunE:  runDoctor,
+		Short: "Check host prerequisites and diagnose setup problems",
+		Long: `Check the host runtimes, tools, ports, paths, and daemon prerequisites required by
+the selected environment. For current resource state use 'orbit status'; for one
+machine-readable readiness decision use 'orbit inspect --json'.`,
+		RunE: runDoctor,
 	}
 }
 

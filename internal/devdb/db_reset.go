@@ -26,10 +26,15 @@ func dbResetCmd() *cobra.Command {
 		Short: "Discard local data and return a database to a clean state at the latest schema",
 		Long: `Reset returns a database to a clean state at the latest schema, discarding
 local data changes (test data, ad-hoc edits) and disconnecting active clients.
+When no clean baseline exists, reset drops and recreates the whole database
+before publishing the latest schema; the confirmation prompt identifies that path.
 
 The argument may be a database name or a project name (both appear in
 ` + "`orbit sqlserver list`" + `), but reset acts on one database: a project with
 more than one database is rejected — name the specific database.
+Each database name must map to exactly one project. To use one schema for
+multiple databases, declare their names on one sqlserver.projects entry, then
+reset a specific database by name.
 
 Destructive: run manually. Requires the host dotnet SDK and sqlpackage.`,
 		Args: cobra.ExactArgs(1),
@@ -84,7 +89,7 @@ func runDBReset(_ *cobra.Command, args []string) error {
 	// will run. Reset re-checks and refuses to escalate if the baseline
 	// vanishes in between.
 	recreate := resetIsRecreate(opts)
-	if !resetYes && !confirmReset(dbName) {
+	if !resetYes && !confirmReset(dbName, recreate) {
 		fmt.Println("Aborted.")
 		return nil
 	}
@@ -105,8 +110,15 @@ func resetIsRecreate(opts sqlpublish.Opts) bool {
 // confirmReset prompts for the destructive intent, warning harder for
 // the recreate path (drops and recreates the whole database) than the
 // revert path. A non-y answer (or no TTY) aborts. Skipped when --yes.
-func confirmReset(db string) bool {
-	return cli.Confirm(fmt.Sprintf("Reset %s? This disconnects clients, discards local data, and applies the latest schema.", db))
+func confirmReset(db string, recreate bool) bool {
+	return cli.Confirm(resetConfirmationPrompt(db, recreate))
+}
+
+func resetConfirmationPrompt(db string, recreate bool) string {
+	if recreate {
+		return fmt.Sprintf("No baseline exists for %s. Reset will DROP AND RECREATE the database, then publish the latest schema. All data will be lost. Continue?", db)
+	}
+	return fmt.Sprintf("Reset %s? This disconnects clients, discards local data, and applies the latest schema.", db)
 }
 
 // resetOne runs the reset and records the outcome: the reset event plus,

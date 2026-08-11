@@ -1,12 +1,90 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
 	"github.com/spf13/cobra"
 )
+
+func TestUserDirectedCommandsAreDiscoverable(t *testing.T) {
+	commands := map[string]*cobra.Command{
+		"daemon":   daemonCmd(),
+		"settings": settingsCmd(),
+		"service":  serviceCmd(),
+		"tracing":  tracingCmd(),
+	}
+	for name, cmd := range commands {
+		if cmd.Hidden {
+			t.Errorf("%s must be visible because Orbit directs users to it", name)
+		}
+	}
+	apply, _, err := envCmd().Find([]string{"apply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apply.Hidden {
+		t.Error("env apply must be visible because lifecycle errors direct users to it")
+	}
+	if !inspectCmd().Hidden {
+		t.Error("inspect stays out of the human command list and is signposted separately")
+	}
+	if !strings.Contains(rootCommandDescription, "orbit inspect --json") ||
+		!strings.Contains(rootCommandDescription, "https://iml885203.github.io/orbit/docs/agent-cli") {
+		t.Fatalf("root help does not lead agents to the JSON entry point: %q", rootCommandDescription)
+	}
+}
+
+func TestLifecycleHelpExplainsSelectionAsymmetry(t *testing.T) {
+	for _, want := range []string{"transitive dependencies", "all configured containers"} {
+		if !strings.Contains(upCmd().Long, want) {
+			t.Errorf("up help missing %q", want)
+		}
+	}
+	for _, want := range []string{"does not expand to dependencies", "remain running"} {
+		if !strings.Contains(downCmd().Long, want) {
+			t.Errorf("down help missing %q", want)
+		}
+	}
+}
+
+func TestDiagnosticHelpSeparatesConfigurationFromRuntimeReadiness(t *testing.T) {
+	checks := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"status", statusCmd().Long, "orbit inspect --json"},
+		{"doctor", doctorCmd().Long, "host runtimes"},
+		{"env info", envInfoCmd().Long, "describes configuration"},
+		{"inspect", inspectCmd().Short, "runtime readiness"},
+	}
+	for _, check := range checks {
+		if !strings.Contains(check.text, check.want) {
+			t.Errorf("%s help missing %q: %q", check.name, check.want, check.text)
+		}
+	}
+	if got := envInfoCmd().Use; got != "info [environment]" {
+		t.Errorf("env info use = %q", got)
+	}
+}
+
+func TestDestructiveHelpNamesDataRemoval(t *testing.T) {
+	clean, _, err := instanceCmd().Find([]string{"clean"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"volumes", "Data", "lost"} {
+		if !strings.Contains(clean.Long, want) {
+			t.Errorf("instance clean help missing %q: %q", want, clean.Long)
+		}
+	}
+	if !strings.Contains(uninstallCmd().Long, "--purge") {
+		t.Error("uninstall help must distinguish the purge path")
+	}
+}
 
 func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}

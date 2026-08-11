@@ -1,11 +1,34 @@
 package daemon
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestSettingsJSONKeepsEmptyMapFields(t *testing.T) {
+	settings := LoadSettings(filepath.Join(t.TempDir(), "missing.json"))
+	data, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values map[string]any
+	if err := json.Unmarshal(data, &values); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"env_toggles", "user_env"} {
+		value, exists := values[field]
+		if !exists {
+			t.Errorf("%s is absent from %s", field, data)
+			continue
+		}
+		if object, ok := value.(map[string]any); !ok || len(object) != 0 {
+			t.Errorf("%s = %#v, want empty object", field, value)
+		}
+	}
+}
 
 func TestIsEnvToggleOn(t *testing.T) {
 	t.Run("nil toggles default true", func(t *testing.T) {
