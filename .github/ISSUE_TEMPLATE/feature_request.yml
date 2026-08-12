@@ -7,30 +7,40 @@ body:
   - type: markdown
     attributes:
       value: |
-        Orbit optimizes for a small mental model. Describe the user problem and desired outcome before proposing configuration or commands.
+        Orbit optimizes for a small mental model. State the gap between today and the desired state, and draw the boundary of what you are asking for — before proposing configuration or commands.
   - type: textarea
-    id: problem
+    id: goal
     attributes:
-      label: User problem
-      description: What local-development task is difficult today, and who encounters it?
+      label: Goal
+      description: The gap this closes — what happens today (including the workaround you use), and what should happen instead. Who encounters it?
+      placeholder: |
+        Today: … (workaround: …)
+        Expected: …
     validations:
       required: true
   - type: textarea
-    id: outcome
+    id: scope
     attributes:
-      label: Desired outcome
-      description: Describe the simplest successful workflow from the user's perspective.
+      label: Scope
+      description: What this request covers. List the cases the feature must handle.
     validations:
       required: true
   - type: textarea
-    id: workaround
+    id: not-in-scope
     attributes:
-      label: Current workaround
-      description: What commands, scripts, or manual steps are required today?
+      label: Not in scope
+      description: What this request deliberately excludes, so the boundary is explicit and the feature stays small.
+    validations:
+      required: true
+  - type: textarea
+    id: key-example
+    attributes:
+      label: Key example
+      description: One concrete example of the feature in use — the simplest successful workflow (command, config, or user steps) as it would look once this exists.
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
       label: Additional context
-      description: Add examples or related tools without including private project information.
+      description: Examples or related tools — without including private project information.
