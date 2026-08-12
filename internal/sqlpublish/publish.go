@@ -189,6 +189,16 @@ func ValidateDacpacArtifacts(root, sqlProj string) error {
 		return fmt.Errorf("prebuilt dacpac root is not a directory: %s", root)
 	}
 	projectName := strings.TrimSuffix(filepath.Base(sqlProj), filepath.Ext(sqlProj))
+	rootEntries, err := os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("reading prebuilt dacpac root %s: %w", root, err)
+	}
+	if exactEntry(rootEntries, projectName) == nil {
+		if actual := equalFoldEntry(rootEntries, projectName); actual != nil {
+			return fmt.Errorf("prebuilt dacpac directory for project %s has incorrect casing %q in %s", projectName, actual.Name(), root)
+		}
+		return fmt.Errorf("prebuilt dacpac directory for project %s not found at %s", projectName, filepath.Join(root, projectName))
+	}
 	projectDir := filepath.Join(root, projectName)
 	projectInfo, err := os.Stat(projectDir)
 	if err != nil {
@@ -200,7 +210,28 @@ func ValidateDacpacArtifacts(root, sqlProj string) error {
 	if !projectInfo.IsDir() {
 		return fmt.Errorf("prebuilt dacpac path for project %s is not a directory: %s", projectName, projectDir)
 	}
-	leaf := filepath.Join(projectDir, projectName+".dacpac")
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return fmt.Errorf("reading prebuilt dacpacs for project %s: %w", projectName, err)
+	}
+	leafName := projectName + ".dacpac"
+	leafEntry := exactEntry(entries, leafName)
+	if leafEntry == nil {
+		if actual := equalFoldEntry(entries, leafName); actual != nil {
+			return fmt.Errorf("prebuilt dacpac for project %s has incorrect casing %q in %s", projectName, actual.Name(), projectDir)
+		}
+		var found []string
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".dacpac") {
+				found = append(found, entry.Name())
+			}
+		}
+		if len(found) == 0 {
+			return fmt.Errorf("prebuilt dacpac directory for project %s contains no dacpac files: %s", projectName, projectDir)
+		}
+		return fmt.Errorf("prebuilt dacpac for project %s not found at %s; directory holds %s", projectName, filepath.Join(projectDir, leafName), strings.Join(found, ", "))
+	}
+	leaf := filepath.Join(projectDir, leafName)
 	info, err := os.Stat(leaf)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -210,6 +241,24 @@ func ValidateDacpacArtifacts(root, sqlProj string) error {
 	}
 	if info.IsDir() {
 		return fmt.Errorf("prebuilt dacpac for project %s is a directory at %s", projectName, leaf)
+	}
+	return nil
+}
+
+func exactEntry(entries []os.DirEntry, name string) os.DirEntry {
+	for _, entry := range entries {
+		if entry.Name() == name {
+			return entry
+		}
+	}
+	return nil
+}
+
+func equalFoldEntry(entries []os.DirEntry, name string) os.DirEntry {
+	for _, entry := range entries {
+		if strings.EqualFold(entry.Name(), name) {
+			return entry
+		}
 	}
 	return nil
 }

@@ -45,7 +45,8 @@ Orbit 不會自動移除該儲存空間。刪除 volume 或 bind mount 內的資
 
 ## `orbit sqlserver publish`：日常快速路徑
 
-`orbit sqlserver publish <db>` 在 **host 上**建置 SQL project(`dotnet build`),
+預設情況下，`orbit sqlserver publish <db>` 在 **host 上**建置 SQL project
+(`dotnet build`)，
 再用 host 的 `sqlpackage` 把 dacpac 直接發佈到設定 target 的 published
 port——不重建 image、不用 container 內工具,Apple Silicon 上是原生 arm64。
 冪等:project 沒變時幾秒內收斂為 no-op,資料一律保留(破壞性變更預設擋下,
@@ -121,7 +122,8 @@ orbit sqlserver publish --all --dacpac-dir .artifacts
 
 所有 referenced dacpac 必須與 leaf 放在一起。Orbit 會把整組檔案複製到
 該次 operation 的暫存目錄，並記錄每個檔案的大小與修改時間。提供的 root、
-project 目錄與預期 leaf 都必須存在。搭配 `--all` 時，Orbit 會在發佈前先
+project 目錄與預期 leaf 都必須存在，且大小寫必須與 `.sqlproj` basename
+完全一致。搭配 `--all` 時，Orbit 會在發佈前先
 驗證所有 project；缺 artifact 時不會偷偷改跑 `dotnet build`。
 
 此模式仍需要 sqlpackage，但不需要 .NET SDK 或可讀取的 source tree。沒有

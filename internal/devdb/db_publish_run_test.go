@@ -25,9 +25,10 @@ func TestValidatePublishArtifacts_ChecksEveryProjectBeforePublish(t *testing.T) 
 		{DB: "Second", SQLProj: "/workspace/Second.sqlproj"},
 	}
 
+	targets = append(targets, publishTargetRef{DB: "Third", SQLProj: "/workspace/Third.sqlproj"})
 	err := validatePublishArtifacts(root, targets)
-	if err == nil || !strings.Contains(err.Error(), "project Second") {
-		t.Fatalf("validation error = %v, want missing Second before publishing begins", err)
+	if err == nil || !strings.Contains(err.Error(), "project Second") || !strings.Contains(err.Error(), "project Third") {
+		t.Fatalf("validation error = %v, want all missing projects before publishing begins", err)
 	}
 }
 

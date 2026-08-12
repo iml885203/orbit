@@ -3,6 +3,7 @@ package devdb
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -301,16 +302,17 @@ func validatePublishArtifacts(root string, targets []publishTargetRef) error {
 		return nil
 	}
 	seen := make(map[string]struct{})
+	var validationErrors []error
 	for _, target := range targets {
 		if _, ok := seen[target.SQLProj]; ok {
 			continue
 		}
 		seen[target.SQLProj] = struct{}{}
 		if err := sqlpublish.ValidateDacpacArtifacts(root, target.SQLProj); err != nil {
-			return err
+			validationErrors = append(validationErrors, err)
 		}
 	}
-	return nil
+	return errors.Join(validationErrors...)
 }
 
 // publishSequentially publishes targets in order, stopping at the first

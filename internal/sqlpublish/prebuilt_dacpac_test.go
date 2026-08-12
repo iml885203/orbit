@@ -69,8 +69,39 @@ func TestValidateDacpacArtifacts_DistinguishesLayoutFailures(t *testing.T) {
 	if err := os.Mkdir(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateDacpacArtifacts(root, project); err == nil || !strings.Contains(err.Error(), "dacpac for project PlatformDB not found") {
+	if err := ValidateDacpacArtifacts(root, project); err == nil || !strings.Contains(err.Error(), "contains no dacpac files") {
 		t.Fatalf("missing leaf error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "Other.dacpac"), []byte("other"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDacpacArtifacts(root, project); err == nil || !strings.Contains(err.Error(), "directory holds Other.dacpac") {
+		t.Fatalf("misnamed leaf error = %v", err)
+	}
+}
+
+func TestValidateDacpacArtifacts_RequiresExactProjectAndLeafCase(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(t.TempDir(), "PlatformDB.sqlproj")
+	wrongProjectDir := filepath.Join(root, "platformdb")
+	if err := os.Mkdir(wrongProjectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wrongProjectDir, "PlatformDB.dacpac"), []byte("leaf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDacpacArtifacts(root, project); err == nil || !strings.Contains(err.Error(), "incorrect casing") {
+		t.Fatalf("project casing error = %v", err)
+	}
+	if err := os.Rename(wrongProjectDir, filepath.Join(root, "PlatformDB")); err != nil {
+		t.Fatal(err)
+	}
+	projectDir := filepath.Join(root, "PlatformDB")
+	if err := os.Rename(filepath.Join(projectDir, "PlatformDB.dacpac"), filepath.Join(projectDir, "platformdb.dacpac")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDacpacArtifacts(root, project); err == nil || !strings.Contains(err.Error(), "incorrect casing") {
+		t.Fatalf("leaf casing error = %v", err)
 	}
 }
 

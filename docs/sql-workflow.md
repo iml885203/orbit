@@ -46,8 +46,8 @@ every configured database.
 
 ## `orbit sqlserver publish`: the everyday path
 
-`orbit sqlserver publish <db>` builds the SQL project **on the host** (`dotnet
-build`) and publishes the dacpac straight to the configured target's published
+By default, `orbit sqlserver publish <db>` builds the SQL project **on the host**
+(`dotnet build`) and publishes the dacpac straight to the configured target's published
 port with the host `sqlpackage` — no image rebuild, no
 container-side tooling, native arm64 on Apple Silicon. It is idempotent:
 an unchanged project converges to a no-op in seconds, and data is always
@@ -129,7 +129,8 @@ artifact directory and leaf dacpac. For example, `db/PlatformDB.sqlproj` uses:
 
 Keep every referenced dacpac beside the leaf. Orbit copies the complete set to
 operation-local scratch space and logs each file's size and modification time.
-The supplied root, project directory, and expected leaf must all exist. With
+The supplied root, project directory, and expected leaf must all exist and use
+the exact case of the `.sqlproj` basename. With
 `--all`, Orbit validates every project before publishing and never falls back
 to `dotnet build` for a missing artifact.
 
