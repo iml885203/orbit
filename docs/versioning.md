@@ -29,11 +29,7 @@ Freeze a preview batch in this order:
 
 1. Complete the related implementation and its strongest practical journey.
 2. Review the combined user-visible difference from the previous release.
-3. Choose the next version, update both plugin manifests, point
-   `EnvRepoRef` in `cmd/orbit/extensions.go` at the upcoming demo tag so
-   `orbit init` ships the demo paired with this release, and prepare that
-   paired demo tag. Its `.orbit-release.json` records the release version and
-   exact Orbit candidate commit that the demo journey built. Do not create the
+3. Choose the next version and update both plugin manifests. Do not create the
    Orbit tag yet.
 4. Prepare and review the user-facing release notes.
 5. Run the candidate and platform gates, then manually approve publication.
@@ -43,6 +39,22 @@ Freeze a preview batch in this order:
 Release notes are entered when the release workflow is approved and live in
 GitHub Releases rather than accumulating in the source tree. They describe the
 batch's user outcome first; individual fixes are supporting details.
+
+## The demo repository versions itself
+
+`orbit init` clones [orbit-demo](https://github.com/iml885203/orbit-demo) at the
+ref pinned by `EnvRepoRef` in `cmd/orbit/extensions.go`, so that ref must always
+exist — `make release-check` fails if it does not.
+
+The demo is **not** re-tagged for each Orbit release. It uses calendar
+versioning, `vYEAR.MONTH.N` where `N` counts releases within that month
+(`v2026.8.1` is August's first), and it is tagged only when the demo itself
+changes. Bump `EnvRepoRef` in the same commit that adopts a new demo tag, which
+is a demo-driven change rather than a step in cutting an Orbit release.
+
+Sharing Orbit's version number was the earlier scheme. It forced an empty demo
+tag per Orbit release whose only content was a pairing declaration, so the two
+now version independently.
 
 Package updates use the private `iml885203-package-sync` GitHub App. Install
 the App only on `iml885203/homebrew-tap` and `iml885203/scoop-bucket` with

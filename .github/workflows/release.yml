@@ -83,36 +83,27 @@ jobs:
             echo "main must pass CI preflight and installed-user-journeys before release" >&2
             exit 1
           fi
-      - name: Verify paired demo evidence
+      - name: Verify pinned demo evidence
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.tag }}
         run: |
           set -euo pipefail
+          # The demo has its own calendar versioning (vYEAR.MONTH.N) and is not
+          # re-tagged per Orbit release. What must hold is that the ref this
+          # binary pins exists and passed the demo's own journey — checked
+          # against whatever EnvRepoRef points at, not this release's tag.
           demo_repository="iml885203/orbit-demo"
-          ref_object="$(
-            gh api "repos/$demo_repository/git/ref/tags/$RELEASE_VERSION"
-          )"
+          demo_ref="$(sed -n 's/.*EnvRepoRef: "\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
+          if [ -z "$demo_ref" ]; then
+            echo "cmd/orbit/extensions.go has no EnvRepoRef to verify" >&2
+            exit 1
+          fi
+          ref_object="$(gh api "repos/$demo_repository/git/ref/tags/$demo_ref")"
           demo_commit="$(jq -r '.object.sha' <<<"$ref_object")"
           if [ "$(jq -r '.object.type' <<<"$ref_object")" = "tag" ]; then
             demo_commit="$(
               gh api "repos/$demo_repository/git/tags/$demo_commit" --jq '.object.sha'
             )"
-          fi
-          pairing="$(
-            gh api "repos/$demo_repository/contents/.orbit-release.json?ref=$RELEASE_VERSION" \
-              --jq '.content' | base64 --decode
-          )"
-          paired_version="$(jq -r '.version' <<<"$pairing")"
-          paired_commit="$(jq -r '.orbit_commit' <<<"$pairing")"
-          main_commit="$(git rev-parse origin/main)"
-          if [ "$paired_version" != "$RELEASE_VERSION" ]; then
-            echo "$demo_repository@$RELEASE_VERSION pairs version $paired_version" >&2
-            exit 1
-          fi
-          if [ "$paired_commit" != "$main_commit" ]; then
-            echo "$demo_repository@$RELEASE_VERSION pairs Orbit $paired_commit, expected $main_commit" >&2
-            exit 1
           fi
           successful_demo_gate="$(
             gh api "repos/$demo_repository/commits/$demo_commit/check-runs" \
@@ -121,7 +112,7 @@ jobs:
                 | length'
           )"
           if [ "$successful_demo_gate" = "0" ]; then
-            echo "$demo_repository@$RELEASE_VERSION must pass its paired preview journey" >&2
+            echo "$demo_repository@$demo_ref must pass its validate journey before Orbit pins it" >&2
             exit 1
           fi
 
