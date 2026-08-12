@@ -327,7 +327,8 @@ endpoint 仍有歧義時，Orbit 才要求明確指定 health-check port。
 HTTP check 的 `scheme` 預設為 `http`；HTTPS-only endpoint 可設為
 `scheme: https`。憑證驗證預設保持開啟；使用 self-signed 或 development
 certificate 的本機服務，可針對該 check 明確設定 `tls_skip_verify: true`。
-HTTP redirect 到 HTTPS 時也會沿用此設定，且最終 response 仍必須是 2xx。
+此放寬會沿用到 redirect：該 check 的每一跳都會略過驗證，包含 redirect 到
+其他 host 的情況。最終 response 仍必須是 2xx。
 
 Resource 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個 port
 中包含 `http`，Orbit 會自動使用 TCP readiness check。Host service 與

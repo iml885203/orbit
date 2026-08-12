@@ -344,8 +344,9 @@ the endpoint remains ambiguous.
 HTTP checks default to `scheme: http`. Set `scheme: https` for an HTTPS-only
 endpoint. Certificate verification remains enabled by default; local services
 using a self-signed or development certificate can opt out for that individual
-check with `tls_skip_verify: true`. The same setting applies when an HTTP check
-follows a redirect to HTTPS, and the final response must still be 2xx.
+check with `tls_skip_verify: true`. The relaxation follows redirects: every hop
+this check makes skips verification, including one to another host. The final
+response must still be 2xx.
 
 A resource with no explicit `health_check` gets a TCP readiness check when it
 declares one port, or an `http` port among several. This applies equally to
