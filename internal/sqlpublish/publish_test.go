@@ -14,9 +14,13 @@ import (
 func TestPublish_UnavailableServerStopsBeforeBuild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	project := filepath.Join(t.TempDir(), "NopeDB.sqlproj")
+	if err := os.WriteFile(project, []byte("<Project />"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	res := Publish(ctx, Opts{
 		DB:      "NopeDB",
-		SQLProj: "/nonexistent/NopeDB.sqlproj",
+		SQLProj: project,
 		OutDir:  t.TempDir(),
 		Host:    "localhost", Port: 1, User: "sa", Password: "x",
 	}, io.Discard)
@@ -28,6 +32,18 @@ func TestPublish_UnavailableServerStopsBeforeBuild(t *testing.T) {
 	}
 	if res.Err == nil || !strings.Contains(res.Err.Error(), "probe database existence") {
 		t.Errorf("Err = %v, want database existence probe context", res.Err)
+	}
+}
+
+func TestPublish_MissingProjectStopsBeforeServerProbe(t *testing.T) {
+	res := Publish(context.Background(), Opts{
+		DB:      "NopeDB",
+		SQLProj: filepath.Join(t.TempDir(), "NopeDB.sqlproj"),
+		OutDir:  t.TempDir(),
+		Host:    "localhost", Port: 1, User: "sa", Password: "x",
+	}, io.Discard)
+	if res.OK || res.Code != CodeSQLProjectNotFound {
+		t.Fatalf("result = %+v, want sql_project_not_found", res)
 	}
 }
 
