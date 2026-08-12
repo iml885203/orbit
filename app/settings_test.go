@@ -74,6 +74,9 @@ func TestSettingsListJSONUsesStableEnvelopeWithoutDaemon(t *testing.T) {
 	if err := settings.Set("workspace_root", root); err != nil {
 		t.Fatal(err)
 	}
+	if err := settings.SetEnvToggle("local/api/FEATURE", true); err != nil {
+		t.Fatal(err)
+	}
 
 	previousJSON := cli.JSONOutput
 	cli.JSONOutput = true
@@ -112,5 +115,23 @@ func TestSettingsListJSONUsesStableEnvelopeWithoutDaemon(t *testing.T) {
 	}
 	if _, exists := envelope.Data.Settings["workspace_root"]; exists {
 		t.Fatalf("settings = %+v", envelope.Data.Settings)
+	}
+	toggles, exists := envelope.Data.Settings["env_toggles"].(map[string]any)
+	if !exists || toggles["local/api/FEATURE"] != true {
+		t.Fatalf("env_toggles = %#v", envelope.Data.Settings["env_toggles"])
+	}
+	if _, exists := envelope.Data.Settings["user_env"].(map[string]any); !exists {
+		t.Fatalf("user_env must keep an object shape: %#v", envelope.Data.Settings["user_env"])
+	}
+}
+
+func TestNormalizeSettingsListMapsKeepsStableObjectShape(t *testing.T) {
+	settings := map[string]any{}
+	normalizeSettingsListMaps(settings)
+	if _, ok := settings["env_toggles"].(map[string]bool); !ok {
+		t.Fatalf("env_toggles = %#v", settings["env_toggles"])
+	}
+	if _, ok := settings["user_env"].(map[string]string); !ok {
+		t.Fatalf("user_env = %#v", settings["user_env"])
 	}
 }

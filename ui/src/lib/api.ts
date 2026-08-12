@@ -56,7 +56,7 @@ export async function fetchDoctor(): Promise<DoctorResponse | null> {
 }
 
 export async function fetchSettings(): Promise<Settings> {
-  return (await getJSON<Settings>('/api/settings')) ?? {}
+  return (await getJSON<Settings>('/api/settings')) ?? { env_toggles: {}, user_env: {} }
 }
 
 export async function fetchEnvToggles(): Promise<EnvToggleInfo[]> {

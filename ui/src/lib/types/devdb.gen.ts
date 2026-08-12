@@ -254,4 +254,5 @@ export interface SQLServerConfig {
 }
 export interface SQLServerProjectConfig {
   path: string;
+  databases?: string[];
 }

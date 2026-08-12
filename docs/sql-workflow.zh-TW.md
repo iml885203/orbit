@@ -74,11 +74,15 @@ sqlserver:
   password_env: MSSQL_SA_PASSWORD
   projects:
     - path: database/Accounts/Accounts.sqlproj
+      databases: [AccountsDev, AccountsE2E]
     - path: database/Orders/Orders.sqlproj
 ```
 
 `target` 指向接收 publish 的 container；project 是 workspace-relative
-的 `.sqlproj` 檔案。沒有 image sniffing、慣例 container 名稱、目錄掃描，
+的 `.sqlproj` 檔案。預設 database name 來自檔名；`databases` 可明確把同一
+project 部署到多個名稱；指定時至少要有一個名稱。每個 database name 只能對應一個 project，因此
+basename 相同的不同 project files 會被拒絕。沒有 image sniffing、慣例
+container 名稱、目錄掃描，
 也沒有另一份 per-machine allowlist。
 
 ### 一次整個環境：`--all`
@@ -97,7 +101,8 @@ daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建�
 
 `orbit sqlserver reset <db>` 會中斷現有連線、丟棄本機資料並套用最新 schema。
 不需要先執行任何設定指令。Orbit 有可用的快速還原狀態時會直接使用，否則
-從 SQL project 重建；這個差異不需要使用者處理。
+會先 drop 並重建整顆 database，再 publish SQL project。移除任何資料前，
+確認提示會明確說明將執行哪一條路徑。
 
 `orbit sqlserver query` 刻意只提供 CLI 操作。Dashboard 專注於 project drift、
 publish 與 reset，而不內嵌通用 SQL console。

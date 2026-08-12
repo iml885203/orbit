@@ -15,7 +15,12 @@ type settingsUpdate struct {
 func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, srv.settings)
+		settings, err := srv.settings.Snapshot()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, settings)
 
 	case http.MethodPut:
 		var update settingsUpdate

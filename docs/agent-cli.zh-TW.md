@@ -84,6 +84,9 @@ resource endpoints。`orbit instance clean <name> --json` 只會停止並移除�
 
 Agent 應優先依據 `error.next_command` 與 `recommended_actions` 行動,而不是從錯誤訊息文字去猜測恢復路徑。
 
+`recommended_actions[].command` 的 machine/display contract 只維護在英文版
+[Executable recommended actions](agent-cli.md#executable-recommended-actions)。
+
 有些失敗沒有任何指令可以推進。`socket_path_too_long` 必須先把 `ORBIT_HOME`
 換成較短的路徑，任何 Orbit 指令才能成功，因此它只帶 hint，不帶 `next_command`
 或 recommended action。缺少 `next_command` 應理解為「依 hint 處理」，而不是回應格式有問題。
@@ -195,6 +198,9 @@ init 會回傳 `service_working_directory_missing`，並說明需移除 source�
 穩定的 `data.operation` 值只維護一份完整清單，見英文版
 [agent-cli.md](agent-cli.md#converted-commands)。
 
+`settings list` 的 map-field wire shape 只維護在英文版
+[Settings map fields](agent-cli.md#settings-map-fields)。
+
 `switch` 會先停掉正在運行的環境，所以在有資源運行且未加 `--yes` 時會回傳
 `confirmation_required` 而不動手——切換環境是機器層級的 provisioning 步驟，
 不該由 harness 隱式觸發。對 `switch` 而言，`previous_environment_stopped` 表示 Orbit 是否在選取前
@@ -293,7 +299,7 @@ Inspect payload 包含：
 | `readiness` | 穩定的決策狀態，包含 `state`、`blocked`、`summary`。 |
 | `daemon` | daemon 是否執行、PID、版本、更新資訊，以及可用時的 dashboard URL。 |
 | `environment` | 與 status、env list 共用 `state`、`selected_name`、`selected_path`、`environments` selection object，另包含可用時的 preview/daemon 資訊。 |
-| `resources` | 依 state 分組的 resource 摘要。 |
+| `resources` | running daemon 的 resource states 摘要。它不列舉 declared configuration；後者請使用 `orbit env info --json`。 |
 | `risks` | 排序過的 machine-readable risks，例如 `setup_required`、`environment_selection_required`、`orbit_update_pending`、`config_invalid`、`environment_stopped`、`env_mismatch`、`status_unavailable`、`dependency_readiness_ambiguous`、`resource_degraded`、`resource_converging`、`resource_stopped`。Dependency-readiness risk 是 advisory config evidence，因此可以與 blocking lifecycle risk 同時出現。 |
 | `recommended_actions` | agent 應考慮的安全下一步指令。 |
 
@@ -349,3 +355,6 @@ workflow 的唯一來源。JSON response 帶有 `recommended_actions` 時，agen
 |---|---|
 | `0` | 成功。 |
 | `1` | 錯誤。在 `--json` 模式下，已轉換的指令仍會輸出結構化 JSON。 |
+
+`inspect` blocked readiness 與 exit status 的精確關係只維護在英文版
+[Exit Codes](agent-cli.md#exit-codes)。

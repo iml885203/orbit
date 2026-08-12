@@ -137,8 +137,9 @@ Agents read state through the same CLI with `--json`; errors carry stable
 codes and executable recommended actions:
 
 ```bash
-orbit status --json
-orbit doctor --json
+orbit inspect --json       # one runtime-readiness decision and safe next actions
+orbit status --json        # selected environment and current resource states
+orbit doctor --json        # host prerequisites and setup diagnostics
 orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
 ```
 

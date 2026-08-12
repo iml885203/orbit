@@ -27,9 +27,9 @@ type Settings struct {
 	// choice; distribution defaults keep their release-owned ref out of user
 	// settings so upgrading Orbit can advance both together.
 	EnvRepoRef   string            `json:"env_repo_ref,omitempty"`
-	EnvToggles   map[string]bool   `json:"env_toggles,omitempty"`
+	EnvToggles   map[string]bool   `json:"env_toggles"`
 	ServiceModes map[string]string `json:"service_modes,omitempty"` // "api": "container"
-	UserEnv      map[string]string `json:"user_env,omitempty"`
+	UserEnv      map[string]string `json:"user_env"`
 	ShowHistory  *bool             `json:"show_history,omitempty"`
 	// DetachedEdges is a two-level map: env → from → []to.
 	// Keys are env names (e.g. "development"); values map a "from" service
@@ -79,7 +79,7 @@ func DefaultSettingsPath() string {
 }
 
 func LoadSettings(path string) *Settings {
-	s := &Settings{path: path}
+	s := emptySettings(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return s
@@ -88,7 +88,7 @@ func LoadSettings(path string) *Settings {
 	var raw settingsOnDisk
 	if err := json.Unmarshal(data, &raw); err != nil {
 		slog.Error("failed to parse settings", "component", "settings", "path", path, "err", err)
-		return &Settings{path: path}
+		return emptySettings(path)
 	}
 
 	s.WorkspaceRoot = raw.WorkspaceRoot
@@ -100,9 +100,13 @@ func LoadSettings(path string) *Settings {
 	}
 	s.EnvRepoURL = raw.EnvRepoURL
 	s.EnvRepoRef = raw.EnvRepoRef
-	s.EnvToggles = raw.EnvToggles
+	if raw.EnvToggles != nil {
+		s.EnvToggles = raw.EnvToggles
+	}
 	s.ServiceModes = raw.ServiceModes
-	s.UserEnv = raw.UserEnv
+	if raw.UserEnv != nil {
+		s.UserEnv = raw.UserEnv
+	}
 	s.ShowHistory = raw.ShowHistory
 
 	if len(raw.RawDetachedEdges) > 0 {
@@ -110,6 +114,29 @@ func LoadSettings(path string) *Settings {
 	}
 
 	return s
+}
+
+func emptySettings(path string) *Settings {
+	return &Settings{
+		path:       path,
+		EnvToggles: make(map[string]bool),
+		UserEnv:    make(map[string]string),
+	}
+}
+
+// Snapshot returns the same JSON object served by the settings endpoint.
+func (s *Settings) Snapshot() (map[string]any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	data, err := json.Marshal(s)
+	if err != nil {
+		return nil, fmt.Errorf("encoding settings: %w", err)
+	}
+	values := make(map[string]any)
+	if err := json.Unmarshal(data, &values); err != nil {
+		return nil, fmt.Errorf("decoding settings: %w", err)
+	}
+	return values, nil
 }
 
 // migrateDetachedEdges attempts to decode the raw JSON as the current nested

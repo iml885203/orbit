@@ -34,6 +34,8 @@ any possible-data-loss warnings. Read-only: the database is not modified.
 
 The argument may be a database name or a project name (both appear in
 ` + "`orbit sqlserver list`" + `); a project diffs each of its databases.
+Each database name must map to exactly one project. To diff one schema against
+multiple databases, declare their names on one sqlserver.projects entry.
 
 By default prints a human-readable summary. Use --script to print the
 exact T-SQL a publish would run, or --json for structured output.

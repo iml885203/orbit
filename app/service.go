@@ -9,9 +9,8 @@ import (
 
 func serviceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "service",
-		Short:  "Manage per-service configuration",
-		Hidden: true,
+		Use:   "service",
+		Short: "Manage per-service configuration",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "mode <name> <dev|container>",

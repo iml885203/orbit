@@ -57,6 +57,33 @@ func TestSQLServerNotConfiguredErrorNamesSourceConfigAndGuide(t *testing.T) {
 	}
 }
 
+func TestResetConfirmationDistinguishesRecreateFromBaselineRevert(t *testing.T) {
+	if !strings.Contains(dbResetCmd().Long, "drops and recreates the whole database") {
+		t.Fatalf("reset help does not describe the no-baseline path: %q", dbResetCmd().Long)
+	}
+	revert := resetConfirmationPrompt("SampleDB", false)
+	if strings.Contains(revert, "DROP AND RECREATE") {
+		t.Fatalf("baseline revert warning = %q", revert)
+	}
+	recreate := resetConfirmationPrompt("SampleDB", true)
+	for _, want := range []string{"No baseline exists", "DROP AND RECREATE", "All data will be lost"} {
+		if !strings.Contains(recreate, want) {
+			t.Errorf("recreate warning missing %q: %q", want, recreate)
+		}
+	}
+}
+
+func TestPublishParallelHelpIncludesMultiDatabaseProjects(t *testing.T) {
+	cmd := dbPublishCmd()
+	flag := cmd.Flags().Lookup("parallel")
+	if flag == nil || !strings.Contains(flag.Usage, "multi-database project") {
+		t.Fatalf("parallel help = %#v", flag)
+	}
+	if !strings.Contains(cmd.Long, "one sqlserver.projects entry") {
+		t.Fatalf("publish help does not explain the safe multi-database shape: %q", cmd.Long)
+	}
+}
+
 func commandFound(cmd *cobra.Command, name string) bool {
 	for _, child := range cmd.Commands() {
 		if child.Name() == name {

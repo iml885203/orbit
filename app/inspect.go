@@ -115,7 +115,7 @@ type inspectBuildOptions struct {
 func inspectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "inspect",
-		Short:  "Show an agent-ready Orbit state snapshot",
+		Short:  "Report machine-readable runtime readiness for agents",
 		Hidden: true,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {

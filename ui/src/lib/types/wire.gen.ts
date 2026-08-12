@@ -25,9 +25,9 @@ export interface Settings {
    * settings so upgrading Orbit can advance both together.
    */
   env_repo_ref?: string;
-  env_toggles?: { [key: string]: boolean};
+  env_toggles: { [key: string]: boolean};
   service_modes?: { [key: string]: string}; // "api": "container"
-  user_env?: { [key: string]: string};
+  user_env: { [key: string]: string};
   show_history?: boolean;
   /**
    * DetachedEdges is a two-level map: env → from → []to.

@@ -28,11 +28,11 @@ func (f *dbFeature) allProjects() ([]DevDBProject, error) {
 	projects := make([]DevDBProject, 0, len(section.Projects))
 	for _, configured := range section.Projects {
 		path := filepath.Join(workspaceRoot, configured.Path)
-		database := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		databases := databaseNamesForProject(configured)
 		projects = append(projects, DevDBProject{
-			Name:      database,
+			Name:      strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
 			Path:      path,
-			Databases: []string{database},
+			Databases: databases,
 		})
 	}
 	return projects, nil

@@ -22,8 +22,11 @@ import (
 func statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show environment status",
-		RunE:  runStatus,
+		Short: "Show selected environment and resource states",
+		Long: `Show the selected environment, daemon state, and current state of each configured
+resource. For one machine-readable readiness decision, use 'orbit inspect --json'.
+For declared ports, URLs, and environment metadata, use 'orbit env info'.`,
+		RunE: runStatus,
 	}
 }
 
