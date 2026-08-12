@@ -92,6 +92,10 @@ Each database name must map to one project, so separate project files with the
 same basename are rejected. There is no image sniffing, conventional
 container name, directory scan, or separate per-machine allowlist.
 
+Orbit publishes the dacpac the build names after the `.sqlproj` itself, whatever
+the target databases are called. A project that renames its own output (via
+`<SqlTargetName>`) fails rather than publishing a different artifact.
+
 ### The whole env at once: `--all`
 
 `orbit sqlserver publish --all` publishes every database from the project merge

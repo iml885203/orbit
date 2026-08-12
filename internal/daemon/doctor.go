@@ -179,11 +179,7 @@ func DependencyReadinessChecks(cfg *config.Config) []DoctorCheck {
 }
 
 func readinessEndpointIsUnambiguous(ports map[string]config.PortDef) bool {
-	if len(ports) == 1 {
-		return true
-	}
-	_, ok := ports["http"]
-	return ok
+	return config.ReadinessPort(ports) != 0
 }
 
 func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []DoctorCheck {
