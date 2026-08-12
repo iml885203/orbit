@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,11 +22,42 @@ func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 	}
 
 	_, rootCheck, _ := f.host.ResolveWorkspaceRoot()
-	checks := []daemon.DoctorCheck{rootCheck}
+	checks := make([]daemon.DoctorCheck, 0, 4)
+	checks = append(checks, rootCheck)
 	checks = append(checks, f.sqlProjectChecks()...)
+	checks = append(checks, sqlServerReadinessChecks(f.host.Config())...)
 	checks = append(checks, f.sqlImageChecks()...)
 	checks = append(checks, publishToolchainChecks()...)
 	return checks
+}
+
+func sqlServerReadinessChecks(cfg *config.Config) []daemon.DoctorCheck {
+	section := SQLServerFrom(cfg)
+	if section == nil {
+		return nil
+	}
+	target, ok := cfg.Containers[section.Target]
+	if !ok || target == nil {
+		return nil
+	}
+	if target.HealthCheck != nil && target.HealthCheck.Type != "tcp" {
+		return nil
+	}
+
+	probe := "has no explicit health check"
+	if target.HealthCheck != nil {
+		probe = "uses a tcp health check"
+	}
+	hint := fmt.Sprintf(
+		"set containers.%s.health_check to:\n  type: exec\n  command: [/bin/sh, -c, 'password=\"$(printenv \"$1\")\"; if [ -z \"$password\" ]; then echo \"$1 is empty in the configured SQL Server target\" >&2; exit 2; fi; export SQLCMDPASSWORD=\"$password\"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U \"$2\" -C -I -Q \"SELECT 1\"', orbit-sqlserver-health, %s, %s]",
+		section.Target, strconv.Quote(section.PasswordEnv), strconv.Quote(section.Username),
+	)
+	return []daemon.DoctorCheck{{
+		Name:    "SQL Server Readiness",
+		Status:  daemon.CheckWarn,
+		Message: fmt.Sprintf("sqlserver.target %q %s, which cannot prove SQL Server accepts logins", section.Target, probe),
+		Hint:    hint,
+	}}
 }
 
 func (f *dbFeature) sqlProjectChecks() []daemon.DoctorCheck {

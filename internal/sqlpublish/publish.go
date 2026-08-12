@@ -101,12 +101,13 @@ func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
 	// exist yet needs its referenced shared objects (roles, schemas)
 	// created too, which only composite deployment does. Detecting it
 	// here keeps the steady-state publish (DB present) on the default
-	// path — no composite, no reshaping objects another DB owns. A
-	// probe error (server down, etc.) is non-fatal: leave composite off
-	// and let publishDacpac surface the real failure; the reactive retry
-	// below still covers a missing shared object on an existing DB.
+	// path — no composite, no reshaping objects another DB owns.
 	created := false
-	if exists, err := DatabaseExists(ctx, opts); err == nil && !exists {
+	exists, err := DatabaseExists(ctx, opts)
+	if err != nil {
+		return failed(start, fmt.Errorf("probe database existence: %w", err), CodeSQLServerUnavailable)
+	}
+	if !exists {
 		opts.IncludeComposite = true
 		created = true
 	}
