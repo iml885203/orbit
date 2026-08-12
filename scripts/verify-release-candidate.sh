@@ -20,12 +20,26 @@ do
   fi
 done
 
-# orbit init must ship the demo paired with this release: the pinned demo
-# ref is the release tag itself, or a suffixed revision of it (vX.Y.Z-fix).
+# The demo is versioned on its own calendar scheme (vYEAR.MONTH.N) and is NOT
+# re-tagged for every Orbit release — it moves only when the demo itself
+# changes. So the pin is checked for existence, never for matching this tag.
 env_repo_ref="$(sed -n 's/.*EnvRepoRef: "\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
-if [[ "$env_repo_ref" != "$tag" && "$env_repo_ref" != "$tag"-* ]]; then
-  echo "cmd/orbit/extensions.go pins EnvRepoRef $env_repo_ref; expected $tag (or $tag-<suffix>) so orbit init ships the demo paired with this release" >&2
+if [[ -z "$env_repo_ref" ]]; then
+  echo "cmd/orbit/extensions.go has no EnvRepoRef; \`orbit init\` needs a pinned demo ref" >&2
   exit 1
 fi
 
-echo "release candidate ${tag} is coherent"
+# The pinned demo tag must exist, because `orbit init` clones exactly this ref.
+# Run locally so a bad pin surfaces before a release is ever dispatched, and
+# skipped without network so an offline build still verifies version strings.
+demo_repo="https://github.com/iml885203/orbit-demo.git"
+if demo_tags="$(git ls-remote --tags --exit-code "$demo_repo" "refs/tags/$env_repo_ref" 2>/dev/null)"; then
+  : "${demo_tags:?}"
+elif [[ -z "${demo_tags+set}" ]] && ! git ls-remote --exit-code "$demo_repo" HEAD >/dev/null 2>&1; then
+  echo "warning: cannot reach $demo_repo; version strings verified, paired demo tag unchecked" >&2
+else
+  echo "orbit-demo has no tag $env_repo_ref, but cmd/orbit/extensions.go pins it; \`orbit init\` would clone a ref that does not exist. Tag orbit-demo first." >&2
+  exit 1
+fi
+
+echo "release candidate ${tag} version strings and paired demo tag are coherent"
