@@ -216,7 +216,14 @@ func validateHealthCheck(resourceType, name string, check *HealthCheckConfig, co
 	prefix := fmt.Sprintf("%s %q health_check", resourceType, name)
 	var errs []string
 	switch check.Type {
-	case "http", "tcp":
+	case "http":
+		if check.Port == 0 {
+			errs = append(errs, prefix+".port is required when ports does not identify one endpoint")
+		}
+		if check.Scheme != "" && check.Scheme != "http" && check.Scheme != "https" {
+			errs = append(errs, prefix+".scheme must be \"http\" or \"https\"")
+		}
+	case "tcp":
 		if check.Port == 0 {
 			errs = append(errs, prefix+".port is required when ports does not identify one endpoint")
 		}
@@ -244,6 +251,12 @@ func validateHealthCheck(resourceType, name string, check *HealthCheckConfig, co
 			prefix+" has unknown type "+fmt.Sprintf("%q", check.Type)+
 				schemaValueSuggestion(check.Type, "http", "tcp", "log", "exec", "healthcheck"),
 		)
+	}
+	if check.Type != "http" && check.Scheme != "" {
+		errs = append(errs, prefix+".scheme is only supported for type http")
+	}
+	if check.Type != "http" && check.TLSSkipVerify {
+		errs = append(errs, prefix+".tls_skip_verify is only supported for type http")
 	}
 	if check.Interval <= 0 {
 		errs = append(errs, prefix+".interval must be positive")

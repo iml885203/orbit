@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/iml885203/orbit/config"
@@ -92,6 +93,147 @@ func TestCheck_HTTP_Unreachable(t *testing.T) {
 	}
 	if result.Message == "" {
 		t.Fatal("expected non-empty error message")
+	}
+}
+
+func TestCheck_HTTPSWithTrustedCertificate(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	checker.httpClient = srv.Client()
+	transport := checker.httpClient.Transport.(*http.Transport).Clone()
+	transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+	transport.TLSClientConfig.ServerName = "example.com"
+	checker.httpClient.Transport = transport
+	result := checker.Check(context.Background(), "https-trusted", &config.HealthCheckConfig{
+		Type:   "http",
+		Scheme: "https",
+		Port:   portFromURL(t, srv.URL),
+		Path:   "/health",
+	})
+
+	if !result.Healthy {
+		t.Fatalf("expected healthy, got unhealthy: %s", result.Message)
+	}
+}
+
+func TestCheck_HTTPSRejectsUntrustedCertificateByDefault(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	result := checker.Check(context.Background(), "https-untrusted", &config.HealthCheckConfig{
+		Type:   "http",
+		Scheme: "https",
+		Port:   portFromURL(t, srv.URL),
+		Path:   "/health",
+	})
+
+	if result.Healthy {
+		t.Fatal("expected untrusted certificate to fail")
+	}
+}
+
+func TestCheck_HTTPSSkipVerify(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	result := checker.Check(context.Background(), "https-insecure", &config.HealthCheckConfig{
+		Type:          "http",
+		Scheme:        "https",
+		TLSSkipVerify: true,
+		Port:          portFromURL(t, srv.URL),
+		Path:          "/health",
+	})
+
+	if !result.Healthy {
+		t.Fatalf("expected explicit TLS skip to succeed, got: %s", result.Message)
+	}
+}
+
+func TestCheck_HTTPSSkipVerifySupportsConcurrentProbes(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	check := &config.HealthCheckConfig{
+		Type:          "http",
+		Scheme:        "https",
+		TLSSkipVerify: true,
+		Port:          portFromURL(t, srv.URL),
+		Path:          "/health",
+	}
+	var wg sync.WaitGroup
+	results := make(chan Result, 20)
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results <- checker.Check(context.Background(), "https-concurrent", check)
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	for result := range results {
+		if !result.Healthy {
+			t.Fatalf("concurrent probe failed: %s", result.Message)
+		}
+	}
+}
+
+func TestCheck_HTTPRedirectHonorsTLSSkipVerify(t *testing.T) {
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer tlsServer.Close()
+
+	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, tlsServer.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	defer redirectServer.Close()
+
+	checker := NewChecker(nil, nil)
+	result := checker.Check(context.Background(), "https-redirect", &config.HealthCheckConfig{
+		Type:          "http",
+		Scheme:        "http",
+		TLSSkipVerify: true,
+		Port:          portFromURL(t, redirectServer.URL),
+		Path:          "/health",
+	})
+
+	if !result.Healthy {
+		t.Fatalf("expected redirect with explicit TLS skip to succeed, got: %s", result.Message)
+	}
+}
+
+func TestCheck_HTTPSSkipVerifyStillRequiresFinal2xx(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	checker := NewChecker(nil, nil)
+	result := checker.Check(context.Background(), "https-unhealthy", &config.HealthCheckConfig{
+		Type:          "http",
+		Scheme:        "https",
+		TLSSkipVerify: true,
+		Port:          portFromURL(t, srv.URL),
+		Path:          "/health",
+	})
+
+	if result.Healthy {
+		t.Fatal("expected non-2xx HTTPS response to fail")
 	}
 }
 

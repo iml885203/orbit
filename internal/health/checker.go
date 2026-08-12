@@ -2,6 +2,7 @@ package health
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -26,10 +27,11 @@ type ContainerInspector interface {
 }
 
 type Checker struct {
-	httpClient *http.Client
-	mux        *logging.Multiplexer // nil disables the "log" strategy
-	inspector  ContainerInspector   // nil disables the "exec" / "healthcheck" strategies
-	progress   *progressTracker
+	httpClient         *http.Client
+	insecureHTTPClient *http.Client
+	mux                *logging.Multiplexer // nil disables the "log" strategy
+	inspector          ContainerInspector   // nil disables the "exec" / "healthcheck" strategies
+	progress           *progressTracker
 	// recoveryInterval is the cadence for post-budget recovery probing —
 	// gentler than startup probing because the common case is a service
 	// that needs more warm-up than the retry budget allowed, not one
@@ -40,12 +42,18 @@ type Checker struct {
 // NewChecker builds a Checker. Pass nil for dependencies you don't need:
 // log strategy wants mux, exec/healthcheck want inspector.
 func NewChecker(mux *logging.Multiplexer, inspector ContainerInspector) *Checker {
+	insecureTransport := http.DefaultTransport.(*http.Transport).Clone()
+	insecureTransport.TLSClientConfig = &tls.Config{
+		//nolint:gosec // Environment authors explicitly opt individual localhost probes out of verification.
+		InsecureSkipVerify: true,
+	}
 	return &Checker{
-		httpClient:       &http.Client{Timeout: 5 * time.Second},
-		mux:              mux,
-		inspector:        inspector,
-		progress:         newProgressTracker(),
-		recoveryInterval: 10 * time.Second,
+		httpClient:         &http.Client{Timeout: 5 * time.Second},
+		insecureHTTPClient: &http.Client{Timeout: 5 * time.Second, Transport: insecureTransport},
+		mux:                mux,
+		inspector:          inspector,
+		progress:           newProgressTracker(),
+		recoveryInterval:   10 * time.Second,
 	}
 }
 
@@ -72,13 +80,17 @@ func (c *Checker) Check(ctx context.Context, name string, hc *config.HealthCheck
 }
 
 func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {
-	url := fmt.Sprintf("http://localhost:%d%s", hc.Port, hc.Path)
+	scheme := hc.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	url := fmt.Sprintf("%s://localhost:%d%s", scheme, hc.Port, hc.Path)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return Result{Service: name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.clientFor(hc).Do(req)
 	if err != nil {
 		return Result{Service: name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}
@@ -91,6 +103,13 @@ func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthC
 		Message: fmt.Sprintf("HTTP %d from %s", resp.StatusCode, url),
 		Latency: time.Since(start),
 	}
+}
+
+func (c *Checker) clientFor(hc *config.HealthCheckConfig) *http.Client {
+	if hc.TLSSkipVerify {
+		return c.insecureHTTPClient
+	}
+	return c.httpClient
 }
 
 func (c *Checker) checkTCP(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {

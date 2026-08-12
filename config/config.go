@@ -289,9 +289,12 @@ func applyHealthCheckDefaults(
 	if hc == nil {
 		return
 	}
+	if hc.Type == "http" && hc.Scheme == "" {
+		hc.Scheme = "http"
+	}
 	if hc.Port == 0 && (hc.Type == "http" || hc.Type == "tcp") {
 		if hc.Type == "http" {
-			if port, ok := ports["http"]; ok {
+			if port, ok := ports[hc.Scheme]; ok {
 				hc.Port = port.Host
 			}
 		}

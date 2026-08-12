@@ -316,7 +316,9 @@ If `icon` is omitted, the graph UI shows a generic gear icon. Orbit does not inf
 health_check:
   type: http | tcp | exec | log | healthcheck
   # plus type-specific fields:
-  port: <int>           # http, tcp — optional for one port; http prefers the "http" alias
+  port: <int>           # http, tcp — optional for one port; http prefers the scheme-named alias
+  scheme: http          # http — http (default) or https
+  tls_skip_verify: false # http — opt out of TLS certificate verification for local development
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
@@ -328,15 +330,22 @@ health_check:
 
 | Type | Semantics |
 |---|---|
-| `http` | `GET http://localhost:<port><path>`, accept any 2xx |
+| `http` | `GET <scheme>://localhost:<port><path>`, accept any final 2xx |
 | `tcp` | Open a TCP connection to the port |
 | `exec` | Run `command` inside the container, treat exit 0 as healthy |
 | `log` | Tail container logs for a regex match (one-shot readiness signal; not a runtime liveness probe) |
 | `healthcheck` | Use the image's own `HEALTHCHECK` as reported by `docker inspect` |
 
 For `http` and `tcp`, omit `port` when the resource declares one port. An
-`http` check also selects the `http` alias when other ports exist. Orbit asks
-for an explicit health-check port only when the endpoint remains ambiguous.
+`http` check also selects the alias matching its scheme (`http` or `https`)
+when other ports exist. Orbit asks for an explicit health-check port only when
+the endpoint remains ambiguous.
+
+HTTP checks default to `scheme: http`. Set `scheme: https` for an HTTPS-only
+endpoint. Certificate verification remains enabled by default; local services
+using a self-signed or development certificate can opt out for that individual
+check with `tls_skip_verify: true`. The same setting applies when an HTTP check
+follows a redirect to HTTPS, and the final response must still be 2xx.
 
 A resource with no explicit `health_check` gets a TCP readiness check when it
 declares one port, or an `http` port among several. This applies equally to

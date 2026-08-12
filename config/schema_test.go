@@ -317,6 +317,33 @@ func TestValidate_RejectsNegativeRuntimeHealthFailureThreshold(t *testing.T) {
 	}
 }
 
+func TestValidate_HTTPHealthTransportOptions(t *testing.T) {
+	tests := []struct {
+		name  string
+		check *HealthCheckConfig
+		want  string
+	}{
+		{name: "https", check: &HealthCheckConfig{Type: "http", Scheme: "https", Port: 443, Interval: 1, Timeout: 1, Retries: 1, FailureThreshold: 1}},
+		{name: "redirect opt out", check: &HealthCheckConfig{Type: "http", Scheme: "http", TLSSkipVerify: true, Port: 80, Interval: 1, Timeout: 1, Retries: 1, FailureThreshold: 1}},
+		{name: "unsupported scheme", check: &HealthCheckConfig{Type: "http", Scheme: "ftp", Port: 21, Interval: 1, Timeout: 1, Retries: 1, FailureThreshold: 1}, want: `.scheme must be "http" or "https"`},
+		{name: "scheme on tcp", check: &HealthCheckConfig{Type: "tcp", Scheme: "https", Port: 443, Interval: 1, Timeout: 1, Retries: 1, FailureThreshold: 1}, want: ".scheme is only supported for type http"},
+		{name: "tls on tcp", check: &HealthCheckConfig{Type: "tcp", TLSSkipVerify: true, Port: 443, Interval: 1, Timeout: 1, Retries: 1, FailureThreshold: 1}, want: ".tls_skip_verify is only supported for type http"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &Config{Services: map[string]*Service{"api": {Name: "api", HealthCheck: test.check}}}
+			err := Validate(cfg)
+			if test.want == "" && err != nil {
+				t.Fatalf("Validate() = %v, want nil", err)
+			}
+			if test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+				t.Fatalf("Validate() = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestValidateSuggestsClosestSchemaValue(t *testing.T) {
 	cfg := &Config{
 		Containers: map[string]*Container{
