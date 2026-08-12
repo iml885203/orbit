@@ -578,8 +578,11 @@ containers:
     volumes:
       - orbit-sqlserver:/var/opt/mssql
     health_check:
-      type: tcp
-      port: 14333
+      type: exec
+      command:
+        - /bin/sh
+        - -c
+        - password="$(printenv MSSQL_SA_PASSWORD)"; if [ -z "$password" ]; then echo "MSSQL_SA_PASSWORD is empty" >&2; exit 2; fi; export SQLCMDPASSWORD="$password"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -Q "SELECT 1"
       retries: 30
 
 sqlserver:
@@ -597,6 +600,14 @@ Microsoft image requires `MSSQL_SA_PASSWORD` to initialize itself; Orbit reads
 the same resolved key because `password_env` names it. If an image requires a
 different bootstrap key, declare both keys on the target container and point
 `password_env` at the one Orbit should read.
+
+The `exec` health check waits for an authenticated query, because accepting a
+TCP connection does not prove that SQL Server has finished startup and accepts
+logins. It runs inside the container, where `MSSQL_SA_PASSWORD` is available;
+keep its username and password variable aligned with `sqlserver.username` and
+`sqlserver.password_env`. The command exports `SQLCMDPASSWORD` instead of
+putting the secret in process arguments. The target image must provide
+`/opt/mssql-tools18/bin/sqlcmd`, which `orbit sqlserver query` also uses.
 
 `target` names a container in this env. `username` defaults to `sa`.
 `password_env` names the target container environment key containing the

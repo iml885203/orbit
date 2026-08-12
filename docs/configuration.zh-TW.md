@@ -551,8 +551,11 @@ containers:
     volumes:
       - orbit-sqlserver:/var/opt/mssql
     health_check:
-      type: tcp
-      port: 14333
+      type: exec
+      command:
+        - /bin/sh
+        - -c
+        - password="$(printenv MSSQL_SA_PASSWORD)"; if [ -z "$password" ]; then echo "MSSQL_SA_PASSWORD is empty" >&2; exit 2; fi; export SQLCMDPASSWORD="$password"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -Q "SELECT 1"
       retries: 30
 
 sqlserver:
@@ -570,6 +573,13 @@ image 初始化時需要 `MSSQL_SA_PASSWORD`；`password_env` 指向同一個 ke
 所以 Orbit 會讀取它解析後的值。如果 image 使用不同的 bootstrap key，
 請在 target container 同時宣告兩個 keys，並讓 `password_env` 指向 Orbit
 應讀取的那一個。
+
+這個 `exec` health check 會等待通過認證的查詢成功，因為接受 TCP connection
+不代表 SQL Server 已完成啟動並能接受登入。它在 container 內執行，因此可讀取
+`MSSQL_SA_PASSWORD`；請讓 username 與 password variable 分別和
+`sqlserver.username`、`sqlserver.password_env` 保持一致。Command 會 export
+`SQLCMDPASSWORD`，不會把 secret 放進 process arguments。Target image 必須提供
+`/opt/mssql-tools18/bin/sqlcmd`，`orbit sqlserver query` 也使用同一工具。
 
 `target` 指向同一個 env 裡的 container；`username` 預設為 `sa`。
 `password_env` 是 target container 裡存放密碼的環境變數名稱，Orbit

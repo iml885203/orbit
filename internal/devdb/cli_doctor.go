@@ -18,8 +18,10 @@ func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
 	}
 	root := daemon.WorkspaceRootFromEnv()
 	rootCheck, _ := daemon.WorkspaceRootCheck(root)
-	checks := []daemon.DoctorCheck{rootCheck}
+	checks := make([]daemon.DoctorCheck, 0, 4)
+	checks = append(checks, rootCheck)
 	checks = append(checks, sqlProjectChecks(cfg, root)...)
+	checks = append(checks, sqlServerReadinessChecks(cfg)...)
 	checks = append(checks, publishToolchainChecks()...)
 	return checks
 }
@@ -29,6 +31,7 @@ func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
 func PrintDBWorkflowChecks(cfg *config.Config) {
 	pass := cli.Green.Sprint("✓")
 	fail := cli.Red.Sprint("✗")
+	warn := cli.Yellow.Sprint("!")
 
 	if !DBWorkflowConfigured(cfg) {
 		return
@@ -41,6 +44,10 @@ func PrintDBWorkflowChecks(cfg *config.Config) {
 		fmt.Printf("  %s workspace root %s (path not found)\n", fail, workspaceRoot)
 	} else {
 		fmt.Printf("  %s workspace root %s\n", pass, workspaceRoot)
+	}
+	for _, check := range sqlServerReadinessChecks(cfg) {
+		fmt.Printf("  %s %s: %s\n", warn, check.Name, check.Message)
+		fmt.Printf("      hint: %s\n", check.Hint)
 	}
 
 	containerMgr, containerErr := container.NewManager(os.Getenv("ORBIT_NAMESPACE"))
@@ -58,6 +65,6 @@ func PrintDBWorkflowChecks(cfg *config.Config) {
 	if containerMgr.ImageExists(c.Image) {
 		fmt.Printf("  %s SQL image available locally\n", pass)
 	} else {
-		fmt.Printf("  %s SQL image not cached — will be pulled on first orbit up\n", cli.Yellow.Sprint("!"))
+		fmt.Printf("  %s SQL image not cached — will be pulled on first orbit up\n", warn)
 	}
 }

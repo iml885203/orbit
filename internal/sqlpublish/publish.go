@@ -96,17 +96,21 @@ type Result struct {
 // a second run against an unchanged project converges to a no-op.
 func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
 	start := time.Now()
+	if code, err := validatePublishInput(opts); err != nil {
+		return failed(start, err, code)
+	}
 
 	// Auto-heal the empty-server case up front: a target that doesn't
 	// exist yet needs its referenced shared objects (roles, schemas)
 	// created too, which only composite deployment does. Detecting it
 	// here keeps the steady-state publish (DB present) on the default
-	// path — no composite, no reshaping objects another DB owns. A
-	// probe error (server down, etc.) is non-fatal: leave composite off
-	// and let publishDacpac surface the real failure; the reactive retry
-	// below still covers a missing shared object on an existing DB.
+	// path — no composite, no reshaping objects another DB owns.
 	created := false
-	if exists, err := DatabaseExists(ctx, opts); err == nil && !exists {
+	exists, err := DatabaseExists(ctx, opts)
+	if err != nil {
+		return failed(start, fmt.Errorf("probe database existence: %w", err), CodeSQLServerUnavailable)
+	}
+	if !exists {
 		opts.IncludeComposite = true
 		created = true
 	}
@@ -122,6 +126,19 @@ func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
 	// Remember what was just published so the next diff can short-circuit.
 	recordPublishStateWhenAvailable(ctx, opts, fingerprint, out)
 	return Result{OK: true, DurationMs: time.Since(start).Milliseconds(), Created: created}
+}
+
+func validatePublishInput(opts Opts) (ErrorCode, error) {
+	if opts.DacpacDir != "" {
+		if err := ValidateDacpacArtifacts(opts.DacpacDir, opts.SQLProj); err != nil {
+			return CodeDacpacArtifactMissing, err
+		}
+		return CodeNone, nil
+	}
+	if _, err := os.Stat(opts.SQLProj); err != nil {
+		return CodeSQLProjectNotFound, fmt.Errorf("sqlproj not found at %s", opts.SQLProj)
+	}
+	return CodeNone, nil
 }
 
 func recordPublishStateWhenAvailable(ctx context.Context, opts Opts, fingerprint string, out io.Writer) {

@@ -25,26 +25,42 @@ jobs:
           dotnet-version: 8.0.x
       - name: Install sqlpackage
         run: dotnet tool install --global microsoft.sqlpackage
-      - name: Start isolated SQL Server
+      - name: Build Orbit
+        run: make build
+      - name: Start cold SQL Server through Orbit readiness
         run: |
           set -euo pipefail
-          docker run --detach --name orbit-sql-e2e \
-            --env ACCEPT_EULA=Y \
-            --env "MSSQL_SA_PASSWORD=$ORBIT_SQL_E2E_PASSWORD" \
-            --publish 127.0.0.1:11433:1433 \
-            mcr.microsoft.com/mssql/server:2022-latest
-          for attempt in {1..90}; do
-            if docker logs orbit-sql-e2e 2>&1 | grep -q "SQL Server is now ready for client connections"; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs orbit-sql-e2e
-          exit 1
+          mkdir -p .sqlserver-smoke
+          cat > .sqlserver-smoke/orbit.yaml <<'YAML'
+          version: "3"
+          containers:
+            database:
+              image: mcr.microsoft.com/mssql/server:2022-latest
+              ports:
+                mssql: "11433:1433"
+              environment:
+                ACCEPT_EULA: "Y"
+                MSSQL_SA_PASSWORD: "${ORBIT_SQL_E2E_PASSWORD}"
+              health_check:
+                type: exec
+                command:
+                  - /bin/sh
+                  - -c
+                  - password="$(printenv MSSQL_SA_PASSWORD)"; if [ -z "$password" ]; then exit 2; fi; export SQLCMDPASSWORD="$password"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -Q "SELECT 1"
+                interval: 1s
+                retries: 90
+          sqlserver:
+            target: database
+            username: sa
+            password_env: MSSQL_SA_PASSWORD
+            projects:
+              - path: Smoke.sqlproj
+          YAML
+          ./bin/orbit --config .sqlserver-smoke/orbit.yaml --instance sql-smoke up
       - name: Exercise the real SQL workflow
         env:
           ORBIT_E2E_SQL: localhost:11433:${{ env.ORBIT_SQL_E2E_PASSWORD }}
         run: go test ./internal/sqlpublish -run 'TestE2E_QuickDiff|TestBuildDacpac' -v -count=1
       - name: Remove isolated SQL Server
         if: always()
-        run: docker rm --force orbit-sql-e2e
+        run: ./bin/orbit instance clean sql-smoke --json || true

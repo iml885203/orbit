@@ -103,6 +103,10 @@ subdirectory per project with its leaf and referenced dacpacs together. Do not
 fall back to a source build when Orbit reports an incomplete artifact set;
 repair the download or deliberately rerun without the flag.
 
+Before the first operation, act on any `orbit doctor --json` SQL Server
+readiness warning so a TCP-only probe does not release the workflow before the
+target accepts logins.
+
 Ask before:
 
 - `orbit sqlserver reset`

@@ -60,6 +60,16 @@ orbit switch example
 
 ## SQL Server
 
+### Target 正在執行，但 `publish`、`diff` 或 `reset` 回報 `sql_server_unavailable`
+
+SQL Server listener 可能已接受 TCP connection，但 instance 還不能接受登入。
+執行 `orbit doctor`；如果它警告 SQL Server readiness，請把 target 缺少或僅有
+TCP 的 health check 換成它印出的認證 `exec` probe。接著執行
+`orbit restart <sqlserver.target>`，讓 `orbit up` 等到登入成功後才放行 workflow。
+
+如果 target 已使用該 probe，請用 `orbit sqlserver query "SELECT 1"` 驗證認證，
+並用 `orbit logs <sqlserver.target>` 查看啟動失敗原因。
+
 ### `orbit sqlserver publish` 之後，DbGate 沒看到新的物件
 DbGate 是按連線快取 schema 的。在連線上右鍵 → Disconnect → Connect，或在 database 節點按重新整理。再用下面的指令確認物件真的在：
 

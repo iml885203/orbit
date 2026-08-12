@@ -66,6 +66,18 @@ environment, use `orbit source sync <name> --no-apply`, then apply it when ready
 
 ## SQL Server
 
+### `publish`, `diff`, or `reset` reports `sql_server_unavailable` while the target is running
+
+The SQL Server listener can accept TCP connections before the instance accepts
+logins. Run `orbit doctor`; if it warns about SQL Server readiness, replace the
+target's absent or TCP-only health check with the authenticated `exec` probe it
+prints. Then restart the target with `orbit restart <sqlserver.target>` so
+`orbit up` waits for a successful login before releasing the workflow.
+
+If the target already uses that probe, verify its credentials with
+`orbit sqlserver query "SELECT 1"` and inspect startup failures with
+`orbit logs <sqlserver.target>`.
+
 ### After `orbit sqlserver publish`, DbGate doesn't show the new object
 DbGate caches the schema per connection. Right-click the connection → Disconnect → Connect, or click the refresh icon on the database node. Verify the object is really there:
 

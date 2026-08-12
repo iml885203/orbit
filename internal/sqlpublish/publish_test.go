@@ -8,26 +8,42 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
-// A nonexistent sqlproj must fail fast with the stable code — before
-// any tool runs (the toolchain check may fire first on hosts without
-// dotnet; both codes are acceptable failures, but never a hang or OK).
-func TestPublish_BogusSQLProj_FailsCleanly(t *testing.T) {
-	res := Publish(context.Background(), Opts{
+func TestPublish_UnavailableServerStopsBeforeBuild(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	project := filepath.Join(t.TempDir(), "NopeDB.sqlproj")
+	if err := os.WriteFile(project, []byte("<Project />"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := Publish(ctx, Opts{
 		DB:      "NopeDB",
-		SQLProj: "/nonexistent/NopeDB.sqlproj",
+		SQLProj: project,
 		OutDir:  t.TempDir(),
 		Host:    "localhost", Port: 1, User: "sa", Password: "x",
 	}, io.Discard)
 	if res.OK {
-		t.Fatal("expected failure for bogus sqlproj")
+		t.Fatal("expected failure for unavailable server")
 	}
-	if res.Code != CodeSQLProjectNotFound && res.Code != CodeToolchainMissing {
-		t.Errorf("code = %q, want sql_project_not_found (or toolchain_missing on bare hosts)", res.Code)
+	if res.Code != CodeSQLServerUnavailable {
+		t.Errorf("code = %q, want sql_server_unavailable", res.Code)
 	}
-	if res.Err == nil {
-		t.Error("Err must be non-nil on failure")
+	if res.Err == nil || !strings.Contains(res.Err.Error(), "probe database existence") {
+		t.Errorf("Err = %v, want database existence probe context", res.Err)
+	}
+}
+
+func TestPublish_MissingProjectStopsBeforeServerProbe(t *testing.T) {
+	res := Publish(context.Background(), Opts{
+		DB:      "NopeDB",
+		SQLProj: filepath.Join(t.TempDir(), "NopeDB.sqlproj"),
+		OutDir:  t.TempDir(),
+		Host:    "localhost", Port: 1, User: "sa", Password: "x",
+	}, io.Discard)
+	if res.OK || res.Code != CodeSQLProjectNotFound {
+		t.Fatalf("result = %+v, want sql_project_not_found", res)
 	}
 }
 
