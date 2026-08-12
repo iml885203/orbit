@@ -170,6 +170,25 @@ type PortDef struct {
 	Target int // container-internal port; same as Host if not specified
 }
 
+// ReadinessPort returns the host port a readiness probe should target when the
+// author declared no explicit health_check, or 0 when the aliases don't single
+// one out. An "https" alias is as unambiguous as "http": the implicit probe is
+// TCP, so it only needs the address, and refusing https would deny a probe to
+// resources whose only endpoint is TLS.
+func ReadinessPort(ports map[string]PortDef) int {
+	for _, alias := range []string{"http", "https"} {
+		if endpoint, ok := ports[alias]; ok {
+			return endpoint.Host
+		}
+	}
+	if len(ports) == 1 {
+		for _, endpoint := range ports {
+			return endpoint.Host
+		}
+	}
+	return 0
+}
+
 func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
 	var single int
 	if err := node.Decode(&single); err == nil {
