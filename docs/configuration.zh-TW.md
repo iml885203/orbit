@@ -152,7 +152,7 @@ settings:
 | `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` / Docker `healthcheck` probe 多久跑一次 |
 | `docker_poll_interval` | duration | `2s` | container poller 多久呼叫一次 `docker inspect` |
 | `image_pull_concurrency` | int | `0` | 同時拉取不同 Docker image 的上限；`0` 維持無上限平行拉取。同一 image 與 platform 的並行請求一律共用一次 pull |
-| `health_check.timeout` | duration | `5s` | 當 `health_check` 沒指定 `timeout` 時，每次 probe 套用的預設逾時 |
+| `health_check.timeout` | duration | `5s` | 當 `health_check` 沒指定 `timeout` 時，單次 `http` 或 `tcp` probe 的期限。`exec` probe 由外層操作限制，不受此值影響 |
 | `health_check.retries` | int | `12` | `health_check` 未指定時套用的啟動重試次數（以預設 5s interval 計約 1 分鐘）。預算用盡後 Orbit 仍會每 10s 探測，資源恢復時自動回到 healthy |
 | `health_check.failure_threshold` | int | `3` | healthy 資源連續幾次 runtime 探測失敗後才轉為 degraded；一次成功即可恢復。`log` 是僅供 readiness 的一次性檢查，不會持續監測 |
 
@@ -307,7 +307,7 @@ health_check:
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
   interval: 5s          # 輪詢頻率（預設用 settings.health_check_interval）
-  timeout: 30s
+  timeout: 30s          # probe 期限 — http/tcp（預設 5s）、log 等待（預設 60s）
   retries: 10
   failure_threshold: 3 # 連續幾次 runtime 失敗後轉為 degraded
 ```

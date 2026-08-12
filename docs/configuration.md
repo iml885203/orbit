@@ -159,7 +159,7 @@ settings:
 | `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` / Docker `healthcheck` probes |
 | `docker_poll_interval` | duration | `2s` | How often the container poller calls `docker inspect` |
 | `image_pull_concurrency` | int | `0` | Maximum distinct Docker image pulls at once; `0` keeps unlimited parallel pulls. Concurrent requests for the same image and platform always share one pull |
-| `health_check.timeout` | duration | `5s` | Per-probe timeout applied when a `health_check` omits `timeout` |
+| `health_check.timeout` | duration | `5s` | Deadline for one `http` or `tcp` probe when a `health_check` omits `timeout`. `exec` probes are bounded by the surrounding operation, not this value |
 | `health_check.retries` | int | `12` | Startup retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). After the budget is spent, Orbit keeps probing every 10s and returns the resource to healthy when it recovers |
 | `health_check.failure_threshold` | int | `3` | Consecutive runtime probe failures required before a healthy resource becomes degraded. One successful probe recovers it. `log` checks are readiness-only and are not continuously monitored |
 
@@ -323,7 +323,7 @@ health_check:
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
   interval: 5s          # poll cadence (defaults to settings.health_check_interval)
-  timeout: 30s
+  timeout: 30s          # probe deadline — http/tcp (default 5s), log wait (default 60s)
   retries: 10
   failure_threshold: 3 # consecutive runtime failures before degraded
 ```
