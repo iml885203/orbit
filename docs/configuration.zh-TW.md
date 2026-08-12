@@ -300,7 +300,9 @@ containers:
 health_check:
   type: http | tcp | exec | log | healthcheck
   # plus type-specific fields:
-  port: <int>           # http、tcp；只有一個 port 時可省略，http 會優先用 "http" alias
+  port: <int>           # http、tcp；只有一個 port 時可省略，http 會優先用同 scheme 的 alias
+  scheme: http          # http；http（預設）或 https
+  tls_skip_verify: false # http；本機開發時可略過 TLS 憑證驗證
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
@@ -312,15 +314,20 @@ health_check:
 
 | Type | 語意 |
 |---|---|
-| `http` | `GET http://localhost:<port><path>`，任何 2xx 都算通過 |
+| `http` | `GET <scheme>://localhost:<port><path>`，最終 response 為 2xx 才算通過 |
 | `tcp` | 對該 port 建立一條 TCP 連線 |
 | `exec` | 在 container 內執行 `command`，exit code 0 視為 healthy |
 | `log` | tail container logs 比對 regex（僅為一次性 readiness 訊號，不是 runtime liveness probe） |
 | `healthcheck` | 直接用 image 自己的 `HEALTHCHECK`，由 `docker inspect` 回報 |
 
 `http` 與 `tcp` 在 resource 只有一個 port 時可省略 `port`。有多個 port
-時，`http` check 仍會優先選擇 `http` alias；只有 endpoint 仍有歧義時，
-Orbit 才要求明確指定 health-check port。
+時，`http` check 會優先選擇與 scheme 同名的 `http` 或 `https` alias；只有
+endpoint 仍有歧義時，Orbit 才要求明確指定 health-check port。
+
+HTTP check 的 `scheme` 預設為 `http`；HTTPS-only endpoint 可設為
+`scheme: https`。憑證驗證預設保持開啟；使用 self-signed 或 development
+certificate 的本機服務，可針對該 check 明確設定 `tls_skip_verify: true`。
+HTTP redirect 到 HTTPS 時也會沿用此設定，且最終 response 仍必須是 2xx。
 
 Resource 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個 port
 中包含 `http`，Orbit 會自動使用 TCP readiness check。Host service 與

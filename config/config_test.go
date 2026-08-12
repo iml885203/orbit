@@ -73,6 +73,9 @@ services:
 	if got := cfg.Services["api"].HealthCheck.Port; got != 5000 {
 		t.Errorf("service health port = %d, want inferred 5000", got)
 	}
+	if got := cfg.Services["api"].HealthCheck.Scheme; got != "http" {
+		t.Errorf("service health scheme = %q, want http", got)
+	}
 	if got := cfg.Services["api"].ResolveURL(); got != "http://localhost:5000" {
 		t.Errorf("service URL = %q, want inferred HTTP endpoint", got)
 	}
@@ -91,6 +94,35 @@ func TestApplyDefaultsUpdatesContainerPointersInMap(t *testing.T) {
 
 	if cfg.Containers["sql-server"].PullPolicy != "always" {
 		t.Fatalf("pull policy = %q, want always", cfg.Containers["sql-server"].PullPolicy)
+	}
+}
+
+func TestLoad_HTTPSHealthCheckUsesHTTPSPort(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+services:
+  api:
+    command: ./api
+    ports:
+      http: 8080
+      https: 8443
+    health_check:
+      type: http
+      scheme: https
+      tls_skip_verify: true
+      path: /health
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	check := cfg.Services["api"].HealthCheck
+	if check.Port != 8443 {
+		t.Errorf("health port = %d, want https port 8443", check.Port)
+	}
+	if check.Scheme != "https" || !check.TLSSkipVerify {
+		t.Errorf("health transport = scheme %q, tls_skip_verify %t", check.Scheme, check.TLSSkipVerify)
 	}
 }
 

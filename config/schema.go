@@ -336,6 +336,8 @@ func (c *Config) ServiceOrContainerExists(name string) bool {
 
 type HealthCheckConfig struct {
 	Type             string        `yaml:"type"` // http, tcp, log, exec, healthcheck
+	Scheme           string        `yaml:"scheme"`
+	TLSSkipVerify    bool          `yaml:"tls_skip_verify"`
 	Path             string        `yaml:"path"`
 	Port             int           `yaml:"port"`
 	Pattern          string        `yaml:"pattern"` // regex for "log" type

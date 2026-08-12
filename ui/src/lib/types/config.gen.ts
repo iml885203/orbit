@@ -145,6 +145,8 @@ export interface EnvToggle {
 }
 export interface HealthCheckConfig {
   type: string; // http, tcp, log, exec, healthcheck
+  scheme: string;
+  tls_skip_verify: boolean;
   path: string;
   port: number /* int */;
   pattern: string; // regex for "log" type
