@@ -160,7 +160,7 @@ settings:
 | `docker_poll_interval` | duration | `2s` | How often the container poller calls `docker inspect` |
 | `image_pull_concurrency` | int | `0` | Maximum distinct Docker image pulls at once; `0` keeps unlimited parallel pulls. Concurrent requests for the same image and platform always share one pull |
 | `health_check.timeout` | duration | `5s` | Deadline for one `http` or `tcp` probe when a `health_check` omits `timeout`. `exec` probes are bounded by the surrounding operation, not this value |
-| `health_check.retries` | int | `12` | Startup retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). After the budget is spent, Orbit keeps probing every 10s and returns the resource to healthy when it recovers |
+| `health_check.retries` | int | `12` | Startup retry count applied when a `health_check` omits `retries` (≈1 minute at the default 5s interval). A probe that times out costs its `timeout` rather than the `interval`, so a large `timeout` stretches the startup budget toward `retries × timeout`. After the budget is spent, Orbit keeps probing every 10s and returns the resource to healthy when it recovers |
 | `health_check.failure_threshold` | int | `3` | Consecutive runtime probe failures required before a healthy resource becomes degraded. One successful probe recovers it. `log` checks are readiness-only and are not continuously monitored |
 
 Duration strings accept Go format: `500ms`, `10s`, `2m`, `1h30m`.
@@ -349,7 +349,7 @@ this check makes skips verification, including one to another host. The final
 response must still be 2xx.
 
 A resource with no explicit `health_check` gets a TCP readiness check when it
-declares one port, or an `http` port among several. This applies equally to
+declares one port, or an `http` or `https` port among several. This applies equally to
 host services and containers: declaring the endpoint is enough for Orbit to
 wait before releasing dependents. Use an explicit HTTP, log, `exec`, or image
 `healthcheck` probe when listening alone is not sufficient proof. A portless
