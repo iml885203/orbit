@@ -179,12 +179,12 @@ func restoreCachedDacpac(opts Opts, dacpac, fingerprint string) (bool, error) {
 	return true, nil
 }
 
-// builtDacpacPath is where `dotnet build` puts this project's dacpac.
-// Microsoft.Build.Sql 2.x names it from the .sqlproj filename, ignoring both
-// <Name> (microsoft/DacFx#491) and <AssemblyName>. A project that redirects
-// its output anyway — via <SqlTargetName>, or the third-party
-// MSBuild.Sdk.SqlProj SDK, which does honour <AssemblyName> — hits the
-// "not produced at" error below rather than publishing the wrong artifact.
+// builtDacpacPath mirrors Microsoft.Build.Sql 2.x, which names the artifact
+// from the .sqlproj filename and ignores both <Name> (microsoft/DacFx#491)
+// and <AssemblyName>. A project that redirects its output anyway — via
+// <SqlTargetName>, or the third-party MSBuild.Sdk.SqlProj SDK, which does
+// honour <AssemblyName> — hits the "not produced at" error below rather
+// than publishing the wrong artifact.
 func builtDacpacPath(opts Opts) string {
 	base := filepath.Base(opts.SQLProj)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
@@ -192,9 +192,9 @@ func builtDacpacPath(opts Opts) string {
 }
 
 // dacpacNotProduced reports a build that succeeded while writing its dacpac
-// somewhere else — in practice a project overriding <SqlTargetName>. Listing
-// what the build did emit turns "file missing" into a name the user
-// recognises as their own override.
+// under a name orbit does not expect. Listing what the build did emit turns
+// "file missing" into something the user can act on — the artifact's real
+// name is usually enough to recognise which project setting redirected it.
 func dacpacNotProduced(want, outDir string) error {
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
@@ -210,7 +210,7 @@ func dacpacNotProduced(want, outDir string) error {
 		return fmt.Errorf("dacpac not produced at %s", want)
 	}
 	return fmt.Errorf(
-		"dacpac not produced at %s; the build wrote %s instead — orbit expects the dacpac named after the .sqlproj, so remove any <SqlTargetName> override",
+		"dacpac not produced at %s; the build wrote %s instead. Orbit publishes the dacpac named after the .sqlproj — check the project for a <SqlTargetName> override, or an SDK that renames the output",
 		want, strings.Join(found, ", "),
 	)
 }

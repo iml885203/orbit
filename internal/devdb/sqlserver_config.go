@@ -181,10 +181,10 @@ func duplicateDatabaseName(current int, currentPath string, previous int, previo
 		"database name %q is declared by two projects:\n"+
 			"  projects[%d]  %s\n"+
 			"  projects[%d]  %s\n"+
-			"To deploy one schema to several databases, declare one project with both names:\n"+
+			"To deploy one schema to several databases, declare one project listing each target name:\n"+
 			"  - path: %s\n"+
-			"    databases: [%sDev, %sE2E]",
-		name, previous, previousPath, current, currentPath, previousPath, name, name,
+			"    databases: [<name>, <name>]",
+		name, previous, previousPath, current, currentPath, previousPath,
 	)
 }
 
