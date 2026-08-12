@@ -95,7 +95,15 @@ The SQL Server Database Projects workflow is optional and exists only when the
 environment enables it. Use `orbit sqlserver diff <database> --json` to inspect
 schema impact. Use `orbit sqlserver publish <database|project> --json` (or
 `--all --json`) for the ordinary data-preserving path; changes that could lose
-data remain blocked. Ask before:
+data remain blocked.
+
+When a CI run already downloaded dacpacs, pass the same
+`--dacpac-dir <root>` to `diff`, `publish`, or `reset`. Keep one
+subdirectory per project with its leaf and referenced dacpacs together. Do not
+fall back to a source build when Orbit reports an incomplete artifact set;
+repair the download or deliberately rerun without the flag.
+
+Ask before:
 
 - `orbit sqlserver reset`
 - `orbit sqlserver publish --allow-data-loss`

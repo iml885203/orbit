@@ -114,7 +114,7 @@ type reportIssue struct {
 // of seconds. Any doubt falls through to the engine, whose result is
 // then cached for identical later states.
 func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode, error) {
-	if !opts.Analyze {
+	if !opts.Analyze && opts.DacpacDir == "" {
 		if res, ok := FastDiff(ctx, opts, out); ok {
 			switch {
 			case res.Cached:
@@ -141,7 +141,7 @@ func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode,
 		return DiffResult{}, CodePublishFailed, fmt.Errorf("reading deploy report: %w", err)
 	}
 	result, code, err := parseDeployReport(opts.DB, data)
-	if err == nil && markerErr == nil {
+	if err == nil && markerErr == nil && fingerprint != "" {
 		// Cache the engine's answer for identical later states. Best-effort.
 		if cacheErr := recordDiffCache(ctx, opts, fingerprint, markers, result); cacheErr != nil {
 			fmt.Fprintf(out, "[diff] result not cached (next identical diff pays the engine again): %v\n", cacheErr)

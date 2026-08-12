@@ -36,11 +36,13 @@ Each database name must map to exactly one project. To use one schema for
 multiple databases, declare their names on one sqlserver.projects entry, then
 reset a specific database by name.
 
-Destructive: run manually. Requires the host dotnet SDK and sqlpackage.`,
+Destructive: run manually. Requires sqlpackage. The host dotnet SDK and project
+sources are also required unless --dacpac-dir supplies prebuilt artifacts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: runDBReset,
 	}
 	cmd.Flags().BoolVarP(&resetYes, "yes", "y", false, "confirm discarding local data without prompting")
+	addDacpacDirFlag(cmd)
 	return cmd
 }
 
@@ -81,6 +83,13 @@ func runDBReset(_ *cobra.Command, args []string) error {
 	// Reuse the project list fetched above rather than re-dialing the daemon.
 	opts.SQLProj, err = sqlProjForDatabaseOrError(projects.Projects, dbName)
 	if err != nil {
+		return err
+	}
+	opts.DacpacDir, err = invocationDacpacDir()
+	if err != nil {
+		return err
+	}
+	if err := sqlpublish.ValidateDacpacArtifacts(opts.DacpacDir, opts.SQLProj); opts.DacpacDir != "" && err != nil {
 		return err
 	}
 

@@ -10,9 +10,9 @@ under `orbit query`.
 An environment that explicitly enables `sqlserver` gets five Database Project
 commands: `list`, `diff`, `publish`, `reset`, and `query`. Other environments
 do not show this workflow.
-Publishing runs entirely on the host — build the SQL project with `dotnet
-build`, then push the dacpac to the configured SQL Server target with
-`sqlpackage`.
+Publishing runs entirely on the host. Orbit normally builds the SQL project
+with `dotnet build`, then pushes the dacpac to the configured SQL Server target
+with `sqlpackage`. A run may instead supply prebuilt dacpacs.
 The implementation used to manage fast resets stays internal.
 
 ## Volume and persistence model
@@ -46,8 +46,8 @@ every configured database.
 
 ## `orbit sqlserver publish`: the everyday path
 
-`orbit sqlserver publish <db>` builds the SQL project **on the host** (`dotnet
-build`) and publishes the dacpac straight to the configured target's published
+By default, `orbit sqlserver publish <db>` builds the SQL project **on the host**
+(`dotnet build`) and publishes the dacpac straight to the configured target's published
 port with the host `sqlpackage` — no image rebuild, no
 container-side tooling, native arm64 on Apple Silicon. It is idempotent:
 an unchanged project converges to a no-op in seconds, and data is always
@@ -68,8 +68,9 @@ and blocked by publish until the user explicitly passes `--allow-data-loss`. A f
 publish shows every affected database and asks for confirmation; use
 `--allow-data-loss --yes` only after reviewing the impact when running non-interactively.
 
-Requirements (checked by `orbit doctor`): the .NET SDK and sqlpackage on
-the host — `dotnet tool install -g microsoft.sqlpackage`.
+Requirements (checked by `orbit doctor`): sqlpackage on the host —
+`dotnet tool install -g microsoft.sqlpackage` — plus the .NET SDK when Orbit
+builds from source.
 
 One explicit section decides both what gets published and where:
 
@@ -106,6 +107,40 @@ The dashboard's `Publish all` button does the same through the daemon.
 Against an empty SQL Server, the same command creates missing databases and
 deploys referenced shared objects. Rerun it after fixing a failed project;
 successful databases converge to no-ops.
+
+### Publish prebuilt dacpacs
+
+Use `--dacpac-dir <root>` with `publish`, `diff`, or `reset` when the current
+runner already has build artifacts:
+
+```bash
+orbit sqlserver publish --all --dacpac-dir .artifacts
+```
+
+The environment still declares each `.sqlproj`; its basename identifies the
+artifact directory and leaf dacpac. For example, `db/PlatformDB.sqlproj` uses:
+
+```text
+.artifacts/
+  PlatformDB/
+    PlatformDB.dacpac
+    CommonFiles.dacpac
+```
+
+Keep every referenced dacpac beside the leaf. Orbit copies the complete set to
+operation-local scratch space and logs each file's size and modification time.
+The supplied root, project directory, and expected leaf must all exist and use
+the exact case of the `.sqlproj` basename. With
+`--all`, Orbit validates every project before publishing and never falls back
+to `dotnet build` for a missing artifact.
+
+This mode still requires sqlpackage, but not the .NET SDK or a readable source
+tree. Without sources, source-based fast diff and publish-state recording are
+unavailable; diff uses the deployment engine and a later run does not assume
+the artifact is unchanged.
+
+Doctor treats missing project sources and the SDK as warnings because prebuilt
+artifacts can replace both. Missing sqlpackage remains a failed prerequisite.
 
 `password_env` names the target container key containing the password. Orbit
 reads that resolved value only when a DB operation runs and never exposes it

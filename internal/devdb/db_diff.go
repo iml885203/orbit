@@ -44,12 +44,14 @@ The default check is optimized for the common edit-and-publish loop. When
 source files changed, it names them immediately. Use --analyze to inspect
 the affected database objects and possible data-loss warnings.
 
-Requires the host dotnet SDK and sqlpackage.`,
+Requires sqlpackage. The host dotnet SDK and project sources are also required
+unless --dacpac-dir supplies prebuilt artifacts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: runDBDiff,
 	}
 	cmd.Flags().BoolVar(&diffScript, "script", false, "print the full T-SQL deployment script instead of a summary")
 	cmd.Flags().BoolVar(&diffAnalyze, "analyze", false, "inspect affected database objects and possible data loss")
+	addDacpacDirFlag(cmd)
 	return cmd
 }
 
@@ -121,6 +123,10 @@ func diffOneDB(client *daemon.Client, projects []DevDBProject, dbName string) er
 		return err
 	}
 	opts.Analyze = diffAnalyze
+	opts.DacpacDir, err = invocationDacpacDir()
+	if err != nil {
+		return err
+	}
 
 	// Build output goes to stderr so stdout stays clean for --json / --script.
 	buildOut := os.Stderr

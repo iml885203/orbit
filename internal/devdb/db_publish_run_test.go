@@ -3,11 +3,34 @@ package devdb
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestValidatePublishArtifacts_ChecksEveryProjectBeforePublish(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "First")
+	if err := os.Mkdir(first, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(first, "First.dacpac"), []byte("first"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	targets := []publishTargetRef{
+		{DB: "First", SQLProj: "/workspace/First.sqlproj"},
+		{DB: "Second", SQLProj: "/workspace/Second.sqlproj"},
+	}
+
+	targets = append(targets, publishTargetRef{DB: "Third", SQLProj: "/workspace/Third.sqlproj"})
+	err := validatePublishArtifacts(root, targets)
+	if err == nil || !strings.Contains(err.Error(), "project Second") || !strings.Contains(err.Error(), "project Third") {
+		t.Fatalf("validation error = %v, want all missing projects before publishing begins", err)
+	}
+}
 
 // runBoundedPublish is the mutex/semaphore core of --parallel, exercised
 // here with a fake work func (no real SQL): it must run every target,
