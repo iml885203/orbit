@@ -48,6 +48,12 @@ Discover commands with `orbit --help`; the agent-facing JSON contract is in [doc
 - `/orbit-review` — review unstaged + staged changes
 - `/orbit-review <base>` — review branch vs base (e.g. `/orbit-review main`)
 
+## Filing issues
+
+- `/orbit-issue-create` — draft an issue, verify its claims against the code with
+  reviewer sub-agents, then file it. Use it rather than writing an issue directly:
+  the failure it prevents is a confidently wrong issue, which costs more than none.
+
 ## Where to read more
 
 - [docs/architecture.md](docs/architecture.md) — state machine and event model
