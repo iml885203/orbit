@@ -42,6 +42,16 @@ func collectOutput(m *Manager) (*[]string, *sync.Mutex) {
 	return &lines, mu
 }
 
+// writePreStartScript returns a pre_start command that runs body.
+//
+// It returns `/bin/sh <path>` rather than the script path alone, so the exec
+// target is a binary that has existed since boot instead of a file this process
+// just created. Exec'ing a just-written file races with any concurrent write in
+// the same process: `open` deliberately does not take syscall.ForkLock (it can
+// block arbitrarily), so a sibling test's fork can inherit the writer's
+// descriptor and the exec then fails with ETXTBSY — "text file busy". These
+// tests run in parallel and one of them writes a gate file from an output
+// callback, which is exactly that shape, and it flaked on Linux CI.
 func writePreStartScript(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -49,7 +59,7 @@ func writePreStartScript(t *testing.T, body string) string {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
-	return path
+	return "/bin/sh " + path
 }
 
 // containsInOrder reports whether want is a subsequence of *got
