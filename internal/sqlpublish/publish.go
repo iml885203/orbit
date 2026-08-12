@@ -139,7 +139,7 @@ func buildDacpac(ctx context.Context, opts Opts, out io.Writer) (string, string,
 		return "", "", CodeSQLProjectNotFound, fmt.Errorf("sqlproj not found at %s", opts.SQLProj)
 	}
 
-	dacpac := filepath.Join(opts.OutDir, opts.DB+".dacpac")
+	dacpac := builtDacpacPath(opts)
 	fingerprint, fpErr := projectFingerprint(opts.SQLProj, opts.DB)
 	if fpErr == nil {
 		restored, err := restoreCachedDacpac(opts, dacpac, fingerprint)
@@ -179,6 +179,42 @@ func restoreCachedDacpac(opts Opts, dacpac, fingerprint string) (bool, error) {
 	return true, nil
 }
 
+// builtDacpacPath mirrors Microsoft.Build.Sql 2.x, which names the artifact
+// from the .sqlproj filename and ignores both <Name> (microsoft/DacFx#491)
+// and <AssemblyName>. A project that redirects its output anyway — via
+// <SqlTargetName>, or the third-party MSBuild.Sdk.SqlProj SDK, which does
+// honour <AssemblyName> — hits the "not produced at" error below rather
+// than publishing the wrong artifact.
+func builtDacpacPath(opts Opts) string {
+	base := filepath.Base(opts.SQLProj)
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+	return filepath.Join(opts.OutDir, name+".dacpac")
+}
+
+// dacpacNotProduced reports a build that succeeded while writing its dacpac
+// under a name orbit does not expect. Listing what the build did emit turns
+// "file missing" into something the user can act on — the artifact's real
+// name is usually enough to recognise which project setting redirected it.
+func dacpacNotProduced(want, outDir string) error {
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return fmt.Errorf("dacpac not produced at %s", want)
+	}
+	var found []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".dacpac") {
+			found = append(found, e.Name())
+		}
+	}
+	if len(found) == 0 {
+		return fmt.Errorf("dacpac not produced at %s", want)
+	}
+	return fmt.Errorf(
+		"dacpac not produced at %s; the build wrote %s instead. Orbit publishes the dacpac named after the .sqlproj — check the project for a <SqlTargetName> override, or an SDK that renames the output",
+		want, strings.Join(found, ", "),
+	)
+}
+
 func buildFreshDacpac(ctx context.Context, opts Opts, dacpac, fingerprint string, fingerprintErr error, out io.Writer) error {
 	build := exec.CommandContext(ctx, "dotnet", "build", opts.SQLProj, "-o", opts.OutDir)
 	build.Stdout = out
@@ -187,7 +223,7 @@ func buildFreshDacpac(ctx context.Context, opts Opts, dacpac, fingerprint string
 		return fmt.Errorf("dotnet build: %w", err)
 	}
 	if _, err := os.Stat(dacpac); err != nil {
-		return fmt.Errorf("dacpac not produced at %s", dacpac)
+		return dacpacNotProduced(dacpac, opts.OutDir)
 	}
 	// A build can overlap an editor save or pull. Publishing that artifact, or
 	// storing it under the pre-build key, would make the cache claim a source

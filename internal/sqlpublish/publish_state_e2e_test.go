@@ -44,14 +44,19 @@ func e2eOpts(t *testing.T) Opts {
 }
 
 // writeE2EProj lays down a small but real SSDT project (SDK build).
+//
+// The project filename deliberately differs from the target database name:
+// while they matched, this test — the live-SQL gate a release runs — could
+// not have caught a publish path that derived build artifacts from the
+// database name instead of the project's.
 func writeE2EProj(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	proj := filepath.Join(dir, "OrbitQuickDiffE2E.sqlproj")
+	proj := filepath.Join(dir, "OrbitQuickDiffProject.sqlproj")
 	sqlproj := `<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <Sdk Name="Microsoft.Build.Sql" Version="2.1.0" />
   <PropertyGroup>
-    <Name>OrbitQuickDiffE2E</Name>
+    <Name>OrbitQuickDiffProject</Name>
     <DSP>Microsoft.Data.Tools.Schema.Sql.Sql160DatabaseSchemaProvider</DSP>
     <ModelCollation>1033, CI</ModelCollation>
   </PropertyGroup>

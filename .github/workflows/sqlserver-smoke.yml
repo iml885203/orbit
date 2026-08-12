@@ -44,7 +44,7 @@ jobs:
       - name: Exercise the real SQL workflow
         env:
           ORBIT_E2E_SQL: localhost:11433:${{ env.ORBIT_SQL_E2E_PASSWORD }}
-        run: go test ./internal/sqlpublish -run TestE2E_QuickDiff -v -count=1
+        run: go test ./internal/sqlpublish -run 'TestE2E_QuickDiff|TestBuildDacpac' -v -count=1
       - name: Remove isolated SQL Server
         if: always()
         run: docker rm --force orbit-sql-e2e
