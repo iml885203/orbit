@@ -32,6 +32,7 @@ const (
 	CodeNone                   ErrorCode = ""
 	CodeToolchainMissing       ErrorCode = "toolchain_missing"
 	CodeSQLProjectNotFound     ErrorCode = "sql_project_not_found"
+	CodeDacpacArtifactMissing  ErrorCode = "dacpac_artifact_missing"
 	CodeBuildFailed            ErrorCode = "build_failed"
 	CodePublishBlockedDataLoss ErrorCode = "publish_blocked_data_loss"
 	CodeSQLServerUnavailable   ErrorCode = "sql_server_unavailable"
@@ -71,6 +72,9 @@ type Opts struct {
 	// Analyze makes Diff compute exact object operations and data-loss
 	// warnings instead of returning the source-file approximation.
 	Analyze bool
+	// DacpacDir is an invocation-scoped root containing one build-output
+	// directory per SQL project. Empty keeps the source-build path.
+	DacpacDir string
 }
 
 // Result describes one publish attempt.
@@ -116,8 +120,14 @@ func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
 		return failed(start, err, code)
 	}
 	// Remember what was just published so the next diff can short-circuit.
-	recordPublishStateBestEffort(ctx, opts, fingerprint, out)
+	recordPublishStateWhenAvailable(ctx, opts, fingerprint, out)
 	return Result{OK: true, DurationMs: time.Since(start).Milliseconds(), Created: created}
+}
+
+func recordPublishStateWhenAvailable(ctx context.Context, opts Opts, fingerprint string, out io.Writer) {
+	if fingerprint != "" {
+		recordPublishStateBestEffort(ctx, opts, fingerprint, out)
+	}
 }
 
 // buildDacpac verifies the toolchain and builds the project — zero
@@ -131,6 +141,13 @@ func Publish(ctx context.Context, opts Opts, out io.Writer) Result {
 func buildDacpac(ctx context.Context, opts Opts, out io.Writer) (string, string, ErrorCode, error) {
 	if _, err := SqlpackagePath(); err != nil {
 		return "", "", CodeToolchainMissing, err
+	}
+	if opts.DacpacDir != "" {
+		dacpac, err := restoreSuppliedDacpacs(opts, out)
+		if err != nil {
+			return "", "", CodeDacpacArtifactMissing, err
+		}
+		return dacpac, "", CodeNone, nil
 	}
 	if _, err := DotnetVersion(ctx); err != nil {
 		return "", "", CodeToolchainMissing, err
@@ -156,6 +173,72 @@ func buildDacpac(ctx context.Context, opts Opts, out io.Writer) (string, string,
 		return "", "", CodeBuildFailed, err
 	}
 	return dacpac, fingerprint, CodeNone, nil
+}
+
+// ValidateDacpacArtifacts checks the invocation-specific artifact layout
+// without copying files or touching SQL Server.
+func ValidateDacpacArtifacts(root, sqlProj string) error {
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("prebuilt dacpac root not found at %s", root)
+		}
+		return fmt.Errorf("checking prebuilt dacpac root %s: %w", root, err)
+	}
+	if !rootInfo.IsDir() {
+		return fmt.Errorf("prebuilt dacpac root is not a directory: %s", root)
+	}
+	projectName := strings.TrimSuffix(filepath.Base(sqlProj), filepath.Ext(sqlProj))
+	projectDir := filepath.Join(root, projectName)
+	projectInfo, err := os.Stat(projectDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("prebuilt dacpac directory for project %s not found at %s", projectName, projectDir)
+		}
+		return fmt.Errorf("checking prebuilt dacpac directory for project %s at %s: %w", projectName, projectDir, err)
+	}
+	if !projectInfo.IsDir() {
+		return fmt.Errorf("prebuilt dacpac path for project %s is not a directory: %s", projectName, projectDir)
+	}
+	leaf := filepath.Join(projectDir, projectName+".dacpac")
+	info, err := os.Stat(leaf)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("checking prebuilt dacpac for project %s at %s: %w", projectName, leaf, err)
+		}
+		return fmt.Errorf("prebuilt dacpac for project %s not found at %s", projectName, leaf)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("prebuilt dacpac for project %s is a directory at %s", projectName, leaf)
+	}
+	return nil
+}
+
+func restoreSuppliedDacpacs(opts Opts, out io.Writer) (string, error) {
+	if err := ValidateDacpacArtifacts(opts.DacpacDir, opts.SQLProj); err != nil {
+		return "", err
+	}
+	projectName := strings.TrimSuffix(filepath.Base(opts.SQLProj), filepath.Ext(opts.SQLProj))
+	projectDir := filepath.Join(opts.DacpacDir, projectName)
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("reading prebuilt dacpacs for project %s: %w", projectName, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".dacpac") {
+			continue
+		}
+		src := filepath.Join(projectDir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			return "", fmt.Errorf("reading prebuilt dacpac metadata for %s: %w", src, err)
+		}
+		if err := copyFileAtomic(src, filepath.Join(opts.OutDir, entry.Name())); err != nil {
+			return "", fmt.Errorf("copying prebuilt dacpac %s: %w", src, err)
+		}
+		fmt.Fprintf(out, "[artifact] %s (%d bytes, modified %s)\n", entry.Name(), info.Size(), info.ModTime().Format(time.RFC3339))
+	}
+	return builtDacpacPath(opts), nil
 }
 
 // Referenced projects emit dacpacs beside the leaf, so a cache hit restores

@@ -44,9 +44,9 @@ func sqlProjectChecks(cfg *config.Config, root string) []daemon.DoctorCheck {
 		info, err := os.Stat(path)
 		switch {
 		case err != nil:
-			check.Status = daemon.CheckFail
+			check.Status = daemon.CheckWarn
 			check.Message += " (file not found)"
-			check.Hint = "Fix sqlserver.projects in the active environment"
+			check.Hint = "Restore the source checkout for builds, or use --dacpac-dir with prebuilt artifacts"
 		case info.IsDir():
 			check.Status = daemon.CheckFail
 			check.Message += " (expected a .sqlproj file, found a directory)"
@@ -133,9 +133,9 @@ func publishToolchainChecks() []daemon.DoctorCheck {
 	if v, err := sqlpublish.DotnetVersion(ctx); err != nil {
 		checks = append(checks, daemon.DoctorCheck{
 			Name:    "SQL Server .NET SDK",
-			Status:  daemon.CheckFail,
-			Message: "dotnet SDK not found — SQL project commands unavailable",
-			Hint:    "Install the .NET SDK: https://dotnet.microsoft.com/download",
+			Status:  daemon.CheckWarn,
+			Message: "dotnet SDK not found — source builds unavailable",
+			Hint:    "Install the .NET SDK, or use --dacpac-dir with prebuilt artifacts",
 		})
 	} else {
 		checks = append(checks, daemon.DoctorCheck{
@@ -148,7 +148,7 @@ func publishToolchainChecks() []daemon.DoctorCheck {
 	v, err := sqlpublish.SqlpackageVersion(ctx)
 	if err != nil {
 		return append(checks, daemon.DoctorCheck{
-			Name: "Publish Toolchain", Status: daemon.CheckWarn,
+			Name: "Publish Toolchain", Status: daemon.CheckFail,
 			Message: "sqlpackage not found — `orbit sqlserver publish` unavailable",
 			Hint:    sqlpublish.InstallHint,
 		})

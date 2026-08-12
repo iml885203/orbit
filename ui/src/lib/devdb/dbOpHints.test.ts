@@ -7,11 +7,13 @@ describe('dbOpHint', () => {
   it.each([
     ['toolchain_missing', /dotnet tool install -g microsoft\.sqlpackage/],
     ['sql_project_not_found', /sqlserver\.projects/],
+    ['dacpac_artifact_missing', /artifact root.*project directory.*expected leaf/],
     ['build_failed', /build errors/],
     ['publish_blocked_data_loss', /--force/],
     ['sql_server_unavailable', /configured SQL Server target/],
     ['database_busy', /active connections/],
     ['publish_failed', /operation log/],
+    ['reference_unresolved', /referenced artifact.*beside the project dacpac/],
     ['reset_clean_state_missing', /Run Reset again/],
     ['reset_restore_failed', /connections.*disk space.*retry/],
     ['reset_prepare_failed', /connections.*disk space.*retry/],
@@ -26,9 +28,6 @@ describe('dbOpHint', () => {
   it('recognizes data-loss blocks', () => {
     const h = hint(['...', 'Error SQL72031: rows were detected. The schema update is terminating because data loss might occur.'])
     expect(h).toMatch(/data loss/)
-  })
-  it('recognizes missing dacpac references', () => {
-    expect(hint(['error: file CommonFiles.dacpac does not exist'])).toMatch(/publish --all/)
   })
   it('recognizes unreachable sql-server', () => {
     expect(hint(['A network-related or instance-specific error occurred'])).toMatch(/orbit status/)

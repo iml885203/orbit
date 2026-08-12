@@ -39,9 +39,10 @@ The argument may be a database name or a project name (both appear in
 Each database name must map to exactly one project. To publish one schema to
 multiple databases, declare their names on one sqlserver.projects entry.
 
-Projects come from sqlserver.projects in the active environment. Requires the
-host dotnet SDK and sqlpackage
-(` + sqlpublish.InstallHint + `).`,
+Projects come from sqlserver.projects in the active environment. By default this
+requires the host dotnet SDK and sqlpackage (` + sqlpublish.InstallHint + `).
+Use --dacpac-dir with a per-project artifact root to skip the source build and
+SDK requirement; sqlpackage remains required.`,
 		Args: func(_ *cobra.Command, args []string) error {
 			if publishAll {
 				if len(args) != 0 {
@@ -63,10 +64,15 @@ host dotnet SDK and sqlpackage
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all or a multi-database project, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
 	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --allow-data-loss without prompting")
+	addDacpacDirFlag(cmd)
 	return cmd
 }
 
 func runDBPublish(_ *cobra.Command, args []string) error {
+	artifactRoot, err := invocationDacpacDir()
+	if err != nil {
+		return err
+	}
 	if publishYes && !publishForce {
 		return fmt.Errorf("--yes requires --allow-data-loss")
 	}
@@ -133,6 +139,7 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 		return err
 	}
 	opts.Force = publishForce
+	opts.DacpacDir = artifactRoot
 	if !authorizeForcedPublish([]publishTargetRef{{DB: dbName}}) {
 		fmt.Println("Aborted.")
 		return nil
@@ -181,6 +188,9 @@ func dbPublishCommand(args []string, jsonOutput, includeYes bool) string {
 	}
 	if publishForce {
 		parts = append(parts, "--allow-data-loss")
+	}
+	if dacpacDir != "" {
+		parts = append(parts, "--dacpac-dir", shellquote.Quote(dacpacDir))
 	}
 	if includeYes && publishYes {
 		parts = append(parts, "--yes")
@@ -262,6 +272,14 @@ func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope 
 		return err
 	}
 	base.Force = publishForce
+	artifactRoot, err := invocationDacpacDir()
+	if err != nil {
+		return err
+	}
+	base.DacpacDir = artifactRoot
+	if err := validatePublishArtifacts(base.DacpacDir, targets); err != nil {
+		return err
+	}
 	if scope == "" {
 		fmt.Fprintf(out, "Publishing %d databases → %s:%d\n", len(targets), base.Host, base.Port)
 	} else {
@@ -274,6 +292,23 @@ func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope 
 		fmt.Fprintf(out, "\n%s Published all %d databases\n", cli.Green.Sprint("✓"), len(targets))
 	} else {
 		fmt.Fprintf(out, "\n%s Published %d databases in %s\n", cli.Green.Sprint("✓"), len(targets), scope)
+	}
+	return nil
+}
+
+func validatePublishArtifacts(root string, targets []publishTargetRef) error {
+	if root == "" {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for _, target := range targets {
+		if _, ok := seen[target.SQLProj]; ok {
+			continue
+		}
+		seen[target.SQLProj] = struct{}{}
+		if err := sqlpublish.ValidateDacpacArtifacts(root, target.SQLProj); err != nil {
+			return err
+		}
 	}
 	return nil
 }

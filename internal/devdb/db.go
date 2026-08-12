@@ -3,10 +3,28 @@ package devdb
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/spf13/cobra"
 )
+
+var dacpacDir string
+
+func addDacpacDirFlag(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&dacpacDir, "dacpac-dir", "", "use prebuilt dacpacs from this per-project artifact root")
+}
+
+func invocationDacpacDir() (string, error) {
+	if dacpacDir == "" {
+		return "", nil
+	}
+	root, err := filepath.Abs(dacpacDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve --dacpac-dir: %w", err)
+	}
+	return root, nil
+}
 
 func SQLServerCmd() *cobra.Command {
 	cmd := &cobra.Command{

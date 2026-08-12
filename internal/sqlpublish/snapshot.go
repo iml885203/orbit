@@ -254,7 +254,7 @@ func PublishClean(ctx context.Context, opts Opts, out io.Writer) Result {
 		return failed(start, err, CodeResetPrepareFailed)
 	}
 	// Remember what was just published so the next diff can short-circuit.
-	recordPublishStateBestEffort(ctx, opts, fingerprint, out)
+	recordPublishStateWhenAvailable(ctx, opts, fingerprint, out)
 	return Result{OK: true, DurationMs: time.Since(start).Milliseconds()}
 }
 

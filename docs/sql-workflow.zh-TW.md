@@ -10,8 +10,9 @@ abstraction。Redis、MongoDB 與 PostgreSQL 的 client convenience 仍放在
 Environment 只有在明確啟用 `sqlserver` 時，才會出現五個 Database Project
 指令：`list`、`diff`、`publish`、`reset`、`query`。其他 environment 不會顯示
 這套 workflow。
-Publish 全程在 host 上進行——用 `dotnet build` 建置 SQL project，再用
-`sqlpackage` 把 dacpac 推到設定指定的 SQL Server target。快速 reset 的
+Publish 全程在 host 上進行。Orbit 通常用 `dotnet build` 建置 SQL project，
+再用 `sqlpackage` 把 dacpac 推到設定指定的 SQL Server target；單次執行也
+可以改用預先建置的 dacpac。快速 reset 的
 底層機制由 Orbit 自己管理。
 
 ## Volume 與持久化模型
@@ -62,8 +63,9 @@ DB schema 會收斂到 project：新增、修改或刪除 stored procedure、tab
 加上 `--allow-data-loss`。Force publish 會列出所有受影響的 database 並再次要求確認；
 非互動執行時，只有在檢視影響後才使用 `--allow-data-loss --yes`。
 
-前置需求(`orbit doctor` 會檢查):host 上的 .NET SDK 與 sqlpackage——
-`dotnet tool install -g microsoft.sqlpackage`。
+前置需求（`orbit doctor` 會檢查）：host 上的 sqlpackage——
+`dotnet tool install -g microsoft.sqlpackage`；Orbit 從 source 建置時還需要
+.NET SDK。
 
 一個明確的 section 同時決定「發佈到哪」與「發佈哪些專案」：
 
@@ -97,6 +99,37 @@ Orbit publish 的是 build 依 `.sqlproj` 檔名產出的那個 dacpac，與目�
 daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建立缺少的
 資料庫並部署 referenced shared objects。修好失敗的 project 後直接重跑；
 已成功的資料庫會收斂為 no-op。
+
+### 發佈預先建置的 dacpac
+
+runner 已取得 build artifacts 時，可在 `publish`、`diff` 或 `reset` 加上
+`--dacpac-dir <root>`：
+
+```bash
+orbit sqlserver publish --all --dacpac-dir .artifacts
+```
+
+環境仍宣告 `.sqlproj`；檔名會決定 artifact 目錄與 leaf dacpac。例如
+`db/PlatformDB.sqlproj` 使用：
+
+```text
+.artifacts/
+  PlatformDB/
+    PlatformDB.dacpac
+    CommonFiles.dacpac
+```
+
+所有 referenced dacpac 必須與 leaf 放在一起。Orbit 會把整組檔案複製到
+該次 operation 的暫存目錄，並記錄每個檔案的大小與修改時間。提供的 root、
+project 目錄與預期 leaf 都必須存在。搭配 `--all` 時，Orbit 會在發佈前先
+驗證所有 project；缺 artifact 時不會偷偷改跑 `dotnet build`。
+
+此模式仍需要 sqlpackage，但不需要 .NET SDK 或可讀取的 source tree。沒有
+source 時，source-based fast diff 與 publish-state 記錄不可用；diff 會使用
+deployment engine，後續執行也不會假設 artifact 沒有變更。
+
+Doctor 會把缺少 project source 與 SDK 視為 warning，因為預建 artifacts 可
+取代兩者；缺少 sqlpackage 仍會判定為前置需求失敗。
 
 `password_env` 指定 target container 裡存放密碼的 key。Orbit 只在 DB
 操作執行時讀取解析後的值，不會在 status、logs 或 JSON output 暴露密碼。
