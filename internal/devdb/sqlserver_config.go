@@ -178,13 +178,10 @@ func validateSQLServerSection(value any, cfg *config.Config) error {
 // naming the rule alone would leave the user with nothing to write instead.
 func duplicateDatabaseName(current int, currentPath string, previous int, previousPath string, name string) error {
 	return fmt.Errorf(
-		"database name %q is declared by two projects:\n"+
-			"  projects[%d]  %s\n"+
-			"  projects[%d]  %s\n"+
-			"To deploy one schema to several databases, declare one project listing each target name:\n"+
-			"  - path: %s\n"+
-			"    databases: [<name>, <name>]",
-		name, previous, previousPath, current, currentPath, previousPath,
+		"database name %q is declared by both projects[%d].path %q and projects[%d].path %q; "+
+			"to deploy one schema to several databases, keep one entry and give each target a "+
+			"distinct name under its `databases:` list",
+		name, previous, previousPath, current, currentPath,
 	)
 }
 
@@ -193,8 +190,9 @@ func duplicateDatabaseName(current int, currentPath string, previous int, previo
 // meaning both would make `publish <name>` ambiguous.
 func crossProjectSQLNameCollision(current int, currentPath string, previous int, previousPath string, name string) error {
 	return fmt.Errorf(
-		"projects[%d].path %q and projects[%d].path %q both expose name %q; project and database names must be unique across projects.\n"+
-			"`orbit sqlserver publish|reset` accepts either a project or a database name, so one name cannot mean both — rename the database, or rename the .sqlproj",
+		"projects[%d].path %q and projects[%d].path %q both expose name %q; "+
+			"`orbit sqlserver publish|reset` accepts either a project or a database name, so one "+
+			"name cannot mean both — rename the database, or rename the .sqlproj",
 		current, currentPath, previous, previousPath, name,
 	)
 }

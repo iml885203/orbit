@@ -416,14 +416,7 @@ func resourceReadinessCheck(
 	if explicit != nil {
 		return explicit
 	}
-	port := 0
-	if endpoint, ok := ports["http"]; ok {
-		port = endpoint.Host
-	} else if len(ports) == 1 {
-		for _, endpoint := range ports {
-			port = endpoint.Host
-		}
-	}
+	port := config.ReadinessPort(ports)
 	if port == 0 {
 		return nil
 	}

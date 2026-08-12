@@ -85,6 +85,10 @@ basename 相同的不同 project files 會被拒絕。沒有 image sniffing、�
 container 名稱、目錄掃描，
 也沒有另一份 per-machine allowlist。
 
+Orbit publish 的是 build 依 `.sqlproj` 檔名產出的那個 dacpac，與目標資料庫叫
+什麼無關。若 project 自行改名輸出(`<SqlTargetName>`)，orbit 會直接失敗，而
+不是 publish 另一個 artifact。
+
 ### 一次整個環境：`--all`
 
 `orbit sqlserver publish --all` 依 project merge 順序逐顆 publish 所有資料庫,

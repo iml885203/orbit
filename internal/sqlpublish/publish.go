@@ -191,10 +191,11 @@ func builtDacpacPath(opts Opts) string {
 	return filepath.Join(opts.OutDir, name+".dacpac")
 }
 
-// dacpacNotProduced reports a build that succeeded while writing its dacpac
-// under a name orbit does not expect. Listing what the build did emit turns
-// "file missing" into something the user can act on — the artifact's real
-// name is usually enough to recognise which project setting redirected it.
+// dacpacNotProduced reports a build that finished without the artifact orbit
+// publishes. Listing the directory's contents turns "file missing" into
+// something the user can act on, but it stops short of claiming a rename: a
+// project with <ProjectReference>s emits its dependencies' dacpacs here too,
+// so what is present may be a sibling rather than a redirected output.
 func dacpacNotProduced(want, outDir string) error {
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
@@ -210,7 +211,7 @@ func dacpacNotProduced(want, outDir string) error {
 		return fmt.Errorf("dacpac not produced at %s", want)
 	}
 	return fmt.Errorf(
-		"dacpac not produced at %s; the build wrote %s instead. Orbit publishes the dacpac named after the .sqlproj — check the project for a <SqlTargetName> override, or an SDK that renames the output",
+		"dacpac not produced at %s; the build directory holds %s. Orbit publishes the dacpac named after the .sqlproj, so check the build output for errors, or for a <SqlTargetName> override that renamed it",
 		want, strings.Join(found, ", "),
 	)
 }

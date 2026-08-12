@@ -48,8 +48,10 @@ func NewChecker(mux *logging.Multiplexer, inspector ContainerInspector) *Checker
 		InsecureSkipVerify: true,
 	}
 	return &Checker{
-		httpClient:         &http.Client{Timeout: 5 * time.Second},
-		insecureHTTPClient: &http.Client{Timeout: 5 * time.Second, Transport: insecureTransport},
+		// No client-level Timeout: checkHTTP applies the per-check one to
+		// the request context, which a fixed client deadline would override.
+		httpClient:         &http.Client{},
+		insecureHTTPClient: &http.Client{Transport: insecureTransport},
 		mux:                mux,
 		inspector:          inspector,
 		progress:           newProgressTracker(),
@@ -84,6 +86,16 @@ func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthC
 	if scheme == "" {
 		scheme = "http"
 	}
+	// The shared clients carry no deadline of their own, so the per-check
+	// timeout has to ride on the request — a TLS handshake makes an HTTPS
+	// probe slower than the HTTP one the old fixed 5s was tuned for.
+	timeout := hc.Timeout
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	url := fmt.Sprintf("%s://localhost:%d%s", scheme, hc.Port, hc.Path)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

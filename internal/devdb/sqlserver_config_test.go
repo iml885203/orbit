@@ -198,6 +198,12 @@ func TestValidateSQLServerSectionRejectsDatabaseNamesSharedByProjects(t *testing
 			t.Errorf("error must mention %q, got: %v", want, err)
 		}
 	}
+	// validate.go joins section errors into a bulleted list, so an embedded
+	// newline escapes its own bullet and the continuation reads as a
+	// separate finding.
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("config error must stay single-line, got: %q", err)
+	}
 }
 
 func TestValidateSQLServerSectionRejectsSharedProjectNamesWithDistinctDatabases(t *testing.T) {
@@ -276,13 +282,18 @@ func TestValidateSQLServerSectionRejectsNamesSharedAcrossProjectAndDatabase(t *t
 			section, cfg := validSQLServerConfig()
 			section.Projects = test.projects
 			err := validateSQLServerSection(section, cfg)
-			if err == nil || !strings.Contains(err.Error(), "project and database names must be unique across projects") {
-				t.Fatalf("error = %v", err)
+			if err == nil {
+				t.Fatal("a name shared by a project and a database must be rejected")
 			}
 			// The constraint looks arbitrary until the error says which
 			// command it protects.
 			if !strings.Contains(err.Error(), "publish|reset") {
 				t.Errorf("error must explain why the names collide, got: %v", err)
+			}
+			// One line, so it survives being nested in the validation
+			// error list without breaking out of its bullet.
+			if strings.Contains(err.Error(), "\n") {
+				t.Errorf("config error must stay single-line, got: %q", err)
 			}
 		})
 	}
