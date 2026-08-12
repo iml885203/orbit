@@ -15,12 +15,12 @@ import (
 func TestAllProjects_ResolvesAgainstWorkspaceNotConfigLocation(t *testing.T) {
 	workspace := t.TempDir() // the app checkout: where .sqlproj files live
 	envRepo := t.TempDir()   // the e2e worktree: where the YAML lives
-	writeProjFixture(t, workspace, "carina.platform", "PlatformDB")
+	writeProjFixture(t, workspace, "schema.platform", "PlatformDB")
 
 	cfg := (&config.Config{}).WithExtension(sqlServerSection, &SQLServerConfig{
 		Projects: []SQLServerProjectConfig{
 			{
-				Path:      "carina.platform/PlatformDB/PlatformDB.sqlproj",
+				Path:      "schema.platform/PlatformDB/PlatformDB.sqlproj",
 				Databases: []string{"PlatformDB_dev", "PlatformDB_e2e"},
 			},
 		},
@@ -37,7 +37,7 @@ func TestAllProjects_ResolvesAgainstWorkspaceNotConfigLocation(t *testing.T) {
 		t.Fatalf("want 1 project, got %d", len(projects))
 	}
 
-	want := filepath.Join(workspace, "carina.platform/PlatformDB/PlatformDB.sqlproj")
+	want := filepath.Join(workspace, "schema.platform/PlatformDB/PlatformDB.sqlproj")
 	if projects[0].Path != want {
 		t.Errorf("project path = %q, want it under the workspace at %q", projects[0].Path, want)
 	}
