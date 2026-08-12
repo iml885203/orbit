@@ -184,8 +184,19 @@ func TestValidateSQLServerSectionRejectsDatabaseNamesSharedByProjects(t *testing
 		SQLServerProjectConfig{Path: "e2e/Accounts/AccountsCopy.sqlproj", Databases: []string{"Accounts"}},
 	)
 	err := validateSQLServerSection(section, cfg)
-	if err == nil || !strings.Contains(err.Error(), `both map database name "Accounts"`) {
-		t.Fatalf("error = %v", err)
+	if err == nil {
+		t.Fatal("two projects mapping one database name must be rejected")
+	}
+	// Being blocked is only half the job: the message has to carry the shape
+	// that replaces the rejected one, or the user is stuck mid-belief.
+	for _, want := range []string{
+		`"Accounts"`,
+		"e2e/Accounts/AccountsCopy.sqlproj",
+		"databases:",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error must mention %q, got: %v", want, err)
+		}
 	}
 }
 
@@ -267,6 +278,11 @@ func TestValidateSQLServerSectionRejectsNamesSharedAcrossProjectAndDatabase(t *t
 			err := validateSQLServerSection(section, cfg)
 			if err == nil || !strings.Contains(err.Error(), "project and database names must be unique across projects") {
 				t.Fatalf("error = %v", err)
+			}
+			// The constraint looks arbitrary until the error says which
+			// command it protects.
+			if !strings.Contains(err.Error(), "publish|reset") {
+				t.Errorf("error must explain why the names collide, got: %v", err)
 			}
 		})
 	}
