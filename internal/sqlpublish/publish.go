@@ -384,6 +384,11 @@ func buildFreshDacpac(ctx context.Context, opts Opts, dacpac, fingerprint string
 			return fmt.Errorf("SQL project changed during build; retry")
 		}
 		if cacheDir, err := cachedBuildDir(fingerprint); err == nil {
+			// Silent by design, unlike the publish-state record which says so
+			// when it fails: a store failure costs the next build a cache miss
+			// and nothing else, and that build retries the store. Nothing else
+			// comes to depend on the entry, so there is no delayed failure to
+			// warn about.
 			_ = storeDacpacs(opts.OutDir, cacheDir)
 		}
 	}

@@ -31,6 +31,22 @@ func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 	return checks
 }
 
+// sqlServerReadinessChecks warns when the SQL Server target's probe cannot
+// prove a login, and is the only doctor check whose remedy carries an ongoing
+// cost: the exec probe it recommends keeps running as the liveness check, one
+// authenticated login per interval.
+//
+// Every other doctor hint read while establishing that asks for a one-off
+// action — install a tool, log in, add a PATH entry, read a log, restore
+// Docker, set a workspace root. Scope of that reading, stated because it is
+// narrower than "every hint in the repo": the 13 other Hints in
+// internal/devdb and internal/daemon/doctor.go plus internal/daemon/
+// runtime_versions.go, app/ and daemon/host_tools.go, literals and variables
+// both, as of 2026-08. A repo-wide grep finds far more, mostly CLI
+// next-action strings rather than doctor remedies, and those were not read.
+//
+// A new hint recommending something continuous belongs in this minority and
+// should say so in its own text, the way this one does.
 func sqlServerReadinessChecks(cfg *config.Config) []daemon.DoctorCheck {
 	section := SQLServerFrom(cfg)
 	if section == nil {
@@ -40,9 +56,10 @@ func sqlServerReadinessChecks(cfg *config.Config) []daemon.DoctorCheck {
 	if !ok || target == nil {
 		return nil
 	}
-	// An omitted type is a TCP probe: applyHealthCheckDefaults leaves Type
-	// empty and the checker treats that as tcp, so `health_check: {port: N}`
-	// proves exactly as little about logins as a spelled-out tcp probe.
+	// The empty-type arm is defensive only: config validation rejects a
+	// health_check without a type, before and after an extends merge, so an
+	// empty Type cannot reach here. Kept because the checker would treat it
+	// as tcp if it ever did.
 	if target.HealthCheck != nil && target.HealthCheck.Type != "" && target.HealthCheck.Type != "tcp" {
 		return nil
 	}
