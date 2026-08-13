@@ -617,7 +617,11 @@ container, where `MSSQL_SA_PASSWORD` is available;
 keep its username and password variable aligned with `sqlserver.username` and
 `sqlserver.password_env`. The command exports `SQLCMDPASSWORD` instead of
 putting the secret in process arguments. The target image must provide
-`/opt/mssql-tools18/bin/sqlcmd`, which `orbit sqlserver query` also uses.
+`/opt/mssql-tools18/bin/sqlcmd`, which `orbit sqlserver query` also uses. That
+path belongs to Microsoft's image, so a future image may move it; the probe
+then reports `exec exit=127`, which looks like a server that has not finished
+starting. Check the binary is where the command expects it
+(`orbit exec <target> ls /opt`) before suspecting the database.
 
 `target` names a container in this env. `username` defaults to `sa`.
 `password_env` names the target container environment key containing the

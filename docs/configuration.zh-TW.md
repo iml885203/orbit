@@ -586,7 +586,10 @@ liveness check 執行，每個 `interval` 登入一次——如果環境是整�
 `MSSQL_SA_PASSWORD`；請讓 username 與 password variable 分別和
 `sqlserver.username`、`sqlserver.password_env` 保持一致。Command 會 export
 `SQLCMDPASSWORD`，不會把 secret 放進 process arguments。Target image 必須提供
-`/opt/mssql-tools18/bin/sqlcmd`，`orbit sqlserver query` 也使用同一工具。
+`/opt/mssql-tools18/bin/sqlcmd`，`orbit sqlserver query` 也使用同一工具。那個
+路徑屬於 Microsoft 的 image，未來的 image 版本可能移動它；屆時探針會回報
+`exec exit=127`，看起來就像 SQL Server 還沒啟動完成。在懷疑資料庫之前，先確認
+執行檔還在指令預期的位置（`orbit exec <target> ls /opt`）。
 
 `target` 指向同一個 env 裡的 container；`username` 預設為 `sa`。
 `password_env` 是 target container 裡存放密碼的環境變數名稱，Orbit
