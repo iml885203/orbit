@@ -95,11 +95,22 @@ Orbit publish 的是 build 依 `.sqlproj` 檔名產出的那個 dacpac，與目�
 ### 一次整個環境：`--all`
 
 `orbit sqlserver publish --all` 依 project merge 順序逐顆 publish 所有資料庫,
-遇到第一個失敗即停止。加上 `--parallel[=N]` 可同時 publish 最多 N 顆
-(只有在已建置過的 server 上才安全)。Dashboard 的 `Publish all` 按鈕透過
-daemon 做同一件事。對空的 SQL Server 執行時，同一個指令會建立缺少的
-資料庫並部署 referenced shared objects。修好失敗的 project 後直接重跑；
-已成功的資料庫會收斂為 no-op。
+遇到第一個失敗即停止。加上 `--parallel[=N]` 可同時 publish 最多 N 顆。
+Dashboard 的 `Publish all` 按鈕透過 daemon 做同一件事。對空的 SQL Server
+執行時，同一個指令會建立缺少的資料庫並部署 referenced shared objects。
+修好失敗的 project 後直接重跑；已成功的資料庫會收斂為 no-op。
+
+**`--parallel` 需要已建置過的 server。** 首次建立資料庫時會部署 server 層級的
+shared objects——各 project 共用的 login 與 role——而並行的 publish 會競相建立
+同一批，於是除了第一個以外全部失敗，錯誤是
+`Msg 15025: The server principal '<name>' already exists`。第一次用序列 publish、
+之後沿用同一台 server 就不會遇到；每次都開全新容器的流程請維持序列。
+
+在已建置的 server 上它確實值得：一次實測中，五顆預建 dacpac 的資料庫序列需
+28 秒，`--parallel=4` 只需 11–12 秒。自行量測時有兩個注意事項——建置後的
+第一次 publish 不具代表性（同一次量測中並行需 30 秒，跟序列一樣慢，要從第二次
+之後才穩定），另外從原始碼 build 而非用預建產物時比例會不同，因為成本會落在
+build 而不是 apply。
 
 ### 發佈預先建置的 dacpac
 
