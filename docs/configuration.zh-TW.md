@@ -580,7 +580,9 @@ image 初始化時需要 `MSSQL_SA_PASSWORD`；`password_env` 指向同一個 ke
 應讀取的那一個。
 
 這個 `exec` health check 會等待通過認證的查詢成功，因為接受 TCP connection
-不代表 SQL Server 已完成啟動並能接受登入。它在 container 內執行，因此可讀取
+不代表 SQL Server 已完成啟動並能接受登入。它在啟動之後會繼續作為 runtime
+liveness check 執行，每個 `interval` 登入一次——如果環境是整天開著的，建議把
+`interval` 調大，因為它要擋的啟動 race 只會發生一次。它在 container 內執行，因此可讀取
 `MSSQL_SA_PASSWORD`；請讓 username 與 password variable 分別和
 `sqlserver.username`、`sqlserver.password_env` 保持一致。Command 會 export
 `SQLCMDPASSWORD`，不會把 secret 放進 process arguments。Target image 必須提供
