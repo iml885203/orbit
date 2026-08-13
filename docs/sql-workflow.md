@@ -101,8 +101,24 @@ the target databases are called. A project that renames its own output (via
 
 `orbit sqlserver publish --all` publishes every database from the project merge
 sequentially, stopping at the first failure. Add `--parallel[=N]` to publish
-up to N databases concurrently (only safe on an already-provisioned server).
-The dashboard's `Publish all` button does the same through the daemon.
+up to N databases concurrently. The dashboard's `Publish all` button does the
+same through the daemon.
+
+**`--parallel` needs an already-provisioned server.** Creating databases for
+the first time deploys shared server-level objects — logins and roles the
+projects have in common — and concurrent publishes race to create the same
+ones, so all but the first fail with `Msg 15025: The server principal '<name>'
+already exists`. Publishing sequentially the first time and reusing that
+server afterwards avoids it; a workflow that provisions a fresh container per
+run should stay sequential.
+
+On a server that is already provisioned it earns its place: one measured run
+of five prebuilt-dacpac databases took 28s sequentially and 11–12s at
+`--parallel=4`. Two caveats on measuring it yourself — the first publish after
+provisioning is not representative (that same run took 30s concurrently, no
+better than sequential, and only settled from the second onward), and building
+from source instead of prebuilt artifacts shifts the ratio because the build,
+not the apply, becomes the cost.
 
 Against an empty SQL Server, the same command creates missing databases and
 deploys referenced shared objects. Rerun it after fixing a failed project;

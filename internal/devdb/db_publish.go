@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,13 @@ SDK requirement; sqlpackage remains required.`,
 		Args: func(_ *cobra.Command, args []string) error {
 			if publishAll {
 				if len(args) != 0 {
+					// --parallel takes its value with '=' because the flag's
+					// value is optional; `--parallel 4` leaves the 4 here as a
+					// positional, and "takes no database argument" reads like a
+					// different mistake than the one that was made.
+					if _, err := strconv.Atoi(args[0]); err == nil {
+						return fmt.Errorf("--all takes no database argument; for a flag value write --parallel=%s, not --parallel %s", args[0], args[0])
+					}
 					return fmt.Errorf("--all takes no database argument")
 				}
 				return nil
@@ -62,7 +70,7 @@ SDK requirement; sqlpackage remains required.`,
 	cmd.Flags().BoolVar(&publishForce, "force", false, "deprecated alias for --allow-data-loss")
 	_ = cmd.Flags().MarkHidden("force")
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
-	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all or a multi-database project, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4")
+	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all or a multi-database project, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4. For repeat publishes to a server that already has the databases. Leave it off the first time: creating them races on the logins and roles the projects share")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
 	cmd.Flags().BoolVarP(&publishYes, "yes", "y", false, "confirm the data-loss risk of --allow-data-loss without prompting")
 	addDacpacDirFlag(cmd)
