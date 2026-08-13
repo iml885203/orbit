@@ -15,6 +15,10 @@ jobs:
     # which is how a target-resolution bug reached v0.15.0 and survived to
     # v0.15.2. Renaming rather than widening because the gap is worth stating
     # before it is worth closing.
+    #
+    # docs/1.0-test-matrix.md describes this gate too. This comment is the
+    # copy to trust: whoever changes what the gate runs passes through here,
+    # and may never open that file.
     name: Publish engine against a real SQL Server
     runs-on: ubuntu-24.04
     timeout-minutes: 15
