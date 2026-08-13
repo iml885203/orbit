@@ -61,7 +61,7 @@ test('opens search on the first click and uses the active locale index', async (
 test('keeps the other language discoverable through the language switcher', async ({ page }) => {
   await page.goto('./docs/instances')
   await page.getByRole('button', { name: 'Change language' }).click()
-  await page.getByRole('link', { name: '繁體中文' }).click()
+  await page.getByRole('banner').getByRole('link', { name: '繁體中文' }).click()
   await expect(page).toHaveURL(/\/zh-TW\/docs\/instances$/)
   await page.getByRole('button', { name: '搜尋' }).click()
   await page.getByPlaceholder('搜尋').fill('instance')
