@@ -62,6 +62,7 @@ for (const [page, language, counterpart] of [
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
   assert.match(html, /name="twitter:card"/)
+  assert.match(html, /property="og:image" content="https:\/\/raw\.githubusercontent\.com\/iml885203\/orbit\/main\/docs\/assets\/orbit-demo-dashboard\.jpg"/)
   assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://iml885203.github.io${counterpart}"`))
 }
 assert.match(chineseGuide, /href="https:\/\/github.com\/iml885203\/orbit\/edit\/main\/docs\/local-first\.zh-TW\.md"/)

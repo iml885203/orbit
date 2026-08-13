@@ -13,6 +13,11 @@ test('keeps the primary action visible on a short phone', async ({ page }) => {
 test('maintains one main landmark through client-side navigation', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
+  await page.keyboard.press('Tab')
+  const skipLink = page.getByRole('link', { name: 'Skip to content' })
+  await expect(skipLink).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#VPContent')).toBeFocused()
   await page.getByRole('link', { name: 'Get started', exact: true }).first().click()
   await expect(page).toHaveURL(/\/docs\/local-first$/)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
@@ -27,9 +32,11 @@ test('closes mobile navigation with Escape and restores focus', async ({ page })
   const toggle = page.getByRole('button', { name: 'mobile navigation' })
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => page.locator('body').evaluate((body) => getComputedStyle(body).overflow)).toBe('hidden')
   await page.keyboard.press('Escape')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(toggle).toBeFocused()
+  await expect.poll(() => page.locator('body').evaluate((body) => getComputedStyle(body).overflow)).not.toBe('hidden')
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {
@@ -49,6 +56,16 @@ test('opens search on the first click and uses the active locale index', async (
   await page.getByPlaceholder('搜尋').fill('instance')
   const firstChineseResult = page.locator('.result').first()
   await expect(firstChineseResult).toHaveAttribute('href', /\/zh-TW\//)
+})
+
+test('keeps the other language discoverable through the language switcher', async ({ page }) => {
+  await page.goto('./docs/instances')
+  await page.getByRole('button', { name: 'Change language' }).click()
+  await page.getByRole('link', { name: '繁體中文' }).click()
+  await expect(page).toHaveURL(/\/zh-TW\/docs\/instances$/)
+  await page.getByRole('button', { name: '搜尋' }).click()
+  await page.getByPlaceholder('搜尋').fill('instance')
+  await expect(page.locator('.result').first()).toHaveAttribute('href', /\/zh-TW\//)
 })
 
 test('renders locale-owned Chinese navigation and metadata', async ({ page }) => {

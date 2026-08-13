@@ -257,7 +257,7 @@ export default defineConfig({
     const pagePath = publicPath(pageData.relativePath)
     const canonical = `${siteOrigin}${pagePath}`
     const alternate = counterpartPath(pageData.relativePath)
-    const title = pageData.title ? `${pageData.title} | Orbit` : 'Orbit'
+    const title = !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
     const summary = pageData.relativePath.startsWith('zh-TW/')
       ? '為專案所需的每個服務提供一個可觀測的本機環境。'
       : 'One observable local environment for every service your project needs.'
@@ -270,11 +270,11 @@ export default defineConfig({
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:url', content: canonical }],
       ['meta', { property: 'og:locale', content: locale }],
-      ['meta', { property: 'og:image', content: `${siteOrigin}${siteBase}orbit-demo-dashboard.jpg` }],
+      ['meta', { property: 'og:image', content: 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg' }],
       ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
       ['meta', { name: 'twitter:title', content: title }],
       ['meta', { name: 'twitter:description', content: description }],
-      ['meta', { name: 'twitter:image', content: `${siteOrigin}${siteBase}orbit-demo-dashboard.jpg` }],
+      ['meta', { name: 'twitter:image', content: 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg' }],
       ...(alternate ? [
         ['link', { rel: 'alternate', hreflang: locale === 'zh_TW' ? 'en' : 'zh-TW', href: `${siteOrigin}${alternate}` }],
       ] as const : []),
