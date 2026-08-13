@@ -316,9 +316,14 @@ health_check:
 |---|---|
 | `http` | `GET <scheme>://localhost:<port><path>`，最終 response 為 2xx 才算通過 |
 | `tcp` | 對該 port 建立一條 TCP 連線 |
-| `exec` | 在 container 內執行 `command`，exit code 0 視為 healthy |
+| `exec` | 在 container 內以 argv 執行 `command`（不經過 shell），exit code 0 視為 healthy |
 | `log` | tail container logs 比對 regex（僅為一次性 readiness 訊號，不是 runtime liveness probe） |
 | `healthcheck` | 直接用 image 自己的 `HEALTHCHECK`，由 `docker inspect` 回報 |
+
+`exec` 的 command 是以 argument vector 傳進 container，不會經過 shell：`$VAR`
+不會展開，`$PASSWORD` 這個參數會原封不動地以九個字元傳給程式。需要變數、pipe
+或重導向時，請用 `sh -c` 包起來。這件事值得一次寫對，因為寫錯的失敗樣子跟
+「服務起不來」完全一樣——探針失敗、重試，直到整個 budget 用盡才回報。
 
 `http` 與 `tcp` 在 resource 只有一個 port 時可省略 `port`。有多個 port
 時，`http` check 會優先選擇與 scheme 同名的 `http` 或 `https` alias；只有

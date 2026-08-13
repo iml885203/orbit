@@ -332,9 +332,16 @@ health_check:
 |---|---|
 | `http` | `GET <scheme>://localhost:<port><path>`, accept any final 2xx |
 | `tcp` | Open a TCP connection to the port |
-| `exec` | Run `command` inside the container, treat exit 0 as healthy |
+| `exec` | Run `command` inside the container as argv — no shell — and treat exit 0 as healthy |
 | `log` | Tail container logs for a regex match (one-shot readiness signal; not a runtime liveness probe) |
 | `healthcheck` | Use the image's own `HEALTHCHECK` as reported by `docker inspect` |
+
+An `exec` command is passed to the container as an argument vector, so no
+shell runs: `$VAR` is not expanded, and a `$PASSWORD` argument reaches the
+program as those nine literal characters. Wrap the command in `sh -c` when it
+needs a variable, a pipe, or a redirect. This is worth getting right the first
+time, because the failure looks exactly like a service that will not start —
+the probe fails, retries, and only reports after the whole budget is spent.
 
 For `http` and `tcp`, omit `port` when the resource declares one port. An
 `http` check also selects the alias matching its scheme (`http` or `https`)
