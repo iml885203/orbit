@@ -36,14 +36,25 @@ func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 // cost: the exec probe it recommends keeps running as the liveness check, one
 // authenticated login per interval.
 //
-// Every other doctor hint read while establishing that asks for a one-off
-// action — install a tool, log in, add a PATH entry, read a log, restore
-// Docker, set a workspace root. Scope of that reading, stated because it is
-// narrower than "every hint in the repo": the 13 other Hints in
-// internal/devdb and internal/daemon/doctor.go plus internal/daemon/
-// runtime_versions.go, app/ and daemon/host_tools.go, literals and variables
-// both, as of 2026-08. A repo-wide grep finds far more, mostly CLI
-// next-action strings rather than doctor remedies, and those were not read.
+// Every other doctor hint asks for a one-off action — install a tool, log in,
+// add a PATH entry, read a log, restore Docker, set a workspace root, create
+// an executable, run a setup command. Checked as of 2026-08 over every file
+// producing a DoctorCheck:
+//
+//	git ls-files '*.go' | grep -v _test | xargs grep -l 'DoctorCheck{'
+//
+// That enumeration matters more than any count here. Three earlier passes
+// were wrong because each searched a category it had named rather than one
+// the repo defines: "Hint string literals" missed the ones built in
+// variables, `Hint:` missed the files that assign `check.Hint`, and both
+// missed files outside the two directories picked before searching.
+//
+// Anchoring on the type rather than on how a hint is written holds because a
+// composite literal is the only way to construct a DoctorCheck — files that
+// merely declare, pass or aggregate them add no hints, and the three files
+// that set a Hint without constructing one (app/root.go, cli/json_contract.go,
+// internal/sqlpublish/tools.go) are CLI error hints and a shared constant,
+// not doctor remedies.
 //
 // A new hint recommending something continuous belongs in this minority and
 // should say so in its own text, the way this one does.
