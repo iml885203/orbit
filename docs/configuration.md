@@ -610,7 +610,10 @@ different bootstrap key, declare both keys on the target container and point
 
 The `exec` health check waits for an authenticated query, because accepting a
 TCP connection does not prove that SQL Server has finished startup and accepts
-logins. It runs inside the container, where `MSSQL_SA_PASSWORD` is available;
+logins. It keeps probing after startup as the runtime liveness check, one login
+per `interval` — worth raising `interval` for an environment left running all
+day, where the startup race it closes only happens once. It runs inside the
+container, where `MSSQL_SA_PASSWORD` is available;
 keep its username and password variable aligned with `sqlserver.username` and
 `sqlserver.password_env`. The command exports `SQLCMDPASSWORD` instead of
 putting the secret in process arguments. The target image must provide

@@ -51,8 +51,13 @@ func sqlServerReadinessChecks(cfg *config.Config) []daemon.DoctorCheck {
 	if target.HealthCheck != nil {
 		probe = "uses a tcp health check"
 	}
+	// An exec probe keeps running after startup (MonitorHealthy), so a
+	// long-lived environment pays one login per interval indefinitely.
+	// Naming that here keeps the reader from adopting a background cost
+	// they only meant to pay while waiting for the server to come up.
 	hint := fmt.Sprintf(
-		"set containers.%s.health_check to:\n  type: exec\n  command: [/bin/sh, -c, 'password=\"$(printenv \"$1\")\"; if [ -z \"$password\" ]; then echo \"$1 is empty in the configured SQL Server target\" >&2; exit 2; fi; export SQLCMDPASSWORD=\"$password\"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U \"$2\" -C -I -Q \"SELECT 1\"', orbit-sqlserver-health, %s, %s]",
+		"set containers.%s.health_check to:\n  type: exec\n  command: [/bin/sh, -c, 'password=\"$(printenv \"$1\")\"; if [ -z \"$password\" ]; then echo \"$1 is empty in the configured SQL Server target\" >&2; exit 2; fi; export SQLCMDPASSWORD=\"$password\"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U \"$2\" -C -I -Q \"SELECT 1\"', orbit-sqlserver-health, %s, %s]\n"+
+			"this probe also runs while the environment is up, one login per health_check.interval (5s default) — raise interval for an environment you leave running",
 		section.Target, strconv.Quote(section.PasswordEnv), strconv.Quote(section.Username),
 	)
 	return []daemon.DoctorCheck{{
