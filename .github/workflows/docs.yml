@@ -37,6 +37,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
       - uses: actions/configure-pages@v5
+      - run: pnpm --dir website install --frozen-lockfile
+      - run: pnpm --dir website exec playwright install --with-deps chromium
       - run: make docs-site-check
       - uses: actions/upload-pages-artifact@v4
         with:

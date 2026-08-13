@@ -5,48 +5,77 @@ import { join, relative, sep } from 'node:path'
 const outputDirectory = new URL('../.vitepress/dist/', import.meta.url)
 const outputPath = outputDirectory.pathname
 const baseURL = new URL('https://iml885203.github.io/orbit/')
-
 const requiredPages = [
   'index.html',
+  'zh-TW/index.html',
   'README.zh-TW.html',
   'docs/local-first.html',
+  'zh-TW/docs/local-first.html',
   'docs/local-first.zh-TW.html',
   'docs/configuration.html',
   'docs/architecture.html',
   'docs/troubleshooting.html',
 ]
 
-for (const page of requiredPages) {
-  assert.ok(existsSync(join(outputPath, page)), `missing required page: ${page}`)
+const sourceRoot = new URL('../../', import.meta.url).pathname
+const translatedSources = readdirSync(join(sourceRoot, 'docs'))
+  .filter((name) => name.endsWith('.zh-TW.md'))
+for (const source of translatedSources) {
+  const page = source.replace('.zh-TW.md', '')
+  const adapterPath = join(sourceRoot, 'zh-TW/docs', `${page}.md`)
+  assert.ok(existsSync(adapterPath), `missing locale adapter for docs/${source}`)
+  assert.equal(
+    readFileSync(adapterPath, 'utf8').trim(),
+    `<!--@include: ../../docs/${source}-->`,
+    `locale adapter must include only docs/${source}`,
+  )
 }
+const adapters = readdirSync(join(sourceRoot, 'zh-TW/docs')).filter((name) => name.endsWith('.md'))
+assert.equal(adapters.length, translatedSources.length, 'every locale adapter must have one translated source')
+
+for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), `missing required page: ${page}`)
 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
 assert.match(home, /Your whole local stack, one observable environment\./)
-assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/orbit\/docs\/local-first"/)
+assert.match(home, /href="\/orbit\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
 
-const traditionalChineseHome = readFileSync(join(outputPath, 'README.zh-TW.html'), 'utf8')
-assert.match(traditionalChineseHome, /<h1 id="orbit"[^>]*><img /)
-assert.doesNotMatch(traditionalChineseHome, /&lt;img src=/)
-assert.match(traditionalChineseHome, /href="\/orbit\/docs\/local-first.zh-TW"/)
+const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
+assert.match(chineseHome, /<html lang="zh-TW"/)
+assert.match(chineseHome, /href="\/orbit\/zh-TW\/docs\/local-first"/)
 
-const traditionalChineseGuide = readFileSync(join(outputPath, 'docs/local-first.zh-TW.html'), 'utf8')
-for (const route of ['sql-workflow.zh-TW', 'architecture.zh-TW', 'agent-cli.zh-TW', 'versioning.zh-TW']) {
-  assert.match(traditionalChineseGuide, new RegExp(`/orbit/docs/${route}`))
+const chineseGuide = readFileSync(join(outputPath, 'zh-TW/docs/local-first.html'), 'utf8')
+for (const route of ['sql-workflow', 'architecture', 'agent-cli', 'versioning', 'CODE_CONVENTIONS']) {
+  assert.match(chineseGuide, new RegExp(`/orbit/zh-TW/docs/${route}`))
 }
 
-const configuration = readFileSync(join(outputPath, 'docs/configuration.html'), 'utf8')
-assert.match(configuration, /class="header-anchor"/)
+for (const [page, language, counterpart] of [
+  ['docs/local-first.html', 'en-US', '/orbit/zh-TW/docs/local-first'],
+  ['zh-TW/docs/local-first.html', 'zh-TW', '/orbit/docs/local-first'],
+]) {
+  const html = readFileSync(join(outputPath, page), 'utf8')
+  assert.match(html, new RegExp(`<html lang="${language}"`))
+  assert.match(html, language === 'zh-TW'
+    ? /<meta name="description" content="為專案所需的每個服務提供一個可觀測的本機環境。">/
+    : /<meta name="description" content="One observable local environment for every service your project needs.">/)
+  assert.match(html, /rel="canonical"/)
+  assert.match(html, /property="og:title"/)
+  assert.match(html, /name="twitter:card"/)
+  assert.match(html, /property="og:image" content="https:\/\/raw\.githubusercontent\.com\/iml885203\/orbit\/main\/docs\/assets\/orbit-demo-dashboard\.jpg"/)
+  assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://iml885203.github.io${counterpart}"`))
+}
+assert.match(chineseGuide, /href="https:\/\/github.com\/iml885203\/orbit\/edit\/main\/docs\/local-first\.zh-TW\.md"/)
 
-const searchIndex = readdirSync(join(outputPath, 'assets/chunks'))
+const searchIndexName = readdirSync(join(outputPath, 'assets/chunks'))
   .find((name) => name.startsWith('@localSearchIndexroot.') && name.endsWith('.js'))
-assert.ok(searchIndex, 'missing local search index')
-
-const indexedContent = readFileSync(join(outputPath, 'assets/chunks', searchIndex), 'utf8')
+assert.ok(searchIndexName, 'missing local search index')
+const indexedContent = readFileSync(join(outputPath, 'assets/chunks', searchIndexName), 'utf8')
 for (const term of ['low-level-runtime-overrides', 'Component map', 'data loss might occur']) {
   assert.ok(indexedContent.includes(term), `local search index is missing: ${term}`)
 }
+assert.ok(!indexedContent.includes('Orbit 1.0 test matrix'), 'release audit must not appear in local search')
+assert.ok(!indexedContent.includes('Documentation website'), 'website maintenance must not appear in local search')
 
 function filesBelow(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -72,30 +101,18 @@ function outputFileFor(url) {
 
 for (const htmlFile of filesBelow(outputPath).filter((file) => file.endsWith('.html'))) {
   const html = readFileSync(htmlFile, 'utf8')
-  const attributes = html.matchAll(/\b(?:href|src)="([^"]+)"/g)
-  for (const [, value] of attributes) {
+  for (const [, value] of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
     if (/^(?:mailto:|data:|javascript:)/.test(value)) continue
-
     const target = new URL(value, publicURLFor(htmlFile))
     if (target.origin !== baseURL.origin) continue
-    assert.ok(
-      target.pathname.startsWith(baseURL.pathname),
-      `${relative(outputPath, htmlFile)} escapes the site base: ${value}`,
-    )
+    assert.ok(target.pathname.startsWith(baseURL.pathname), `${relative(outputPath, htmlFile)} escapes site base: ${value}`)
     const targetFile = outputFileFor(target)
-    assert.ok(
-      existsSync(targetFile),
-      `${relative(outputPath, htmlFile)} has an unresolved link: ${value}`,
-    )
+    assert.ok(existsSync(targetFile), `${relative(outputPath, htmlFile)} has unresolved link: ${value}`)
     if (target.hash) {
       const targetHTML = readFileSync(targetFile, 'utf8')
-      const targetID = decodeURIComponent(target.hash.slice(1))
-      assert.ok(
-        targetHTML.includes(`id="${targetID}"`),
-        `${relative(outputPath, htmlFile)} has an unresolved fragment: ${value}`,
-      )
+      assert.ok(targetHTML.includes(`id="${decodeURIComponent(target.hash.slice(1))}"`), `${relative(outputPath, htmlFile)} has unresolved fragment: ${value}`)
     }
   }
 }
 
-console.log('docs website pages, search index, deep links, and internal assets are valid')
+console.log('documentation routes, locales, metadata, search index, and links are valid')

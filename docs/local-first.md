@@ -6,6 +6,10 @@ This ten-minute path starts with one file in your existing project. You do not
 need an environment Git repository, `orbit init`, or settings under
 `~/.orbit` for this local trial.
 
+Install the [Orbit CLI](development.md#install-orbit) first. The example below
+also requires Docker and Python 3; `orbit doctor` checks all three before it
+starts the environment.
+
 ## 1. Put intent beside the project
 
 Save this as `orbit.yaml` in your project root:

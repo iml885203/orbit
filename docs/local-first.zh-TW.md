@@ -5,6 +5,9 @@
 這條十分鐘路徑只需要在現有專案加入一個檔案。本機試用不需要 environment Git
 repository、不需要 `orbit init`，也不需要編輯 `~/.orbit` 底下的設定。
 
+請先安裝 [Orbit CLI](development.zh-TW.md#安裝-orbit)。下方範例也需要 Docker
+與 Python 3；`orbit doctor` 會在啟動環境前檢查這三項。
+
 ## 1. 把開發意圖放在專案旁
 
 在專案根目錄把以下內容存成 `orbit.yaml`：

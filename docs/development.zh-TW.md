@@ -4,13 +4,41 @@
 
 兩種讀者：**使用 Orbit**（安裝方式、upgrade / rollback / uninstall）與
 **在 Orbit 本身上動手**（從原始碼 build、開發流程、dashboard hot reload）。
-日常基本流程請參考[網站概覽](https://iml885203.github.io/orbit/README.zh-TW#一份檔案描述整個環境)。
+日常基本流程請參考[網站概覽](https://iml885203.github.io/orbit/zh-TW/#一份檔案描述整個環境)。
 
 ## 使用 Orbit
 
 文件中的 installer 一律安裝已發布的 GitHub Release。Script 雖然放在
 `main`，但不會安裝尚未發布的 `main` build。要測試目前 source，請依照
 [測試尚未發布的 main](#測試尚未發布的-main)。
+
+### 安裝 Orbit
+
+macOS 或 Linux 使用 Homebrew：
+
+```bash
+brew install iml885203/tap/orbit
+```
+
+Windows 使用 Scoop（Beta）：
+
+```powershell
+scoop bucket add iml885203 https://github.com/iml885203/scoop-bucket
+scoop install orbit
+```
+
+macOS 或 Linux 使用 verified installer：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Windows PowerShell（Beta）：
+
+```powershell
+irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
+```
 
 ### 平台支援
 

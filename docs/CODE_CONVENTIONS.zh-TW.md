@@ -258,7 +258,7 @@ Type alias 預設定義在 `.svelte` script 裡，除非有 3 個以上的 consu
 
 ## 18. 在行為邊界寫測試
 
-見 [testing.md](testing.md)。
+見 [testing.md](https://iml885203.github.io/orbit/docs/testing)。
 
 Orbit 偏好 end-to-end journey 與 sociable domain test。Solitary test 留給演算法、parser、escaping、安全邊界、concurrency invariant 和穩定的 wire contract——不是 DTO builder、getter、薄 wrapper 或 private 呼叫順序。寧可用一個測試涵蓋一個 public 行為，也不要為它的實作 helper 寫好幾個測試。
 
@@ -270,7 +270,7 @@ Orbit 偏好 end-to-end journey 與 sociable domain test。Solitary test 留給�
 - **文件簡單易懂、維護便宜。** 寫文件要讓人第一次讀就懂：句子短、指令具體、不灌水。避免會隨功能變動而需要跟著改的文件；真的需要時只保留一份權威來源，其他位置用連結指過去。
 - **想解釋就是該重構的訊號。** 想寫文件或註解來解釋程式碼，代表應該先重構程式碼（§3）。
 - **程式碼自己說出意圖。** 功能不是能動就算完成——實作完要再做一輪重構，讓命名與結構不靠旁白就能突顯意圖。
-- **行為有測試保護。** 每個功能都要有守在行為邊界的測試——絕不寫一對一鏡射實作的單元測試（§18、[testing.md](testing.md)）。
+- **行為有測試保護。** 每個功能都要有守在行為邊界的測試——絕不寫一對一鏡射實作的單元測試（§18、[testing.md](https://iml885203.github.io/orbit/docs/testing)）。
 
 ### 文件 ownership
 
