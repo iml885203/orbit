@@ -181,7 +181,7 @@ playback。Dashboard 只綁定 loopback。
 - [架構](docs/architecture.zh-TW.md)
 - [開發](docs/development.zh-TW.md)
 - [Agent CLI contract](docs/agent-cli.zh-TW.md)
-- [Contributing](CONTRIBUTING.md)
+- [Contributing](https://iml885203.github.io/orbit/CONTRIBUTING)
 
 ## License
 

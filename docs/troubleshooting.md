@@ -195,7 +195,7 @@ When stuck:
 4. **`ORBIT_LOG_LEVEL=debug orbit daemon restart`** — verbose daemon logs in `~/.orbit/daemon.log`.
 5. **`docker ps -a`** / **`docker logs <container>`** — bypass orbit entirely to rule out its bookkeeping.
 
-If you find a failure mode that isn't covered here, add it and open an MR — the catalog's value compounds with every new entry.
+If you find a failure mode that isn't covered here, add it and open a PR — the catalog's value compounds with every new entry.
 
 ## See also
 

@@ -5,7 +5,8 @@
 Full YAML schema for an Orbit environment file. A project may keep
 `orbit.yaml` beside its code, or a team may distribute files through
 `~/.orbit/envs/` and select one with `orbit switch <name>`. See
-`envs/example.yaml` for a runnable example.
+[the repository example](https://github.com/iml885203/orbit/blob/main/envs/example.yaml)
+for a larger runnable environment.
 
 **Contents**
 
@@ -23,6 +24,29 @@ Full YAML schema for an Orbit environment file. A project may keep
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbit-settings-json)
 - [Variable substitution](#variable-substitution)
 - [Low-level runtime overrides](#low-level-runtime-overrides)
+
+## Complete minimal example
+
+```yaml
+version: "3"
+
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "26379:6379"
+
+services:
+  app:
+    kind: frontend
+    command: python3 -m http.server "$PORT"
+    ports:
+      http: 28080
+    depends_on: [redis]
+```
+
+Save this as `orbit.yaml`, then run `orbit doctor` and `orbit up`. The sections
+below describe every available field and extension.
 
 ## Config selection
 

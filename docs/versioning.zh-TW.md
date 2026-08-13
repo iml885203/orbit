@@ -13,7 +13,7 @@ Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
   支援的 preview，不要求使用者理解或選擇 release channel。
 - 第一個 stable release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
   已有文件與測試，並已準備好提供外部使用者使用。
-  [1.0 test matrix](1.0-test-matrix.md) 記錄該 tag 所需的平台證據，
+  [1.0 test matrix](https://iml885203.github.io/orbit/docs/1.0-test-matrix) 記錄該 tag 所需的平台證據，
   以及目前實際已驗證的項目。
 - Release tag 不可修改；修正必須發布成新版本。
 

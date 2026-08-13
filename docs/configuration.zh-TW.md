@@ -4,7 +4,8 @@
 
 Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放在程式碼
 旁；團隊也可以透過 `~/.orbit/envs/` 發布檔案，再用 `orbit switch <name>`
-選擇。可參考 `envs/example.yaml` 這個可直接執行的範例。
+選擇。較大型的可執行環境請參考
+[repository 範例](https://github.com/iml885203/orbit/blob/main/envs/example.yaml)。
 
 **目錄**
 
@@ -22,6 +23,29 @@ Orbit environment 檔案完整的 YAML schema。專案可以把 `orbit.yaml` 放
 - [User settings (`~/.orbit/settings.json`)](#user-settings-orbit-settings-json)
 - [變數替換](#變數替換)
 - [底層 runtime 覆寫](#底層-runtime-覆寫)
+
+## 完整最小範例
+
+```yaml
+version: "3"
+
+containers:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      redis: "26379:6379"
+
+services:
+  app:
+    kind: frontend
+    command: python3 -m http.server "$PORT"
+    ports:
+      http: 28080
+    depends_on: [redis]
+```
+
+把內容存成 `orbit.yaml`，再執行 `orbit doctor` 與 `orbit up`。以下 sections
+說明所有可用 fields 與 extensions。
 
 ## Config 選擇
 

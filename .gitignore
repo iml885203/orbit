@@ -16,6 +16,8 @@ ui/node_modules/
 website/node_modules/
 website/.vitepress/cache/
 website/.vitepress/dist/
+website/test-results/
+website/playwright-report/
 __pycache__/
 *.pyc
 docs/examples/mini-shop/apps/*/*.db

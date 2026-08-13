@@ -12,6 +12,9 @@ Use Node.js 22 and pnpm 11, then start the development server:
 make docs-site-dev
 ```
 
+The full check installs its pinned headless Chromium build on first use. To
+prepare that browser separately, run `make docs-site-browser-setup`.
+
 Build and validate the production site before submitting a documentation
 change:
 
@@ -20,8 +23,10 @@ make docs-site-check
 ```
 
 The check fails for broken internal links or assets. It also verifies the
-landing page, stable core-document routes, heading anchors, and the local
-search index. Preview the generated production site with:
+landing page, stable core-document routes, locale metadata, heading anchors,
+and the local search index. A headless browser also verifies search, keyboard
+navigation, landmarks, and the short-phone layout. Preview the generated
+production site with:
 
 ```bash
 make docs-site-preview
@@ -38,6 +43,11 @@ top-level navigation.
 Links to Markdown pages should stay relative so they work on GitHub and on the
 website. Links to repository files that are not website pages should use their
 full GitHub URL.
+
+English pages live at the site root and Traditional Chinese pages live below
+`/zh-TW/`. Existing `.zh-TW` URLs remain redirect aliases. Pages without a
+translation fall back to English; do not create a placeholder translation just
+to fill a navigation slot.
 
 ## Deployment
 

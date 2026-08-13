@@ -69,7 +69,43 @@
 }
 
 @media (max-width: 640px) {
+  .VPHomeHero {
+    padding-top: 40px !important;
+    padding-bottom: 32px !important;
+  }
+
   .VPHomeHero .image {
-    margin-top: 24px;
+    margin: 0 0 20px;
+  }
+
+  .VPHomeHero .image-src {
+    max-width: 96px;
+    max-height: 96px;
+  }
+
+  .VPHomeHero .name,
+  .VPHomeHero .text {
+    font-size: 34px;
+    line-height: 1.08;
+  }
+
+  .VPHomeHero .tagline {
+    padding-top: 14px;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .VPHomeHero .actions {
+    padding-top: 18px;
+  }
+}
+
+@media (max-width: 360px) and (max-height: 620px) {
+  .VPHomeHero {
+    padding-top: 20px !important;
+  }
+
+  .VPHomeHero .image {
+    display: none;
   }
 }
