@@ -50,6 +50,9 @@ func TestSQLServerReadinessChecks(t *testing.T) {
 	}{
 		{name: "implicit tcp", wantWarn: true, wantPhrase: "has no explicit health check"},
 		{name: "explicit tcp", health: &config.HealthCheckConfig{Type: "tcp"}, wantWarn: true, wantPhrase: "uses a tcp health check"},
+		// A port with no type is the form live env files actually use, and it
+		// runs as a TCP probe — so it must warn like a spelled-out one.
+		{name: "port only, type omitted", health: &config.HealthCheckConfig{Port: 21433}, wantWarn: true, wantPhrase: "uses a tcp health check"},
 		{name: "exec proves login", health: &config.HealthCheckConfig{Type: "exec"}},
 		{name: "other explicit probe", health: &config.HealthCheckConfig{Type: "healthcheck"}},
 	} {

@@ -40,7 +40,10 @@ func sqlServerReadinessChecks(cfg *config.Config) []daemon.DoctorCheck {
 	if !ok || target == nil {
 		return nil
 	}
-	if target.HealthCheck != nil && target.HealthCheck.Type != "tcp" {
+	// An omitted type is a TCP probe: applyHealthCheckDefaults leaves Type
+	// empty and the checker treats that as tcp, so `health_check: {port: N}`
+	// proves exactly as little about logins as a spelled-out tcp probe.
+	if target.HealthCheck != nil && target.HealthCheck.Type != "" && target.HealthCheck.Type != "tcp" {
 		return nil
 	}
 
