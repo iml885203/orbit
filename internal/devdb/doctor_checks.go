@@ -15,7 +15,9 @@ import (
 )
 
 // dbWorkflowChecks reports only checks required by an explicitly configured
-// SQL Server workflow.
+// SQL Server workflow. CLIDoctorChecks (cli_doctor.go) builds the same list
+// minus sqlImageChecks, which needs the daemon's host; that comment carries
+// the reasoning for both.
 func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 	if !f.dbWorkflowConfigured() {
 		return nil
