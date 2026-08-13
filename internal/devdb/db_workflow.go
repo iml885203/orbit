@@ -70,6 +70,22 @@ func dialDBWorkflow() (*daemon.Client, error) {
 // resolve from the daemon's publish target (the CLI has no config of
 // its own here) — mixing the target's port with another container's
 // password would break any env whose target isn't sql-server.
+// targetServiceName resolves the env resource name for a publish target.
+// It must come from meta rather than from stripping the container name: with
+// `--instance` the container is orbit-instance-<name>-<hash>-<resource> while
+// the resource stays <resource>, so trimming only "orbit-" yields a name that
+// appears in no status response. The publish then reports the target as
+// unavailable seconds after `up` reported it healthy, and tells the user to
+// start a resource orbit itself rejects as unknown.
+//
+// The container-name fallback covers a daemon older than the meta field.
+func targetServiceName(metaService, containerName string) string {
+	if metaService != "" {
+		return metaService
+	}
+	return strings.TrimPrefix(containerName, "orbit-")
+}
+
 func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish.Opts, error) {
 	meta, err := fetchDevDBMeta(client)
 	if err != nil {
@@ -82,7 +98,7 @@ func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish
 	if target == "" {
 		return sqlpublish.Opts{}, fmt.Errorf("SQL Server target unavailable from the active environment")
 	}
-	serviceName := strings.TrimPrefix(target, "orbit-")
+	serviceName := targetServiceName(meta.SQLServerService, target)
 	if !containerRunning(target) {
 		return sqlpublish.Opts{}, fmt.Errorf("SQL Server target %s is stopped — start it with `orbit up %s`", serviceName, serviceName)
 	}
