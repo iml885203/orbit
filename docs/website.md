@@ -1,6 +1,6 @@
 # Documentation website
 
-Orbit's official website is [iml885203.github.io/orbit](https://iml885203.github.io/orbit/).
+Orbit's official website is [orbit.dotw.me](https://orbit.dotw.me/).
 The repository README is its landing-page source, and files in `docs/` remain
 the source for documentation pages. Do not copy documentation into `website/`.
 
@@ -52,9 +52,9 @@ to fill a navigation slot.
 ## Deployment
 
 `.github/workflows/docs.yml` builds the same checked artifact and deploys it to
-GitHub Pages after documentation changes reach `main`. The site uses `/orbit/`
-as its base path. A future custom domain can change the base and canonical
-hostname without changing routes below that base.
+GitHub Pages after documentation changes reach `main`. The custom domain serves
+the site from `/`, with English pages at the root and Traditional Chinese pages
+below `/zh-TW/`.
 
 VitePress was selected after evaluating Docusaurus first. Both support
 Markdown documentation and stable routes, but Docusaurus needs an external

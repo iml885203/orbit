@@ -25,7 +25,7 @@ test('maintains one main landmark through client-side navigation', async ({ page
   await expect(page).toHaveURL(/\/#try-orbit$/)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
   await page.getByRole('link', { name: 'Orbit', exact: true }).click()
-  await expect(page).toHaveURL(/\/orbit\/$/)
+  await expect(page).toHaveURL(/:\d+\/$/)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
 })
 

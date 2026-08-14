@@ -32,7 +32,7 @@ func TestUserDirectedCommandsAreDiscoverable(t *testing.T) {
 		t.Error("inspect stays out of the human command list and is signposted separately")
 	}
 	if !strings.Contains(rootCommandDescription, "orbit inspect --json") ||
-		!strings.Contains(rootCommandDescription, "https://iml885203.github.io/orbit/docs/agent-cli") {
+		!strings.Contains(rootCommandDescription, "https://orbit.dotw.me/docs/agent-cli") {
 		t.Fatalf("root help does not lead agents to the JSON entry point: %q", rootCommandDescription)
 	}
 }

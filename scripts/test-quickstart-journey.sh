@@ -82,7 +82,7 @@ for command in daemon doctor down env init logs open restart service settings st
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
 done
 grep -F "orbit inspect --json" "$test_root/root-help.txt" >/dev/null
-grep -F "https://iml885203.github.io/orbit/docs/agent-cli" "$test_root/root-help.txt" >/dev/null
+grep -F "https://orbit.dotw.me/docs/agent-cli" "$test_root/root-help.txt" >/dev/null
 if grep -E "^[[:space:]]+inspect[[:space:]]" "$test_root/root-help.txt" >/dev/null; then
   echo "agent-only inspect command appeared in the human command list instead of its dedicated signpost." >&2
   exit 1

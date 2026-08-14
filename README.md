@@ -6,7 +6,7 @@ Orbit is an agent-native local development orchestrator. It gives developers
 and coding agents one reliable interface to set up, run, inspect, and manage a
 project's entire local stack.
 
-[Official website](https://iml885203.github.io/orbit/) · [Try the demo](#try-orbit) ·
+[Official website](https://orbit.dotw.me/) · [Try the demo](#try-orbit) ·
 [Use Orbit with your project](docs/local-first.md) · [Install](docs/development.md) ·
 [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)

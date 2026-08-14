@@ -6,10 +6,10 @@ Orbit 是為 Agent 而生的本機開發環境編排工具，讓開發者與 cod
 agents 透過同一個可靠介面，建置、啟動、檢查與管理專案的整套本機
 stack。
 
-[官方網站](https://iml885203.github.io/orbit/) · [試玩 demo](#試玩-orbit) ·
+[官方網站](https://orbit.dotw.me/) · [試玩 demo](#試玩-orbit) ·
 [在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
 [安裝](docs/development.zh-TW.md) · [文件](#文件) ·
-[English](https://iml885203.github.io/orbit/)
+[English](https://orbit.dotw.me/)
 
 ![Orbit dashboard，顯示健康的 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
@@ -212,7 +212,7 @@ playback。Dashboard 只綁定 loopback。
 - [架構](docs/architecture.zh-TW.md)
 - [開發](docs/development.zh-TW.md)
 - [Agent CLI contract](docs/agent-cli.zh-TW.md)
-- [Contributing](https://iml885203.github.io/orbit/CONTRIBUTING)
+- [Contributing](https://orbit.dotw.me/CONTRIBUTING)
 
 ## License
 

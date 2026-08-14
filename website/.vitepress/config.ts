@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 import { fileURLToPath } from 'node:url'
 
-const siteOrigin = 'https://iml885203.github.io'
-const siteBase = '/orbit/'
+const siteOrigin = 'https://orbit.dotw.me'
+const siteBase = '/'
 const untranslatedRoutes = new Set([
   'CODE_OF_CONDUCT',
   'CONTRIBUTING',
@@ -139,7 +139,7 @@ export default defineConfig({
     },
   },
   sitemap: {
-    hostname: 'https://iml885203.github.io/orbit/',
+    hostname: 'https://orbit.dotw.me/',
   },
   rewrites: { 'README.md': 'index.md' },
   srcExclude: [
@@ -161,7 +161,7 @@ export default defineConfig({
   ],
   head: [
     ['meta', { name: 'theme-color', content: '#0d1117' }],
-    ['link', { rel: 'icon', href: '/orbit/orbit-logo-badge.svg' }],
+    ['link', { rel: 'icon', href: '/orbit-logo-badge.svg' }],
   ],
   locales: {
     root: { label: 'English', lang: 'en-US' },

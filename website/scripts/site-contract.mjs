@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const outputDirectory = new URL('../.vitepress/dist/', import.meta.url)
-const outputPath = outputDirectory.pathname
-const baseURL = new URL('https://iml885203.github.io/orbit/')
+const outputPath = fileURLToPath(outputDirectory)
+const baseURL = new URL('https://orbit.dotw.me/')
 const requiredPages = [
   'index.html',
   'zh-TW/index.html',
@@ -17,7 +18,7 @@ const requiredPages = [
   'docs/troubleshooting.html',
 ]
 
-const sourceRoot = new URL('../../', import.meta.url).pathname
+const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
 const translatedSources = readdirSync(join(sourceRoot, 'docs'))
   .filter((name) => name.endsWith('.zh-TW.md'))
 for (const source of translatedSources) {
@@ -38,22 +39,22 @@ for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
 assert.match(home, /Build the product\. Let agents run the environment\./)
 assert.match(home, /aria-label="Search"/)
-assert.match(home, /href="\/orbit\/#try-orbit"/)
-assert.match(home, /href="\/orbit\/docs\/development#install-orbit"/)
+assert.match(home, /href="\/#try-orbit"/)
+assert.match(home, /href="\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
 
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
-assert.match(chineseHome, /href="\/orbit\/zh-TW\/docs\/local-first"/)
+assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
 
 const chineseGuide = readFileSync(join(outputPath, 'zh-TW/docs/local-first.html'), 'utf8')
 for (const route of ['sql-workflow', 'architecture', 'agent-cli', 'versioning', 'CODE_CONVENTIONS']) {
-  assert.match(chineseGuide, new RegExp(`/orbit/zh-TW/docs/${route}`))
+  assert.match(chineseGuide, new RegExp(`/zh-TW/docs/${route}`))
 }
 
 for (const [page, language, counterpart] of [
-  ['docs/local-first.html', 'en-US', '/orbit/zh-TW/docs/local-first'],
-  ['zh-TW/docs/local-first.html', 'zh-TW', '/orbit/docs/local-first'],
+  ['docs/local-first.html', 'en-US', '/zh-TW/docs/local-first'],
+  ['zh-TW/docs/local-first.html', 'zh-TW', '/docs/local-first'],
 ]) {
   const html = readFileSync(join(outputPath, page), 'utf8')
   assert.match(html, new RegExp(`<html lang="${language}"`))
@@ -64,7 +65,7 @@ for (const [page, language, counterpart] of [
   assert.match(html, /property="og:title"/)
   assert.match(html, /name="twitter:card"/)
   assert.match(html, /property="og:image" content="https:\/\/raw\.githubusercontent\.com\/iml885203\/orbit\/main\/docs\/assets\/orbit-demo-dashboard\.jpg"/)
-  assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://iml885203.github.io${counterpart}"`))
+  assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://orbit.dotw.me${counterpart}"`))
 }
 assert.match(chineseGuide, /href="https:\/\/github.com\/iml885203\/orbit\/edit\/main\/docs\/local-first\.zh-TW\.md"/)
 
