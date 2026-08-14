@@ -9,6 +9,7 @@ test('keeps the primary action visible on a short phone', async ({ page }) => {
   const orbitBox = await page.locator('.hero-orbit canvas').boundingBox()
   expect(actionBox && actionBox.y + actionBox.height).toBeLessThanOrEqual(568)
   expect(orbitBox && orbitBox.width > 0 && orbitBox.height > 0).toBe(true)
+  expect(orbitBox && Math.abs(orbitBox.x + orbitBox.width / 2 - 160)).toBeLessThanOrEqual(1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 

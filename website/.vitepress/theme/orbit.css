@@ -73,6 +73,7 @@
   position: relative;
   width: min(500px, 42vw);
   aspect-ratio: 500 / 430;
+  margin-inline: auto;
   overflow: hidden;
   border-radius: 50%;
   background:
