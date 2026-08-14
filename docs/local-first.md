@@ -45,9 +45,21 @@ an endpoint named `http`), Orbit waits for it before starting dependents and
 reuses it for `orbit open` and dependency URLs. Add an explicit `health_check`
 only when a listening port is not enough to prove application readiness.
 
-## 2. Prove the local loop
+## 2. Delegate the local loop
 
-Run these commands from the project root:
+With the [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+installed or included in context, ask your coding agent:
+
+> Use Orbit to inspect this project's prerequisites and current state. Follow
+> only non-destructive recommended actions, start the environment, verify that
+> `app` and `redis` are ready, and open `app`. Stop and explain before any
+> destructive action or whenever setup requires my input.
+
+This is the intended path: the agent reads structured state, performs the
+narrowest safe action, and verifies the result. You remain responsible for
+approving destructive operations and providing anything Orbit cannot infer.
+
+To prove the same loop manually, run these commands from the project root:
 
 ```bash
 orbit doctor

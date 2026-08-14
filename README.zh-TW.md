@@ -26,11 +26,45 @@ stack。
 ## 試玩 Orbit
 
 Demo 需要 Git、Docker、Python 3，以及
-[已安裝的 Orbit CLI](docs/development.zh-TW.md)：
+[已安裝的 Orbit CLI](docs/development.zh-TW.md)。先 clone demo：
 
 ```bash
 git clone https://github.com/iml885203/orbit-demo.git
 cd orbit-demo
+```
+
+### 1. 把 Orbit skill 交給 Agent
+
+Claude Code 可以直接安裝版本對齊的 plugin：
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+使用 Codex 或其他 coding agent 時，在下方 prompt 保留
+[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+連結。Source release 也包含 `plugins/orbit-agent`，可作為 Codex 與 Claude Code
+的 local plugin。
+
+### 2. 委派環境管理
+
+用 coding agent 開啟 clone 下來的目錄，送出：
+
+> 使用 Orbit 檢查這個專案的 prerequisites 與當前狀態。只執行啟動 demo
+> 所需的非破壞性 recommended actions，啟動環境、確認每個 resource 都已
+> ready，然後開啟 `demo-shop`。任何破壞性操作或 setup 需要我輸入時，
+> 先停下並說明。如果無法使用 Orbit plugin，先閱讀
+> [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)。
+
+Agent 會透過 Orbit 的結構化狀態與錯誤來檢查、執行與驗證，不必猜測
+stack 的運作方式。
+
+### 想自己使用 CLI？
+
+手動執行同一段 journey：
+
+```bash
 orbit up
 orbit status
 orbit open demo-shop
@@ -141,18 +175,11 @@ orbit doctor --json        # host prerequisites 與 setup diagnostics
 orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用表示的憑證
 ```
 
-Repository 內含 `plugins/orbit-agent`，是版本對齊的 Claude 與 Codex
-plugin，其 skill 會要求 agent 先檢查狀態、優先使用 `--json`，並在破壞性
-操作前確認。在 Claude Code 中：
-
-```bash
-claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
-```
-
-不安裝 plugin 時，讓 agent 直接閱讀
-[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md) 與
-[JSON contract](docs/agent-cli.zh-TW.md)。
+[試玩 journey](#試玩-orbit) 使用的版本對齊 plugin 會要求 agent 先檢查狀態、
+優先使用 `--json`，並在破壞性操作前確認。不安裝 plugin 時，讓
+agent 直接閱讀
+[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+與 [JSON contract](docs/agent-cli.zh-TW.md)。
 
 ## Dashboard
 

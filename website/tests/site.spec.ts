@@ -4,7 +4,7 @@ test('keeps the primary action visible on a short phone', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
 
-  const primaryAction = page.getByRole('link', { name: 'Get started', exact: true }).first()
+  const primaryAction = page.getByRole('link', { name: 'Try with your agent', exact: true }).first()
   const actionBox = await primaryAction.boundingBox()
   expect(actionBox && actionBox.y + actionBox.height).toBeLessThanOrEqual(568)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
@@ -18,8 +18,8 @@ test('maintains one main landmark through client-side navigation', async ({ page
   await expect(skipLink).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('#VPContent')).toBeFocused()
-  await page.getByRole('link', { name: 'Get started', exact: true }).first().click()
-  await expect(page).toHaveURL(/\/docs\/local-first$/)
+  await page.getByRole('link', { name: 'Try with your agent', exact: true }).first().click()
+  await expect(page).toHaveURL(/\/#try-orbit$/)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
   await page.getByRole('link', { name: 'Orbit', exact: true }).click()
   await expect(page).toHaveURL(/\/orbit\/$/)
@@ -37,6 +37,22 @@ test('closes mobile navigation with Escape and restores focus', async ({ page })
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(toggle).toBeFocused()
   await expect.poll(() => page.locator('body').evaluate((body) => getComputedStyle(body).overflow)).not.toBe('hidden')
+})
+
+test('switches between distinct light and dark themes', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('vitepress-theme-appearance', 'light'))
+  await page.goto('./')
+
+  const appearance = page.locator('.VPSwitchAppearance').first()
+  await expect(appearance).toHaveAttribute('aria-checked', 'false')
+  const lightBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
+
+  await appearance.click()
+  await expect(appearance).toHaveAttribute('aria-checked', 'true')
+  const darkBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
+
+  expect(lightBackground.trim()).toBe('#ffffff')
+  expect(darkBackground.trim()).toBe('#0d1117')
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

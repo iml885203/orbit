@@ -38,7 +38,7 @@ for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
 assert.match(home, /Build the product\. Let agents run the environment\./)
 assert.match(home, /aria-label="Search"/)
-assert.match(home, /href="\/orbit\/docs\/local-first"/)
+assert.match(home, /href="\/orbit\/#try-orbit"/)
 assert.match(home, /href="\/orbit\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
 

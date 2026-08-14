@@ -219,7 +219,7 @@ export default defineConfig({
         tagline: '預覽版。為整套本機 stack 而生的 agent-native orchestration，讓開發者、CI 與 coding agents 共用同一個可靠介面。',
         image: { src: '/orbit-logo-badge.svg', alt: 'Orbit' },
         actions: [
-          { theme: 'brand', text: '開始使用', link: '/zh-TW/docs/local-first' },
+          { theme: 'brand', text: '交給 Agent 試玩', link: '/zh-TW/#試玩-orbit' },
           { theme: 'alt', text: '安裝 Orbit', link: '/zh-TW/docs/development#安裝-orbit' },
         ],
       }
@@ -243,7 +243,7 @@ export default defineConfig({
         alt: 'Orbit',
       },
       actions: [
-        { theme: 'brand', text: 'Get started', link: '/docs/local-first' },
+        { theme: 'brand', text: 'Try with your agent', link: '/#try-orbit' },
         { theme: 'alt', text: 'Install Orbit', link: '/docs/development#install-orbit' },
       ],
     }

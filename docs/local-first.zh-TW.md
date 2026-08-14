@@ -41,9 +41,19 @@ dependents，並將它重用於 `orbit open` 與 dependency URL。只有 port �
 listening 仍不足以證明 application ready 時，才需要明確加入
 `health_check`。
 
-## 2. 證明本機開發迴圈
+## 2. 委派本機開發迴圈
 
-從專案根目錄執行：
+安裝 [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+或把它加入 context 後，讓 coding agent 執行：
+
+> 使用 Orbit 檢查這個專案的 prerequisites 與當前狀態。只執行非破壞性
+> recommended actions，啟動環境、確認 `app` 與 `redis` 都已 ready，
+> 然後開啟 `app`。任何破壞性操作或 setup 需要我輸入時，先停下並說明。
+
+這是 Orbit 預期的使用方式：Agent 讀取結構化狀態、執行範圍最小的安全動作，
+再驗證結果。破壞性操作仍由你批准；Orbit 無法推斷的資訊也由你提供。
+
+若要手動驗證同一段迴圈，從專案根目錄執行：
 
 ```bash
 orbit doctor

@@ -28,11 +28,47 @@ CI, and coding agents.
 ## Try Orbit
 
 The demo needs Git, Docker, Python 3, and an
-[installed Orbit CLI](docs/development.md):
+[installed Orbit CLI](docs/development.md). Start by cloning it:
 
 ```bash
 git clone https://github.com/iml885203/orbit-demo.git
 cd orbit-demo
+```
+
+### 1. Give your agent the Orbit skill
+
+Claude Code can install the version-matched plugin directly:
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+For Codex or another coding agent, include the
+[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+in the prompt below. Source releases also include `plugins/orbit-agent` as a
+local plugin for Codex and Claude Code.
+
+### 2. Delegate the environment
+
+Open the cloned directory in your coding agent and send:
+
+> Use Orbit to inspect the prerequisites and current state of this project.
+> Follow only non-destructive recommended actions needed to start the demo,
+> bring up the environment, verify that every resource is ready, and open
+> `demo-shop`. Stop and explain before any destructive action or whenever setup
+> requires my input. If the Orbit plugin is unavailable, read the
+> [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+> first.
+
+The agent uses Orbit's structured state and errors to inspect, act, and verify
+instead of guessing how the stack works.
+
+### Prefer the CLI?
+
+Run the same journey yourself:
+
+```bash
 orbit up
 orbit status
 orbit open demo-shop
@@ -148,18 +184,11 @@ orbit doctor --json        # host prerequisites and setup diagnostics
 orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
 ```
 
-The repository ships `plugins/orbit-agent`, a version-matched Claude and
-Codex plugin whose skill teaches agents to inspect state first, prefer
-`--json`, and confirm destructive operations. In Claude Code:
-
-```bash
-claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
-```
-
-Without the plugin, point an agent to
-[the skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md) and
-[the JSON contract](docs/agent-cli.md).
+The version-matched plugin used in the [demo journey](#try-orbit) teaches agents
+to inspect state first, prefer `--json`, and confirm destructive operations.
+Without the plugin, point an agent to the
+[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+and [JSON contract](docs/agent-cli.md).
 
 ## Dashboard
 
