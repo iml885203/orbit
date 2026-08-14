@@ -86,7 +86,7 @@ function counterpartPath(relativePath: string) {
 export default defineConfig({
   srcDir: '..',
   title: 'Orbit',
-  description: 'One observable local environment for every service your project needs.',
+  description: 'Agent-native orchestration for local development.',
   lang: 'en-US',
   base: siteBase,
   cleanUrls: true,
@@ -168,7 +168,7 @@ export default defineConfig({
       label: '繁體中文',
       lang: 'zh-TW',
       link: '/zh-TW/',
-      description: '為專案所需的每個服務提供一個可觀測的本機環境。',
+      description: '為 Agent 而生的本機開發環境編排工具。',
       themeConfig: {
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
@@ -215,8 +215,8 @@ export default defineConfig({
       pageData.frontmatter.layout = 'home'
       pageData.frontmatter.hero = {
         name: 'Orbit',
-        text: '你的整套本機服務，一個可觀測環境。',
-        tagline: '依相依順序啟動 host processes 與 containers，從同一套 CLI 與 dashboard 掌握 readiness、logs、ports、traces 與 failures。',
+        text: '專心打造產品，讓 Agent 運行環境。',
+        tagline: '預覽版。為整套本機 stack 而生的 agent-native orchestration，讓開發者、CI 與 coding agents 共用同一個可靠介面。',
         image: { src: '/orbit-logo-badge.svg', alt: 'Orbit' },
         actions: [
           { theme: 'brand', text: '開始使用', link: '/zh-TW/docs/local-first' },
@@ -224,9 +224,9 @@ export default defineConfig({
         ],
       }
       pageData.frontmatter.features = [
-        { title: '一起啟動', details: '依相依順序從一份版本化檔案啟動 containers 與 host processes。' },
-        { title: '掌握 readiness', details: '從 dashboard 或穩定的 JSON CLI 檢視 health、logs、ports、traces 與 failures。' },
-        { title: '共用同一套 stack', details: '開發者、CI jobs 與 coding agents 共用同一份環境定義。' },
+        { title: '環境只定義一次', details: '把 dependencies、commands、ports 與 readiness 收旂在同一份版本化定義。' },
+        { title: '放心委派給 Agent', details: '透過穩定的 JSON CLI 提供可觀測狀態、結構化錯誤與安全的下一步。' },
+        { title: '讓人專注在產品', details: '讓 Orbit 協調 host processes 與 containers，團隊專心打造產品。' },
       ]
       return
     }
@@ -236,8 +236,8 @@ export default defineConfig({
     pageData.frontmatter.layout = 'home'
     pageData.frontmatter.hero = {
       name: 'Orbit',
-      text: 'Your whole local stack, one observable environment.',
-      tagline: 'Preview release. Start host processes and containers in dependency order, then see readiness, logs, ports, traces, and failures from one CLI and dashboard.',
+      text: 'Build the product. Let agents run the environment.',
+      tagline: 'Preview release. Agent-native orchestration for your entire local stack, with one reliable interface for developers, CI, and coding agents.',
       image: {
         src: '/orbit-logo-badge.svg',
         alt: 'Orbit',
@@ -248,9 +248,9 @@ export default defineConfig({
       ],
     }
     pageData.frontmatter.features = [
-      { title: 'Start together', details: 'Bring up containers and host processes in dependency order from one versioned file.' },
-      { title: 'Know what is ready', details: 'Inspect health, logs, ports, traces, and failures from the dashboard or stable JSON CLI.' },
-      { title: 'Run the same stack', details: 'Share one environment definition across developers, CI jobs, and coding agents.' },
+      { title: 'Encode the environment once', details: 'Put dependencies, commands, ports, and readiness in one versioned definition—not scattered setup notes.' },
+      { title: 'Delegate with confidence', details: 'Give agents observable state, structured errors, and safe next actions through a stable JSON CLI.' },
+      { title: 'Keep humans focused', details: 'Let Orbit coordinate host processes and containers while your team builds the product.' },
     ]
   },
   transformHead({ pageData }) {
@@ -259,8 +259,8 @@ export default defineConfig({
     const alternate = counterpartPath(pageData.relativePath)
     const title = !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
     const summary = pageData.relativePath.startsWith('zh-TW/')
-      ? '為專案所需的每個服務提供一個可觀測的本機環境。'
-      : 'One observable local environment for every service your project needs.'
+      ? '為 Agent 而生的本機開發環境編排工具。'
+      : 'Agent-native orchestration for local development.'
     const description = pageData.frontmatter.description || (pageData.title ? `${pageData.title}. ${summary}` : summary)
     const locale = pageData.relativePath.startsWith('zh-TW/') ? 'zh_TW' : 'en_US'
     return [

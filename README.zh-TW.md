@@ -1,7 +1,10 @@
 # ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
-把專案需要的所有服務——host processes 與 containers——放進同一個可觀測的
-本機環境。
+**專心打造產品，讓 Agent 運行環境。**
+
+Orbit 是為 Agent 而生的本機開發環境編排工具，讓開發者與 coding
+agents 透過同一個可靠介面，建置、啟動、檢查與管理專案的整套本機
+stack。
 
 [官方網站](https://iml885203.github.io/orbit/) · [試玩 demo](#試玩-orbit) ·
 [在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
@@ -10,14 +13,15 @@
 
 ![Orbit dashboard，顯示健康的 mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
-Orbit 把一份 `orbit.yaml` 變成可重現的 stack，供本機開發、CI 與 coding agents
-共同使用。
+本機環境的 setup 知識不該只存在開發者腦中。Orbit 把一份 `orbit.yaml`
+變成可執行的 environment contract，讓開發者、CI 與 coding agents 共用。
 
-- **一起啟動：** containers 與 host processes 會依 dependency 順序啟動。
-- **知道什麼真的 ready：** dashboard 與 CLI 集中顯示 health、logs、ports、
-  traces 與失敗原因。
-- **到哪裡都跑同一套：** developers、test suites 與 agents 共用一份有版本的
-  environment definition。
+- **環境只定義一次：** dependencies、commands、ports 與 readiness 收旂在
+  同一份有版本的定義，不再散落於 setup 筆記與口耳相傳的知識。
+- **放心委派給 Agent：** 穩定的 JSON CLI 提供可觀測狀態、結構化錯誤與安全的
+  下一步，不必依賴脆弱的 shell automation。
+- **讓人專注在產品：** Orbit 協調 host processes 與 containers，並在同一處
+  顯示 health、logs、ports、traces 與失敗原因。
 
 ## 試玩 Orbit
 

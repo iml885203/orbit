@@ -1,7 +1,10 @@
 # ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
-Run every service your project needs—host processes and containers—as one
-observable local environment.
+**Build the product. Let agents run the environment.**
+
+Orbit is an agent-native local development orchestrator. It gives developers
+and coding agents one reliable interface to set up, run, inspect, and manage a
+project's entire local stack.
 
 [Official website](https://iml885203.github.io/orbit/) · [Try the demo](#try-orbit) ·
 [Use Orbit with your project](docs/local-first.md) · [Install](docs/development.md) ·
@@ -10,15 +13,17 @@ observable local environment.
 
 ![Orbit dashboard showing a healthy mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
 
-Orbit turns one `orbit.yaml` into a repeatable stack for local development,
+Local setup should not live in a developer's head. Orbit turns one
+`orbit.yaml` into an executable environment contract shared by developers,
 CI, and coding agents.
 
-- **Start together:** dependencies come up in order across containers and host
-  processes.
-- **Know what is ready:** health, logs, ports, traces, and failures are visible
-  from the dashboard and CLI.
-- **Run the same stack everywhere:** developers, test suites, and agents share
-  one versioned environment definition.
+- **Encode the environment once:** dependencies, commands, ports, and readiness
+  live in one versioned definition instead of setup notes and tribal knowledge.
+- **Delegate with confidence:** the stable JSON CLI gives agents observable
+  state, structured errors, and safe next actions instead of brittle shell
+  automation.
+- **Keep humans focused:** Orbit coordinates host processes and containers and
+  surfaces health, logs, ports, traces, and failures in one place.
 
 ## Try Orbit
 

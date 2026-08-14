@@ -36,7 +36,8 @@ assert.equal(adapters.length, translatedSources.length, 'every locale adapter mu
 for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), `missing required page: ${page}`)
 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
-assert.match(home, /Your whole local stack, one observable environment\./)
+assert.match(home, /Build the product\. Let agents run the environment\./)
+assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/orbit\/docs\/local-first"/)
 assert.match(home, /href="\/orbit\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
@@ -57,8 +58,8 @@ for (const [page, language, counterpart] of [
   const html = readFileSync(join(outputPath, page), 'utf8')
   assert.match(html, new RegExp(`<html lang="${language}"`))
   assert.match(html, language === 'zh-TW'
-    ? /<meta name="description" content="為專案所需的每個服務提供一個可觀測的本機環境。">/
-    : /<meta name="description" content="One observable local environment for every service your project needs.">/)
+    ? /<meta name="description" content="為 Agent 而生的本機開發環境編排工具。">/
+    : /<meta name="description" content="Agent-native orchestration for local development.">/)
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
   assert.match(html, /name="twitter:card"/)

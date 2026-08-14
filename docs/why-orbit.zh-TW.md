@@ -2,9 +2,13 @@
 
 [English](./why-orbit.md) · [繁體中文](./why-orbit.zh-TW.md)
 
-Orbit 適合無法誠實塞進單一 process 或單一 container file 的本機應用環境。
-Application code 通常在 host 上執行最適合快速迭代，database、queue、cache 與
-支援工具則適合放在 containers；開發者不該為這兩半各自維護一套控制方式。
+本機環境的 setup 知識不該只存在開發者腦中。在 microservice 專案裡，記住要啟動
+哪些 processes、順序、ports、dependencies 與 health checks，是顯著的認知負擔，
+也很難可靠地委派給 coding agent。
+
+Orbit 把這些知識變成可執行的 environment contract，讓開發者與 coding agents
+共用同一套控制方式，管理在 host 上執行的 application code，以及放在
+containers 裡的 database、queue、cache 與支援工具。
 
 ## 使用者需要理解的模型
 

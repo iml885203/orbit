@@ -2,10 +2,15 @@
 
 [English](./why-orbit.md) · [繁體中文](./why-orbit.zh-TW.md)
 
-Orbit is for local application environments that do not fit honestly into one
-process or one container file. Application code often runs best on the host,
-while databases, queues, caches, and supporting tools belong in containers.
-Developers should not need a different control plane for each half.
+Local setup should not live in a developer's head. In a microservice project,
+knowing which processes to start, in what order, with which ports, dependencies,
+and health checks is a significant cognitive burden—and difficult to delegate
+reliably to a coding agent.
+
+Orbit turns that knowledge into an executable environment contract. It gives
+developers and coding agents the same control plane for application code that
+runs on the host and databases, queues, caches, and supporting tools that run
+in containers.
 
 ## The user model
 
