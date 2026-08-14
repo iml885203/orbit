@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/container"
@@ -144,15 +145,50 @@ func runInstanceClean(_ *cobra.Command, args []string) error {
 	if err := instance.RemoveHome(baseHome, name); err != nil {
 		return fmt.Errorf("removing instance state: %w", err)
 	}
-	// Activate above created the home so the daemon could be addressed, and
-	// the daemon it stopped may write once more on its way out — so the
-	// directory can exist again by the time RemoveHome returns. Sweep the
-	// empty shell rather than racing whoever recreated it; a failure here is
-	// not worth failing a clean that already removed everything that matters.
-	if _, err := instance.RemoveEmptyHome(baseHome, name); err != nil {
+	if err := sweepInstanceHome(baseHome, name); err != nil {
 		fmt.Fprintf(os.Stderr, "note: instance home for %q left behind: %v\n", name, err)
 	}
 	return reportInstanceCleaned(name)
+}
+
+// sweepInstanceHome removes the empty directory clean's own Activate created
+// so the daemon could be addressed.
+//
+// One pass is not enough. waitForDaemonStop returns when the pid stops being
+// alive, and a daemon can still land a last write after that — so the sweep
+// can find nothing, and the directory appears a moment later. Only instances
+// that actually ran a daemon show it: one created but never started cleans in
+// a single pass.
+//
+// Retrying beats waiting longer because there is nothing to wait *for* that
+// the process table exposes. A few short passes cover the window; if the
+// directory is still there afterwards it is not this race, and saying so is
+// better than blocking a clean that already removed everything of substance.
+func sweepInstanceHome(baseHome, name string) error {
+	var lastErr error
+	clearFor := 0
+	for attempt := 0; attempt < 8; attempt++ {
+		if attempt > 0 {
+			time.Sleep(50 * time.Millisecond)
+		}
+		removed, err := instance.RemoveEmptyHome(baseHome, name)
+		if err != nil {
+			lastErr = err
+			clearFor = 0
+			continue
+		}
+		if removed {
+			clearFor = 0
+			continue
+		}
+		// Absent this pass. Two in a row means the late write has landed and
+		// been swept, rather than not having happened yet.
+		clearFor++
+		if clearFor >= 2 {
+			return nil
+		}
+	}
+	return lastErr
 }
 
 func reportInstanceCleaned(name string) error {
