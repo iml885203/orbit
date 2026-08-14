@@ -37,6 +37,45 @@ func TestListSkipsHomesWithoutAManifest(t *testing.T) {
 	}
 }
 
+// Only an empty home is swept. A directory with contents belongs to a real
+// instance or one mid-creation, and clean calls this after removing state —
+// so deleting a non-empty home here would race whoever just wrote to it.
+func TestRemoveEmptyHomeLeavesNonEmptyHomes(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "instances", "busy")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "orbit.sock"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := RemoveEmptyHome(base, "busy")
+	if err != nil || removed {
+		t.Fatalf("RemoveEmptyHome on non-empty home = (%v, %v), want (false, nil)", removed, err)
+	}
+	if _, err := os.Stat(home); err != nil {
+		t.Errorf("non-empty home was removed: %v", err)
+	}
+}
+
+// The shell clean's own Activate recreates: empty, and nobody's.
+func TestRemoveEmptyHomeSweepsTheShell(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "instances", "swept")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := RemoveEmptyHome(base, "swept")
+	if err != nil || !removed {
+		t.Fatalf("RemoveEmptyHome = (%v, %v), want (true, nil)", removed, err)
+	}
+	if _, err := os.Stat(home); !os.IsNotExist(err) {
+		t.Errorf("empty home survived: %v", err)
+	}
+}
+
 func TestRemoveResidueReportsWhetherAnythingWasThere(t *testing.T) {
 	base := t.TempDir()
 	home := filepath.Join(base, "instances", "leftover")

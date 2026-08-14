@@ -144,6 +144,14 @@ func runInstanceClean(_ *cobra.Command, args []string) error {
 	if err := instance.RemoveHome(baseHome, name); err != nil {
 		return fmt.Errorf("removing instance state: %w", err)
 	}
+	// Activate above created the home so the daemon could be addressed, and
+	// the daemon it stopped may write once more on its way out — so the
+	// directory can exist again by the time RemoveHome returns. Sweep the
+	// empty shell rather than racing whoever recreated it; a failure here is
+	// not worth failing a clean that already removed everything that matters.
+	if _, err := instance.RemoveEmptyHome(baseHome, name); err != nil {
+		fmt.Fprintf(os.Stderr, "note: instance home for %q left behind: %v\n", name, err)
+	}
 	return reportInstanceCleaned(name)
 }
 

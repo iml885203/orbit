@@ -113,9 +113,11 @@ func List(baseHome string) ([]Summary, error) {
 	return instances, nil
 }
 
-// RemoveResidue deletes an instance home that has no manifest — the state an
-// interrupted clean leaves behind. Reports whether anything was there, so the
-// caller can tell "finished a half-done clean" from "never existed".
+// RemoveResidue deletes an instance home left without a manifest — what an
+// interrupted clean leaves behind. Callers must establish the manifest is
+// absent first; this removes whatever is there. Reports whether anything was
+// found, so the caller can tell "finished a half-done clean" from "never
+// existed".
 func RemoveResidue(baseHome, name string) (bool, error) {
 	runtime, err := Resolve(baseHome, name)
 	if err != nil {
@@ -128,6 +130,32 @@ func RemoveResidue(baseHome, name string) (bool, error) {
 		return false, err
 	}
 	if err := os.RemoveAll(runtime.Home); err != nil {
+		return false, fmt.Errorf("removing instance residue: %w", err)
+	}
+	return true, nil
+}
+
+// RemoveEmptyHome sweeps the bare directory clean's own Activate recreates on
+// its way through, after RemoveHome has taken the state. Only an empty
+// directory goes: anything with contents belongs to a real instance, or one
+// being created right now, and a clean that already succeeded must not be the
+// thing that deletes it.
+func RemoveEmptyHome(baseHome, name string) (bool, error) {
+	runtime, err := Resolve(baseHome, name)
+	if err != nil {
+		return false, err
+	}
+	entries, err := os.ReadDir(runtime.Home)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if len(entries) > 0 {
+		return false, nil
+	}
+	if err := os.Remove(runtime.Home); err != nil {
 		return false, fmt.Errorf("removing instance residue: %w", err)
 	}
 	return true, nil
