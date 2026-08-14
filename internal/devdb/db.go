@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/spf13/cobra"
@@ -11,12 +12,30 @@ import (
 
 var dacpacDir string
 
+// dacpacDirGiven records that --dacpac-dir appeared on the command line, as
+// opposed to being left at its empty default. A caller that builds the
+// argument from a variable can pass an empty one — CI signalling "no
+// artifacts this run" by clearing an env var is the case that prompted this
+// — and reading that as "flag omitted" quietly builds from source, which
+// then fails on project paths that do not exist on that machine. The
+// argument was the mistake; the error should say so.
+//
+// Set in the flag's own parse callback so it belongs to whichever command is
+// running, rather than to whichever registered last.
+var dacpacDirGiven bool
+
 func addDacpacDirFlag(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&dacpacDir, "dacpac-dir", "", "use prebuilt dacpacs from this per-project artifact root")
+	cmd.PreRun = func(c *cobra.Command, _ []string) {
+		dacpacDirGiven = c.Flags().Changed("dacpac-dir")
+	}
 }
 
 func invocationDacpacDir() (string, error) {
-	if dacpacDir == "" {
+	if strings.TrimSpace(dacpacDir) == "" {
+		if dacpacDirGiven {
+			return "", fmt.Errorf("--dacpac-dir was given an empty path; omit the flag to build from source")
+		}
 		return "", nil
 	}
 	root, err := filepath.Abs(dacpacDir)
