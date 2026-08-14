@@ -67,10 +67,15 @@ test('uses dark mode on the first visit', async ({ page }) => {
 })
 
 test('renders a bounded animated hero and respects reduced motion', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('./')
   const hero = page.locator('.hero-orbit')
   const canvas = hero.locator('canvas')
   await expect(hero).toHaveAttribute('data-motion', 'running')
+  const containerBox = await page.locator('.VPHomeHero .image-container').boundingBox()
+  const heroBox = await hero.boundingBox()
+  expect(containerBox && heroBox && Math.abs(heroBox.x + heroBox.width / 2 - containerBox.x - containerBox.width / 2)).toBeLessThanOrEqual(1)
+  expect(containerBox && heroBox && Math.abs(heroBox.y + heroBox.height / 2 - containerBox.y - containerBox.height / 2)).toBeLessThanOrEqual(1)
   const dimensions = await canvas.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
     return { cssWidth: bounds.width, cssHeight: bounds.height, width: element.width, height: element.height }

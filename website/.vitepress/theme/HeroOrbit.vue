@@ -198,6 +198,33 @@ function drawSignalStreak(frame: HeroFrame) {
   frame.ctx.globalAlpha = 1
 }
 
+function drawOrbitMark(frame: HeroFrame, coreRadius: number) {
+  const ringRadius = coreRadius * 0.46
+  frame.ctx.save()
+  frame.ctx.strokeStyle = 'rgba(216, 239, 255, 0.92)'
+  frame.ctx.lineWidth = Math.max(2, 3.2 * frame.scale)
+  frame.ctx.lineCap = 'round'
+  frame.ctx.beginPath()
+  frame.ctx.arc(frame.centerX, frame.centerY, ringRadius, -0.88, 1.9)
+  frame.ctx.stroke()
+  frame.ctx.beginPath()
+  frame.ctx.arc(frame.centerX, frame.centerY, ringRadius, 2.72, 5.05)
+  frame.ctx.stroke()
+
+  for (const angle of [-0.82, 2.4]) {
+    drawBody(
+      frame.ctx,
+      frame.centerX + Math.cos(angle) * ringRadius,
+      frame.centerY + Math.sin(angle) * ringRadius,
+      Math.max(2, 3.2 * frame.scale),
+      '#7ee787',
+      5 * frame.scale,
+    )
+  }
+  drawBody(frame.ctx, frame.centerX, frame.centerY, Math.max(1.8, 2.8 * frame.scale), '#e6edf3', 4 * frame.scale)
+  frame.ctx.restore()
+}
+
 function drawCore(frame: HeroFrame) {
   const haloRadius = (82 + frame.pulse * 9) * frame.scale
   const halo = frame.ctx.createRadialGradient(frame.centerX, frame.centerY, 0, frame.centerX, frame.centerY, haloRadius)
@@ -223,14 +250,7 @@ function drawCore(frame: HeroFrame) {
   frame.ctx.arc(frame.centerX, frame.centerY, coreRadius, 0, Math.PI * 2)
   frame.ctx.fill()
   frame.ctx.restore()
-
-  frame.ctx.save()
-  frame.ctx.strokeStyle = 'rgba(255, 255, 255, 0.86)'
-  frame.ctx.lineWidth = Math.max(2, 3 * frame.scale)
-  frame.ctx.beginPath()
-  frame.ctx.arc(frame.centerX, frame.centerY, coreRadius * 0.45, -Math.PI * 0.72, Math.PI * 0.72)
-  frame.ctx.stroke()
-  frame.ctx.restore()
+  drawOrbitMark(frame, coreRadius)
 }
 
 function draw(time: number) {
