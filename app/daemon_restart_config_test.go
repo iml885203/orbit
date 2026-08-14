@@ -17,32 +17,32 @@ func TestRejectRestartAcrossEnvironments(t *testing.T) {
 	requested := filepath.Join(dir, "e2e.yaml")
 
 	for _, tc := range []struct {
-		name        string
-		running     string
-		requested   string
-		contextKind string
-		wantErr     bool
+		name           string
+		running        string
+		requested      string
+		explicitConfig bool
+		wantErr        bool
 	}{
 		{
-			name:      "explicit flag naming another environment is refused",
-			running:   running, requested: requested, contextKind: "explicit",
+			name:    "explicit flag naming another environment is refused",
+			running: running, requested: requested, explicitConfig: true,
 			wantErr: true,
 		},
 		{
-			name:      "explicit flag naming the running environment proceeds",
-			running:   running, requested: running, contextKind: "explicit",
+			name:    "explicit flag naming the running environment proceeds",
+			running: running, requested: running, explicitConfig: true,
 		},
 		{
-			name:      "a resolved default is not a request",
-			running:   running, requested: requested, contextKind: "",
+			name:    "a resolved default is not a request",
+			running: running, requested: requested, explicitConfig: false,
 		},
 		{
-			name:      "nothing running yet",
-			running:   "", requested: requested, contextKind: "explicit",
+			name:    "nothing running yet",
+			running: "", requested: requested, explicitConfig: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := rejectRestartAcrossEnvironments(tc.running, tc.requested, tc.contextKind)
+			err := rejectRestartAcrossEnvironments(tc.running, tc.requested, tc.explicitConfig)
 			if tc.wantErr != (err != nil) {
 				t.Fatalf("err = %v, want error = %v", err, tc.wantErr)
 			}

@@ -51,7 +51,11 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 	if daemonRestartDelay > 0 {
 		time.Sleep(daemonRestartDelay)
 	}
-	result, err := restartDaemonPreservingResources(configFile, daemonRestartProgress())
+	// Read the flag directly rather than configContextKind: restart sets that
+	// from the running daemon partway through, so by the time the guard runs
+	// it no longer says whether the caller typed --config.
+	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+	result, err := restartDaemonPreservingResourcesWithIntent(configFile, explicitConfig, daemonRestartProgress())
 	if err != nil {
 		return err
 	}
@@ -102,8 +106,8 @@ type daemonRestartResult struct {
 // while restarting the old environment leaves them hunting for why their file
 // was ignored. Only an explicit flag triggers this: a resolved default is not
 // a request.
-func rejectRestartAcrossEnvironments(runningConfig, requestedConfig, contextKind string) error {
-	if contextKind != "explicit" || runningConfig == "" || requestedConfig == "" {
+func rejectRestartAcrossEnvironments(runningConfig, requestedConfig string, explicitConfig bool) error {
+	if !explicitConfig || runningConfig == "" || requestedConfig == "" {
 		return nil
 	}
 	if sameFilePath(runningConfig, requestedConfig) {
@@ -114,7 +118,13 @@ func rejectRestartAcrossEnvironments(runningConfig, requestedConfig, contextKind
 		runningConfig, requestedConfig, requestedConfig)
 }
 
+// restartDaemonPreservingResources restarts on whatever environment is
+// running, which is what every caller except `daemon restart` itself wants.
 func restartDaemonPreservingResources(configPath string, report func(string)) (daemonRestartResult, error) {
+	return restartDaemonPreservingResourcesWithIntent(configPath, false, report)
+}
+
+func restartDaemonPreservingResourcesWithIntent(configPath string, explicitConfig bool, report func(string)) (daemonRestartResult, error) {
 	previousPID, alive := daemon.IsDaemonRunning()
 	contextKind := environmentContextKind(configPath)
 	result := daemonRestartResult{
@@ -139,7 +149,7 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 		// ignored — the running config, the daemon's own status and the
 		// instance manifest then disagree, with no command that changes any
 		// of them.
-		if err := rejectRestartAcrossEnvironments(status.Context.ConfigPath, configPath, configContextKind); err != nil {
+		if err := rejectRestartAcrossEnvironments(status.Context.ConfigPath, configPath, explicitConfig); err != nil {
 			return result, err
 		}
 		contextKind = status.Context.Kind
