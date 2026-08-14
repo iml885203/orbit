@@ -44,15 +44,23 @@ test('switches between distinct light and dark themes', async ({ page }) => {
   await page.goto('./')
 
   const appearance = page.locator('.VPSwitchAppearance').first()
-  await expect(appearance).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
   const lightBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
 
   await appearance.click()
-  await expect(appearance).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('html')).toHaveClass(/dark/)
   const darkBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
 
   expect(lightBackground.trim()).toBe('#ffffff')
   expect(darkBackground.trim()).toBe('#0d1117')
+})
+
+test('uses dark mode on the first visit', async ({ page }) => {
+  await page.goto('./')
+
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  const background = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
+  expect(background.trim()).toBe('#0d1117')
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

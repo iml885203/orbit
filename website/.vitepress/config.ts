@@ -89,6 +89,7 @@ export default defineConfig({
   description: 'Agent-native orchestration for local development.',
   lang: 'en-US',
   base: siteBase,
+  appearance: 'dark',
   cleanUrls: true,
   lastUpdated: true,
   markdown: {
