@@ -85,7 +85,15 @@ func List(baseHome string) ([]Summary, error) {
 			continue
 		}
 		runtime, _ := Resolve(baseHome, entry.Name())
-		manifest, _ := ReadManifest(baseHome, entry.Name())
+		manifest, manifestErr := ReadManifest(baseHome, entry.Name())
+		// A directory with no manifest is a leftover, not an instance:
+		// `clean` reads the manifest first and reports "does not exist",
+		// so listing it offers a name no command can act on. Skipping
+		// keeps both surfaces on one definition of existing, and drains
+		// the residue an interrupted clean already left behind.
+		if manifestErr != nil {
+			continue
+		}
 		pid, dashboardPort := readOwnership(runtime.Home)
 		state := "stopped"
 		if platform.IsProcessAlive(pid) {
@@ -103,6 +111,26 @@ func List(baseHome string) ([]Summary, error) {
 	}
 	sort.Slice(instances, func(i, j int) bool { return instances[i].Name < instances[j].Name })
 	return instances, nil
+}
+
+// RemoveResidue deletes an instance home that has no manifest — the state an
+// interrupted clean leaves behind. Reports whether anything was there, so the
+// caller can tell "finished a half-done clean" from "never existed".
+func RemoveResidue(baseHome, name string) (bool, error) {
+	runtime, err := Resolve(baseHome, name)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(runtime.Home); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := os.RemoveAll(runtime.Home); err != nil {
+		return false, fmt.Errorf("removing instance residue: %w", err)
+	}
+	return true, nil
 }
 
 func RemoveHome(baseHome, name string) error {

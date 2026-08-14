@@ -108,6 +108,16 @@ func runInstanceClean(_ *cobra.Command, args []string) error {
 	manifest, err := instance.ReadManifest(baseHome, name)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// No manifest but a directory still there: an earlier clean died
+			// between emptying the home and removing it. Finish that rather
+			// than reporting the instance missing — the caller asked for it
+			// gone, and "does not exist" alongside a directory only orbit can
+			// see leaves them with no command that works.
+			if removed, rmErr := instance.RemoveResidue(baseHome, name); rmErr != nil {
+				return rmErr
+			} else if removed {
+				return reportInstanceCleaned(name)
+			}
 			return cli.NewInvalidArgumentError(fmt.Sprintf("instance %q does not exist", name))
 		}
 		return err
@@ -134,6 +144,10 @@ func runInstanceClean(_ *cobra.Command, args []string) error {
 	if err := instance.RemoveHome(baseHome, name); err != nil {
 		return fmt.Errorf("removing instance state: %w", err)
 	}
+	return reportInstanceCleaned(name)
+}
+
+func reportInstanceCleaned(name string) error {
 	if cli.JSONOutput {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{"instance": name, "removed": true}, nil)
 	}
