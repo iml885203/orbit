@@ -51,7 +51,11 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 	if daemonRestartDelay > 0 {
 		time.Sleep(daemonRestartDelay)
 	}
-	result, err := restartDaemonPreservingResources(configFile, daemonRestartProgress())
+	// Read the flag directly rather than configContextKind: restart sets that
+	// from the running daemon partway through, so by the time the guard runs
+	// it no longer says whether the caller typed --config.
+	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+	result, err := restartDaemonPreservingResourcesWithIntent(configFile, explicitConfig, daemonRestartProgress())
 	if err != nil {
 		return err
 	}
@@ -95,7 +99,32 @@ type daemonRestartResult struct {
 	ConfigPath        string
 }
 
+// rejectRestartAcrossEnvironments stops a restart that would silently ignore
+// an explicit --config. Restart's job is to bring the daemon back on the
+// environment it already serves, so the running config normally wins — but a
+// caller who typed --config asked for a different one, and reporting success
+// while restarting the old environment leaves them hunting for why their file
+// was ignored. Only an explicit flag triggers this: a resolved default is not
+// a request.
+func rejectRestartAcrossEnvironments(runningConfig, requestedConfig string, explicitConfig bool) error {
+	if !explicitConfig || runningConfig == "" || requestedConfig == "" {
+		return nil
+	}
+	if sameFilePath(runningConfig, requestedConfig) {
+		return nil
+	}
+	return fmt.Errorf(
+		"daemon is serving %s; restart keeps that environment.\nTo run %s instead: orbit down, then orbit up -c %s",
+		runningConfig, requestedConfig, requestedConfig)
+}
+
+// restartDaemonPreservingResources restarts on whatever environment is
+// running, which is what every caller except `daemon restart` itself wants.
 func restartDaemonPreservingResources(configPath string, report func(string)) (daemonRestartResult, error) {
+	return restartDaemonPreservingResourcesWithIntent(configPath, false, report)
+}
+
+func restartDaemonPreservingResourcesWithIntent(configPath string, explicitConfig bool, report func(string)) (daemonRestartResult, error) {
 	previousPID, alive := daemon.IsDaemonRunning()
 	contextKind := environmentContextKind(configPath)
 	result := daemonRestartResult{
@@ -112,6 +141,17 @@ func restartDaemonPreservingResources(configPath string, report func(string)) (d
 			return result, fmt.Errorf("checking the running environment before restart: %w", err)
 		}
 		result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
+		// Restart exists to bring the daemon back on the environment it is
+		// already serving, so the running config wins over whatever this
+		// invocation resolved. But a caller who typed --config asked for a
+		// different one, and silently restarting the old environment while
+		// reporting success sends them looking for why their file was
+		// ignored — the running config, the daemon's own status and the
+		// instance manifest then disagree, with no command that changes any
+		// of them.
+		if err := rejectRestartAcrossEnvironments(status.Context.ConfigPath, configPath, explicitConfig); err != nil {
+			return result, err
+		}
 		contextKind = status.Context.Kind
 		configPath = status.Context.ConfigPath
 		result.ConfigPath = configPath
@@ -246,7 +286,18 @@ func runDaemonStatus(_ *cobra.Command, _ []string) error {
 			out.OnDiskPath = v.OnDiskPath
 			out.UpdateAvailable = v.UpdateAvailable
 		}
-		out.ConfigPath = resolveConfigFile()
+		// Ask the running daemon which environment it is serving rather than
+		// resolving one locally: this branch already knows it is alive, and a
+		// locally derived path answers "what would I start" when the question
+		// was "what is running". Those differ whenever the daemon was started
+		// from another directory or with an explicit --config, and reporting
+		// the wrong one here is how `daemon status`, `status` and
+		// `instance list` came to give three answers for one environment.
+		if status, err := client.Status(); err == nil && status.Context.ConfigPath != "" {
+			out.ConfigPath = status.Context.ConfigPath
+		} else {
+			out.ConfigPath = resolveConfigFile()
+		}
 		out.Dashboard = fmt.Sprintf("http://localhost:%d", daemon.DashboardPort())
 	}
 
