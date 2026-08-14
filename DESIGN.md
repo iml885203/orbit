@@ -75,7 +75,7 @@ The foundation is still a dense, developer-focused orchestration dashboard. It m
 
 Use the luminous layer to carry operational meaning. Glow, pulse, flowing dots, orbital motion, and sci-fi energy treatment are welcome when they reveal live state, dependency movement, build progress, or failure. They are not generic decoration.
 
-Do not interpret "celestial" literally. Do not add planets, stars, galaxies, rockets, astronauts, space wallpaper, or illustrative cosmic scenes to the product UI. The metaphor should appear as precise system behavior: paths, flow, pulse, scan, selection, state, and topology.
+The operational dashboard does not interpret "celestial" literally: do not add planets, stars, galaxies, rockets, astronauts, or space wallpaper to product surfaces. The public marketing site may use an abstract orbital field, gradients, and restrained star-like particles to establish the Orbit brand before the copy explains the product. Keep that artwork outside the dashboard and ensure it remains performant, accessible, and subordinate to the hero text and actions.
 
 Orbit is a Mystery House project: personal, agent-built, idiosyncratic, and fun. It may have taste. It should not feel committee-designed. The design goal is a precise engineering instrument with a bit of living machinery inside it.
 
@@ -96,7 +96,7 @@ The canonical runtime tokens live in `ui/src/app.css`. Keep new UI aligned with 
 
 The luminous palette is built from these same tokens. Blue is the primary signal/flow color. Green, yellow, and red are reserved for state. Purple and teal identify service kind. Do not introduce unrelated neon palettes.
 
-Avoid one-off decorative palettes, large marketing gradients, bokeh/orb wallpaper, and color treatments that compete with service state. If something glows, it should be because something is alive, flowing, selected, building, complete, or broken.
+In the operational UI, avoid one-off decorative palettes, large marketing gradients, bokeh/orb wallpaper, and color treatments that compete with service state. The marketing hero is the narrow exception: it may use Orbit's existing blue and purple palette decoratively, but must not introduce colors that imply a false runtime state. If something glows inside the dashboard, it should be because something is alive, flowing, selected, building, complete, or broken.
 
 ## Typography
 

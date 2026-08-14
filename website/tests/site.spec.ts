@@ -6,7 +6,9 @@ test('keeps the primary action visible on a short phone', async ({ page }) => {
 
   const primaryAction = page.getByRole('link', { name: 'Try with your agent', exact: true }).first()
   const actionBox = await primaryAction.boundingBox()
+  const orbitBox = await page.locator('.hero-orbit canvas').boundingBox()
   expect(actionBox && actionBox.y + actionBox.height).toBeLessThanOrEqual(568)
+  expect(orbitBox && orbitBox.width > 0 && orbitBox.height > 0).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
@@ -61,6 +63,24 @@ test('uses dark mode on the first visit', async ({ page }) => {
   await expect(page.locator('html')).toHaveClass(/dark/)
   const background = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
   expect(background.trim()).toBe('#0d1117')
+})
+
+test('renders a bounded animated hero and respects reduced motion', async ({ page }) => {
+  await page.goto('./')
+  const hero = page.locator('.hero-orbit')
+  const canvas = hero.locator('canvas')
+  await expect(hero).toHaveAttribute('data-motion', 'running')
+  const dimensions = await canvas.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    return { cssWidth: bounds.width, cssHeight: bounds.height, width: element.width, height: element.height }
+  })
+  expect(dimensions.width).toBeGreaterThanOrEqual(dimensions.cssWidth)
+  expect(dimensions.width).toBeLessThanOrEqual(dimensions.cssWidth * 2 + 1)
+  expect(dimensions.height).toBeGreaterThanOrEqual(dimensions.cssHeight)
+  expect(dimensions.height).toBeLessThanOrEqual(dimensions.cssHeight * 2 + 1)
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(hero).toHaveAttribute('data-motion', 'reduced')
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

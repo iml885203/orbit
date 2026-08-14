@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
+import HeroOrbit from './HeroOrbit.vue'
 import './orbit.css'
 
 function addMobileNavigationEscape() {
@@ -39,7 +40,9 @@ export default {
       })
       onUnmounted(() => cleanup?.())
       onUnmounted(() => stopWatching?.())
-      return () => h(DefaultTheme.Layout)
+      return () => h(DefaultTheme.Layout, null, {
+        'home-hero-image': () => h(HeroOrbit),
+      })
     },
   }),
 }
