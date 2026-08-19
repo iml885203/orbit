@@ -663,7 +663,7 @@ Resource names, --infra, and --group are separate selection modes and cannot be 
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "start only infrastructure containers")
-	cmd.Flags().DurationVar(&timeout, "timeout", 0, "exit after duration (e.g. 60s)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for resources to settle (default 5m)")
 	cmd.Flags().BoolVarP(&projectContextYes, "yes", "y", false, "confirm stopping resources from another context")
 	return cmd
 }
@@ -698,7 +698,7 @@ func restartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runRestart,
 	}
-	cmd.Flags().DurationVar(&timeout, "timeout", 0, "exit after duration (e.g. 60s)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for resources to settle (default 5m)")
 	return cmd
 }
 

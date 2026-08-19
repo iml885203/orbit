@@ -484,7 +484,9 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 	if len(names) == 0 {
 		return client.Status()
 	}
-	deadline := time.After(effectiveTimeout(timeout))
+	budget := effectiveTimeout(timeout)
+	started := time.Now()
+	deadline := time.After(budget)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
@@ -497,7 +499,8 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 	for {
 		select {
 		case <-deadline:
-			return last, cli.NewTimeoutError(fmt.Sprintf("timeout waiting for resources to become %s", wantState))
+			return last, newWaitTimeoutError(
+				fmt.Sprintf("resources to become %s", wantState), timeout, budget, time.Since(started))
 		case <-ticker.C:
 			status, err := client.Status()
 			if err != nil {
@@ -545,14 +548,17 @@ func lifecycleStopFailedError(status *daemon.StatusResponse, names []string, pre
 }
 
 func waitForLifecycleRestartObserved(client *daemon.Client, name string, priorRestartCount *int) (*daemon.StatusResponse, error) {
-	deadline := time.After(effectiveTimeout(timeout))
+	budget := effectiveTimeout(timeout)
+	started := time.Now()
+	deadline := time.After(budget)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
 	for {
 		select {
 		case <-deadline:
-			return last, cli.NewTimeoutError(fmt.Sprintf("timeout waiting for %s restart to begin", name))
+			return last, newWaitTimeoutError(
+				fmt.Sprintf("%s restart to begin", name), timeout, budget, time.Since(started))
 		case <-ticker.C:
 			status, err := client.Status()
 			if err != nil {

@@ -45,6 +45,12 @@ func buildUpFailureJSONData(names []string, status *daemon.StatusResponse, logTa
 		if reason == "" && svc.HealthProgress != nil {
 			reason = svc.HealthProgress.LastErr
 		}
+		// A pending resource has no reason of its own — it never started. Left
+		// empty it is indistinguishable from one that started and failed
+		// silently, so name what it is waiting on.
+		if reason == "" && svc.State == "pending" && len(svc.PendingDependencies) > 0 {
+			reason = "waiting for " + strings.Join(svc.PendingDependencies, ", ")
+		}
 		data.FailedResources = append(data.FailedResources, upFailedResource{
 			Name:        svc.Name,
 			State:       svc.State,
