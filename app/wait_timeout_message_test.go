@@ -44,6 +44,19 @@ func TestWaitTimeoutMessageNamesBudgetAndElapsed(t *testing.T) {
 		}
 	})
 
+	// The deadline fires a moment after the budget expires, so waited always
+	// exceeds it by a sliver. Keying the clock-start note on the raw value
+	// explains a discrepancy between two numbers that both print as "25s" —
+	// a contradiction the reader cannot see, in the case (budget used exactly)
+	// where there is nothing to explain.
+	t.Run("no clock-start note when elapsed and budget display the same", func(t *testing.T) {
+		err := newWaitTimeoutError("resources to become healthy",
+			25*time.Second, 25*time.Second, 25*time.Second+3*time.Millisecond)
+		if strings.Contains(err.Error(), "covers only the wait") {
+			t.Errorf("message = %q, want no clock-start note when both read 25s", err)
+		}
+	})
+
 	// `--timeout 5m` produces a budget identical to the default, so a message
 	// that infers provenance from the value tells the user to raise a flag
 	// they just set — the same "recommend what was already done" failure this
