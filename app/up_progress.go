@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 )
 
@@ -52,6 +53,44 @@ func effectiveTimeout(d time.Duration) time.Duration {
 		return defaultWaitTimeout
 	}
 	return d
+}
+
+// newWaitTimeoutError reports which budget ran out, not just that one did.
+//
+// Orbit enforces two independent budgets and neither knows about the other:
+// this one bounds how long the CLI waits, while a service's own
+// health_check.retries bounds how many times the daemon probes it. Whichever
+// expires first ends the wait. A user who raises retries and still times out
+// here has no way to tell from "timeout waiting for resources to become
+// healthy" that they raised a budget that was never the one being spent.
+//
+// waited is reported alongside the budget because the two do not match: the
+// clock starts when the wait loop does, so daemon startup and environment
+// convergence land outside it. Printing only the budget invites the reader to
+// check it against a wall-clock duration that was always going to be larger.
+// requested is the caller's raw --timeout value before the fallback, so
+// attribution survives `--timeout 5m`: that budget is indistinguishable from
+// the default by value, and telling someone who set it to "raise it with
+// --timeout" names a step they have already taken.
+func newWaitTimeoutError(what string, requested, budget, waited time.Duration) error {
+	source := "--timeout"
+	remedy := "Raise --timeout, or check whether the service is stuck rather than slow."
+	if requested <= 0 {
+		source = "the default"
+		remedy = "Raise it with --timeout."
+	}
+	// waited exceeds budget whenever startup and convergence ran before the
+	// loop. Saying so keeps the larger number from reading as a bug.
+	elapsedNote := ""
+	if waited > budget {
+		elapsedNote = " The budget covers only the wait, which starts after the daemon is up and the environment has converged."
+	}
+	return cli.NewTimeoutError(fmt.Sprintf(
+		"timeout waiting for %s — waited %s against a %s budget from %s.%s "+
+			"This is the CLI's wait budget, separate from each service's "+
+			"health_check.retries; whichever expires first ends the wait. %s",
+		what, waited.Round(time.Second), budget, source, elapsedNote, remedy,
+	))
 }
 
 // heartbeatable lists states where silence likely means "still working,"

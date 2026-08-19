@@ -251,7 +251,7 @@ func validateUpResourceNames(client *daemon.Client, names []string) error {
 func pollLoop(
 	client *daemon.Client,
 	timeoutDur time.Duration,
-	timeoutErr error,
+	waitingFor string,
 	onTick func(t time.Time, status *daemon.StatusResponse) (done bool, err error),
 ) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -271,7 +271,9 @@ func pollLoop(
 	const pollInterval = 2 * time.Second
 	frame := time.NewTicker(frameInterval)
 	defer frame.Stop()
-	deadline := time.After(effectiveTimeout(timeoutDur))
+	budget := effectiveTimeout(timeoutDur)
+	started := time.Now()
+	deadline := time.After(budget)
 
 	var lastPoll time.Time
 	var status *daemon.StatusResponse
@@ -283,7 +285,7 @@ func pollLoop(
 			_, _ = cli.Faint.Println("Detached. Daemon is still running — use 'orbit status' to check progress.")
 			return nil
 		case <-deadline:
-			return timeoutErr
+			return newWaitTimeoutError(waitingFor, timeoutDur, budget, time.Since(started))
 		case t := <-frame.C:
 			// Poll only every pollInterval; the frame ticker still fires
 			// every 100ms so the caller can animate (spinner, seconds).
@@ -330,8 +332,10 @@ type waitOptions struct {
 	// finished, by inspecting the current snapshots and done map. It may
 	// also fail the wait with an error.
 	onTick func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error)
-	// timeoutErr is returned when the overall deadline expires.
-	timeoutErr error
+	// waitingFor names what the wait was for, e.g. "resources to become
+	// healthy". It is rendered into the timeout message alongside the
+	// budget, which is only known once the deadline actually fires.
+	waitingFor string
 }
 
 // runProgressWait is the shared driver behind every waitFor* function. It
@@ -350,7 +354,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 	done := make(map[string]bool)
 	frame := 0
 
-	err := pollLoop(client, timeout, opts.timeoutErr,
+	err := pollLoop(client, timeout, opts.waitingFor,
 		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
 			frame++
 			watched := make([]daemon.ResourceStatus, 0, len(status.Resources))
@@ -436,7 +440,7 @@ func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMe
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		timeoutErr: cli.NewTimeoutError("timeout waiting for resources to become healthy"),
+		waitingFor: "resources to become healthy",
 		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			for name := range watch {
@@ -482,7 +486,7 @@ func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error 
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
-		timeoutErr: cli.NewTimeoutError("timeout waiting for requested resources to become healthy"),
+		waitingFor: "requested resources to become healthy",
 		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
 			announceRecovering(snapshots, announced)
 			for name := range watch {
@@ -549,7 +553,7 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 			}
 			return e.kind == eventTransition && e.to == "stopped"
 		},
-		timeoutErr: cli.NewTimeoutError("timeout waiting for resources to stop"),
+		waitingFor: "resources to stop",
 		onTick: func(_ map[string]progressSnapshot, done map[string]bool, _ *daemon.StatusResponse) (bool, error) {
 			if len(done) == len(watch) {
 				if len(stopFailed) > 0 {
