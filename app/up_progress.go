@@ -79,17 +79,20 @@ func newWaitTimeoutError(what string, requested, budget, waited time.Duration) e
 		source = "the default"
 		remedy = "Raise it with --timeout."
 	}
-	// waited exceeds budget whenever startup and convergence ran before the
-	// loop. Saying so keeps the larger number from reading as a bug.
+	// waited always exceeds budget slightly — the deadline fires a moment
+	// after it expires — so the note is keyed on the rounded value the reader
+	// actually sees. Explaining a discrepancy between two numbers that both
+	// print as "25s" describes a contradiction that is not on screen.
+	shown := waited.Round(time.Second)
 	elapsedNote := ""
-	if waited > budget {
+	if shown > budget {
 		elapsedNote = " The budget covers only the wait, which starts after the daemon is up and the environment has converged."
 	}
 	return cli.NewTimeoutError(fmt.Sprintf(
 		"timeout waiting for %s — waited %s against a %s budget from %s.%s "+
 			"This is the CLI's wait budget, separate from each service's "+
 			"health_check.retries; whichever expires first ends the wait. %s",
-		what, waited.Round(time.Second), budget, source, elapsedNote, remedy,
+		what, shown, budget, source, elapsedNote, remedy,
 	))
 }
 
