@@ -496,17 +496,28 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 	// began (stops normally). Only pure stop waits fail fast; restart's
 	// stop phase (pastState != nil) re-enters pending even on stop errors.
 	prevStates := map[string]string{}
+	// Progress snapshots exist only to drive heartbeats on stderr; the wait's
+	// own decisions read status directly.
+	snapshots := map[string]progressSnapshot{}
+	watch := watchSet(names)
 	for {
 		select {
 		case <-deadline:
 			return last, newWaitTimeoutError(
 				fmt.Sprintf("resources to become %s", wantState), timeout, budget, time.Since(started))
-		case <-ticker.C:
+		case now := <-ticker.C:
 			status, err := client.Status()
 			if err != nil {
 				return last, err
 			}
 			last = status
+			watched := make([]daemon.ResourceStatus, 0, len(status.Resources))
+			for i := range status.Resources {
+				if watch[status.Resources[i].Name] {
+					watched = append(watched, status.Resources[i])
+				}
+			}
+			snapshots = emitJSONHeartbeats(snapshots, nextSnapshots(snapshots, watched, now), now)
 			if wantState == "healthy" {
 				if err := lifecycleTerminalError(client, status, names, failStopped); err != nil {
 					return last, err
