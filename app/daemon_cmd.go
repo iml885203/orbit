@@ -212,9 +212,9 @@ func launchDashboardRestart(configPath, contextKind string) error {
 	if err != nil {
 		return fmt.Errorf("finding orbit executable: %w", err)
 	}
-	logFile, err := os.OpenFile(daemon.DefaultLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := daemon.OpenDaemonLog()
 	if err != nil {
-		return fmt.Errorf("opening daemon log: %w", err)
+		return err
 	}
 	defer func() { _ = logFile.Close() }()
 
@@ -431,9 +431,9 @@ func buildDaemonJSONData(opts daemonJSONOptions) daemonJSONData {
 }
 
 func runDaemon(_ *cobra.Command, _ []string) error {
-	logFile, err := daemon.RedirectLogToFile()
+	logFile, err := daemon.OpenDaemonLog()
 	if err != nil {
-		return fmt.Errorf("opening daemon log: %w", err)
+		return err
 	}
 	log.SetOutput(logFile)
 	logging.SetupDefault(logFile, "ORBIT_LOG_LEVEL")

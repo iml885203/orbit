@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/atomicio"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/instance"
 	"github.com/iml885203/orbit/platform"
@@ -150,7 +151,7 @@ func WritePID() error {
 	if err != nil {
 		return fmt.Errorf("encoding daemon ownership: %w", err)
 	}
-	return os.WriteFile(path, append(data, '\n'), 0644)
+	return atomicio.WriteFile(path, append(data, '\n'), 0644)
 }
 
 // ReadPID reads the PID from the PID file. Returns 0 if not found.
@@ -360,9 +361,9 @@ func StartDaemonWithContext(configPath string, features []string, contextKind st
 		args = append(args, "--feature", f)
 	}
 
-	logFile, err := os.OpenFile(DefaultLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := OpenDaemonLog()
 	if err != nil {
-		return 0, fmt.Errorf("opening daemon log: %w", err)
+		return 0, err
 	}
 
 	cmd := exec.Command(exe, args...)
@@ -480,12 +481,16 @@ func Cleanup() {
 	RemovePID()
 }
 
-// RedirectLogToFile redirects the standard log output to the daemon log file.
-func RedirectLogToFile() (*os.File, error) {
-	logPath := DefaultLogPath()
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
+// OpenDaemonLog opens the daemon log for appending, creating the home
+// directory if it does not exist yet. Opening a file does not create its
+// parent, and every caller here reached for the same two steps.
+func OpenDaemonLog() (*os.File, error) {
+	if _, err := EnsureOrbitDir(); err != nil {
 		return nil, err
+	}
+	f, err := os.OpenFile(DefaultLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("opening daemon log: %w", err)
 	}
 	return f, nil
 }

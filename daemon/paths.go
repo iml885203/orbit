@@ -7,12 +7,14 @@ import (
 	"runtime"
 )
 
-// OrbitDir returns the orbit data directory, creating it if necessary.
+// OrbitDir reports the orbit data directory without creating it: every command
+// resolves this path, so creating it here made merely naming an instance bring
+// it into being. Writers create what they need.
+//
 // ORBIT_HOME overrides the default location (useful for isolated e2e tests).
 // Unix: ~/.orbit, Windows: %LOCALAPPDATA%\orbit (falls back to %APPDATA%\orbit).
 func OrbitDir() string {
 	if override := os.Getenv("ORBIT_HOME"); override != "" {
-		_ = os.MkdirAll(override, 0755)
 		return override
 	}
 	home, _ := os.UserHomeDir()
@@ -23,8 +25,18 @@ func OrbitDir() string {
 		dir = filepath.Join(localApp, "orbit")
 	}
 
-	_ = os.MkdirAll(dir, 0755)
 	return dir
+}
+
+// EnsureOrbitDir creates Orbit's home directory and returns it. Writers call
+// it because opening or binding does not create a parent, and the home may not
+// exist yet — OrbitDir deliberately no longer creates one.
+func EnsureOrbitDir() (string, error) {
+	dir := OrbitDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating %s: %w", dir, err)
+	}
+	return dir, nil
 }
 
 // DefaultSocketPath returns ~/.orbit/orbit.sock.

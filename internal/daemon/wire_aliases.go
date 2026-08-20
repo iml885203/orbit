@@ -65,6 +65,7 @@ var (
 	writeJSON                   = pub.WriteJSON
 	requireMethod               = pub.RequireMethod
 	OrbitDir                    = pub.OrbitDir
+	EnsureOrbitDir              = pub.EnsureOrbitDir
 	LoadSettings                = pub.LoadSettings
 	DefaultSettingsPath         = pub.DefaultSettingsPath
 	SocketHTTPClient            = pub.SocketHTTPClient
@@ -80,7 +81,7 @@ var (
 	RemovePID                   = pub.RemovePID
 	ReadPID                     = pub.ReadPID
 	IsProcessAlive              = pub.IsProcessAlive
-	RedirectLogToFile           = pub.RedirectLogToFile
+	OpenDaemonLog               = pub.OpenDaemonLog
 	SocketPath                  = pub.SocketPath
 	ListenDashboard             = pub.ListenDashboard
 	DefaultPIDPath              = pub.DefaultPIDPath

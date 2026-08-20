@@ -68,9 +68,6 @@ func Activate(name string) (Runtime, error) {
 	if err != nil {
 		return Runtime{}, err
 	}
-	if err := os.MkdirAll(runtime.Home, 0o755); err != nil {
-		return Runtime{}, fmt.Errorf("creating instance home: %w", err)
-	}
 	for key, value := range map[string]string{
 		EnvName:           runtime.Name,
 		EnvBaseHome:       base,

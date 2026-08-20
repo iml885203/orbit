@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/atomicio"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
@@ -295,7 +296,7 @@ func buildEnvListJSONData(selection environmentSelection) envListJSONData {
 }
 
 func writeCurrentEnv(absPath string) error {
-	return os.WriteFile(daemonsrv.CurrentEnvPath(), []byte(absPath+"\n"), 0644)
+	return atomicio.WriteFile(daemonsrv.CurrentEnvPath(), []byte(absPath+"\n"), 0644)
 }
 
 func readCurrentEnv() string {
