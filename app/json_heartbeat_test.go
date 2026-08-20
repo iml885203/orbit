@@ -39,12 +39,48 @@ func TestJSONHeartbeatAccounting(t *testing.T) {
 	}
 }
 
-// Only long-running states earn a heartbeat. A resource that is briefly
-// starting, or already healthy, must not produce output — the value of the
-// line is that it means "still working".
+// A service waiting on its health check reports "starting" for as long as its
+// retries allow. Treating that window as too short to report left a local run
+// silent for 75s with the service alive and failing its probe — the shape a
+// caller reads as a hang.
+func TestJSONHeartbeatCoversAServiceStuckStarting(t *testing.T) {
+	now := time.Now()
+	starting := []daemon.ResourceStatus{{Name: "api", State: "starting"}}
+
+	snaps := nextSnapshots(map[string]progressSnapshot{}, starting, now)
+	due := now.Add(heartbeatInterval + time.Second)
+	snaps = emitJSONHeartbeats(snaps, nextSnapshots(snaps, starting, due), due)
+
+	if snaps["api"].lastHeartbeat.IsZero() {
+		t.Error("no heartbeat for a service still starting after a full interval")
+	}
+}
+
+// The point of covering "starting" is the stuck case, not the ordinary one. A
+// service that comes up promptly must not gain a line, or the heartbeat stops
+// meaning anything.
+func TestJSONHeartbeatSilentForAPromptStart(t *testing.T) {
+	now := time.Now()
+	starting := []daemon.ResourceStatus{{Name: "api", State: "starting"}}
+	snaps := nextSnapshots(map[string]progressSnapshot{}, starting, now)
+
+	// Healthy well inside one interval, as a normal start is.
+	soon := now.Add(heartbeatInterval / 3)
+	healthy := []daemon.ResourceStatus{{Name: "api", State: "healthy"}}
+	snaps = emitJSONHeartbeats(snaps, nextSnapshots(snaps, healthy, soon), soon)
+
+	if !snaps["api"].lastHeartbeat.IsZero() {
+		t.Error("a prompt start produced a heartbeat")
+	}
+}
+
+// Only long-running states earn a heartbeat. A resource that has settled —
+// healthy, degraded — or one whose real signal is its dependency's progress
+// must not produce output; the value of the line is that it means "still
+// working".
 func TestJSONHeartbeatOnlyForLongRunningStates(t *testing.T) {
 	now := time.Now()
-	for _, state := range []string{"starting", "healthy", "pending", "degraded"} {
+	for _, state := range []string{"healthy", "pending", "degraded", "stopped"} {
 		t.Run(state, func(t *testing.T) {
 			rs := []daemon.ResourceStatus{{Name: "api", State: state}}
 			snaps := nextSnapshots(map[string]progressSnapshot{}, rs, now)

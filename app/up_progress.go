@@ -99,11 +99,20 @@ func newWaitTimeoutError(what string, requested, budget, waited time.Duration) e
 }
 
 // heartbeatable lists states where silence likely means "still working,"
-// not "blocked." For "pending" the dep's progress is the better signal;
-// for "starting" the spawn-to-running window is short by design.
+// not "blocked." For "pending" the dep's progress is the better signal.
+//
+// "starting" is here despite covering a window that is usually brief: it runs
+// from spawn until the health check passes, so it also covers every retry of a
+// check that is not passing yet. A service stuck there is silent for as long
+// as its retries allow — measured at 75s in one local run, and bounded only by
+// health_check.retries. Reaching the interval at all means the window was not
+// brief, which is exactly when the reader needs to hear something; a service
+// that starts normally becomes healthy well inside one interval and stays
+// quiet.
 var heartbeatable = map[string]bool{
 	"building":  true,
 	"pre_start": true,
+	"starting":  true,
 	"stopping":  true,
 }
 
