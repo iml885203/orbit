@@ -62,6 +62,25 @@ The full targeting and cleanup model is documented in
 When a converted command fails with `--json`, Orbit prints a single JSON object
 to stdout and exits with code `1`.
 
+## Streams
+
+`stdout` carries the envelope and nothing else. Parse it alone.
+
+`stderr` carries diagnostics and progress for humans, and is not part of the
+contract — its content and wording may change between releases. During a long
+wait, `orbit up --json` writes one progress line per interval there, so a
+resource that stays in a long-running state is visible to a CI log or a person
+watching the run:
+
+```
+⋯ api still starting (30s)
+⋯ api still building (1m0s)
+```
+
+Merging `stderr` into `stdout` before parsing will break: progress lines are
+not JSON. Redirect them separately, or discard `stderr` if only the envelope
+matters.
+
 ## Error Shape
 
 Structured errors use this shape:
