@@ -105,6 +105,26 @@ func TestWritersCreateTheHomeThemselves(t *testing.T) {
 		}
 	})
 
+	t.Run("settings and pid from an uncreated home", func(t *testing.T) {
+		base := t.TempDir()
+		home := filepath.Join(base, "instances", "state-writer")
+		t.Setenv("ORBIT_HOME", home)
+
+		s := LoadSettings(DefaultSettingsPath())
+		s.SetEnvToggle("svc/FLAG", false)
+		if err := s.Save(); err != nil {
+			t.Fatalf("saving settings under a home that does not exist: %v", err)
+		}
+		if err := WritePID(); err != nil {
+			t.Fatalf("writing the pid file under a home that does not exist: %v", err)
+		}
+
+		// Read back through the same path a later command would use.
+		if v, ok := LoadSettings(DefaultSettingsPath()).GetEnvToggles()["svc/FLAG"]; !ok || v {
+			t.Errorf("toggle did not survive the round trip: got %v, present=%v", v, ok)
+		}
+	})
+
 	t.Run("unix socket", func(t *testing.T) {
 		// A short base: the socket path has an OS-imposed byte budget that
 		// t.TempDir's name would blow on its own.

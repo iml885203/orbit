@@ -7,11 +7,9 @@ import (
 	"runtime"
 )
 
-// OrbitDir reports the orbit data directory without creating it. Resolving a
-// path is not a reason to write to disk: creating it here made
-// `--instance <name>` bring a named instance into being merely by being
-// mentioned, since every command resolves this path. Writers create what they
-// need.
+// OrbitDir reports the orbit data directory without creating it: every command
+// resolves this path, so creating it here made merely naming an instance bring
+// it into being. Writers create what they need.
 //
 // ORBIT_HOME overrides the default location (useful for isolated e2e tests).
 // Unix: ~/.orbit, Windows: %LOCALAPPDATA%\orbit (falls back to %APPDATA%\orbit).

@@ -433,7 +433,7 @@ func buildDaemonJSONData(opts daemonJSONOptions) daemonJSONData {
 func runDaemon(_ *cobra.Command, _ []string) error {
 	logFile, err := daemon.OpenDaemonLog()
 	if err != nil {
-		return fmt.Errorf("opening daemon log: %w", err)
+		return err
 	}
 	log.SetOutput(logFile)
 	logging.SetupDefault(logFile, "ORBIT_LOG_LEVEL")

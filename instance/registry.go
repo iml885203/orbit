@@ -135,8 +135,8 @@ func RemoveResidue(baseHome, name string) (bool, error) {
 	return true, nil
 }
 
-// RemoveEmptyHome sweeps the bare directory the daemon `clean` starts leaves
-// behind, after RemoveHome has taken the state. Only an empty
+// RemoveEmptyHome sweeps the bare directory left behind by the daemon that
+// `clean` starts, after RemoveHome has taken the state. Only an empty
 // directory goes: anything with contents belongs to a real instance, or one
 // being created right now, and a clean that already succeeded must not be the
 // thing that deletes it.

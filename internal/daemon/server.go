@@ -138,8 +138,11 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	if err := ValidateSocketPath(sockPath); err != nil {
 		return err
 	}
-	// Binding a unix socket does not create its parent, and the home may not
-	// exist yet on a first run under a named instance.
+	// Binding a unix socket does not create its parent. Today the daemon opens
+	// its log first, which creates the home, so this is a second line of
+	// defence rather than the only one — kept because a bind failure here
+	// surfaces as a bare "invalid argument" that says nothing about a missing
+	// directory.
 	if _, err := EnsureOrbitDir(); err != nil {
 		return err
 	}

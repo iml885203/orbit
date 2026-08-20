@@ -14,10 +14,9 @@ import (
 // same filesystem, which is guaranteed because the temp file is created
 // in path's directory.
 //
-// The directory is created if absent, with the same 0755 the callers that
-// previously created it used. Directory permissions belong to whoever owns
-// the directory, not to whatever file happens to be written into it first —
-// a caller needing a private home creates it itself.
+// The directory is created if absent, at 0755. Its permissions belong to
+// whoever owns it, not to whichever file lands there first, so a caller
+// needing a private directory creates it itself.
 func WriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
