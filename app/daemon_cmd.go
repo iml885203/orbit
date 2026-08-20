@@ -447,6 +447,13 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	slog.Info("starting", "component", "daemon", "pid", os.Getpid(), "config", configFile)
 
 	settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+	// Starting with settings that exist but could not be read would inject a
+	// different environment than the one on disk — toggles read as unset, so
+	// services come up with declared defaults instead of the user's choices.
+	// Refusing is the only option that cannot silently run the wrong thing.
+	if err := settings.LoadError(); err != nil {
+		return fmt.Errorf("reading settings from %s: %w", daemon.DefaultSettingsPath(), err)
+	}
 	settings.ApplyToEnv()
 
 	cfg, err := config.Load(configFile)

@@ -43,6 +43,10 @@ type Settings struct {
 
 	mu   sync.RWMutex
 	path string
+	// loadErr records why the settings on disk could not be read, so callers
+	// that must not treat "unknown" as "unset" can tell the two apart. An
+	// absent file is not an error: that genuinely means no settings.
+	loadErr error
 	// extensionsRaw preserves extension data written by another Orbit version.
 	// Like the rest of the settings snapshot, concurrent external writes remain
 	// last-writer-wins. Guarded by mu.
@@ -82,13 +86,22 @@ func LoadSettings(path string) *Settings {
 	s := emptySettings(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
+		// A missing file is the ordinary first-run case and stays silent. Any
+		// other read failure means settings exist but could not be consulted,
+		// which must not look like "nothing is configured".
+		if !os.IsNotExist(err) {
+			slog.Error("failed to read settings", "component", "settings", "path", path, "err", err)
+			s.loadErr = err
+		}
 		return s
 	}
 
 	var raw settingsOnDisk
 	if err := json.Unmarshal(data, &raw); err != nil {
 		slog.Error("failed to parse settings", "component", "settings", "path", path, "err", err)
-		return emptySettings(path)
+		empty := emptySettings(path)
+		empty.loadErr = err
+		return empty
 	}
 
 	s.WorkspaceRoot = raw.WorkspaceRoot
@@ -122,6 +135,16 @@ func emptySettings(path string) *Settings {
 		EnvToggles: make(map[string]bool),
 		UserEnv:    make(map[string]string),
 	}
+}
+
+// LoadError reports why the settings on disk could not be read, or nil when
+// they were read successfully or genuinely do not exist yet. Callers that act
+// on the absence of a setting should check this first: an empty snapshot from
+// a failed read is indistinguishable from a clean install.
+func (s *Settings) LoadError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.loadErr
 }
 
 // Snapshot returns the same JSON object served by the settings endpoint.
