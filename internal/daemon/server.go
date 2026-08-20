@@ -138,6 +138,11 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	if err := ValidateSocketPath(sockPath); err != nil {
 		return err
 	}
+	// Binding a unix socket does not create its parent, and the home may not
+	// exist yet on a first run under a named instance.
+	if _, err := EnsureOrbitDir(); err != nil {
+		return err
+	}
 
 	_ = os.Remove(sockPath)
 

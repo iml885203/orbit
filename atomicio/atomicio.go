@@ -13,8 +13,16 @@ import (
 // then renames. Rename is atomic on POSIX when source and dest are on the
 // same filesystem, which is guaranteed because the temp file is created
 // in path's directory.
+//
+// The directory is created if absent, with the same 0755 the callers that
+// previously created it used. Directory permissions belong to whoever owns
+// the directory, not to whatever file happens to be written into it first —
+// a caller needing a private home creates it itself.
 func WriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)

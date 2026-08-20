@@ -151,8 +151,8 @@ func runInstanceClean(_ *cobra.Command, args []string) error {
 	return reportInstanceCleaned(name)
 }
 
-// sweepInstanceHome removes the empty directory clean's own Activate created
-// so the daemon could be addressed.
+// sweepInstanceHome removes the empty directory left behind by the daemon that
+// `clean` has to start in order to stop the instance's resources.
 //
 // One pass is not enough. waitForDaemonStop returns when the pid stops being
 // alive, and a daemon can still land a last write after that — so the sweep
