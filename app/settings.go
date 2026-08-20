@@ -156,6 +156,13 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 		}
 	} else {
 		settings := daemon.LoadSettings(daemon.DefaultSettingsPath())
+		// Settings that exist but could not be read must not be reported as an
+		// empty set: a caller deciding whether a toggle is off would read the
+		// same empty map either way, and act on a default that may not be in
+		// force. Failing here is what lets them tell "unset" from "unknown".
+		if err := settings.LoadError(); err != nil {
+			return cli.NewInvalidEnvironmentError(fmt.Sprintf("settings at %s exist but could not be read: %v", daemon.DefaultSettingsPath(), err))
+		}
 		var err error
 		current, err = settings.Snapshot()
 		if err != nil {
