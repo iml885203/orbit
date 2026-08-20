@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/iml885203/orbit/cli"
@@ -169,6 +171,32 @@ func diffProgress(prev, curr map[string]progressSnapshot, now time.Time) []progr
 		}
 	}
 	return events
+}
+
+// emitJSONHeartbeats writes one line per heartbeat to stderr and returns the
+// snapshots with those heartbeats recorded, so the next poll waits a full
+// interval before repeating itself.
+//
+// stdout carries the `orbit.cli.v1` envelope and nothing else, which is why
+// progress goes to stderr: a consumer parsing stdout is unaffected, while one
+// watching the run — a CI log, a person — stops facing an unbroken silence
+// between the call and its result. The wait can run for minutes, and without
+// this there is no way to tell a slow build from a stuck one.
+//
+// Transitions are deliberately not emitted. The envelope already reports the
+// final state of every resource; what it cannot report is that something was
+// still moving while the caller waited.
+func emitJSONHeartbeats(prev, next map[string]progressSnapshot, now time.Time) map[string]progressSnapshot {
+	for _, evt := range diffProgress(prev, next, now) {
+		if evt.kind != eventHeartbeat {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(formatProgressEvent(evt)))
+		snap := next[evt.name]
+		snap.lastHeartbeat = now
+		next[evt.name] = snap
+	}
+	return next
 }
 
 func maxTime(a, b time.Time) time.Time {
