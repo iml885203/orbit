@@ -203,19 +203,34 @@ func TestDiffProgress_LongStillRunningEmitsHeartbeat(t *testing.T) {
 }
 
 func TestDiffProgress_HeartbeatOnlyFiresForLongRunningStates(t *testing.T) {
-	// "starting" is short-lived (process is spawning); we don't heartbeat
-	// it because either it succeeds quickly or fails. "pending" means
-	// blocked on deps — the user wants to know but the dep's progress
-	// is the real signal, not pending's age.
-	prev := map[string]progressSnapshot{
-		"worker": {state: "starting", since: time.Unix(0, 0), firstSeen: time.Unix(0, 0)},
+	// "pending" means blocked on deps — the user wants to know, but the dep's
+	// progress is the real signal, not pending's age. Settled states have
+	// nothing left to report.
+	for _, state := range []string{"pending", "healthy", "degraded", "stopped"} {
+		t.Run(state, func(t *testing.T) {
+			snap := progressSnapshot{state: state, since: time.Unix(0, 0), firstSeen: time.Unix(0, 0)}
+			prev := map[string]progressSnapshot{"worker": snap}
+			curr := map[string]progressSnapshot{"worker": snap}
+			if got := diffProgress(prev, curr, time.Unix(600, 0)); len(got) != 0 {
+				t.Errorf("%s should not heartbeat, got %d events: %+v", state, len(got), got)
+			}
+		})
 	}
-	curr := map[string]progressSnapshot{
-		"worker": {state: "starting", since: time.Unix(0, 0), firstSeen: time.Unix(0, 0)},
-	}
+}
+
+// "starting" used to be excluded on the grounds that it either succeeds
+// quickly or fails. It does neither while a health check is still retrying:
+// the state holds for as long as health_check.retries allows, which a local
+// run held silent for 75s. Reaching the heartbeat interval is itself the
+// evidence that the window was not short.
+func TestDiffProgress_HeartbeatFiresForAStalledStart(t *testing.T) {
+	snap := progressSnapshot{state: "starting", since: time.Unix(0, 0), firstSeen: time.Unix(0, 0)}
+	prev := map[string]progressSnapshot{"worker": snap}
+	curr := map[string]progressSnapshot{"worker": snap}
+
 	got := diffProgress(prev, curr, time.Unix(60, 0))
-	if len(got) != 0 {
-		t.Errorf("starting should not heartbeat, got %d events: %+v", len(got), got)
+	if len(got) != 1 || got[0].kind != eventHeartbeat {
+		t.Fatalf("want one heartbeat for a start stalled 60s, got %+v", got)
 	}
 }
 
