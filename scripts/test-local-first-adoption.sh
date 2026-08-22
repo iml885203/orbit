@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
+port_fixture="$repo_root/scripts/hold-test-ports.py"
 example_config="$repo_root/docs/examples/local-first/orbit.yaml"
 
 for guide in docs/local-first.md docs/local-first.zh-TW.md; do
@@ -66,6 +67,8 @@ local_namespace="local-first-$$"
 shared_namespace="shared-first-$$"
 export ORBIT_HOME="$local_home"
 export ORBIT_NAMESPACE="$local_namespace"
+"$repo_root/scripts/register-journey-namespace.sh" "$local_namespace"
+"$repo_root/scripts/register-journey-namespace.sh" "$shared_namespace"
 export ORBIT_DASHBOARD_PORT="$((24000 + ($$ % 1000)))"
 
 cleanup() {
@@ -202,34 +205,22 @@ assert risks["dependency_readiness_ambiguous"]["severity"] == "medium"
 assert "containers.database.health_check" in risks["dependency_readiness_ambiguous"]["message"]
 PY
 
-python3 -c '
-import pathlib
-import socket
-import sys
-import time
-
-listeners = []
-for port in (26379, 28080):
-    listener = socket.socket()
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        listener.bind(("127.0.0.1", port))
-    except OSError:
-        listener.close()
-    else:
-        listener.listen()
-        listeners.append(listener)
-pathlib.Path(sys.argv[1]).touch()
-time.sleep(600)
-' "$test_root/ports-ready" &
+"$port_fixture" hold "$test_root/ports-ready" "$test_root/ports-error" \
+  26379 28080 &
 port_guard_pid=$!
 
 for _ in $(seq 1 100); do
-  if [ -f "$test_root/ports-ready" ]; then
+  if [ -f "$test_root/ports-ready" ] || [ -f "$test_root/ports-error" ]; then
     break
   fi
   sleep 0.05
 done
+if [ -f "$test_root/ports-error" ]; then
+  cat "$test_root/ports-error" >&2
+  wait "$port_guard_pid" 2>/dev/null || true
+  port_guard_pid=""
+  exit 1
+fi
 if [ ! -f "$test_root/ports-ready" ]; then
   echo "Timed out waiting for occupied-port guard." >&2
   exit 1
@@ -253,13 +244,20 @@ PY
 kill "$port_guard_pid" >/dev/null 2>&1 || true
 wait "$port_guard_pid" 2>/dev/null || true
 port_guard_pid=""
+ports_released=false
 for _ in $(seq 1 100); do
-  if ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 26379), 0.2)' 2>/dev/null &&
-     ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 28080), 0.2)' 2>/dev/null; then
+  if "$port_fixture" check 26379 28080 \
+    2>"$test_root/ports-release-error"; then
+    ports_released=true
     break
   fi
   sleep 0.1
 done
+if [ "$ports_released" != true ]; then
+  echo "Timed out waiting for the local-first fixture ports to be released." >&2
+  cat "$test_root/ports-release-error" >&2
+  exit 1
+fi
 
 "$orbit_bin" doctor --json >"$test_root/doctor.json"
 if ! "$orbit_bin" up --json \

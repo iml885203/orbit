@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs docs-site-dev docs-site-build docs-site-preview docs-site-browser-setup docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs docs-site-dev docs-site-build docs-site-preview docs-site-browser-setup docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -69,26 +69,47 @@ test-e2e: build
 # inner loop: they intentionally use real Git repositories, processes, and
 # Docker to prove the product works beyond package boundaries.
 test-journeys: build
-	$(MAKE) -j2 test-journey-quickstart test-journey-project-context-switch
-	$(MAKE) -j4 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness test-journey-runtime-adoption
+	@set -eu; \
+	instance_base="$$(mktemp -d /tmp/orbit-journeys.XXXXXX)"; \
+	resource_state="$$(mktemp -d /tmp/orbit-journey-resources.XXXXXX)"; \
+	namespace_registry="$$resource_state/namespaces"; \
+	: >"$$namespace_registry"; \
+	cleanup() { \
+		status="$$?"; \
+		cleanup_status=0; \
+		trap - EXIT; \
+		./scripts/clean-journey-docker-resources.sh "$$namespace_registry" || cleanup_status="$$?"; \
+		rm -rf "$$instance_base" "$$resource_state"; \
+		if [ "$$status" -eq 0 ] && [ "$$cleanup_status" -ne 0 ]; then status="$$cleanup_status"; fi; \
+		exit "$$status"; \
+	}; \
+	trap cleanup EXIT; \
+	$(MAKE) test-journey-harness; \
+	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
+		$(MAKE) -j2 test-journey-quickstart test-journey-project-context-switch; \
+	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
+		$(MAKE) -j4 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness test-journey-runtime-adoption
+
+test-journey-harness:
+	./scripts/test-journey-port-reliability.sh
 
 test-journey-quickstart:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-quickstart-journey.sh
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-quickstart-journey.sh
 
 test-journey-local-first-adoption:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-local-first-adoption.sh
 
 test-journey-project-context-switch:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
 
 test-journey-recovery:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency|UpAppliesChangedConfigAndPreservesRunningIntent)$$'
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_(StatusBeforeInitPointsDirectlyToSetup|DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails|ProjectSchemaMigrationDoesNotLoop|LiteralSingleServicePortInjectsPORT|UpdateReconnectsTheRunningEnvironment|StaleDaemonMetadataNeverKillsUnrelatedProcess|UpInfraReconcilesExternalRestart|CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency|UpAppliesChangedConfigAndPreservesRunningIntent)$$'
 
 test-journey-startup-readiness:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh
 
 test-journey-runtime-adoption:
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-runtime-adoption.sh
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-runtime-adoption.sh
 
 test-install:
 	@./scripts/test-install.sh

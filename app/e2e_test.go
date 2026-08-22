@@ -57,6 +57,25 @@ type e2eEnv struct {
 	port      int
 }
 
+func registerE2ENamespace(t *testing.T, namespace string) {
+	t.Helper()
+	registry := os.Getenv("ORBIT_JOURNEY_NAMESPACE_REGISTRY")
+	if registry == "" {
+		return
+	}
+	file, err := os.OpenFile(registry, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open journey namespace registry: %v", err)
+	}
+	if _, err := fmt.Fprintln(file, namespace); err != nil {
+		_ = file.Close()
+		t.Fatalf("register journey namespace: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close journey namespace registry: %v", err)
+	}
+}
+
 func setupE2E(t *testing.T) *e2eEnv {
 	t.Helper()
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -93,6 +112,7 @@ func setupE2E(t *testing.T) *e2eEnv {
 	}
 
 	ns := "e2e-" + randHex(4)
+	registerE2ENamespace(t, ns)
 	port := 19900 + int(randByte())
 	t.Logf("ORBIT_NAMESPACE=%s ORBIT_DASHBOARD_PORT=%d", ns, port)
 
@@ -673,6 +693,7 @@ printf 'Installed: %s\n' "$target"
 	t.Cleanup(server.Close)
 
 	namespace := "e2e-update-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(extraEnv []string, args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(installedBinary, fullArgs...)
@@ -2070,6 +2091,8 @@ func TestE2E_LiteralSingleServicePortInjectsPORT(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 	binary := findOrbitBinary(t)
+	namespace := "e2e-literal-port-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	servicePort := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 	home, err := os.MkdirTemp("/tmp", "orb-literal-port-")
@@ -2100,7 +2123,7 @@ services:
 		cmd := exec.Command(binary, fullArgs...)
 		cmd.Env = append(os.Environ(),
 			"ORBIT_HOME="+home,
-			"ORBIT_NAMESPACE=e2e-literal-port",
+			"ORBIT_NAMESPACE="+namespace,
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 		)
 		return cmd
@@ -2233,6 +2256,7 @@ services:
 	}
 
 	namespace := "e2e-crash-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(binary, fullArgs...)

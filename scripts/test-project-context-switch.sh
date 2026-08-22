@@ -26,6 +26,7 @@ fi
 test_root="$(mktemp -d)"
 export ORBIT_HOME="$test_root/home"
 export ORBIT_NAMESPACE="project-switch-$$"
+"$repo_root/scripts/register-journey-namespace.sh" "$ORBIT_NAMESPACE"
 export ORBIT_DASHBOARD_PORT="$((25000 + ($$ % 1000)))"
 service_port="$((29000 + ($$ % 1000)))"
 

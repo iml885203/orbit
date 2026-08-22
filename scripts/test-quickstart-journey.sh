@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
+port_fixture="$repo_root/scripts/hold-test-ports.py"
 
 for readme in README.md README.zh-TW.md; do
   demo_section="$(
@@ -57,6 +58,7 @@ fi
 test_root="$(mktemp -d)"
 export ORBIT_HOME="$test_root/orbit-home"
 export ORBIT_NAMESPACE="first-run-$$"
+"$repo_root/scripts/register-journey-namespace.sh" "$ORBIT_NAMESPACE"
 export ORBIT_DASHBOARD_PORT="$((23000 + ($$ % 1000)))"
 
 cleanup() {
@@ -221,28 +223,21 @@ if grep -E 'Environment source|https://github.com/|@[[:space:]]+v[0-9]|/envs' \
   cat "$test_root/init.txt" >&2
   exit 1
 fi
-python3 -c '
-import socket
-import time
-
-listeners = []
-for port in (26379, 28080, 28101, 28102, 28103):
-    listener = socket.socket()
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("127.0.0.1", port))
-    listener.listen()
-    listeners.append(listener)
-import pathlib, sys
-pathlib.Path(sys.argv[1]).touch()
-time.sleep(600)
-' "$test_root/ports-ready" &
+"$port_fixture" hold "$test_root/ports-ready" "$test_root/ports-error" \
+  26379 28080 28101 28102 28103 &
 port_guard_pid=$!
 for _ in $(seq 1 100); do
-  if [ -f "$test_root/ports-ready" ]; then
+  if [ -f "$test_root/ports-ready" ] || [ -f "$test_root/ports-error" ]; then
     break
   fi
   sleep 0.05
 done
+if [ -f "$test_root/ports-error" ]; then
+  cat "$test_root/ports-error" >&2
+  wait "$port_guard_pid" 2>/dev/null || true
+  port_guard_pid=""
+  exit 1
+fi
 if [ ! -f "$test_root/ports-ready" ]; then
   echo "Timed out waiting for the port guard." >&2
   exit 1
@@ -266,12 +261,20 @@ PY
 kill "$port_guard_pid" >/dev/null 2>&1 || true
 wait "$port_guard_pid" 2>/dev/null || true
 port_guard_pid=""
+ports_released=false
 for _ in $(seq 1 100); do
-  if ! python3 -c 'import socket; socket.create_connection(("127.0.0.1", 26379), 0.2)' 2>/dev/null; then
+  if "$port_fixture" check 26379 28080 28101 28102 28103 \
+    2>"$test_root/ports-release-error"; then
+    ports_released=true
     break
   fi
   sleep 0.1
 done
+if [ "$ports_released" != true ]; then
+  echo "Timed out waiting for the quickstart fixture ports to be released." >&2
+  cat "$test_root/ports-release-error" >&2
+  exit 1
+fi
 
 if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   echo "orbit up failed during the quickstart journey." >&2

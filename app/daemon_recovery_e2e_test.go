@@ -91,6 +91,7 @@ func TestE2E_StaleDaemonMetadataNeverKillsUnrelatedProcess(t *testing.T) {
 	}
 
 	namespace := "e2e-stale-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		cmd := exec.Command(binary, append([]string{"-c", configPath}, args...)...)
 		cmd.Env = append(os.Environ(),
