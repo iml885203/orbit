@@ -127,6 +127,45 @@ if grep -F "retrying the isolated journey" "$test_root/stale-structured-output" 
   exit 1
 fi
 
+cat >"$test_root/terminal-marker-conflict.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+count=0
+if [ -f "$1" ]; then
+  count="$(cat "$1")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >"$1"
+if [ "$count" -eq 1 ]; then
+  echo "earlier diagnostics can be arbitrarily long"
+  echo "ORBIT_JOURNEY_RETRYABLE=port-conflict"
+  exit 1
+fi
+echo "terminal marker recovered"
+SH
+chmod +x "$test_root/terminal-marker-conflict.sh"
+"$retry_runner" "$test_root/terminal-marker-conflict.sh" "$test_root/terminal-marker-count" \
+  >"$test_root/terminal-marker-output" 2>&1
+grep -F "terminal marker recovered" "$test_root/terminal-marker-output" >/dev/null
+test "$(cat "$test_root/terminal-marker-count")" = "2"
+
+cat >"$test_root/stale-terminal-marker.sh" <<'SH'
+#!/usr/bin/env bash
+echo "ORBIT_JOURNEY_RETRYABLE=port-conflict"
+echo "later assertion failed"
+exit 6
+SH
+chmod +x "$test_root/stale-terminal-marker.sh"
+set +e
+"$retry_runner" "$test_root/stale-terminal-marker.sh" >"$test_root/stale-terminal-marker-output" 2>&1
+stale_marker_status=$?
+set -e
+test "$stale_marker_status" -eq 6
+if grep -F "retrying the isolated journey" "$test_root/stale-terminal-marker-output" >/dev/null; then
+  echo "Retry runner used a non-terminal port marker to mask a later assertion." >&2
+  exit 1
+fi
+
 set +e
 "$port_fixture" hold "$test_root/fixture-ready" "$test_root/fixture-error" \
   28070 28070 >"$test_root/fixture-output" 2>&1
