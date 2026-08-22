@@ -22,6 +22,9 @@ run_orbit() {
 }
 
 cleanup() {
+  status="$1"
+  "$repo_root/scripts/export-journey-diagnostics.sh" startup-readiness "$status" "$test_root" ||
+    echo "Failed to export startup-readiness journey diagnostics." >&2
   if [ -f "$instance_base/instances/$instance_name/instance.json" ]; then
     namespace="$(python3 - "$instance_base/instances/$instance_name/instance.json" <<'PY'
 import json
@@ -36,7 +39,7 @@ PY
   "$orbit_bin" instance clean "$instance_name" --json >/dev/null 2>&1 || true
   rm -rf "$test_root"
 }
-trap 'status=$?; cleanup; exit "$status"' EXIT
+trap 'status=$?; trap - EXIT; cleanup "$status"; exit "$status"' EXIT
 
 mkdir -p "$test_root/delayed"
 cat >"$test_root/delayed/api.py" <<'PY'

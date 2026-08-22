@@ -89,3 +89,12 @@ jobs:
         run: pnpm --dir ui install --frozen-lockfile
       - name: Run installed-user journeys with one build
         run: make test-journeys
+      - name: Upload installed-user journey diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: installed-user-journey-diagnostics-${{ github.run_attempt }}
+          path: artifacts/installed-user-journeys
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 3

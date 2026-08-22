@@ -70,6 +70,9 @@ test-e2e: build
 # Docker to prove the product works beyond package boundaries.
 test-journeys: build
 	@set -eu; \
+	artifact_root="$(CURDIR)/artifacts/installed-user-journeys"; \
+	rm -rf "$$artifact_root"; \
+	mkdir -p "$$artifact_root"; \
 	instance_base="$$(mktemp -d /tmp/orbit-journeys.XXXXXX)"; \
 	resource_state="$$(mktemp -d /tmp/orbit-journey-resources.XXXXXX)"; \
 	namespace_registry="$$resource_state/namespaces"; \
@@ -85,9 +88,9 @@ test-journeys: build
 	}; \
 	trap cleanup EXIT; \
 	$(MAKE) test-journey-harness; \
-	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
+	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_ARTIFACT_DIR="$$artifact_root" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
 		$(MAKE) -j2 test-journey-quickstart test-journey-project-context-switch; \
-	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
+	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_ARTIFACT_DIR="$$artifact_root" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
 		$(MAKE) -j4 test-journey-local-first-adoption test-journey-recovery test-journey-startup-readiness test-journey-runtime-adoption
 
 test-journey-harness:

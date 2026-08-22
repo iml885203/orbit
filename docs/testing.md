@@ -85,6 +85,13 @@ environment selection, lifecycle orchestration, dependency recovery, or other
 cross-process behavior. It builds once, then reuses that exact binary for the
 empty-directory, local-adoption, and project-switch journeys.
 
+When a shell journey fails, `make test-journeys` exports a curated diagnostic
+bundle under `artifacts/installed-user-journeys/<journey>/attempt-<n>`. The
+bundle contains bounded structured outputs, stderr captures, and a bounded
+daemon-log tail with sensitive fields redacted. It never archives the complete
+temporary project, configuration, binaries, or daemon state. CI retains this
+bundle briefly only when the installed-user job fails.
+
 Expensive end-to-end cases must own a unique named instance and clean it when
 finished. Consume the resolved endpoints reported by Orbit rather than
 hard-coding service or dashboard ports. Use low-level home, namespace, and port

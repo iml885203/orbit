@@ -62,12 +62,17 @@ export ORBIT_NAMESPACE="first-run-$$"
 export ORBIT_DASHBOARD_PORT="$((23000 + ($$ % 1000)))"
 
 cleanup() {
+  status="$?"
+  trap - EXIT
+  "$repo_root/scripts/export-journey-diagnostics.sh" quickstart "$status" "$test_root" ||
+    echo "Failed to export quickstart journey diagnostics." >&2
   "$orbit_bin" down --json >/dev/null 2>&1 || true
   "$orbit_bin" daemon stop --json >/dev/null 2>&1 || true
   if [ -n "${port_guard_pid:-}" ]; then
     kill "$port_guard_pid" >/dev/null 2>&1 || true
   fi
   rm -rf "$test_root"
+  exit "$status"
 }
 trap cleanup EXIT
 

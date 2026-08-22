@@ -31,6 +31,9 @@ export ORBIT_DASHBOARD_PORT="$((25000 + ($$ % 1000)))"
 service_port="$((29000 + ($$ % 1000)))"
 
 cleanup() {
+  status="$1"
+  "$repo_root/scripts/export-journey-diagnostics.sh" project-context-switch "$status" "$test_root" ||
+    echo "Failed to export project-context-switch journey diagnostics." >&2
   for project in project-b project-a; do
     if [ -d "$test_root/$project" ]; then
       (
@@ -42,7 +45,7 @@ cleanup() {
   "$orbit_bin" daemon stop --json >/dev/null 2>&1 || true
   rm -rf "$test_root"
 }
-trap 'status=$?; cleanup; exit "$status"' EXIT
+trap 'status=$?; trap - EXIT; cleanup "$status"; exit "$status"' EXIT
 
 make_project() {
   project="$1"
