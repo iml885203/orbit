@@ -148,28 +148,28 @@ orbit uninstall --yes --purge
 下載 `orbit-<os>-<arch>`（Windows 為 `.exe`）與 `checksums.txt`。驗證
 SHA-256 checksum 後，再把 binary 放到 `PATH`。
 
-### Agent plugin
+### Orbit plugin
 
 如果希望 Agent 從第一次 setup 就開始引導，而不只是操作既有 environment，
-請先安裝版本對齊的 Orbit Agent plugin，再讓它協助安裝 CLI。
+請先安裝版本對齊的 Orbit plugin，再讓它協助安裝 CLI。
 
 Claude Code：
 
 ```bash
 claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
+claude plugin install orbit@orbit
 ```
 
 Codex CLI：
 
 ```bash
 codex plugin marketplace add iml885203/orbit
-codex plugin add orbit-agent@orbit
+codex plugin add orbit@orbit
 ```
 
 安裝後請開啟新的 Agent session。Bundled skill 會偵測缺少的 Orbit CLI、說明
 符合平台的 installer，並在執行前詢問。每個 source release 也包含
-`plugins/orbit-agent`，供 local plugin 開發使用。兩份 manifest 與 Orbit release
+`plugins/orbit`，供 local plugin 開發使用。兩份 manifest 與 Orbit release
 必須維持相同版本；不要讓新版 plugin 搭配舊版 binary。
 
 ## 貢獻 Orbit

@@ -47,7 +47,7 @@ only when a listening port is not enough to prove application readiness.
 
 ## 2. Delegate the local loop
 
-With the [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+With the [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
 installed or included in context, ask your coding agent:
 
 > Use Orbit to inspect this project's prerequisites and current state. Follow

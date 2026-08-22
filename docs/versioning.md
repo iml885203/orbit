@@ -1,6 +1,6 @@
 # Versioning and compatibility
 
-Orbit and the bundled `plugins/orbit-agent` plugin use the same
+Orbit and the bundled `plugins/orbit` plugin use the same
 [Semantic Versioning](https://semver.org/) release number.
 
 ## Release sequence
@@ -91,8 +91,8 @@ fixtures are not compatibility contracts.
 
 Every release updates both plugin manifests to the Orbit release number:
 
-- `plugins/orbit-agent/.codex-plugin/plugin.json`
-- `plugins/orbit-agent/.claude-plugin/plugin.json`
+- `plugins/orbit/.codex-plugin/plugin.json`
+- `plugins/orbit/.claude-plugin/plugin.json`
 
 The plugin may use only commands and contracts available in the same Orbit
 version. A release is incomplete if either manifest differs from the Orbit tag.

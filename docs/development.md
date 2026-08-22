@@ -162,28 +162,28 @@ Download `orbit-<os>-<arch>` (or the Windows `.exe`) and `checksums.txt` from
 the matching [GitHub Release](https://github.com/iml885203/orbit/releases).
 Verify the SHA-256 checksum before moving the binary onto your `PATH`.
 
-### Agent plugin
+### Orbit plugin
 
-Install the version-matched Orbit Agent plugin before the CLI when you want the
+Install the version-matched Orbit plugin before the CLI when you want the
 agent to guide first-time setup as well as operate an existing environment.
 
 Claude Code:
 
 ```bash
 claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
+claude plugin install orbit@orbit
 ```
 
 Codex CLI:
 
 ```bash
 codex plugin marketplace add iml885203/orbit
-codex plugin add orbit-agent@orbit
+codex plugin add orbit@orbit
 ```
 
 Start a new agent session after installation. The bundled skill detects a
 missing Orbit CLI, explains the platform-specific installer, and asks before
-running it. Each source release also includes `plugins/orbit-agent` for local
+running it. Each source release also includes `plugins/orbit` for local
 plugin development. The two manifests and Orbit release always carry the same
 version; do not mix a plugin from one release with an older binary.
 

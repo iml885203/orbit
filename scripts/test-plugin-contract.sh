@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-skill="plugins/orbit-agent/skills/orbit/SKILL.md"
-workflows="plugins/orbit-agent/skills/orbit/references/workflows.md"
-metadata="plugins/orbit-agent/skills/orbit/agents/openai.yaml"
-manifest="plugins/orbit-agent/.codex-plugin/plugin.json"
+skill="plugins/orbit/skills/orbit/SKILL.md"
+workflows="plugins/orbit/skills/orbit/references/workflows.md"
+metadata="plugins/orbit/skills/orbit/agents/openai.yaml"
+manifest="plugins/orbit/.codex-plugin/plugin.json"
 marketplace=".agents/plugins/marketplace.json"
 
 for stale in \

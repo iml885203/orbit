@@ -30,7 +30,7 @@ CI, and coding agents.
 Paste this into Claude Code, Codex, or another agent that can use a terminal and
 open a web link:
 
-> Read and follow [these Orbit instructions](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md).
+> Read and follow [these Orbit instructions](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md).
 > Help me try the public demo in a new empty directory, outside any existing
 > project. Install Orbit if needed, start and verify the demo, then open its
 > dashboard and `demo-shop`. Ask before installing software or changing anything
@@ -43,7 +43,7 @@ request cross the service graph.
 ### Use Orbit regularly with your agent
 
 The first prompt works without setup. For future sessions, install the Orbit
-Agent plugin so your agent already has those instructions.
+plugin so your agent already has those instructions.
 
 Run the commands for the agent you use in a terminal. After they succeed, exit
 the current agent process and start a fresh session.
@@ -52,14 +52,14 @@ Claude Code:
 
 ```bash
 claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
+claude plugin install orbit@orbit
 ```
 
 Codex CLI:
 
 ```bash
 codex plugin marketplace add iml885203/orbit
-codex plugin add orbit-agent@orbit
+codex plugin add orbit@orbit
 ```
 
 On an agent surface without plugin support, keep using the first prompt.
@@ -191,7 +191,7 @@ orbit env info --json   # ports, URLs, and credentials-by-reference for anything
 The version-matched plugin used in the [demo journey](#try-orbit) teaches agents
 to inspect state first, prefer `--json`, and confirm destructive operations.
 Without the plugin, point an agent to the
-[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
 and [JSON contract](docs/agent-cli.md).
 
 ## Dashboard

@@ -43,7 +43,7 @@ listening 仍不足以證明 application ready 時，才需要明確加入
 
 ## 2. 委派本機開發迴圈
 
-安裝 [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+安裝 [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
 或把它加入 context 後，讓 coding agent 執行：
 
 > 使用 Orbit 檢查這個專案的 prerequisites 與當前狀態。只執行非破壞性

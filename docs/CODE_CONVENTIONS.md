@@ -316,7 +316,7 @@ for their audience and link to that owner; they do not redefine the contract.
 |---|---|
 | `configuration.md` | YAML schema, config resolution, and field semantics |
 | `agent-cli.md` | JSON envelopes, payloads, errors, and wire compatibility |
-| `plugins/orbit-agent/skills/orbit/` | Agent decision policy and operational workflow |
+| `plugins/orbit/skills/orbit/` | Agent decision policy and operational workflow |
 | Domain references such as `instances.md`, `tracing.md`, and `sql-workflow.md` | One product domain's user-visible behavior and safety model |
 | `architecture.md` | Implementation model and extension boundaries |
 | README and task-oriented guides | Audience-specific entry points that link to the owning contract |

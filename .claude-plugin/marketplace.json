@@ -8,8 +8,8 @@
   },
   "plugins": [
     {
-      "name": "orbit-agent",
-      "source": "./plugins/orbit-agent",
+      "name": "orbit",
+      "source": "./plugins/orbit",
       "description": "Operate and diagnose local development environments with the Orbit CLI. Teaches agents to inspect state first, use the orbit.cli.v1 JSON contract, and confirm destructive operations."
     }
   ]

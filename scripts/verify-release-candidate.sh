@@ -10,8 +10,8 @@ fi
 version="${tag#v}"
 
 for manifest in \
-  plugins/orbit-agent/.codex-plugin/plugin.json \
-  plugins/orbit-agent/.claude-plugin/plugin.json
+  plugins/orbit/.codex-plugin/plugin.json \
+  plugins/orbit/.claude-plugin/plugin.json
 do
   actual="$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' "$manifest")"
   if [[ "$actual" != "$version" ]]; then

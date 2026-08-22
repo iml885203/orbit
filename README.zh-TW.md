@@ -28,7 +28,7 @@ stack。
 把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
 的 Agent：
 
-> 閱讀並遵循[這份 Orbit 操作說明](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)。
+> 閱讀並遵循[這份 Orbit 操作說明](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)。
 > 在現有專案之外建立一個新的空目錄，協助我試玩 public demo。如果需要就先
 > 安裝 Orbit，啟動並驗證 demo，再開啟 dashboard 與 `demo-shop`。安裝軟體或
 > 修改 demo 以外的東西前先詢問我。
@@ -38,7 +38,7 @@ Agent 會檢查 demo 需要什麼，並在安裝任何東西前詢問。完成�
 
 ### 讓 Agent 在之後的 session 直接使用 Orbit
 
-第一次體驗不需要預先設定。若要長期使用，安裝 Orbit Agent plugin，之後的
+第一次體驗不需要預先設定。若要長期使用，安裝 Orbit plugin，之後的
 Agent 便會自帶操作說明。
 
 在 terminal 執行你所使用 Agent 的指令。成功後離開目前的 Agent process，再
@@ -48,14 +48,14 @@ Claude Code：
 
 ```bash
 claude plugin marketplace add iml885203/orbit
-claude plugin install orbit-agent@orbit
+claude plugin install orbit@orbit
 ```
 
 Codex CLI：
 
 ```bash
 codex plugin marketplace add iml885203/orbit
-codex plugin add orbit-agent@orbit
+codex plugin add orbit@orbit
 ```
 
 安裝後新的 session 才會載入 Orbit skill。若你的 Agent 介面不支援 plugin，
@@ -183,7 +183,7 @@ orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用
 [試玩 journey](#試玩-orbit) 使用的版本對齊 plugin 會要求 agent 先檢查狀態、
 優先使用 `--json`，並在破壞性操作前確認。不安裝 plugin 時，讓
 agent 直接閱讀
-[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
+[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
 與 [JSON contract](docs/agent-cli.zh-TW.md)。
 
 ## Dashboard

@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "orbit-agent",
+      "name": "orbit",
       "source": {
         "source": "local",
-        "path": "./plugins/orbit-agent"
+        "path": "./plugins/orbit"
       },
       "policy": {
         "installation": "AVAILABLE",

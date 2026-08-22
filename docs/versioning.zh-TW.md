@@ -1,6 +1,6 @@
 # 版本與相容性
 
-Orbit 與 repository 內的 `plugins/orbit-agent` plugin 共用同一個
+Orbit 與 repository 內的 `plugins/orbit` plugin 共用同一個
 [語義化版本](https://semver.org/lang/zh-TW/)。
 
 ## 發布順序
@@ -76,8 +76,8 @@ test fixtures 不屬於相容性契約。
 
 每次發布都必須把以下兩份 plugin manifest 更新成 Orbit release 版本：
 
-- `plugins/orbit-agent/.codex-plugin/plugin.json`
-- `plugins/orbit-agent/.claude-plugin/plugin.json`
+- `plugins/orbit/.codex-plugin/plugin.json`
+- `plugins/orbit/.claude-plugin/plugin.json`
 
 Plugin 只能使用同版 Orbit 已提供的 command 與 contract。任何一份 manifest
 與 Orbit tag 不一致時，該 release 就尚未完成。

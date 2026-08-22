@@ -1,5 +1,5 @@
 {
-  "name": "orbit-agent",
+  "name": "orbit",
   "version": "0.15.7",
   "description": "Operate local development environments safely with Orbit.",
   "author": {

@@ -281,7 +281,7 @@ workflow 並連回 owner，不重新定義 contract。
 |---|---|
 | `configuration.md` | YAML schema、config resolution 與 field semantics |
 | `agent-cli.md` | JSON envelopes、payloads、errors 與 wire compatibility |
-| `plugins/orbit-agent/skills/orbit/` | Agent decision policy 與 operational workflow |
+| `plugins/orbit/skills/orbit/` | Agent decision policy 與 operational workflow |
 | `instances.md`、`tracing.md`、`sql-workflow.md` 等 domain references | 單一 product domain 對使用者可見的行為與 safety model |
 | `architecture.md` | Implementation model 與 extension boundaries |
 | README 與 task-oriented guides | 依讀者情境提供入口，並連向 owning contract |
