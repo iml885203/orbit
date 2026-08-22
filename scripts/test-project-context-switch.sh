@@ -84,7 +84,24 @@ printf '%s\n' \
   >"$test_root/candidate/orbit.yaml"
 
 cd "$test_root/project-a"
-"$orbit_bin" up --json >"$test_root/up-a.json"
+if ! "$orbit_bin" up --json >"$test_root/up-a.json" 2>"$test_root/up-a.stderr"; then
+  echo "orbit up failed while starting the first project." >&2
+  if [ -s "$test_root/up-a.json" ]; then
+    echo "orbit up JSON:" >&2
+    sed 's/^/  /' "$test_root/up-a.json" >&2
+  fi
+  if [ -s "$test_root/up-a.stderr" ]; then
+    echo "orbit up stderr:" >&2
+    sed 's/^/  /' "$test_root/up-a.stderr" >&2
+  fi
+  echo "orbit status after the failure:" >&2
+  "$orbit_bin" status --json >&2 || true
+  if [ -s "$ORBIT_HOME/daemon.log" ]; then
+    echo "daemon log tail:" >&2
+    tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
+  fi
+  exit 1
+fi
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "http://localhost:$service_port" >"$test_root/page-a.html"
 grep -F "project-a" "$test_root/page-a.html" >/dev/null

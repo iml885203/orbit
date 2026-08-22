@@ -98,7 +98,24 @@ YAML
 
 cd "$test_root"
 "$orbit_bin" doctor --json >"$test_root/doctor.json"
-"$orbit_bin" up --json >"$test_root/up.json"
+if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
+  echo "orbit up failed during runtime adoption." >&2
+  if [ -s "$test_root/up.json" ]; then
+    echo "orbit up JSON:" >&2
+    sed 's/^/  /' "$test_root/up.json" >&2
+  fi
+  if [ -s "$test_root/up.stderr" ]; then
+    echo "orbit up stderr:" >&2
+    sed 's/^/  /' "$test_root/up.stderr" >&2
+  fi
+  echo "orbit status after the failure:" >&2
+  "$orbit_bin" status --json >&2 || true
+  if [ -s "$ORBIT_HOME/daemon.log" ]; then
+    echo "daemon log tail:" >&2
+    tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
+  fi
+  exit 1
+fi
 "$orbit_bin" status --json >"$test_root/status.json"
 
 python3 - "$test_root" <<'PY'
