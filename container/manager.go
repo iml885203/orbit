@@ -163,6 +163,10 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	}
 
 	containerName := m.ContainerName(name)
+	if err := ensureNamespaceVolumes(ctx, m.cli, m.namespace, cfg.Volumes); err != nil {
+		m.narrate(name, "ERROR: "+err.Error())
+		return err
+	}
 
 	// Container config
 	containerConfig := &container.Config{
@@ -268,7 +272,7 @@ func (m *Manager) reconcileExisting(
 	// ownership before checking ports so our own stale resource can never be
 	// reported as an unrelated external conflict.
 	m.narrate(name, "replacing stale managed container "+containerName)
-	if _, err := m.cli.ContainerRemove(ctx, containerName, client.ContainerRemoveOptions{Force: true}); err != nil &&
+	if err := m.removeContainer(ctx, containerName); err != nil &&
 		!cerrdefs.IsNotFound(err) {
 		return false, fmt.Errorf("removing stale managed container %s: %w", containerName, err)
 	}
@@ -469,7 +473,7 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 	if _, err := m.cli.ContainerStop(ctx, containerName, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
 		m.narrate(name, "stop error: "+err.Error())
 	}
-	if _, err := m.cli.ContainerRemove(ctx, containerName, client.ContainerRemoveOptions{Force: true}); err != nil {
+	if err := m.removeContainer(ctx, containerName); err != nil {
 		if cerrdefs.IsNotFound(err) {
 			return nil
 		}
@@ -501,7 +505,7 @@ func (m *Manager) stopSidecars(ctx context.Context, parentName string) {
 		scName := list.Items[i].Labels[labelService]
 		m.narrate(parentName, "stopping sidecar "+scName)
 		_, _ = m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout})
-		if _, err := m.cli.ContainerRemove(ctx, list.Items[i].ID, client.ContainerRemoveOptions{Force: true}); err != nil && !cerrdefs.IsNotFound(err) {
+		if err := m.removeContainer(ctx, list.Items[i].ID); err != nil && !cerrdefs.IsNotFound(err) {
 			m.narrate(parentName, "sidecar remove error: "+err.Error())
 		}
 	}
@@ -522,9 +526,14 @@ func (m *Manager) StopAll(ctx context.Context) error {
 		}
 		timeout := 10
 		_, _ = m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout})
-		_, _ = m.cli.ContainerRemove(ctx, list.Items[i].ID, client.ContainerRemoveOptions{Force: true})
+		_ = m.removeContainer(ctx, list.Items[i].ID)
 	}
 	return nil
+}
+
+func (m *Manager) removeContainer(ctx context.Context, containerID string) error {
+	_, err := m.cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	return err
 }
 
 // matchesNamespace reports whether a container's labels place it in this

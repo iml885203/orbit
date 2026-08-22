@@ -529,6 +529,41 @@ func TestPollerDebouncesDockerOutageAndReportsItOnce(t *testing.T) {
 	}
 }
 
+func TestRemoveContainerIncludesAnonymousVolumes(t *testing.T) {
+	var force, volumes string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.HasSuffix(r.URL.Path, "/containers/test-container") {
+			http.Error(w, `{"message":"unexpected Docker API request"}`, http.StatusNotFound)
+			return
+		}
+		force = r.URL.Query().Get("force")
+		volumes = r.URL.Query().Get("v")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	endpoint, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli, err := client.New(
+		client.WithHost("tcp://"+endpoint.Host),
+		client.WithScheme("http"),
+		client.WithHTTPClient(server.Client()),
+		client.WithAPIVersion("1.52"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+	manager := &Manager{cli: cli}
+	if err := manager.removeContainer(context.Background(), "test-container"); err != nil {
+		t.Fatal(err)
+	}
+	if force != "1" || volumes != "1" {
+		t.Fatalf("remove query force=%q v=%q, want both enabled", force, volumes)
+	}
+}
+
 func TestContainerPortConflictHidesContainerRuntimeError(t *testing.T) {
 	listener, err := net.Listen("tcp4", "0.0.0.0:0")
 	if err != nil {

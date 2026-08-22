@@ -13,8 +13,12 @@ import (
 
 func TestE2E_NamedInstancesRunAndCleanIndependently(t *testing.T) {
 	env := setupNamedInstanceE2E(t)
-	peer := assertInstancesUseIndependentEndpoints(t, env, "test-a", "test-b")
-	assertCleaningInstancePreservesPeer(t, env, "test-a", peer)
+	first := "a"
+	peerName := "a-ca978112-x"
+	peer := assertInstancesUseIndependentEndpoints(t, env, first, peerName)
+	assertOrdinaryDownCleansAnonymousAndPreservesNamedVolume(t, env, first)
+	assertStaleReplacementCleansAnonymousAndPreservesConfiguredStorage(t, env, first)
+	assertCleaningInstancePreservesPeer(t, env, first, peer)
 }
 
 func setupNamedInstanceE2E(t *testing.T) *e2eEnv {
@@ -44,6 +48,13 @@ server.serve_forever()
 
 func writeNamedInstanceConfig(t *testing.T, env *e2eEnv) {
 	t.Helper()
+	bindPath := env.home + "/bind-proof"
+	if err := os.MkdirAll(bindPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bindPath+"/sentinel", []byte("preserved"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	configYAML := fmt.Sprintf(`version: "3"
 settings:
   health_check_interval: 500ms
@@ -51,11 +62,26 @@ settings:
 containers:
   redis:
     image: redis:7.4-alpine
+    volumes:
+      - data:/data
+      - %q
     ports:
       redis: "26379:6379"
     health_check:
       type: tcp
       port: 26379
+  cache:
+    image: redis:7.4-alpine
+    environment:
+      REPLACEMENT_PROOF: before
+    volumes:
+      - cache-data:/named
+      - %q
+    ports:
+      redis: "26380:6379"
+    health_check:
+      type: tcp
+      port: 26380
 services:
   api:
     type: python
@@ -68,7 +94,7 @@ services:
       type: http
       path: /
       port: 28080
-`, env.home)
+`, bindPath+":/proof", bindPath+":/proof", env.home)
 	if err := os.WriteFile(env.envYaml, []byte(configYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +103,8 @@ services:
 func cleanupNamedInstances(t *testing.T, env *e2eEnv) {
 	t.Helper()
 	t.Cleanup(func() {
-		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "test-a")
-		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "test-b")
+		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "a")
+		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "a-ca978112-x")
 	})
 }
 
@@ -94,7 +120,7 @@ func assertInstancesUseIndependentEndpoints(t *testing.T, env *e2eEnv, first, se
 	t.Helper()
 	portsA := upInstancePorts(t, env, first)
 	portsB := upInstancePorts(t, env, second)
-	for _, resource := range []string{"api", "redis"} {
+	for _, resource := range []string{"api", "cache", "redis"} {
 		if portsA[resource] == portsB[resource] {
 			t.Fatalf("instances share %s port %d", resource, portsA[resource])
 		}
@@ -114,7 +140,7 @@ func assertInstancesUseIndependentEndpoints(t *testing.T, env *e2eEnv, first, se
 	if listData.Instances[0].Dashboard == listData.Instances[1].Dashboard {
 		t.Fatalf("instances share dashboard %q", listData.Instances[0].Dashboard)
 	}
-	for _, resource := range []string{"api", "redis"} {
+	for _, resource := range []string{"api", "cache", "redis"} {
 		if listData.Instances[0].Endpoints[resource] == listData.Instances[1].Endpoints[resource] {
 			t.Fatalf("instances share %s endpoint: %+v", resource, listData.Instances)
 		}
@@ -122,14 +148,142 @@ func assertInstancesUseIndependentEndpoints(t *testing.T, env *e2eEnv, first, se
 	return listData.Instances[1]
 }
 
-func assertCleaningInstancePreservesPeer(t *testing.T, env *e2eEnv, cleaned string, peer namedInstanceSummary) {
+func assertOrdinaryDownCleansAnonymousAndPreservesNamedVolume(t *testing.T, env *e2eEnv, name string) {
 	t.Helper()
-	containerName := "orbit-" + peer.Namespace + "-redis"
-	containerID := dockerOutput(t, "inspect", "--format", "{{.Id}}", containerName)
-	if got := dockerOutput(t, "exec", containerName, "redis-cli", "SET", "instance-proof", "preserved"); got != "OK" {
+	namespace := instanceNamespaceFromList(t, env, name)
+	redisContainer := "orbit-" + namespace + "-redis"
+	cacheContainer := "orbit-" + namespace + "-cache"
+	namedVolume := "orbit-" + namespace + "-data"
+	bindPath := env.home + "/bind-proof"
+	anonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", cacheContainer)
+	if anonymousVolume == "" {
+		t.Fatal("cache container did not receive its image-declared anonymous volume")
+	}
+	assertContainerBindMount(t, redisContainer, bindPath)
+	if got := dockerOutput(t, "exec", redisContainer, "redis-cli", "SET", "down-proof", "preserved"); got != "OK" {
 		t.Fatalf("redis SET = %q", got)
 	}
+	runNamedInstance(t, env, "down", "--instance", name, "--json")
+	if _, err := exec.Command("docker", "volume", "inspect", anonymousVolume).CombinedOutput(); err == nil {
+		t.Fatalf("anonymous volume %s survived ordinary down", anonymousVolume)
+	}
+	dockerOutput(t, "volume", "inspect", namedVolume)
+	upInstancePorts(t, env, name)
+	assertContainerBindMount(t, redisContainer, bindPath)
+	if contents, err := os.ReadFile(bindPath + "/sentinel"); err != nil || string(contents) != "preserved" {
+		t.Fatalf("bind mount sentinel changed across down/up: contents=%q err=%v", contents, err)
+	}
+	if got := dockerOutput(t, "exec", redisContainer, "redis-cli", "GET", "down-proof"); got != "preserved" {
+		t.Fatalf("named Redis data changed across down/up: %q", got)
+	}
+}
+
+func assertContainerBindMount(t *testing.T, containerName, wantSource string) {
+	t.Helper()
+	got := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/proof\"}}{{.Type}}:{{.Source}}{{end}}{{end}}", containerName)
+	if got != "bind:"+wantSource {
+		t.Fatalf("container bind mount = %q, want bind:%s", got, wantSource)
+	}
+}
+
+func assertStaleReplacementCleansAnonymousAndPreservesConfiguredStorage(t *testing.T, env *e2eEnv, name string) {
+	t.Helper()
+	namespace := instanceNamespaceFromList(t, env, name)
+	redisContainer := "orbit-" + namespace + "-redis"
+	cacheContainer := "orbit-" + namespace + "-cache"
+	bindPath := env.home + "/bind-proof"
+	oldAnonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", cacheContainer)
+	cacheNamedVolume := "orbit-" + namespace + "-cache-data"
+	namedVolumeID := dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", cacheNamedVolume)
+	if got := dockerOutput(t, "exec", redisContainer, "redis-cli", "SET", "replacement-proof", "preserved"); got != "OK" {
+		t.Fatalf("redis SET = %q", got)
+	}
+	if got := dockerOutput(t, "exec", cacheContainer, "sh", "-c", "printf preserved > /named/replacement-proof && printf preserved > /proof/cache-replacement-proof"); got != "" {
+		t.Fatalf("cache sentinel command output = %q", got)
+	}
+
+	original, err := os.ReadFile(env.envYaml)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := []byte(strings.Replace(string(original), "REPLACEMENT_PROOF: before", "REPLACEMENT_PROOF: after", 1))
+	if string(updated) == string(original) {
+		t.Fatal("named-instance fixture no longer contains the replacement marker")
+	}
+	if err := os.WriteFile(env.envYaml, updated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	upInstancePorts(t, env, name)
+	if _, err := exec.Command("docker", "volume", "inspect", oldAnonymousVolume).CombinedOutput(); err == nil {
+		t.Fatalf("anonymous volume %s survived stale container replacement", oldAnonymousVolume)
+	}
+	newAnonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", cacheContainer)
+	if newAnonymousVolume == "" || newAnonymousVolume == oldAnonymousVolume {
+		t.Fatalf("replacement anonymous volume = %q, old=%q", newAnonymousVolume, oldAnonymousVolume)
+	}
+	if got := dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", cacheNamedVolume); got != namedVolumeID {
+		t.Fatalf("named volume changed during replacement: before=%s after=%s", namedVolumeID, got)
+	}
+	if got := dockerOutput(t, "exec", cacheContainer, "cat", "/named/replacement-proof"); got != "preserved" {
+		t.Fatalf("cache named-volume data changed during replacement: %q", got)
+	}
+	if got := dockerOutput(t, "exec", cacheContainer, "cat", "/proof/cache-replacement-proof"); got != "preserved" {
+		t.Fatalf("cache bind-mount data changed during replacement: %q", got)
+	}
+	if got := dockerOutput(t, "exec", redisContainer, "redis-cli", "GET", "replacement-proof"); got != "preserved" {
+		t.Fatalf("named Redis data changed during replacement: %q", got)
+	}
+	assertContainerBindMount(t, redisContainer, bindPath)
+	if err := os.WriteFile(env.envYaml, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	upInstancePorts(t, env, name)
+}
+
+func instanceNamespaceFromList(t *testing.T, env *e2eEnv, name string) string {
+	t.Helper()
+	output := runNamedInstance(t, env, "instance", "list", "--json")
+	envelope := parseE2EEnvelope(t, output)
+	var data struct {
+		Instances []namedInstanceSummary `json:"instances"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range data.Instances {
+		if item.Name == name {
+			return item.Namespace
+		}
+	}
+	t.Fatalf("instance %q missing from list: %s", name, output)
+	return ""
+}
+
+func assertCleaningInstancePreservesPeer(t *testing.T, env *e2eEnv, cleaned string, peer namedInstanceSummary) {
+	t.Helper()
+	cleanedNamespace := instanceNamespaceFromList(t, env, cleaned)
+	cleanedNamedVolumes := []string{
+		dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", "orbit-"+cleanedNamespace+"-data"),
+		dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", "orbit-"+cleanedNamespace+"-cache-data"),
+	}
+	cleanedAnonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", "orbit-"+cleanedNamespace+"-cache")
+	peerContainer := "orbit-" + peer.Namespace + "-redis"
+	peerNamedVolume := "orbit-" + peer.Namespace + "-data"
+	peerNamedVolumeID := dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", peerNamedVolume)
+	if got := dockerOutput(t, "exec", peerContainer, "redis-cli", "SET", "instance-proof", "preserved"); got != "OK" {
+		t.Fatalf("redis SET = %q", got)
+	}
+	runNamedInstance(t, env, "down", "--instance", peer.Name, "--json")
 	runNamedInstance(t, env, "instance", "clean", cleaned, "--json")
+	for _, removed := range append(cleanedNamedVolumes, cleanedAnonymousVolume) {
+		if _, err := exec.Command("docker", "volume", "inspect", removed).CombinedOutput(); err == nil {
+			t.Fatalf("cleaned instance volume %s survived instance clean", removed)
+		}
+	}
+	if got := dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", peerNamedVolume); got != peerNamedVolumeID {
+		t.Fatalf("peer named volume changed: before=%s after=%s", peerNamedVolumeID, got)
+	}
+	upInstancePorts(t, env, peer.Name)
 	statusB := runNamedInstance(t, env, "status", "--instance", peer.Name, "--json")
 	statusEnvelope := parseE2EEnvelope(t, string(statusB))
 	if !statusEnvelope.OK {
@@ -144,7 +298,7 @@ func assertCleaningInstancePreservesPeer(t *testing.T, env *e2eEnv, cleaned stri
 	if err := json.Unmarshal(statusEnvelope.Data, &statusData); err != nil {
 		t.Fatal(err)
 	}
-	if len(statusData.Resources) != 2 {
+	if len(statusData.Resources) != 3 {
 		t.Fatalf("peer resources changed after cleanup: %+v", statusData.Resources)
 	}
 	for _, resource := range statusData.Resources {
@@ -152,10 +306,7 @@ func assertCleaningInstancePreservesPeer(t *testing.T, env *e2eEnv, cleaned stri
 			t.Fatalf("peer resource changed after cleanup: %+v", statusData.Resources)
 		}
 	}
-	if got := dockerOutput(t, "inspect", "--format", "{{.Id}}", containerName); got != containerID {
-		t.Fatalf("peer container changed: before=%s after=%s", containerID, got)
-	}
-	if got := dockerOutput(t, "exec", containerName, "redis-cli", "GET", "instance-proof"); got != "preserved" {
+	if got := dockerOutput(t, "exec", peerContainer, "redis-cli", "GET", "instance-proof"); got != "preserved" {
 		t.Fatalf("peer Redis data changed: %q", got)
 	}
 }
@@ -192,8 +343,8 @@ func upInstancePorts(t *testing.T, env *e2eEnv, name string) map[string]int {
 			ports[resource.Name] = port
 		}
 	}
-	if len(ports) != 2 || ports["api"] == 0 || ports["redis"] == 0 {
-		t.Fatalf("%s did not report both resolved endpoints: %+v", name, ports)
+	if len(ports) != 3 || ports["api"] == 0 || ports["cache"] == 0 || ports["redis"] == 0 {
+		t.Fatalf("%s did not report all resolved endpoints: %+v", name, ports)
 	}
 	return ports
 }
