@@ -164,9 +164,27 @@ Verify the SHA-256 checksum before moving the binary onto your `PATH`.
 
 ### Agent plugin
 
-Each source release includes `plugins/orbit-agent`, with manifests for both
-Codex and Claude Code. Add that directory as a local plugin using your agent's
-plugin command. The two manifests and Orbit release always carry the same
+Install the version-matched Orbit Agent plugin before the CLI when you want the
+agent to guide first-time setup as well as operate an existing environment.
+
+Claude Code:
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+Codex CLI:
+
+```bash
+codex plugin marketplace add iml885203/orbit
+codex plugin add orbit-agent@orbit
+```
+
+Start a new agent session after installation. The bundled skill detects a
+missing Orbit CLI, explains the platform-specific installer, and asks before
+running it. Each source release also includes `plugins/orbit-agent` for local
+plugin development. The two manifests and Orbit release always carry the same
 version; do not mix a plugin from one release with an older binary.
 
 ## Contributing to Orbit

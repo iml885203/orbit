@@ -10,23 +10,44 @@ CLI over invoking Docker, databases, or service processes directly.
 
 ## Setup
 
-Docker must be running. If `orbit` is not installed:
+If `orbit` is not installed, identify the host platform, explain the matching
+official installer, and get the user's approval before running it. On macOS or
+Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
-export PATH="$HOME/.local/bin:$PATH"
 ```
+
+On Windows PowerShell (Beta):
+
+```powershell
+irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
+```
+
+Read the installer's reported `Installed:` path and verify the result with
+`orbit version --json`, invoking that exact binary path when needed. Agent
+shell calls may not preserve PATH changes; if a later call cannot find `orbit`,
+invoke the installed path or prefix that call with the path the installer
+reported. Do not install or update Docker, package managers, or project
+runtimes without the user's approval. Docker must be running when the selected
+environment declares containers; the public demo does.
 
 Then pick the path that matches the user:
 
+- **They explicitly asked for the public demo** — work from a new empty
+  directory with no ancestor `orbit.yaml`. Run `orbit inspect --json`, follow
+  its exact non-destructive `orbit init --yes --json` action, and continue the
+  core loop. Do not present the other setup paths unless the request is
+  ambiguous.
 - **Their project already has `orbit.yaml`** — nothing to set up. Run
   `orbit up` from anywhere inside the project; Orbit finds the nearest config.
 - **They have a team environment repository** —
   `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
-- **They have neither** — `orbit init --yes` uses the public demo, which is the
-  fastest way to show what Orbit does. For a real project, prefer a
-  project-local `orbit.yaml` over building an environment repository.
+- **They have neither** — run `orbit inspect --json` and follow its exact setup
+  action. The public demo is the fastest way to show what Orbit does. For a
+  real project, prefer a project-local `orbit.yaml` over building an
+  environment repository.
 
 If a command reports that Orbit is not set up, follow its stated next step
 rather than guessing between these paths.

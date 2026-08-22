@@ -125,6 +125,7 @@ test-docs:
 	@! grep -F 'Orbit never moves a port' docs/configuration.md
 	@! grep -F 'Orbit 永遠不會移動 port' docs/configuration.zh-TW.md
 	@test ! -d docs/examples/mini-shop
+	@grep -F 'codex plugin marketplace add iml885203/orbit' README.md README.zh-TW.md docs/development.md docs/development.zh-TW.md >/dev/null
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.md >/dev/null
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.zh-TW.md >/dev/null
 	@! grep -F 'iml885203/orbit-examples' README.md README.zh-TW.md

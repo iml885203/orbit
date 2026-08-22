@@ -27,56 +27,60 @@ CI, and coding agents.
 
 ## Try Orbit
 
-The demo needs Git, Docker, Python 3, and an
-[installed Orbit CLI](docs/development.md). Start by cloning it:
+Paste this into Claude Code, Codex, or another agent that can use a terminal and
+open a web link:
 
-```bash
-git clone https://github.com/iml885203/orbit-demo.git
-cd orbit-demo
-```
+> Read and follow [these Orbit instructions](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md).
+> Help me try the public demo in a new empty directory, outside any existing
+> project. Install Orbit if needed, start and verify the demo, then open its
+> dashboard and `demo-shop`. Ask before installing software or changing anything
+> outside the demo.
 
-### 1. Give your agent the Orbit skill
+The agent checks what the demo needs and asks before installing anything. When
+it finishes, the dashboard and tiny storefront are open; buy a mug to watch one
+request cross the service graph.
 
-Claude Code can install the version-matched plugin directly:
+### Use Orbit regularly with your agent
+
+The first prompt works without setup. For future sessions, install the Orbit
+Agent plugin so your agent already has those instructions.
+
+Run the commands for the agent you use in a terminal. After they succeed, exit
+the current agent process and start a fresh session.
+
+Claude Code:
 
 ```bash
 claude plugin marketplace add iml885203/orbit
 claude plugin install orbit-agent@orbit
 ```
 
-For Codex or another coding agent, include the
-[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
-in the prompt below. Source releases also include `plugins/orbit-agent` as a
-local plugin for Codex and Claude Code.
+Codex CLI:
 
-### 2. Delegate the environment
+```bash
+codex plugin marketplace add iml885203/orbit
+codex plugin add orbit-agent@orbit
+```
 
-Open the cloned directory in your coding agent and send:
-
-> Use Orbit to inspect the prerequisites and current state of this project.
-> Follow only non-destructive recommended actions needed to start the demo,
-> bring up the environment, verify that every resource is ready, and open
-> `demo-shop`. Stop and explain before any destructive action or whenever setup
-> requires my input. If the Orbit plugin is unavailable, read the
-> [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
-> first.
-
-The agent uses Orbit's structured state and errors to inspect, act, and verify
-instead of guessing how the stack works.
+On an agent surface without plugin support, keep using the first prompt.
 
 ### Prefer the CLI?
 
-Run the same journey yourself:
+The manual demo needs Git, Docker, and Python 3.
+Install Orbit using the [platform instructions](docs/development.md#install-orbit),
+then run the same journey yourself:
 
 ```bash
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
 orbit up
 orbit status
 orbit open demo-shop
 ```
 
-The [Orbit demo](https://github.com/iml885203/orbit-demo) is a tiny storefront:
-three host APIs, live stock in a Redis container, and orders in SQLite. Buy a
-mug to see one request cross the whole graph, then use `orbit down` to stop it.
+The [Orbit demo](https://github.com/iml885203/orbit-demo) contains three host
+APIs, live stock in a Redis container, and orders in SQLite. Use `orbit down`
+to stop it.
 
 ## One file describes the environment
 

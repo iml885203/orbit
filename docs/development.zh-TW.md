@@ -150,10 +150,27 @@ SHA-256 checksum 後，再把 binary 放到 `PATH`。
 
 ### Agent plugin
 
-每個 source release 都包含 `plugins/orbit-agent`，內有 Codex 與 Claude Code
-兩份 manifest。使用 agent 的 plugin 指令，把該目錄加入為 local plugin。
-兩份 manifest 與 Orbit release 必須維持相同版本；不要讓新版 plugin 搭配舊版
-binary。
+如果希望 Agent 從第一次 setup 就開始引導，而不只是操作既有 environment，
+請先安裝版本對齊的 Orbit Agent plugin，再讓它協助安裝 CLI。
+
+Claude Code：
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit-agent@orbit
+```
+
+Codex CLI：
+
+```bash
+codex plugin marketplace add iml885203/orbit
+codex plugin add orbit-agent@orbit
+```
+
+安裝後請開啟新的 Agent session。Bundled skill 會偵測缺少的 Orbit CLI、說明
+符合平台的 installer，並在執行前詢問。每個 source release 也包含
+`plugins/orbit-agent`，供 local plugin 開發使用。兩份 manifest 與 Orbit release
+必須維持相同版本；不要讓新版 plugin 搭配舊版 binary。
 
 ## 貢獻 Orbit
 

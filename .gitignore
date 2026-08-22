@@ -10,6 +10,9 @@ cmd/orbit/dist/
 .codex/
 .agents/*
 !.agents/skills
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
 .superpowers/
 .playwright-cli/
 ui/node_modules/

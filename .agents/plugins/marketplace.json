@@ -1,0 +1,20 @@
+{
+  "name": "orbit",
+  "interface": {
+    "displayName": "Orbit"
+  },
+  "plugins": [
+    {
+      "name": "orbit-agent",
+      "source": {
+        "source": "local",
+        "path": "./plugins/orbit-agent"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

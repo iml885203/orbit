@@ -42,10 +42,20 @@ assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/#try-orbit"/)
 assert.match(home, /href="\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
+assert.ok(home.includes('Help me try the public demo'), 'agent-first demo prompt is missing')
+assert.ok(
+  home.indexOf('Help me try the public demo') < home.indexOf('Use Orbit regularly with your agent'),
+  'first-time value must appear before plugin distribution details',
+)
 
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
+assert.ok(chineseHome.includes('協助我試玩 public demo'), 'Traditional Chinese agent-first demo prompt is missing')
+assert.ok(
+  chineseHome.indexOf('協助我試玩 public demo') < chineseHome.indexOf('讓 Agent 在之後的 session 直接使用 Orbit'),
+  'Traditional Chinese first-time value must appear before plugin distribution details',
+)
 
 const chineseGuide = readFileSync(join(outputPath, 'zh-TW/docs/local-first.html'), 'utf8')
 for (const route of ['sql-workflow', 'architecture', 'agent-cli', 'versioning', 'CODE_CONVENTIONS']) {

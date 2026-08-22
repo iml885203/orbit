@@ -16,7 +16,7 @@ stack。
 本機環境的 setup 知識不該只存在開發者腦中。Orbit 把一份 `orbit.yaml`
 變成可執行的 environment contract，讓開發者、CI 與 coding agents 共用。
 
-- **環境只定義一次：** dependencies、commands、ports 與 readiness 收旂在
+- **環境只定義一次：** dependencies、commands、ports 與 readiness 集中在
   同一份有版本的定義，不再散落於 setup 筆記與口耳相傳的知識。
 - **放心委派給 Agent：** 穩定的 JSON CLI 提供可觀測狀態、結構化錯誤與安全的
   下一步，不必依賴脆弱的 shell automation。
@@ -25,54 +25,59 @@ stack。
 
 ## 試玩 Orbit
 
-Demo 需要 Git、Docker、Python 3，以及
-[已安裝的 Orbit CLI](docs/development.zh-TW.md)。先 clone demo：
+把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
+的 Agent：
 
-```bash
-git clone https://github.com/iml885203/orbit-demo.git
-cd orbit-demo
-```
+> 閱讀並遵循[這份 Orbit 操作說明](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)。
+> 在現有專案之外建立一個新的空目錄，協助我試玩 public demo。如果需要就先
+> 安裝 Orbit，啟動並驗證 demo，再開啟 dashboard 與 `demo-shop`。安裝軟體或
+> 修改 demo 以外的東西前先詢問我。
 
-### 1. 把 Orbit skill 交給 Agent
+Agent 會檢查 demo 需要什麼，並在安裝任何東西前詢問。完成後會打開 dashboard
+與迷你 storefront，買一個馬克杯就能看到 request 穿過整張 service graph。
 
-Claude Code 可以直接安裝版本對齊的 plugin：
+### 讓 Agent 在之後的 session 直接使用 Orbit
+
+第一次體驗不需要預先設定。若要長期使用，安裝 Orbit Agent plugin，之後的
+Agent 便會自帶操作說明。
+
+在 terminal 執行你所使用 Agent 的指令。成功後離開目前的 Agent process，再
+開啟一個全新的 session。
+
+Claude Code：
 
 ```bash
 claude plugin marketplace add iml885203/orbit
 claude plugin install orbit-agent@orbit
 ```
 
-使用 Codex 或其他 coding agent 時，在下方 prompt 保留
-[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)
-連結。Source release 也包含 `plugins/orbit-agent`，可作為 Codex 與 Claude Code
-的 local plugin。
+Codex CLI：
 
-### 2. 委派環境管理
+```bash
+codex plugin marketplace add iml885203/orbit
+codex plugin add orbit-agent@orbit
+```
 
-用 coding agent 開啟 clone 下來的目錄，送出：
-
-> 使用 Orbit 檢查這個專案的 prerequisites 與當前狀態。只執行啟動 demo
-> 所需的非破壞性 recommended actions，啟動環境、確認每個 resource 都已
-> ready，然後開啟 `demo-shop`。任何破壞性操作或 setup 需要我輸入時，
-> 先停下並說明。如果無法使用 Orbit plugin，先閱讀
-> [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit-agent/skills/orbit/SKILL.md)。
-
-Agent 會透過 Orbit 的結構化狀態與錯誤來檢查、執行與驗證，不必猜測
-stack 的運作方式。
+安裝後新的 session 才會載入 Orbit skill。若你的 Agent 介面不支援 plugin，
+繼續使用本節開頭的 prompt 即可。
 
 ### 想自己使用 CLI？
 
-手動執行同一段 journey：
+手動操作 demo 需要 Git、Docker 與 Python 3。
+先依照[平台安裝說明](docs/development.zh-TW.md#安裝-orbit)安裝 Orbit，再手動
+執行同一段 journey：
 
 ```bash
+git clone https://github.com/iml885203/orbit-demo.git
+cd orbit-demo
 orbit up
 orbit status
 orbit open demo-shop
 ```
 
-[Orbit demo](https://github.com/iml885203/orbit-demo) 是一個迷你 storefront：
-三個 host APIs、放在 Redis container 裡的即時庫存，以及存進 SQLite 的訂單。
-買一個馬克杯就能看到 request 穿過整張 graph；完成後用 `orbit down` 停止環境。
+[Orbit demo](https://github.com/iml885203/orbit-demo) 包含三個 host APIs、放在
+Redis container 裡的即時庫存，以及存進 SQLite 的訂單。完成後用
+`orbit down` 停止環境。
 
 ## 一份檔案描述整個環境
 
