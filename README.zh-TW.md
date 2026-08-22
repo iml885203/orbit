@@ -28,10 +28,12 @@ stack。
 把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
 的 Agent：
 
-> 閱讀並遵循[這份 Orbit 操作說明](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)。
-> 在現有專案之外建立一個新的空目錄，協助我試玩 public demo。如果需要就先
-> 安裝 Orbit，啟動並驗證 demo，再開啟 dashboard 與 `demo-shop`。安裝軟體或
-> 修改 demo 以外的東西前先詢問我。
+```text
+閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
+在現有專案之外建立一個新的空目錄，協助我試玩 public demo。如果需要就先
+安裝 Orbit，啟動並驗證 demo，再開啟 dashboard 與 demo-shop。安裝軟體或
+修改 demo 以外的東西前先詢問我。
+```
 
 Agent 會檢查 demo 需要什麼，並在安裝任何東西前詢問。完成後會打開 dashboard
 與迷你 storefront，買一個馬克杯就能看到 request 穿過整張 service graph。

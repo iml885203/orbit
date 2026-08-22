@@ -30,11 +30,13 @@ CI, and coding agents.
 Paste this into Claude Code, Codex, or another agent that can use a terminal and
 open a web link:
 
-> Read and follow [these Orbit instructions](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md).
-> Help me try the public demo in a new empty directory, outside any existing
-> project. Install Orbit if needed, start and verify the demo, then open its
-> dashboard and `demo-shop`. Ask before installing software or changing anything
-> outside the demo.
+```text
+Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
+Help me try the public demo in a new empty directory, outside any existing
+project. Install Orbit if needed, start and verify the demo, then open its
+dashboard and demo-shop. Ask before installing software or changing anything
+outside the demo.
+```
 
 The agent checks what the demo needs and asks before installing anything. When
 it finishes, the dashboard and tiny storefront are open; buy a mug to watch one
