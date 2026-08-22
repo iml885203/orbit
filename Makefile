@@ -150,7 +150,7 @@ docs-site-check: docs-site-browser-setup
 	pnpm --dir website run check
 
 test-release:
-	@version="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' plugins/orbit/.codex-plugin/plugin.json)"; \
+	@version="$$(tr -d '[:space:]' < VERSION)"; \
 	./scripts/verify-release-candidate.sh "v$$version"
 
 release-check:

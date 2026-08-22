@@ -28,6 +28,20 @@ stack。
 把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
 的 Agent：
 
+### 在你的專案使用 Orbit
+
+```text
+閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
+協助我為這個專案設定 Orbit。先檢查目前的開發環境並提出方案，安裝軟體或
+修改專案檔案前先詢問我。如果專案使用其他本機 orchestrator，先評估直接
+migration，不要默默把它包成單一 Orbit service。
+```
+
+Agent 會先說明 Orbit 將管理什麼、哪些仍由專案負責，以及無法安全 migration
+的行為。只有在你同意方案後才會修改專案。
+
+### 或試玩 public demo
+
 ```text
 閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
 在現有專案之外建立一個新的空目錄，協助我試玩 public demo。如果需要就先
@@ -61,7 +75,7 @@ codex plugin add orbit@orbit
 ```
 
 安裝後新的 session 才會載入 Orbit skill。若你的 Agent 介面不支援 plugin，
-繼續使用本節開頭的 prompt 即可。
+繼續使用所選路徑的 prompt 即可。
 
 ### 想自己使用 CLI？
 
@@ -182,7 +196,7 @@ orbit doctor --json        # host prerequisites 與 setup diagnostics
 orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用表示的憑證
 ```
 
-[試玩 journey](#試玩-orbit) 使用的版本對齊 plugin 會要求 agent 先檢查狀態、
+[試玩 journey](#試玩-orbit) 使用的獨立編版 plugin 會要求 agent 先檢查狀態、
 優先使用 `--json`，並在破壞性操作前確認。不安裝 plugin 時，讓
 agent 直接閱讀
 [skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)

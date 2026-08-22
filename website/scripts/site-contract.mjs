@@ -42,18 +42,22 @@ assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/#try-orbit"/)
 assert.match(home, /href="\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
+assert.ok(home.includes('Help me set up Orbit for this project'), 'project onboarding prompt is missing')
 assert.ok(home.includes('Help me try the public demo'), 'agent-first demo prompt is missing')
 assert.ok(
-  home.indexOf('Help me try the public demo') < home.indexOf('Use Orbit regularly with your agent'),
+  home.indexOf('Help me set up Orbit for this project') < home.indexOf('Help me try the public demo') &&
+    home.indexOf('Help me try the public demo') < home.indexOf('Use Orbit regularly with your agent'),
   'first-time value must appear before plugin distribution details',
 )
 
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
+assert.ok(chineseHome.includes('協助我為這個專案設定 Orbit'), 'Traditional Chinese project onboarding prompt is missing')
 assert.ok(chineseHome.includes('協助我試玩 public demo'), 'Traditional Chinese agent-first demo prompt is missing')
 assert.ok(
-  chineseHome.indexOf('協助我試玩 public demo') < chineseHome.indexOf('讓 Agent 在之後的 session 直接使用 Orbit'),
+  chineseHome.indexOf('協助我為這個專案設定 Orbit') < chineseHome.indexOf('協助我試玩 public demo') &&
+    chineseHome.indexOf('協助我試玩 public demo') < chineseHome.indexOf('讓 Agent 在之後的 session 直接使用 Orbit'),
   'Traditional Chinese first-time value must appear before plugin distribution details',
 )
 

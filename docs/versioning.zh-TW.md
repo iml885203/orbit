@@ -1,7 +1,8 @@
 # 版本與相容性
 
-Orbit 與 repository 內的 `plugins/orbit` plugin 共用同一個
-[語義化版本](https://semver.org/lang/zh-TW/)。
+Orbit CLI 使用[語義化版本](https://semver.org/lang/zh-TW/)，candidate version
+記錄在 repository root 的 `VERSION`。`plugins/orbit` plugin 獨立編版，讓只修改
+skill 的更新不必連帶發布 CLI。
 
 ## 發布順序
 
@@ -28,11 +29,7 @@ Preview batch 依照下列順序 freeze：
 
 1. 完成相關 implementation，以及實務上最強的 journey 驗證。
 2. 一次 review 相較於前一版的完整使用者差異。
-3. 決定下一個版本、更新兩份 plugin manifest、把 `cmd/orbit/extensions.go`
-   的 `EnvRepoRef` 指向即將建立的 demo tag（讓 `orbit init` 內建與本版配對
-   的 demo），並準備配對的 demo tag；此時先不要建立 Orbit tag。Demo tag 內
-   的 `.orbit-release.json` 會記錄 release version 與 demo journey 實際
-   build 的 Orbit candidate commit。
+3. 決定下一個版本並更新 `VERSION`；此時先不要建立 Orbit tag。
 4. 準備並 review 對使用者說明的 release notes。
 5. 執行 candidate 與 platform gates，再手動 approve 發布。Release workflow
    只會在所有 gate 通過後建立不可修改的 Orbit tag，失敗的 candidate 不會留下
@@ -74,10 +71,12 @@ test fixtures 不屬於相容性契約。
 
 ## Plugin 版本
 
-每次發布都必須把以下兩份 plugin manifest 更新成 Orbit release 版本：
+Plugin 使用 `YEAR.MONTH.N`，其中 `N` 是該月第幾次 plugin release；例如
+`2026.8.1` 代表 2026 年 8 月第一版。每次 plugin 發布都要一起更新：
 
 - `plugins/orbit/.codex-plugin/plugin.json`
 - `plugins/orbit/.claude-plugin/plugin.json`
 
-Plugin 只能使用同版 Orbit 已提供的 command 與 contract。任何一份 manifest
-與 Orbit tag 不一致時，該 release 就尚未完成。
+兩份 manifest 必須彼此一致，但不需要等於 Orbit CLI version。只有 plugin
+內容變更時才增加 plugin version。Plugin 必須偵測已安裝的 CLI，不能教導其
+支援版本尚未提供的 command 或 contract。

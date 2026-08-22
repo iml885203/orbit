@@ -151,7 +151,7 @@ SHA-256 checksum 後，再把 binary 放到 `PATH`。
 ### Orbit plugin
 
 如果希望 Agent 從第一次 setup 就開始引導，而不只是操作既有 environment，
-請先安裝版本對齊的 Orbit plugin，再讓它協助安裝 CLI。
+請先安裝 Orbit plugin，再讓它協助安裝 CLI。
 
 Claude Code：
 
@@ -169,8 +169,8 @@ codex plugin add orbit@orbit
 
 安裝後請開啟新的 Agent session。Bundled skill 會偵測缺少的 Orbit CLI、說明
 符合平台的 installer，並在執行前詢問。每個 source release 也包含
-`plugins/orbit`，供 local plugin 開發使用。兩份 manifest 與 Orbit release
-必須維持相同版本；不要讓新版 plugin 搭配舊版 binary。
+`plugins/orbit`，供 local plugin 開發使用。Codex 與 Claude manifest 共用一個
+獨立發布的日曆版本，因此只更新 skill 時不需要發布新的 CLI。
 
 ## 貢獻 Orbit
 

@@ -8,17 +8,11 @@ if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-
 fi
 
 version="${tag#v}"
-
-for manifest in \
-  plugins/orbit/.codex-plugin/plugin.json \
-  plugins/orbit/.claude-plugin/plugin.json
-do
-  actual="$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).version)' "$manifest")"
-  if [[ "$actual" != "$version" ]]; then
-    echo "$manifest has version $actual; expected $version" >&2
-    exit 1
-  fi
-done
+actual="$(tr -d '[:space:]' < VERSION)"
+if [[ "$actual" != "$version" ]]; then
+  echo "VERSION has $actual; expected $version" >&2
+  exit 1
+fi
 
 # The demo is versioned on its own calendar scheme (vYEAR.MONTH.N) and is NOT
 # re-tagged for every Orbit release — it moves only when the demo itself
@@ -42,4 +36,4 @@ else
   exit 1
 fi
 
-echo "release candidate ${tag} version strings and paired demo tag are coherent"
+echo "release candidate ${tag} version and paired demo tag are coherent"

@@ -44,10 +44,16 @@ Then pick the path that matches the user:
 - **They have a team environment repository** —
   `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
-- **They have neither** — run `orbit inspect --json` and follow its exact setup
-  action. The public demo is the fastest way to show what Orbit does. For a
-  real project, prefer a project-local `orbit.yaml` over building an
-  environment repository.
+- **Their real project has no `orbit.yaml`** — inspect its existing development
+  setup read-only. Do not initialize the public demo or write project files.
+  Propose the resources, dependencies, readiness checks, and files Orbit would
+  manage, then get approval before creating `orbit.yaml`. When the project uses
+  another local orchestrator, prefer a migration plan over wrapping that
+  orchestrator as one opaque Orbit service. For an Aspire AppHost, read
+  [references/aspire-migration.md](references/aspire-migration.md).
+- **They have neither a project nor an environment** — run
+  `orbit inspect --json` and follow its exact setup action. The public demo is
+  the fastest way to show what Orbit does.
 
 If a command reports that Orbit is not set up, follow its stated next step
 rather than guessing between these paths.

@@ -494,7 +494,7 @@ and recommends only `orbit daemon restart --json`.
 ## Recommended Agent Workflow
 
 This document owns the JSON contract, not agent decision policy. The
-version-matched [Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
+[Orbit skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
 defines the inspect, action, verification, failure-recovery, instance-targeting,
 and destructive-operation workflow. Agents should follow response
 `recommended_actions` before falling back to ad hoc debugging.

@@ -30,6 +30,22 @@ CI, and coding agents.
 Paste this into Claude Code, Codex, or another agent that can use a terminal and
 open a web link:
 
+### Use Orbit in your project
+
+```text
+Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
+Help me set up Orbit for this project. Inspect its current development setup
+and propose a plan before installing software or changing project files. If it
+uses another local orchestrator, assess a direct migration instead of silently
+wrapping it as one Orbit service.
+```
+
+The agent first shows what Orbit would manage, what remains the project's
+responsibility, and any behavior that cannot migrate safely. It changes the
+project only after you approve the plan.
+
+### Or try the public demo
+
 ```text
 Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
 Help me try the public demo in a new empty directory, outside any existing
@@ -64,7 +80,8 @@ codex plugin marketplace add iml885203/orbit
 codex plugin add orbit@orbit
 ```
 
-On an agent surface without plugin support, keep using the first prompt.
+On an agent surface without plugin support, keep using the prompt for your
+chosen path.
 
 ### Prefer the CLI?
 
@@ -190,7 +207,7 @@ orbit doctor --json        # host prerequisites and setup diagnostics
 orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
 ```
 
-The version-matched plugin used in the [demo journey](#try-orbit) teaches agents
+The independently versioned plugin used in the [demo journey](#try-orbit) teaches agents
 to inspect state first, prefer `--json`, and confirm destructive operations.
 Without the plugin, point an agent to the
 [skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)

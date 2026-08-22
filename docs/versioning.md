@@ -1,7 +1,8 @@
 # Versioning and compatibility
 
-Orbit and the bundled `plugins/orbit` plugin use the same
-[Semantic Versioning](https://semver.org/) release number.
+Orbit CLI uses [Semantic Versioning](https://semver.org/). Its candidate
+version lives in the root `VERSION` file. The bundled `plugins/orbit` plugin
+versions independently so skill-only changes do not force a CLI release.
 
 ## Release sequence
 
@@ -29,8 +30,8 @@ Freeze a preview batch in this order:
 
 1. Complete the related implementation and its strongest practical journey.
 2. Review the combined user-visible difference from the previous release.
-3. Choose the next version and update both plugin manifests. Do not create the
-   Orbit tag yet.
+3. Choose the next version and update `VERSION`. Do not create the Orbit tag
+   yet.
 4. Prepare and review the user-facing release notes.
 5. Run the candidate and platform gates, then manually approve publication.
    The release workflow creates the immutable Orbit tag only after every gate
@@ -89,10 +90,13 @@ fixtures are not compatibility contracts.
 
 ## Plugin version
 
-Every release updates both plugin manifests to the Orbit release number:
+The plugin uses `YEAR.MONTH.N`, where `N` counts plugin releases within that
+month (`2026.8.1` is August 2026's first). Update both manifests together:
 
 - `plugins/orbit/.codex-plugin/plugin.json`
 - `plugins/orbit/.claude-plugin/plugin.json`
 
-The plugin may use only commands and contracts available in the same Orbit
-version. A release is incomplete if either manifest differs from the Orbit tag.
+The two manifests must match each other, but do not match the Orbit CLI
+version. Increment the plugin version only when plugin contents change. The
+plugin must detect the installed CLI and avoid teaching commands or contracts
+that unavailable supported CLI versions cannot provide.

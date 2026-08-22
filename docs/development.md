@@ -164,7 +164,7 @@ Verify the SHA-256 checksum before moving the binary onto your `PATH`.
 
 ### Orbit plugin
 
-Install the version-matched Orbit plugin before the CLI when you want the
+Install the Orbit plugin before the CLI when you want the
 agent to guide first-time setup as well as operate an existing environment.
 
 Claude Code:
@@ -184,8 +184,8 @@ codex plugin add orbit@orbit
 Start a new agent session after installation. The bundled skill detects a
 missing Orbit CLI, explains the platform-specific installer, and asks before
 running it. Each source release also includes `plugins/orbit` for local
-plugin development. The two manifests and Orbit release always carry the same
-version; do not mix a plugin from one release with an older binary.
+plugin development. The Codex and Claude manifests share one independently
+released calendar version, so skill-only updates do not require a CLI release.
 
 ## Contributing to Orbit
 
