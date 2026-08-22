@@ -149,13 +149,15 @@ if [ -x "$orbit_bin" ]; then
   done
   test -f "$test_root/relocation-ready"
   (
-    for _ in $(seq 1 100); do
+    for _ in $(seq 1 600); do
       if grep -F "checks_failed" "$test_root/relocation-output" >/dev/null 2>&1; then
         kill "$relocation_guard_pid" >/dev/null 2>&1 || true
         exit 0
       fi
       sleep 0.05
     done
+    echo "Timed out waiting for the runtime journey's occupied-port failure." >&2
+    tail -n 40 "$test_root/relocation-output" >&2 || true
     exit 1
   ) &
   release_watcher_pid=$!
@@ -226,8 +228,16 @@ import pathlib
 import sys
 pathlib.Path(sys.argv[1]).write_text("x" * (70 * 1024), encoding="utf-8")
 PY
-printf '%s\n' '{"token":"daemon-secret","state":"ready"}' >"$ORBIT_HOME/daemon.log"
+python3 - "$ORBIT_HOME/daemon.log" <<'PY'
+import pathlib
+import sys
+pathlib.Path(sys.argv[1]).write_text(
+    "daemon-prefix-secret\n" + "x" * (140 * 1024) + '\n{"token":"daemon-secret","state":"ready"}\n',
+    encoding="utf-8",
+)
+PY
 printf '%s\n' 'env: { API_TOKEN: top-secret }' >"$fixture_root/orbit.yaml"
+printf '%s\n' '{"account":{"value":"unrelated-secret"}}' >"$fixture_root/credentials.json"
 mkdir -p "$fixture_root/cloned-repository"
 printf '%s\n' '{"secret":"cloned-secret"}' >"$fixture_root/cloned-repository/external.json"
 ln -s "cloned-repository/external.json" "$fixture_root/external-link.json"
@@ -268,7 +278,7 @@ grep -F 'daemon-tail.log' "$artifact_dir/manifest.json" >/dev/null
 grep -F 'assertion.stderr' "$artifact_dir/manifest.json" >/dev/null
 grep -F '[truncated]' "$artifact_dir"/*oversized.stderr >/dev/null
 grep -F '[redacted]' "$artifact_dir"/* >/dev/null
-for secret in top-secret bearer-secret api-key-secret db-secret private-key-secret daemon-secret camel-api-secret camel-token-secret camel-private-secret camel-database-secret camel-connection-secret; do
+for secret in top-secret bearer-secret api-key-secret db-secret private-key-secret daemon-secret daemon-prefix-secret unrelated-secret camel-api-secret camel-token-secret camel-private-secret camel-database-secret camel-connection-secret; do
   if grep -R -F "$secret" "$artifact_dir" >/dev/null; then
     echo "Journey diagnostic artifact retained sensitive content: $secret" >&2
     grep -R -n -F "$secret" "$artifact_dir" >&2
