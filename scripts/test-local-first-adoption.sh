@@ -72,6 +72,9 @@ export ORBIT_NAMESPACE="$local_namespace"
 export ORBIT_DASHBOARD_PORT="$((24000 + ($$ % 1000)))"
 
 cleanup() {
+  status="$1"
+  "$repo_root/scripts/export-journey-diagnostics.sh" local-first "$status" "$test_root" ||
+    echo "Failed to export local-first journey diagnostics." >&2
   ORBIT_HOME="$shared_home" ORBIT_NAMESPACE="$shared_namespace" \
     "$orbit_bin" down --json >/dev/null 2>&1 || true
   ORBIT_HOME="$shared_home" ORBIT_NAMESPACE="$shared_namespace" \
@@ -85,7 +88,7 @@ cleanup() {
   fi
   rm -rf "$test_root"
 }
-trap 'status=$?; cleanup; exit "$status"' EXIT
+trap 'status=$?; trap - EXIT; cleanup "$status"; exit "$status"' EXIT
 
 mkdir -p "$test_root/project"
 cp "$example_config" "$test_root/project/orbit.yaml"

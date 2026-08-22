@@ -43,7 +43,7 @@ fi
 while [ "$attempt" -le "$max_attempts" ]; do
   : >"$output"
   set +e
-  "$@" 2>&1 | tee "$output"
+  ORBIT_JOURNEY_ATTEMPT="$attempt" "$@" 2>&1 | tee "$output"
   command_status="${PIPESTATUS[0]}"
   set -e
 

@@ -10,6 +10,7 @@ orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 test_root="$(mktemp -d)"
 existing_network="orbit-harness-existing-$$"
 new_network="orbit-harness-new-$$"
+late_failure_namespace="harness-late-failure-$$"
 cleanup() {
   if [ -n "${release_watcher_pid:-}" ]; then
     kill "$release_watcher_pid" >/dev/null 2>&1 || true
@@ -20,6 +21,7 @@ cleanup() {
     wait "$relocation_guard_pid" >/dev/null 2>&1 || true
   fi
   docker network rm "$new_network" "$existing_network" >/dev/null 2>&1 || true
+  docker network rm "orbit-$late_failure_namespace" >/dev/null 2>&1 || true
   rm -rf "$test_root"
 }
 trap cleanup EXIT
@@ -192,4 +194,119 @@ set -e
 test "$cleanup_failure_status" -ne 0
 grep -F "Refusing to clean invalid journey namespace" "$test_root/cleanup-failure-output" >/dev/null
 
-echo "Journey harness retries only bounded port conflicts and removes only newly created Docker resources"
+cat >"$test_root/late-failure.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+fixture_root="$1"
+repo_root="$2"
+namespace="$3"
+docker_available="$4"
+export ORBIT_HOME="$fixture_root/home"
+mkdir -p "$ORBIT_HOME"
+cleanup() {
+  status="$?"
+  trap - EXIT
+  "$repo_root/scripts/export-journey-diagnostics.sh" late-stage-fixture "$status" "$fixture_root"
+  rm -rf "$fixture_root"
+  exit "$status"
+}
+trap cleanup EXIT
+printf '%s\n' '{"ok":true,"data":{"environment":{"API_TOKEN":"top-secret"},"state":"ready"}}' >"$fixture_root/up.json"
+printf '%s\n' \
+  'assertion failed token=top-secret' \
+  'Authorization: Bearer bearer-secret' \
+  'API_KEY="api-key-secret"' \
+  'DATABASE_URL=https://db-user:db-secret@example.test/database' \
+  '-----BEGIN PRIVATE KEY-----' \
+  'private-key-secret' \
+  '-----END PRIVATE KEY-----' \
+  >"$fixture_root/assertion.stderr"
+python3 - "$fixture_root/oversized.stderr" <<'PY'
+import pathlib
+import sys
+pathlib.Path(sys.argv[1]).write_text("x" * (70 * 1024), encoding="utf-8")
+PY
+printf '%s\n' '{"token":"daemon-secret","state":"ready"}' >"$ORBIT_HOME/daemon.log"
+printf '%s\n' 'env: { API_TOKEN: top-secret }' >"$fixture_root/orbit.yaml"
+mkdir -p "$fixture_root/cloned-repository"
+printf '%s\n' '{"secret":"cloned-secret"}' >"$fixture_root/cloned-repository/external.json"
+ln -s "cloned-repository/external.json" "$fixture_root/external-link.json"
+for file_number in $(seq 1 30); do
+  printf '{"early":%s}\n' "$file_number" >"$fixture_root/early-$file_number.json"
+done
+printf '%s\n' '{"late":"failure-boundary","state":"ready","apiKey":"camel-api-secret","accessToken":"camel-token-secret","privateKey":"camel-private-secret","databaseUrl":"camel-database-secret","connectionString":"camel-connection-secret"}' >"$fixture_root/late-status.json"
+if [ "$docker_available" = "1" ]; then
+  "$repo_root/scripts/register-journey-namespace.sh" "$namespace"
+  docker network create "orbit-$namespace" >/dev/null
+fi
+echo "startup completed; synthetic late assertion failed" >&2
+exit 23
+SH
+chmod +x "$test_root/late-failure.sh"
+
+docker_available=0
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  docker_available=1
+fi
+artifact_root="$test_root/artifacts"
+late_fixture_root="$test_root/late-fixture"
+mkdir -p "$late_fixture_root"
+set +e
+ORBIT_JOURNEY_ARTIFACT_DIR="$artifact_root" \
+  "$retry_runner" "$test_root/late-failure.sh" "$late_fixture_root" "$repo_root" \
+    "$late_failure_namespace" "$docker_available" \
+    >"$test_root/late-failure-output" 2>&1
+late_failure_status=$?
+set -e
+test "$late_failure_status" -eq 23
+test ! -d "$late_fixture_root"
+artifact_dir="$artifact_root/late-stage-fixture/attempt-1"
+test -f "$artifact_dir/manifest.json"
+grep -F '"state": "ready"' "$artifact_dir"/*.json >/dev/null
+grep -F '"late": "failure-boundary"' "$artifact_dir"/*.json >/dev/null
+grep -F 'daemon-tail.log' "$artifact_dir/manifest.json" >/dev/null
+grep -F 'assertion.stderr' "$artifact_dir/manifest.json" >/dev/null
+grep -F '[truncated]' "$artifact_dir"/*oversized.stderr >/dev/null
+grep -F '[redacted]' "$artifact_dir"/* >/dev/null
+for secret in top-secret bearer-secret api-key-secret db-secret private-key-secret daemon-secret camel-api-secret camel-token-secret camel-private-secret camel-database-secret camel-connection-secret; do
+  if grep -R -F "$secret" "$artifact_dir" >/dev/null; then
+    echo "Journey diagnostic artifact retained sensitive content: $secret" >&2
+    grep -R -n -F "$secret" "$artifact_dir" >&2
+    exit 1
+  fi
+done
+artifact_max_file="$(python3 - "$artifact_dir" <<'PY'
+import pathlib
+import sys
+print(max(path.stat().st_size for path in pathlib.Path(sys.argv[1]).iterdir() if path.is_file()))
+PY
+)"
+if [ "$artifact_max_file" -gt $((64 * 1024)) ]; then
+  echo "Journey diagnostic artifact exceeded its per-file limit." >&2
+  exit 1
+fi
+artifact_bytes="$(python3 - "$artifact_dir" <<'PY'
+import pathlib
+import sys
+print(sum(path.stat().st_size for path in pathlib.Path(sys.argv[1]).iterdir() if path.is_file()))
+PY
+)"
+if [ "$artifact_bytes" -gt $((512 * 1024)) ]; then
+  echo "Journey diagnostic artifact exceeded its total-size limit." >&2
+  exit 1
+fi
+if grep -R -F 'cloned-secret' "$artifact_dir" >/dev/null; then
+  echo "Journey diagnostic artifact traversed a cloned repository." >&2
+  exit 1
+fi
+if find "$artifact_dir" -type f | grep -F 'orbit.yaml' >/dev/null; then
+  echo "Journey diagnostic artifact included configuration material." >&2
+  exit 1
+fi
+test "$(find "$artifact_dir" -type f | wc -l | tr -d ' ')" -le 24
+if [ "$docker_available" = "1" ] && docker network inspect "orbit-$late_failure_namespace" >/dev/null 2>&1; then
+  echo "Late-stage failure diagnostics skipped registered Docker cleanup." >&2
+  exit 1
+fi
+
+echo "Journey harness preserves bounded failure diagnostics, retries only port conflicts, and removes registered Docker resources"
