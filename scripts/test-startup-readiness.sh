@@ -10,16 +10,30 @@ if [ ! -x "$orbit_bin" ]; then
   exit 1
 fi
 
-test_root="$(mktemp -d)"
+test_root="$(mktemp -d /tmp/orbit-readiness.XXXXXX)"
 export ORBIT_HOME="$test_root/home"
-export ORBIT_NAMESPACE="startup-readiness-$$"
-export ORBIT_DASHBOARD_PORT="$((27000 + ($$ % 1000)))"
-api_port="$((30000 + ($$ % 1000)))"
-silent_port="$((31000 + ($$ % 1000)))"
+instance_base="${ORBIT_INSTANCE_BASE_HOME:-$ORBIT_HOME}"
+instance_name="startup-readiness-$$"
+api_port=21180
+silent_port=21181
+
+run_orbit() {
+  "$orbit_bin" --instance "$instance_name" "$@"
+}
 
 cleanup() {
-  "$orbit_bin" down --json >/dev/null 2>&1 || true
-  "$orbit_bin" daemon stop --json >/dev/null 2>&1 || true
+  if [ -f "$instance_base/instances/$instance_name/instance.json" ]; then
+    namespace="$(python3 - "$instance_base/instances/$instance_name/instance.json" <<'PY'
+import json
+import sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["namespace"])
+PY
+)"
+    "$repo_root/scripts/register-journey-namespace.sh" "$namespace"
+  fi
+  run_orbit down --json >/dev/null 2>&1 || true
+  run_orbit daemon stop --json >/dev/null 2>&1 || true
+  "$orbit_bin" instance clean "$instance_name" --json >/dev/null 2>&1 || true
   rm -rf "$test_root"
 }
 trap 'status=$?; cleanup; exit "$status"' EXIT
@@ -67,7 +81,7 @@ services:
 YAML
 
 cd "$test_root/delayed"
-if ! "$orbit_bin" up --json >"$test_root/delayed-up.json" 2>"$test_root/delayed-up.stderr"; then
+if ! run_orbit up --json >"$test_root/delayed-up.json" 2>"$test_root/delayed-up.stderr"; then
   echo "orbit up failed during startup readiness." >&2
   if [ -s "$test_root/delayed-up.json" ]; then
     echo "orbit up JSON:" >&2
@@ -78,15 +92,15 @@ if ! "$orbit_bin" up --json >"$test_root/delayed-up.json" 2>"$test_root/delayed-
     sed 's/^/  /' "$test_root/delayed-up.stderr" >&2
   fi
   echo "orbit status after the failure:" >&2
-  "$orbit_bin" status --json >&2 || true
+  run_orbit status --json >&2 || true
   if [ -s "$ORBIT_HOME/daemon.log" ]; then
     echo "daemon log tail:" >&2
     tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
   fi
   exit 1
 fi
-"$orbit_bin" logs client --json >"$test_root/client-logs.json"
-"$orbit_bin" status --json >"$test_root/delayed-status.json"
+run_orbit logs client --json >"$test_root/client-logs.json"
+run_orbit status --json >"$test_root/delayed-status.json"
 python3 - "$test_root" <<'PY'
 import json
 import pathlib
@@ -105,7 +119,7 @@ assert any("dependency request succeeded" in line for line in logs["data"]["line
 with urllib.request.urlopen(resources["api"]["url"], timeout=2) as response:
     assert response.status == 200
 PY
-"$orbit_bin" down --json >/dev/null
+run_orbit down --json >/dev/null
 
 mkdir -p "$test_root/silent"
 cat >"$test_root/silent/sleep.py" <<'PY'
@@ -129,18 +143,19 @@ services:
 YAML
 
 cd "$test_root/silent"
-if "$orbit_bin" up --timeout 3s --json >"$test_root/silent-up.json"; then
+if run_orbit up --timeout 3s --json >"$test_root/silent-up.json"; then
   echo "orbit up declared a non-listening frontend healthy." >&2
   exit 1
 fi
-"$orbit_bin" status --json >"$test_root/silent-status.json"
-"$orbit_bin" logs app --json >"$test_root/silent-logs.json"
-python3 - "$test_root" <<'PY'
+run_orbit status --json >"$test_root/silent-status.json"
+run_orbit logs app --json >"$test_root/silent-logs.json"
+python3 - "$test_root" "$instance_name" <<'PY'
 import json
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
+instance = sys.argv[2]
 up = json.loads((root / "silent-up.json").read_text(encoding="utf-8"))
 status = json.loads((root / "silent-status.json").read_text(encoding="utf-8"))
 logs = json.loads((root / "silent-logs.json").read_text(encoding="utf-8"))
@@ -149,11 +164,13 @@ assert all(not action["command"].startswith("orbit open") for action in up.get("
 app = next(item for item in status["data"]["resources"] if item["name"] == "app")
 assert app["state"] == "degraded"
 assert app["failure_kind"] == "health"
-assert [action["command"] for action in logs["recommended_actions"]] == ["orbit status --json"]
+assert [action["command"] for action in logs["recommended_actions"]] == [
+    f"orbit --instance {instance} status --json"
+]
 PY
-"$orbit_bin" status --json >"$test_root/emitted-status.json"
-"$orbit_bin" down --json >/dev/null
-"$orbit_bin" daemon stop --json >/dev/null
+run_orbit status --json >"$test_root/emitted-status.json"
+run_orbit down --json >/dev/null
+run_orbit daemon stop --json >/dev/null
 
 mkdir -p "$test_root/invalid"
 cat >"$test_root/invalid/sleep.py" <<'PY'
@@ -177,11 +194,11 @@ services:
 YAML
 
 cd "$test_root/invalid"
-if "$orbit_bin" doctor --json >"$test_root/invalid-doctor.json"; then
+if run_orbit doctor --json >"$test_root/invalid-doctor.json"; then
   echo "orbit doctor accepted missing startup executables." >&2
   exit 1
 fi
-if "$orbit_bin" up --json >"$test_root/invalid-up.json"; then
+if run_orbit up --json >"$test_root/invalid-up.json"; then
   echo "orbit up started a deterministically invalid environment." >&2
   exit 1
 fi

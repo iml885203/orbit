@@ -10,17 +10,31 @@ if [ ! -x "$orbit_bin" ]; then
   exit 1
 fi
 
-test_root="$(mktemp -d)"
+test_root="$(mktemp -d /tmp/orbit-runtime.XXXXXX)"
 export ORBIT_HOME="$test_root/home"
-export ORBIT_NAMESPACE="runtime-adoption-$$"
-export ORBIT_DASHBOARD_PORT="$((32000 + ($$ % 500)))"
-python_port="$((32500 + ($$ % 500)))"
-node_port="$((33000 + ($$ % 500)))"
-go_port="$((33500 + ($$ % 500)))"
+instance_base="${ORBIT_INSTANCE_BASE_HOME:-$ORBIT_HOME}"
+instance_name="runtime-adoption-$$"
+python_port=21080
+node_port=21081
+go_port=21082
+
+run_orbit() {
+  "$orbit_bin" --instance "$instance_name" "$@"
+}
 
 cleanup() {
-  "$orbit_bin" down --json >/dev/null 2>&1 || true
-  "$orbit_bin" daemon stop --json >/dev/null 2>&1 || true
+  if [ -f "$instance_base/instances/$instance_name/instance.json" ]; then
+    namespace="$(python3 - "$instance_base/instances/$instance_name/instance.json" <<'PY'
+import json
+import sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["namespace"])
+PY
+)"
+    "$repo_root/scripts/register-journey-namespace.sh" "$namespace"
+  fi
+  run_orbit down --json >/dev/null 2>&1 || true
+  run_orbit daemon stop --json >/dev/null 2>&1 || true
+  "$orbit_bin" instance clean "$instance_name" --json >/dev/null 2>&1 || true
   rm -rf "$test_root"
 }
 trap 'status=$?; cleanup; exit "$status"' EXIT
@@ -97,8 +111,15 @@ services:
 YAML
 
 cd "$test_root"
-"$orbit_bin" doctor --json >"$test_root/doctor.json"
-if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
+if ! run_orbit doctor --json >"$test_root/doctor.json" 2>"$test_root/doctor.stderr"; then
+  echo "orbit doctor failed during runtime adoption." >&2
+  sed 's/^/  /' "$test_root/doctor.json" >&2
+  if [ -s "$test_root/doctor.stderr" ]; then
+    sed 's/^/  /' "$test_root/doctor.stderr" >&2
+  fi
+  exit 1
+fi
+if ! run_orbit up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
   echo "orbit up failed during runtime adoption." >&2
   if [ -s "$test_root/up.json" ]; then
     echo "orbit up JSON:" >&2
@@ -109,14 +130,14 @@ if ! "$orbit_bin" up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
     sed 's/^/  /' "$test_root/up.stderr" >&2
   fi
   echo "orbit status after the failure:" >&2
-  "$orbit_bin" status --json >&2 || true
+  run_orbit status --json >&2 || true
   if [ -s "$ORBIT_HOME/daemon.log" ]; then
     echo "daemon log tail:" >&2
     tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
   fi
   exit 1
 fi
-"$orbit_bin" status --json >"$test_root/status.json"
+run_orbit status --json >"$test_root/status.json"
 
 python3 - "$test_root" <<'PY'
 import json
