@@ -12,8 +12,10 @@ Use Node.js 22 and pnpm 11, then start the development server:
 make docs-site-dev
 ```
 
-The full check installs its pinned headless Chromium build on first use. To
-prepare that browser separately, run `make docs-site-browser-setup`.
+The full check installs website dependencies once and installs its pinned
+headless Chromium build on first use. To prepare that browser separately, run
+`make docs-site-browser-setup`. Callers that provide
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` keep using that browser instead.
 
 Build and validate the production site before submitting a documentation
 change:

@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/docs.yml'
+      - 'Makefile'
       - 'docs/**'
       - 'ui/public/**'
       - 'website/**'
+      - 'scripts/test-docs-site-setup.sh'
       - 'README.md'
       - 'README.zh-TW.md'
       - 'CONTRIBUTING.md'
@@ -26,6 +28,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -37,9 +40,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
       - uses: actions/configure-pages@v5
-      - run: pnpm --dir website install --frozen-lockfile
-      - run: pnpm --dir website exec playwright install --with-deps chromium
-      - run: make docs-site-check
+      - run: make docs-site-linux-deps docs-site-check
       - uses: actions/upload-pages-artifact@v4
         with:
           path: website/.vitepress/dist
@@ -53,6 +54,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

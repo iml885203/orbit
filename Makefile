@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs docs-site-dev docs-site-build docs-site-preview docs-site-browser-setup docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-browser-setup docs-site-linux-deps docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -118,7 +118,7 @@ test-install:
 	@./scripts/test-install.sh
 	@./scripts/test-uninstall.sh
 
-test-docs:
+test-docs: test-docs-site-setup
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-quickstart-journey.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-local-first-adoption.sh
 	@ORBIT_DOCS_ONLY=1 ./scripts/test-project-context-switch.sh
@@ -133,6 +133,9 @@ test-docs:
 	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.zh-TW.md >/dev/null
 	@! grep -F 'iml885203/orbit-examples' README.md README.zh-TW.md
 
+test-docs-site-setup:
+	@./scripts/test-docs-site-setup.sh
+
 docs-site-dev:
 	pnpm --dir website install --frozen-lockfile
 	pnpm --dir website run dev
@@ -144,12 +147,16 @@ docs-site-build:
 docs-site-preview: docs-site-build
 	pnpm --dir website run preview
 
-docs-site-browser-setup:
+docs-site-deps:
 	pnpm --dir website install --frozen-lockfile
+
+docs-site-browser-setup: docs-site-deps
 	@if [ -z "$(PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)" ]; then pnpm --dir website exec playwright install chromium; fi
 
+docs-site-linux-deps: docs-site-deps
+	pnpm --dir website exec playwright install-deps chromium
+
 docs-site-check: docs-site-browser-setup
-	pnpm --dir website install --frozen-lockfile
 	pnpm --dir website run check
 
 test-release:
