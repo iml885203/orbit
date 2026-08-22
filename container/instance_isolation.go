@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/iml885203/orbit/dockerctx"
+	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 )
 
@@ -26,6 +28,54 @@ func namespaceVolumeBinds(namespace string, binds []string) []string {
 	return isolated
 }
 
+func ensureNamespaceVolumes(ctx context.Context, cli *client.Client, namespace string, binds []string) error {
+	if namespace == "" {
+		return nil
+	}
+	for _, bind := range namespaceVolumeBinds(namespace, binds) {
+		parts := strings.SplitN(bind, ":", 2)
+		if len(parts) != 2 || !strings.HasPrefix(parts[0], "orbit-"+namespace+"-") {
+			continue
+		}
+		if result, err := cli.VolumeInspect(ctx, parts[0], client.VolumeInspectOptions{}); err == nil {
+			if err := validateNamespaceVolume(result.Volume, namespace); err != nil {
+				return err
+			}
+			continue
+		} else if !cerrdefs.IsNotFound(err) {
+			return fmt.Errorf("inspecting instance volume %s: %w", parts[0], err)
+		}
+		result, err := cli.VolumeCreate(ctx, client.VolumeCreateOptions{
+			Name: parts[0],
+			Labels: map[string]string{
+				labelManaged:   "true",
+				labelNamespace: namespace,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating instance volume %s: %w", parts[0], err)
+		}
+		if err := validateNamespaceVolume(result.Volume, namespace); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateNamespaceVolume(item volume.Volume, namespace string) error {
+	if len(item.Labels) == 0 {
+		return nil
+	}
+	if item.Labels[labelManaged] == "true" && item.Labels[labelNamespace] == namespace {
+		return nil
+	}
+	return fmt.Errorf("volume %s has conflicting ownership labels", item.Name)
+}
+
+func isOwnedNamespaceVolume(item volume.Volume, namespace string) bool {
+	return item.Labels[labelManaged] == "true" && item.Labels[labelNamespace] == namespace
+}
+
 // An empty namespace is rejected so cleanup can never target legacy default-runtime resources.
 func PurgeNamespace(ctx context.Context, namespace string) error {
 	if namespace == "" {
@@ -35,8 +85,11 @@ func PurgeNamespace(ctx context.Context, namespace string) error {
 	if err != nil {
 		return fmt.Errorf("connecting to Docker: %w", err)
 	}
+	defer func() { _ = cli.Close() }()
 	containers, err := cli.ContainerList(ctx, client.ContainerListOptions{
-		All: true, Filters: make(client.Filters).Add("label", labelNamespace+"="+namespace),
+		All: true, Filters: make(client.Filters).
+			Add("label", labelManaged+"=true").
+			Add("label", labelNamespace+"="+namespace),
 	})
 	if err != nil {
 		return fmt.Errorf("listing instance containers: %w", err)
@@ -46,12 +99,16 @@ func PurgeNamespace(ctx context.Context, namespace string) error {
 			return fmt.Errorf("removing instance container %s: %w", item.ID, err)
 		}
 	}
-	volumes, err := cli.VolumeList(ctx, client.VolumeListOptions{Filters: make(client.Filters).Add("name", "orbit-"+namespace+"-")})
+	volumes, err := cli.VolumeList(ctx, client.VolumeListOptions{
+		Filters: make(client.Filters).
+			Add("label", labelManaged+"=true").
+			Add("label", labelNamespace+"="+namespace),
+	})
 	if err != nil {
 		return fmt.Errorf("listing instance volumes: %w", err)
 	}
 	for _, volume := range volumes.Items {
-		if !strings.HasPrefix(volume.Name, "orbit-"+namespace+"-") {
+		if !isOwnedNamespaceVolume(volume, namespace) {
 			continue
 		}
 		if _, err := cli.VolumeRemove(ctx, volume.Name, client.VolumeRemoveOptions{Force: true}); err != nil {

@@ -57,6 +57,14 @@ It is destructive to that instance's local processes and data, but ownership
 labels keep other named instances and the default runtime untouched. Run it
 only when that instance is no longer needed.
 
+Orbit labels newly created named volumes with their exact instance ownership.
+Volumes created by older Orbit versions may not have this label. Cleanup
+preserves these unlabelled legacy volumes because their names alone cannot
+prove ownership safely; remove or migrate them manually after verifying their
+data. Ordinary `down` and restart operations keep
+configured named volumes and bind mounts, while removing image-created
+anonymous volumes with their containers.
+
 Low-level runtime environment variables remain available for compatibility
 and tests of Orbit's isolation internals. They are not the normal way to run a
 second stack; see [Configuration](configuration.md#low-level-runtime-overrides).

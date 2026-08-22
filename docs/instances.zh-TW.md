@@ -53,6 +53,12 @@ Cleanup 會停止該 instance，並移除其 daemon state 與 Docker resources�
 該 instance 的本機 processes 與資料，但 ownership labels 會保護其他 named
 instances 與 default runtime。只在確定不再需要該 instance 時執行。
 
+Orbit 會在新建的 named volumes 加上該 instance 的 exact ownership label。舊版
+Orbit 建立的 volumes 可能沒有這個 label；cleanup 會保留這些 unlabeled legacy
+volumes，因為只靠名稱無法安全證明 ownership。請先確認資料，再手動移除或遷移這些
+volumes。一般的 `down` 與 restart 會保留設定中宣告的 named volumes 和 bind
+mounts，並隨 container 移除 image 建立的 anonymous volumes。
+
 底層 runtime environment variables 仍保留給相容性與 Orbit 隔離內部的測試，
 不再是啟動第二個 stack 的一般方式；詳見
 [設定](configuration.zh-TW.md#底層-runtime-覆寫)。
