@@ -138,6 +138,19 @@ if ! run_orbit up --json >"$test_root/up.json" 2>"$test_root/up.stderr"; then
     echo "daemon log tail:" >&2
     tail -n 80 "$ORBIT_HOME/daemon.log" | sed 's/^/  /' >&2
   fi
+  if python3 - "$test_root/up.json" <<'PY'
+import json
+import sys
+
+result = json.load(open(sys.argv[1], encoding="utf-8"))
+raise SystemExit(0 if result.get("error", {}).get("code") in {
+    "dashboard_port_conflict",
+    "resource_port_conflict",
+} else 1)
+PY
+  then
+    echo "ORBIT_JOURNEY_RETRYABLE=port-conflict" >&2
+  fi
   exit 1
 fi
 run_orbit status --json >"$test_root/status.json"

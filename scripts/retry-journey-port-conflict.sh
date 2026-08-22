@@ -57,7 +57,9 @@ while [ "$attempt" -le "$max_attempts" ]; do
   fi
   last_error_code="$(tail -n "$classification_lines" "$output" | sed -nE 's/.*"code"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | tail -n 1)"
   retryable=1
-  if [ -n "$last_error_code" ]; then
+  if [ "$terminal_line" = "ORBIT_JOURNEY_RETRYABLE=port-conflict" ]; then
+    retryable=0
+  elif [ -n "$last_error_code" ]; then
     case "$last_error_code" in
       resource_port_conflict|dashboard_port_conflict) retryable=0 ;;
       checks_failed)
