@@ -1,6 +1,6 @@
 {
   "name": "orbit",
-  "version": "0.15.7",
+  "version": "0.15.8",
   "description": "Operate local development environments safely with Orbit.",
   "author": {
     "name": "Logan Guo"
