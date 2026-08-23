@@ -624,8 +624,6 @@ services:
 }
 
 func TestE2E_UpdateReconnectsTheRunningEnvironment(t *testing.T) {
-	t.Parallel()
-
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
