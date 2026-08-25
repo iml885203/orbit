@@ -156,11 +156,7 @@ func (s *ProbeSession) checkHTTP(ctx context.Context, hc *config.HealthCheckConf
 		return Result{Service: s.name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}
 
-	client := s.client
-	if scheme == "https" {
-		client = s.checker.clientFor(hc)
-	}
-	resp, err := client.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return Result{Service: s.name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}

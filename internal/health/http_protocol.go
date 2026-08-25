@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -105,9 +106,9 @@ func (t *protocolTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			resp, alternateErr := t.roundTrip(alternate, req)
 			if alternateErr != nil {
 				if protocol == protocolH2C {
-					return nil, protocolFailures{h2c: firstErr, http1: alternateErr}
+					return nil, protocolFailures{h2c: protocolCause(firstErr), http1: protocolCause(alternateErr)}
 				}
-				return nil, protocolFailures{h2c: alternateErr, http1: firstErr}
+				return nil, protocolFailures{h2c: protocolCause(alternateErr), http1: protocolCause(firstErr)}
 			}
 			t.mu.Lock()
 			if t.selected[origin] == protocol {
@@ -139,6 +140,14 @@ func (t *protocolTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			return discovery.response, discovery.err
 		}
 	}
+}
+
+func protocolCause(err error) error {
+	var failure protocolFailure
+	if errors.As(err, &failure) {
+		return failure.err
+	}
+	return err
 }
 
 func (t *protocolTransport) discover(origin string, req *http.Request, discovery *protocolDiscovery) {

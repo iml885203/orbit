@@ -151,6 +151,34 @@ func TestHTTPProbeRedirectToHTTPSUsesConfiguredTrust(t *testing.T) {
 	}
 }
 
+func TestHTTPProbeDiscoversH2CAfterHTTPSRedirect(t *testing.T) {
+	targetPort := startH2CServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor != 2 {
+			http.Error(w, "h2c required", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	source := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://localhost:"+strconv.Itoa(targetPort)+"/ready", http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+	checker := NewChecker(nil, nil)
+	checker.httpClient = source.Client()
+	transport := checker.httpClient.Transport.(*http.Transport).Clone()
+	transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+	transport.TLSClientConfig.ServerName = "example.com"
+	checker.httpClient.Transport = transport
+	hc := &config.HealthCheckConfig{
+		Type: "http", Scheme: "https", Port: source.Listener.Addr().(*net.TCPAddr).Port,
+		Path: "/health", Timeout: time.Second,
+	}
+	result := checker.NewProbeSession(context.Background(), "api", 1, hc).Check()
+	if !result.Healthy {
+		t.Fatalf("HTTPS-to-h2c redirect failed: %s", result.Message)
+	}
+}
+
 func TestHTTPProbeRejectsRedirectLoop(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, r.URL.Path, http.StatusTemporaryRedirect)
