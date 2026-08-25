@@ -12,6 +12,7 @@ func TestSplitShortPreservesDestinationAndMode(t *testing.T) {
 		{"./fixtures/init.sql:/docker-entrypoint-initdb.d/init.sql:ro", "./fixtures/init.sql", ":/docker-entrypoint-initdb.d/init.sql:ro"},
 		{`C:\work\init.sql:/docker-entrypoint-initdb.d/init.sql:ro`, `C:\work\init.sql`, ":/docker-entrypoint-initdb.d/init.sql:ro"},
 		{"C:/work/init.sql:/docker-entrypoint-initdb.d/init.sql:ro", "C:/work/init.sql", ":/docker-entrypoint-initdb.d/init.sql:ro"},
+		{"C:/data", "C", ":/data"},
 	}
 	for _, test := range tests {
 		source, suffix := SplitShort(test.value)

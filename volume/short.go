@@ -6,12 +6,13 @@ import (
 )
 
 func SplitShort(value string) (string, string) {
-	searchFrom := 0
 	if hasWindowsDrivePrefix(value) {
-		searchFrom = 2
+		if offset := strings.Index(value[2:], ":"); offset >= 0 {
+			index := 2 + offset
+			return value[:index], value[index:]
+		}
 	}
-	if offset := strings.Index(value[searchFrom:], ":"); offset >= 0 {
-		index := searchFrom + offset
+	if index := strings.Index(value, ":"); index >= 0 {
 		return value[:index], value[index:]
 	}
 	return value, ""
