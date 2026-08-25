@@ -3,11 +3,13 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -507,10 +509,19 @@ func TestResolveDotnetAssemblyPath_UseArtifactsOutput(t *testing.T) {
 	if _, err := exec.LookPath("dotnet"); err != nil {
 		t.Skip("dotnet not installed")
 	}
+	versionOutput, err := exec.Command("dotnet", "--version").Output()
+	if err != nil {
+		t.Skipf("dotnet SDK version unavailable: %v", err)
+	}
+	majorText, _, _ := strings.Cut(strings.TrimSpace(string(versionOutput)), ".")
+	major, err := strconv.Atoi(majorText)
+	if err != nil || major < 8 {
+		t.Skipf("UseArtifactsOutput requires .NET SDK 8 or newer; found %q", strings.TrimSpace(string(versionOutput)))
+	}
 	dir := t.TempDir()
 	files := map[string]string{
 		"Directory.Build.props": `<Project><PropertyGroup><UseArtifactsOutput>true</UseArtifactsOutput></PropertyGroup></Project>`,
-		"Api/Api.csproj":        `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>`,
+		"Api/Api.csproj":        fmt.Sprintf(`<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net%d.0</TargetFramework></PropertyGroup></Project>`, major),
 		"Api/Program.cs":        `System.Console.WriteLine("ok");`,
 	}
 	for name, contents := range files {
