@@ -155,10 +155,11 @@ func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
 		_ = server.Close()
 	})
 
-	previousJSON, previousStdout, previousTimeout := cli.JSONOutput, os.Stdout, timeout
+	previousJSON, previousStdout, previousStderr, previousTimeout := cli.JSONOutput, os.Stdout, os.Stderr, timeout
 	t.Cleanup(func() {
 		cli.JSONOutput = previousJSON
 		os.Stdout = previousStdout
+		os.Stderr = previousStderr
 		timeout = previousTimeout
 	})
 	cli.JSONOutput = true
@@ -167,18 +168,32 @@ func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stdout = writeEnd
+	stderrRead, stderrWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = stderrWrite
 	cmd := envApplyCmd()
 	timeout = 80 * time.Millisecond
 	cmd.SetContext(context.Background())
 	err = runEnvApply(cmd, nil)
 	_ = writeEnd.Close()
+	_ = stderrWrite.Close()
 	os.Stdout = previousStdout
+	os.Stderr = previousStderr
 	if err == nil {
 		t.Fatal("runEnvApply() succeeded after reconcile deadline")
 	}
 	output, readErr := io.ReadAll(readEnd)
 	if readErr != nil {
 		t.Fatal(readErr)
+	}
+	progressOutput, readErr := io.ReadAll(stderrRead)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if got, want := string(progressOutput), "⋯ checking environment\n⋯ applying environment\n"; got != want {
+		t.Fatalf("stderr progress = %q, want %q", got, want)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(output))
 	var envelope cli.JSONEnvelope

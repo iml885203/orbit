@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
@@ -65,9 +66,12 @@ func runEnvApply(cmd *cobra.Command, _ []string) error {
 	defer stopSignals()
 	ctx, cancel := lifecycleOperationContext(ctx)
 	defer cancel()
-	result, err := applyEnvironmentChangesContext(ctx, environmentApplyProgress())
+	progress := newLifecycleProgress(ctx, os.Stderr, time.Now())
+	defer progress.Close()
+	result, err := applyEnvironmentChangesContextWithProgress(ctx, environmentApplyProgress(), progress)
 	if err != nil {
 		err = lifecycleOperationError(ctx, err, result.reconcileDispatched)
+		progress.Close()
 		if cli.JSONOutput {
 			failure := cli.WithJSONReplacementActions(err, []cli.JSONAction{cli.StatusAction()})
 			if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), buildEnvironmentApplyJSONData(result), failure, nil); writeErr != nil {
@@ -77,6 +81,7 @@ func runEnvApply(cmd *cobra.Command, _ []string) error {
 		}
 		return err
 	}
+	progress.Close()
 	return cli.WriteJSONSuccess(
 		os.Stdout,
 		commandString(),
@@ -86,19 +91,19 @@ func runEnvApply(cmd *cobra.Command, _ []string) error {
 }
 
 func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(context.Background(), report, false, false)
+	return applyEnvironmentChangesWithEvidence(context.Background(), report, false, false, nil)
 }
 
-func applyEnvironmentChangesContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(ctx, report, false, true)
+func applyEnvironmentChangesContextWithProgress(ctx context.Context, report func(string), progress *lifecycleProgress) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(ctx, report, false, true, progress)
 }
 
 func applyEnvironmentChangesKnownPending(report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(context.Background(), report, true, false)
+	return applyEnvironmentChangesWithEvidence(context.Background(), report, true, false, nil)
 }
 
-func applyEnvironmentChangesKnownPendingContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(ctx, report, true, true)
+func applyEnvironmentChangesKnownPendingContextWithProgress(ctx context.Context, report func(string), progress *lifecycleProgress) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(ctx, report, true, true, progress)
 }
 
 func applyEnvironmentChangesWithEvidence(
@@ -106,8 +111,10 @@ func applyEnvironmentChangesWithEvidence(
 	report func(string),
 	knownPending bool,
 	operationWide bool,
+	progress *lifecycleProgress,
 ) (environmentApplyResult, error) {
 	result := emptyEnvironmentApplyResult()
+	progress.Phase(phaseCheckingEnvironment)
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -137,32 +144,14 @@ func applyEnvironmentChangesWithEvidence(
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	progress.Phase(phaseApplyingEnvironment)
 	result.reconcileDispatched = true
 	reconciled, err := client.ReconcileEnvironment()
 	if err != nil {
 		return result, fmt.Errorf("reconciling environment changes: %w", err)
 	}
 	if !reconciled.RestartRequired {
-		result.Applied = true
-		result.PID = previousPID
-		result.PreviouslyRunning = append(result.PreviouslyRunning, reconciled.PreviouslyRunning...)
-		result.UnavailableResources = append(result.UnavailableResources, reconciled.UnavailableResources...)
-		result.RestoredResources = availablePreviouslyRunning(
-			reconciled.PreviouslyRunning,
-			reconciled.UnavailableResources,
-		)
-		result.StartedDependencies = append(result.StartedDependencies, reconciled.StartedDependencies...)
-		if len(reconciled.AffectedResources) == 0 {
-			result.FinalStatus, err = client.Status()
-		} else if operationWide {
-			result.FinalStatus, err = waitForLifecycleJSONContext(ctx, client, reconciled.AffectedResources, "healthy")
-		} else {
-			result.FinalStatus, err = waitForLifecycleJSON(client, reconciled.AffectedResources, "healthy")
-		}
-		if err != nil {
-			return result, fmt.Errorf("environment applied, but affected resources could not recover: %w", err)
-		}
-		return result, nil
+		return finishReconciledEnvironment(ctx, client, previousPID, reconciled, result, operationWide, progress)
 	}
 
 	result.PreviouslyRunning = runningEnvironmentResources(status.Resources)
@@ -205,6 +194,7 @@ func applyEnvironmentChangesWithEvidence(
 		report(fmt.Sprintf("Restoring %d running resource(s)...", len(result.RestoredResources)))
 	}
 	requestedRestores := append([]string(nil), result.RestoredResources...)
+	progress.Phase(phaseRequestingResourceRestore)
 	response, err := client.Up(daemon.UpRequest{Resources: requestedRestores})
 	if err != nil {
 		return result, fmt.Errorf("restoring running resources: %w", err)
@@ -213,13 +203,44 @@ func applyEnvironmentChangesWithEvidence(
 	sort.Strings(result.RestoredResources)
 	var finalStatus *daemon.StatusResponse
 	if operationWide {
-		finalStatus, err = waitForLifecycleJSONContext(ctx, client, response.AffectedResources, "healthy")
+		finalStatus, err = waitForLifecycleJSONContextWithProgress(ctx, client, response.AffectedResources, "healthy", progress)
 	} else {
 		finalStatus, err = waitForLifecycleJSON(client, response.AffectedResources, "healthy")
 	}
 	result.FinalStatus = finalStatus
 	if err != nil {
 		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)
+	}
+	return result, nil
+}
+
+func finishReconciledEnvironment(
+	ctx context.Context,
+	client *daemon.Client,
+	previousPID int,
+	reconciled *daemon.EnvironmentReconcileResponse,
+	result environmentApplyResult,
+	operationWide bool,
+	progress *lifecycleProgress,
+) (environmentApplyResult, error) {
+	result.Applied = true
+	result.PID = previousPID
+	result.PreviouslyRunning = append(result.PreviouslyRunning, reconciled.PreviouslyRunning...)
+	result.UnavailableResources = append(result.UnavailableResources, reconciled.UnavailableResources...)
+	result.RestoredResources = availablePreviouslyRunning(reconciled.PreviouslyRunning, reconciled.UnavailableResources)
+	result.StartedDependencies = append(result.StartedDependencies, reconciled.StartedDependencies...)
+
+	var err error
+	switch {
+	case len(reconciled.AffectedResources) == 0:
+		result.FinalStatus, err = client.Status()
+	case operationWide:
+		result.FinalStatus, err = waitForLifecycleJSONContextWithProgress(ctx, client, reconciled.AffectedResources, "healthy", progress)
+	default:
+		result.FinalStatus, err = waitForLifecycleJSON(client, reconciled.AffectedResources, "healthy")
+	}
+	if err != nil {
+		return result, fmt.Errorf("environment applied, but affected resources could not recover: %w", err)
 	}
 	return result, nil
 }

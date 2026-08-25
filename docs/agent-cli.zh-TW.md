@@ -63,6 +63,18 @@ Deadline 用盡時回傳 `timeout`；caller 或可攔截 signal 取消時回傳 
 若 environment reconcile request 已 dispatch，canceled message 會如實說明 daemon
 可能已接受並繼續該工作，並建議執行 `orbit status --json`。
 
+## Streams
+
+`stdout` 只承載最終 envelope，請單獨解析。`stderr` 則承載供人閱讀的 diagnostics
+與 progress，不屬於穩定機器契約；內容、措辭與時間點可能隨版本改變。
+`orbit up --json` 與 `orbit env apply --json` 會在 stderr 簡短提示 lifecycle phase。
+同一 phase 持續 30 秒後，heartbeat 才會加入 elapsed time 與約略的剩餘 operation
+budget。Readiness interval 若已有 resource heartbeat，就不會再輸出 generic phase
+heartbeat。Agent 應以最終 envelope 做決策，不應解析 stderr 文字。
+
+若在解析前把 stderr 合併進 stdout，progress 行會破壞 JSON。請分開 redirect，或在
+只需要 envelope 時捨棄 stderr。
+
 ## Error Shape
 
 結構化錯誤使用以下形狀：
@@ -137,7 +149,8 @@ healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` �
 每個指令的 JSON 行為只維護一份完整對照表，見英文版
 [agent-cli.md](agent-cli.md#converted-commands)。新增或變更指令時只更新那份表。
 
-Lifecycle 指令在 JSON 模式下會抑制裝飾性的進度輸出，讓 stdout 保持可解析。
+Lifecycle 指令在 JSON 模式下不會把裝飾性或 diagnostic progress 寫入 stdout，
+因此最終 envelope 仍可解析。
 
 Lifecycle actions 會依結果提供。成功的 `up` 只回傳一個主要下一步：
 `orbit open --json`。啟動失敗時則建議查看 status、根因 resource 的 logs，

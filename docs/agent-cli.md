@@ -75,15 +75,20 @@ may have accepted it and recommends `orbit status --json`.
 `stdout` carries the envelope and nothing else. Parse it alone.
 
 `stderr` carries diagnostics and progress for humans, and is not part of the
-contract — its content and wording may change between releases. During a long
-wait, `orbit up --json` writes one progress line per interval there, so a
-resource that stays in a long-running state is visible to a CI log or a person
-watching the run:
+contract — its content and wording may change between releases. `orbit up
+--json` and `orbit env apply --json` announce a small number of lifecycle phase
+changes there. If a phase stays unchanged for 30 seconds, they add elapsed time
+and an approximate remaining operation budget. During readiness, a resource
+heartbeat replaces the generic phase heartbeat for that interval:
 
 ```
-⋯ api still starting (30s)
-⋯ api still building (1m0s)
+⋯ ensuring daemon
+⋯ waiting for readiness
+⋯ api still starting (elapsed 30s, about 4m29s remaining)
 ```
+
+Phase wording and timing are diagnostic, not stable values for agents to parse.
+Use the final envelope for decisions.
 
 Merging `stderr` into `stdout` before parsing will break: progress lines are
 not JSON. Redirect them separately, or discard `stderr` if only the envelope
@@ -238,8 +243,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |
 | `orbit tracing status --json` | Returns the receiver's health, the port in use, and ingest counters in `data`. |
 
-Lifecycle commands suppress decorative progress output in JSON mode so stdout
-remains parseable.
+Lifecycle commands keep decorative and diagnostic progress off stdout in JSON
+mode so the final envelope remains parseable.
 
 Lifecycle actions are outcome-specific. A successful `up` returns one primary
 next action, `orbit open --json`. A failed start recommends status, logs for the
