@@ -132,7 +132,7 @@ sequenceDiagram
     HC-->>Orch: HealthOK
 ```
 
-`POST /api/up` returns as soon as startup is *dispatched* (`handlers_service.go` calls `StartServices` then responds), not after everything is healthy — the CLI/dashboard watch convergence over the SSE status stream. Services are launched as soon as their declared dependencies reach `Healthy`. The DAG itself doesn't block — independent services start in parallel.
+`POST /api/up` returns as soon as startup is *dispatched* (`handlers_service.go` calls `StartServices` then responds), not after everything is healthy — the CLI/dashboard watch convergence over the SSE status stream. Services are launched as soon as their declared dependencies reach `Healthy`. The DAG itself doesn't block — independent services start in parallel, except that non-watch .NET service builds share one context-aware admission gate. Their runtime processes still start independently as soon as each serialized build completes.
 
 The response identifies the exact daemon-resolved resource set, including
 transitive dependencies and group filtering. The CLI waits only for that set.

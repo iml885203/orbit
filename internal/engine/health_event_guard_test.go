@@ -38,6 +38,34 @@ func TestHealthOK_StaleGenerationIgnored(t *testing.T) {
 	}
 }
 
+func TestBuildEvents_StaleGenerationAndStoppedStateIgnored(t *testing.T) {
+	tests := []struct {
+		name  string
+		state ServiceState
+		event Event
+	}{
+		{name: "stale start", state: StateStarting, event: Event{Type: EventBuildStarted, Service: "api", Generation: 1}},
+		{name: "stale complete", state: StateBuilding, event: Event{Type: EventBuildComplete, Service: "api", Generation: 1}},
+		{name: "stale failure", state: StateBuilding, event: Event{Type: EventBuildFailed, Service: "api", Generation: 1}},
+		{name: "stopped start", state: StateStopped, event: Event{Type: EventBuildStarted, Service: "api", Generation: 2}},
+		{name: "stopped complete", state: StateStopped, event: Event{Type: EventBuildComplete, Service: "api", Generation: 2}},
+		{name: "stopped failure", state: StateStopped, event: Event{Type: EventBuildFailed, Service: "api", Generation: 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := singleServiceOrchestrator(t)
+			setServiceState(o, "api", tt.state, 2)
+
+			_ = o.handleEvent(context.Background(), tt.event)
+
+			info, _ := o.GetServiceInfo("api")
+			if info.State != tt.state {
+				t.Fatalf("state = %s, want unchanged %s", info.State, tt.state)
+			}
+		})
+	}
+}
+
 // A recovery success racing StopService must not resurrect the service.
 func TestHealthOK_StoppedStatesNotResurrected(t *testing.T) {
 	for _, state := range []ServiceState{StateStopping, StateStopped, StatePending, StateRestarting} {

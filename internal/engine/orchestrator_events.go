@@ -16,7 +16,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 	case EventHealthOK:
 		o.mu.Lock()
 		info, exists := o.services[evt.Service]
-		if !exists || staleHealthEvent(info, evt) {
+		if !exists || staleLifecycleEvent(info, evt) {
 			o.mu.Unlock()
 			break
 		}
@@ -50,7 +50,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 	case EventHealthFail:
 		o.mu.Lock()
 		info, exists := o.services[evt.Service]
-		if exists && !staleHealthEvent(info, evt) {
+		if exists && !staleLifecycleEvent(info, evt) {
 			switch info.State {
 			case StateStarting, StateHealthy:
 				info.Transition(StateDegraded)
@@ -80,21 +80,21 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 
 	case EventBuildStarted:
 		o.mu.Lock()
-		if info, exists := o.services[evt.Service]; exists {
+		if info, exists := o.services[evt.Service]; exists && !staleLifecycleEvent(info, evt) && info.State == StateStarting {
 			info.Transition(StateBuilding)
 		}
 		o.mu.Unlock()
 
 	case EventBuildComplete:
 		o.mu.Lock()
-		if info, exists := o.services[evt.Service]; exists {
+		if info, exists := o.services[evt.Service]; exists && !staleLifecycleEvent(info, evt) && info.State == StateBuilding {
 			info.Transition(StateStarting)
 		}
 		o.mu.Unlock()
 
 	case EventBuildFailed:
 		o.mu.Lock()
-		if info, exists := o.services[evt.Service]; exists {
+		if info, exists := o.services[evt.Service]; exists && !staleLifecycleEvent(info, evt) && info.State == StateBuilding {
 			info.Transition(StateDegraded)
 			info.StateReason = "build failed"
 			info.FailureKind = FailureKindBuild
@@ -109,7 +109,7 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 		// a red "something died" rather than a gray "someone stopped it".
 		o.mu.Lock()
 		info, exists := o.services[evt.Service]
-		if exists && !staleHealthEvent(info, evt) && info.State != StateStopping && info.State != StateStopped {
+		if exists && !staleLifecycleEvent(info, evt) && info.State != StateStopping && info.State != StateStopped {
 			info.Transition(StateDegraded)
 			reason := evt.Message
 			if reason == "" {
@@ -160,14 +160,14 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 	return nil
 }
 
-// staleHealthEvent reports whether a health or process-exit event was
-// produced by a different start of the service than the current one (a
-// probe goroutine or exit watcher that outlived a restart). Strict
+// staleLifecycleEvent reports whether a build, health, or process-exit event
+// was produced by a different start of the service than the current one.
+// Strict
 // equality: every production sender stamps the generation it was started
 // with, and generation 0 only matches services adopted without a start —
 // daemon-reconnected processes and infra marked healthy in place. A
 // gen-0 event can therefore never touch a service that has since been
 // (re)started. Caller must hold o.mu.
-func staleHealthEvent(info *ServiceInfo, evt Event) bool {
+func staleLifecycleEvent(info *ServiceInfo, evt Event) bool {
 	return evt.Generation != info.Generation
 }

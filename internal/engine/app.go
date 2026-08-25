@@ -1,11 +1,9 @@
 package engine
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -45,6 +43,7 @@ type App struct {
 	// can be wrong once a conflict moved the port. nil (no daemon) means no
 	// injection.
 	TracingEndpoint func() string
+	dotnetBuilds    *dotnetBuildGate
 
 	// OnFatal, if set, receives unrecoverable background errors so the
 	// owner can trigger graceful shutdown. Without it, deferred cleanup
@@ -94,6 +93,7 @@ func NewApp(
 		Orchestrator:  orch,
 		HealthChecker: healthChecker,
 		Logs:          logs,
+		dotnetBuilds:  newDotnetBuildGate(),
 	}
 
 	app.wireLogCapture(logs, orch)
@@ -196,59 +196,19 @@ func (a *App) wireProcessCallbacks(mgr *process.Manager, holder *config.Holder) 
 			if svc.Watch {
 				command = fmt.Sprintf("dotnet watch run --project %s", proj)
 			} else {
-				// Emit build started event
-				a.Orchestrator.Events() <- Event{Type: EventBuildStarted, Service: name}
-
-				// Build with streaming output to log multiplexer
-				buildCmd := exec.CommandContext(ctx, "dotnet", "build", proj, "-v", "minimal")
-				buildCmd.Dir = dir
-				buildCmd.Env = append(os.Environ(), "DOTNET_CLI_UI_LANGUAGE=en")
-				for k, v := range svc.BuildEnv {
-					buildCmd.Env = append(buildCmd.Env, k+"="+v)
-				}
-				// Disable NuGet vulnerability audit by default — it requires
-				// reaching every package source (including private feeds) on
-				// every build, which fails offline / without VPN and surfaces
-				// as NU1900 (warning-as-error). Set NuGetAudit=true to opt in.
-				if os.Getenv("NuGetAudit") == "" {
-					buildCmd.Env = append(buildCmd.Env, "NuGetAudit=false")
-				}
-
-				stdout, err := buildCmd.StdoutPipe()
-				if err != nil {
-					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name}
-					return fmt.Errorf("dotnet build pipe failed: %w", err)
-				}
-				stderr, err := buildCmd.StderrPipe()
-				if err != nil {
-					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name}
-					return fmt.Errorf("dotnet build pipe failed: %w", err)
-				}
-				if err := buildCmd.Start(); err != nil {
-					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name}
-					return fmt.Errorf("dotnet build start failed: %w", err)
-				}
-
-				// Stream build output to logs
-				go func() {
-					scanner := bufio.NewScanner(io.MultiReader(stdout, stderr))
-					for scanner.Scan() {
-						a.Logs.Write(name, scanner.Text())
-					}
-				}()
-
-				if err := buildCmd.Wait(); err != nil {
-					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name}
-					return fmt.Errorf("dotnet build failed")
-				}
-
-				a.Orchestrator.Events() <- Event{Type: EventBuildComplete, Service: name}
-
-				assemblyPath, err := resolveDotnetAssemblyPath(dir, proj)
-				if err != nil {
+				a.Orchestrator.Events() <- Event{Type: EventBuildStarted, Service: name, Generation: generation}
+				buildEnvironment := dotnetBuildEnvironment(svc.BuildEnv)
+				if err := a.buildDotnetProject(ctx, name, dir, proj, buildEnvironment); err != nil {
+					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name, Generation: generation}
 					return err
 				}
-				command = fmt.Sprintf("dotnet %s", assemblyPath)
+				assemblyPath, err := resolveDotnetAssemblyPath(ctx, dir, proj, buildEnvironment)
+				if err != nil {
+					a.Orchestrator.Events() <- Event{Type: EventBuildFailed, Service: name, Generation: generation}
+					return err
+				}
+				a.Orchestrator.Events() <- Event{Type: EventBuildComplete, Service: name, Generation: generation}
+				command = "dotnet " + quoteProcessArgument(assemblyPath)
 			}
 		}
 		return mgr.Start(ctx, name, dir, command, envVars, svc.PreStart, generation)

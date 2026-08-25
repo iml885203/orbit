@@ -485,6 +485,13 @@ services:
 | `depends_on` | list | no | 必須先 `Healthy` 才能啟動的名稱 |
 | `kafka` | object | no | `produces` / `consumes` topic 清單 — 在 graph 上畫成 async edge |
 
+對未啟用 watch 的 .NET service，Orbit 會逐一建置設定的 project，再啟動
+service。即使多個 service 同時符合啟動條件，當 MSBuild project 共用輸出
+artifact 時也不會互相競爭。Orbit 會在建置後取得各 project 評估出的
+`TargetPath`，因此標準 `bin` 輸出與集中式 artifact 配置都不需要額外先建置
+solution，也不需要手寫 DLL command。相依條件允許時，其他 service 與
+container 仍會並行啟動。
+
 例如 `command: python3 -m http.server "$PORT"` 會把 Orbit 實際選到的單一
 service port 當成一個 argument。只有確實需要 pipe、redirect 或其他 shell
 operator 時，才明確使用 `sh -c "..."`。
