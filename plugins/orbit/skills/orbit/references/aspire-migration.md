@@ -92,6 +92,28 @@ Orbit's existing runtime behavior:
   so content roots, appsettings files, and relative assets resolve as they do in
   the original developer workflow. A successful compile does not prove the
   process can be launched from the repository root.
+- Treat project names such as `Worker` or `Processor` as labels, not protocol
+  evidence. Inspect the executable and its configuration for hosted HTTP or
+  gRPC endpoints, give every hosted endpoint a distinct declared port, and set
+  the application's normal listen-address setting when it would otherwise
+  fall back to a shared default.
+- Applications using .NET service discovery may consume keys shaped like
+  `services__<resource>__http__0` or `services__<resource>__https__0`. Orbit's
+  dependency injection does not replace that application-level contract:
+  inspect the consumer's configuration and add explicit non-secret aliases to
+  the resolved local endpoints when needed.
+- When adding groups for dashboard organization, write each group in object
+  form and set `enabled: true` when its members should participate in an
+  ordinary full-environment `orbit up`. After the first start request, verify
+  that the returned resource selection contains the intended services; a
+  successful empty or infrastructure-only selection is not proof that the
+  application stack started.
+- For stateful images, use an explicit named volume when persistence is part of
+  the local workflow and preserve the image's documented default user unless
+  runtime evidence requires another supported user. On a permission failure,
+  inspect that resource's structured logs and fix the narrow ownership/user
+  mismatch; do not delete the volume, run every container as root, or replace
+  persistence with an anonymous volume as a generic recovery.
 
 Classify every resource as `supported`, `needs user input`, or `unsupported`
 only after this mapping attempt. Unsupported means a required local behavior
@@ -131,6 +153,12 @@ one real application endpoint, and the smallest representative user flow that
 crosses service boundaries. Record the exact configuration or runtime behavior
 behind any remaining failure; do not infer a product gap from the manifest
 alone.
+
+Do not equate a healthy process, open port, or HTTP 200 with a usable product.
+Inspect the representative response for expected application content and
+framework-rendering errors, then exercise one real dependency-backed flow.
+This catches server-rendered pages that return 200 while an internal service
+lookup failed.
 
 A failed first attempt is recovery evidence, not a reason to hand environment
 ownership back to the user. Continue the inspect/log/fix/verify loop while the

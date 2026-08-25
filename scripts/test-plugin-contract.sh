@@ -31,6 +31,11 @@ for required in \
   "Treat it as public repository data" \
   "share a central artifacts directory" \
   "preserve each project's working directory" \
+  'services__<resource>__http__0' \
+  'set `enabled: true`' \
+  "returned resource selection" \
+  "documented default user" \
+  "expected application content" \
   "protocol-correct probe" \
   "never invoke" \
   "do not infer a product gap from the manifest" \
@@ -53,6 +58,7 @@ for required in \
   "orbit status --json" \
   "orbit instance list --json" \
   "orbit instance clean <name>" \
+  "authorized disposal after verification" \
   "--instance <name>" \
   "orbit sqlserver diff" \
   "orbit sqlserver publish <database|project> --json" \
