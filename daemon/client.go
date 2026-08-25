@@ -3,6 +3,7 @@ package daemon
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ const CLIOriginHeader = "X-Orbit-Origin"
 type Client struct {
 	http       *http.Client
 	socketPath string
+	ctx        context.Context
 }
 
 // NewClient creates a new daemon client.
@@ -28,7 +30,16 @@ func NewClient(socketPath string) *Client {
 	return &Client{
 		http:       SocketHTTPClient(socketPath),
 		socketPath: socketPath,
+		ctx:        context.Background(),
 	}
+}
+
+// WithContext returns a client whose requests are bounded by ctx.
+func (c *Client) WithContext(ctx context.Context) *Client {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &Client{http: c.http, socketPath: c.socketPath, ctx: ctx}
 }
 
 // ErrDaemonUnreachable indicates the daemon socket is unreachable or not
@@ -61,7 +72,11 @@ func Dial(socketPath string) (*Client, error) {
 // failures so every daemon-backed command shares one recovery path instead of
 // leaking the socket path and syscall text.
 func (c *Client) get(rawURL string) (*http.Response, error) {
-	resp, err := c.http.Get(rawURL)
+	req, err := http.NewRequestWithContext(c.ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building GET request: %w", err)
+	}
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, unreachable(err)
 	}
@@ -284,6 +299,7 @@ func FastClone(c *Client, timeout time.Duration) *Client {
 	return &Client{
 		http:       SocketHTTPClientWithTimeout(c.socketPath, timeout, timeout),
 		socketPath: c.socketPath,
+		ctx:        c.ctx,
 	}
 }
 
@@ -299,7 +315,7 @@ func (c *Client) PostDecode(path string, body, out any) error {
 	if err != nil {
 		return fmt.Errorf("marshaling request: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, "http://orbit"+path, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(c.ctx, http.MethodPost, "http://orbit"+path, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("building request to %s: %w", path, err)
 	}
@@ -368,7 +384,7 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 		reader = bytes.NewReader([]byte("{}"))
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "http://orbit"+path, reader)
+	req, err := http.NewRequestWithContext(c.ctx, http.MethodPost, "http://orbit"+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("building request to %s: %w", path, err)
 	}
@@ -407,7 +423,7 @@ func (c *Client) putJSON(path string, body any) (*APIResponse, error) {
 		reader = bytes.NewReader([]byte("{}"))
 	}
 
-	req, err := http.NewRequest(http.MethodPut, "http://orbit"+path, reader)
+	req, err := http.NewRequestWithContext(c.ctx, http.MethodPut, "http://orbit"+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("building request to %s: %w", path, err)
 	}

@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -340,7 +341,9 @@ func classify(err error) JSONError {
 	// A daemon that accepted the connection but ran out the clock is busy,
 	// not absent — the same recovery as any other timeout, and pointedly not
 	// daemon_unreachable's "run orbit up".
-	case errors.Is(err, ErrTimeout), errors.Is(err, daemon.ErrDaemonTimeout):
+	case errors.Is(err, ErrCanceled), errors.Is(err, context.Canceled):
+		return canceledJSONError(msg)
+	case errors.Is(err, ErrTimeout), errors.Is(err, context.DeadlineExceeded), errors.Is(err, daemon.ErrDaemonTimeout):
 		return JSONError{
 			Code:        "timeout",
 			Message:     msg,
@@ -455,6 +458,16 @@ func classify(err error) JSONError {
 	}
 }
 
+func canceledJSONError(message string) JSONError {
+	return JSONError{
+		Code:        "canceled",
+		Message:     message,
+		Hint:        "Inspect the latest daemon and resource state before retrying.",
+		Retryable:   true,
+		NextCommand: "orbit status --json",
+	}
+}
+
 // IsManagedEnvironmentPath reports whether path belongs to Orbit's synced
 // environment repository. Project-local files require a documented schema
 // edit; recommending env sync for them creates a recovery loop.
@@ -554,7 +567,7 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 			Destructive: false,
 		}}
 	}
-	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" {
+	if err.Code == "service_start_failed" || err.Code == "dependency_blocked" || err.Code == "timeout" || err.Code == "canceled" {
 		return []JSONAction{StatusAction()}
 	}
 	if err.Code == "logs_unavailable" {

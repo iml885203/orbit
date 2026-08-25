@@ -85,12 +85,11 @@ For a failed resource, reuse the initial inspect snapshot and read
 targeted retry action; do not choose a broader command from prose. Dependencies
 recover through normal lifecycle behavior.
 
-If a lifecycle client does not return after its stated timeout but the daemon
-is still responsive, do not repeat the same mutation blindly or abandon the
-workflow. Preserve the client evidence, read structured status and targeted
-logs, and continue from the daemon's authoritative resource/config state.
-Terminate only the waiting client when necessary; do not kill the daemon or
-unrelated resources to recover a missing terminal envelope.
+Lifecycle JSON commands return one final envelope within their stated timeout.
+On `timeout` or `canceled`, follow the returned actions instead of repeating
+the mutation. A canceled environment reconcile may continue under daemon
+ownership when the response says so; use `orbit status --json` to read its
+authoritative state. Do not kill the daemon or unrelated resources.
 
 ## Database workflow
 

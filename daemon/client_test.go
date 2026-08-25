@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // stubDaemon spins up an httptest.Server backed by handler and returns a
@@ -26,6 +27,7 @@ func stubDaemon(t *testing.T, handler http.Handler) *Client {
 	base, _ := url.Parse(srv.URL)
 
 	return &Client{
+		ctx: context.Background(),
 		http: &http.Client{
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -34,6 +36,51 @@ func stubDaemon(t *testing.T, handler http.Handler) *Client {
 				},
 			},
 		},
+	}
+}
+
+func TestClientContextBoundsBlockedStatusRequest(t *testing.T) {
+	requestCanceled := make(chan struct{})
+	c := stubDaemon(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+		close(requestCanceled)
+	}))
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	_, err := c.WithContext(ctx).Status()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Status() error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("Status() returned after %s, want operation deadline", elapsed)
+	}
+	select {
+	case <-requestCanceled:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("server request context was not canceled")
+	}
+}
+
+func TestClientContextBoundsBlockedEnvironmentReconcile(t *testing.T) {
+	release := make(chan struct{})
+	c := stubDaemon(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	t.Cleanup(func() { close(release) })
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err := c.WithContext(ctx).ReconcileEnvironment()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ReconcileEnvironment() error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("ReconcileEnvironment() returned after %s, want operation deadline", elapsed)
 	}
 }
 

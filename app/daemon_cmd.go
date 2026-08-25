@@ -239,8 +239,20 @@ func ensureDaemonStarted(configPath string) error {
 	return renderDaemonStartError(err)
 }
 
-func restartDaemon(configPath string, previousPID int, alive bool) (daemonStopMethod, int, bool, error) {
-	return restartDaemonWithContext(configPath, environmentContextKind(configPath), previousPID, alive)
+func restartDaemonOperationContext(ctx context.Context, configPath string, previousPID int, alive bool) (daemonStopMethod, int, bool, error) {
+	stopMethod := daemonStopNotRunning
+	if alive {
+		var err error
+		stopMethod, err = stopDaemonWithContext(ctx, previousPID)
+		if err != nil {
+			return stopMethod, 0, false, err
+		}
+	}
+	if _, err := daemon.EnsureDaemonWithOperationContext(ctx, configPath, groups, environmentContextKind(configPath)); err != nil {
+		return stopMethod, 0, false, renderDaemonStartError(err)
+	}
+	pid, running := daemon.IsDaemonRunning()
+	return stopMethod, pid, running, nil
 }
 
 func restartDaemonWithContext(configPath, contextKind string, previousPID int, alive bool) (daemonStopMethod, int, bool, error) {
@@ -358,7 +370,11 @@ func runDaemonStop(_ *cobra.Command, _ []string) error {
 }
 
 func stopDaemon(pid int) (daemonStopMethod, error) {
-	client := daemon.NewClient(daemon.DefaultSocketPath())
+	return stopDaemonWithContext(context.Background(), pid)
+}
+
+func stopDaemonWithContext(ctx context.Context, pid int) (daemonStopMethod, error) {
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 
 	// Ask for graceful shutdown without waiting on a potentially stuck daemon.
 	// Escalation inside waitForDaemonStop handles the case where the goroutine
@@ -369,6 +385,8 @@ func stopDaemon(pid int) (daemonStopMethod, error) {
 		downDone <- err
 	}()
 	select {
+	case <-ctx.Done():
+		return daemonStopNotRunning, ctx.Err()
 	case err := <-downDone:
 		if err != nil {
 			_ = platform.SendTermSignal(pid)
@@ -377,7 +395,7 @@ func stopDaemon(pid int) (daemonStopMethod, error) {
 		_ = platform.SendTermSignal(pid)
 	}
 
-	return waitForDaemonStop(pid)
+	return waitForDaemonStopContext(ctx, pid)
 }
 
 type daemonStopMethod string
@@ -594,7 +612,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 // escalates to SIGTERM then SIGKILL when graceful shutdown takes too long.
 // We avoid the HTTP client here because a frozen daemon would make each
 // probe block on the client's request timeout.
-func waitForDaemonStop(pid int) (daemonStopMethod, error) {
+func waitForDaemonStopContext(ctx context.Context, pid int) (daemonStopMethod, error) {
 	const (
 		termAfter = 10 * time.Second
 		killAfter = 20 * time.Second
@@ -606,7 +624,11 @@ func waitForDaemonStop(pid int) (daemonStopMethod, error) {
 
 	termSent, killSent := false, false
 	for {
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			return daemonStopNotRunning, ctx.Err()
+		case <-ticker.C:
+		}
 		if !platform.IsProcessAlive(pid) {
 			switch {
 			case killSent:

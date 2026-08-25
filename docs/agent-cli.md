@@ -62,6 +62,14 @@ The full targeting and cleanup model is documented in
 When a converted command fails with `--json`, Orbit prints a single JSON object
 to stdout and exits with code `1`.
 
+`orbit up --json` and `orbit env apply --json` share one operation-wide
+`--timeout` with a five-minute default. The deadline starts when command
+execution begins and bounds daemon readiness, lifecycle RPCs, status polling,
+and failure-evidence collection. Deadline exhaustion returns `timeout`;
+caller or catchable-signal cancellation returns `canceled`. If an environment
+reconcile request was dispatched, the canceled message states that the daemon
+may have accepted it and recommends `orbit status --json`.
+
 ## Streams
 
 `stdout` carries the envelope and nothing else. Parse it alone.
@@ -158,6 +166,7 @@ caller (or its operator) intends the destruction.
 | Code | Meaning |
 |---|---|
 | `checks_failed` | doctor checks failed; resolve them, then run doctor again |
+| `canceled` | the caller or a supported catchable signal canceled the operation |
 | `command_failed` | unclassified failure; act on the hint |
 | `confirmation_required` | a destructive step needs `--yes` |
 | `daemon_unreachable` | Orbit is not running |
@@ -186,7 +195,7 @@ caller (or its operator) intends the destruction.
 | `service_working_directory_missing` | a host service path does not resolve |
 | `setup_required` | `orbit init` has not completed |
 | `socket_path_too_long` | `ORBIT_HOME` produces an over-long socket path |
-| `timeout` | the wait exceeded `--timeout` |
+| `timeout` | the operation exceeded its operation-wide `--timeout` |
 | `unknown_group` | `--group` names no defined group |
 | `unknown_resource` | a named resource is not in the env |
 
@@ -210,7 +219,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit env list --json` | Returns `data.environment` with the selection state, prior selection when unavailable, exact available environment choices, and managed repository URL/ref/commit when applicable. |
 | `orbit env use <path> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit source sync [<name>] --json` | Returns per-source results; `--all` continues independent sources and reports every success or failure. |
-| `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. |
+| `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. It accepts the same operation-wide `--timeout` as `up`. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit update --json` | Updates the invoked binary and, when an environment is running, reconnects it and returns the resources restored across the handoff. `--rollback` applies the same contract to the previous binary. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
