@@ -6,7 +6,7 @@ Orbit is an agent-native local development orchestrator. It gives developers
 and coding agents one reliable interface to set up, run, inspect, and manage a
 project's entire local stack.
 
-[Official website](https://orbit.dotw.me/) · [Try the demo](#try-orbit) ·
+[Official website](https://orbit.dotw.me/) · [Get started](#get-started) ·
 [Use Orbit with your project](docs/local-first.md) · [Install](docs/development.md) ·
 [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
@@ -25,7 +25,7 @@ CI, and coding agents.
 - **Keep humans focused:** Orbit coordinates host processes and containers and
   surfaces health, logs, ports, traces, and failures in one place.
 
-## Try Orbit
+## Get started
 
 Paste this into Claude Code, Codex, or another agent that can use a terminal and
 open a web link:
@@ -207,7 +207,7 @@ orbit doctor --json        # host prerequisites and setup diagnostics
 orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
 ```
 
-The independently versioned plugin used in the [demo journey](#try-orbit) teaches agents
+The independently versioned plugin used in the [getting-started journey](#get-started) teaches agents
 to inspect state first, prefer `--json`, and confirm destructive operations.
 Without the plugin, point an agent to the
 [skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)

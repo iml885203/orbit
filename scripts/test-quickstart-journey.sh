@@ -9,7 +9,7 @@ port_fixture="$repo_root/scripts/hold-test-ports.py"
 for readme in README.md README.zh-TW.md; do
   demo_section="$(
     awk '
-      /^## (Try Orbit|試玩 Orbit)$/ { capture = 1; next }
+      /^## (Get started|開始使用)$/ { capture = 1; next }
       capture && /^## / { exit }
       capture { print }
     ' "$repo_root/$readme"

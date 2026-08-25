@@ -39,7 +39,7 @@ for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
 assert.match(home, /Build the product\. Let agents run the environment\./)
 assert.match(home, /aria-label="Search"/)
-assert.match(home, /href="\/#try-orbit"/)
+assert.match(home, /href="\/#get-started"/)
 assert.match(home, /href="\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
 assert.ok(home.includes('Help me set up Orbit for this project'), 'project onboarding prompt is missing')

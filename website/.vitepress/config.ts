@@ -220,12 +220,12 @@ export default defineConfig({
         tagline: '預覽版。為整套本機 stack 而生的 agent-native orchestration，讓開發者、CI 與 coding agents 共用同一個可靠介面。',
         image: { src: '/orbit-logo-badge.svg', alt: 'Orbit' },
         actions: [
-          { theme: 'brand', text: '交給 Agent 試玩', link: '/zh-TW/#試玩-orbit' },
+          { theme: 'brand', text: '與 Agent 開始使用', link: '/zh-TW/#開始使用' },
           { theme: 'alt', text: '安裝 Orbit', link: '/zh-TW/docs/development#安裝-orbit' },
         ],
       }
       pageData.frontmatter.features = [
-        { title: '環境只定義一次', details: '把 dependencies、commands、ports 與 readiness 收旂在同一份版本化定義。' },
+        { title: '環境只定義一次', details: '把 dependencies、commands、ports 與 readiness 集中在同一份版本化定義。' },
         { title: '放心委派給 Agent', details: '透過穩定的 JSON CLI 提供可觀測狀態、結構化錯誤與安全的下一步。' },
         { title: '讓人專注在產品', details: '讓 Orbit 協調 host processes 與 containers，團隊專心打造產品。' },
       ]
@@ -244,7 +244,7 @@ export default defineConfig({
         alt: 'Orbit',
       },
       actions: [
-        { theme: 'brand', text: 'Try with your agent', link: '/#try-orbit' },
+        { theme: 'brand', text: 'Get started with your agent', link: '/#get-started' },
         { theme: 'alt', text: 'Install Orbit', link: '/docs/development#install-orbit' },
       ],
     }

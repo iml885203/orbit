@@ -6,7 +6,7 @@ Orbit 是為 Agent 而生的本機開發環境編排工具，讓開發者與 cod
 agents 透過同一個可靠介面，建置、啟動、檢查與管理專案的整套本機
 stack。
 
-[官方網站](https://orbit.dotw.me/) · [試玩 demo](#試玩-orbit) ·
+[官方網站](https://orbit.dotw.me/) · [開始使用](#開始使用) ·
 [在你的專案使用 Orbit](docs/local-first.zh-TW.md) ·
 [安裝](docs/development.zh-TW.md) · [文件](#文件) ·
 [English](https://orbit.dotw.me/)
@@ -23,7 +23,7 @@ stack。
 - **讓人專注在產品：** Orbit 協調 host processes 與 containers，並在同一處
   顯示 health、logs、ports、traces 與失敗原因。
 
-## 試玩 Orbit
+## 開始使用
 
 把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
 的 Agent：
@@ -196,7 +196,7 @@ orbit doctor --json        # host prerequisites 與 setup diagnostics
 orbit env info --json   # 給住在 stack 旁邊的東西:port、URL、以引用表示的憑證
 ```
 
-[試玩 journey](#試玩-orbit) 使用的獨立編版 plugin 會要求 agent 先檢查狀態、
+[開始使用 journey](#開始使用) 使用的獨立編版 plugin 會要求 agent 先檢查狀態、
 優先使用 `--json`，並在破壞性操作前確認。不安裝 plugin 時，讓
 agent 直接閱讀
 [skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
