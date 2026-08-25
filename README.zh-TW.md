@@ -25,18 +25,23 @@ stack。
 
 ## 開始使用
 
-把下面這段話貼進 Claude Code、Codex，或其他能使用 terminal 並開啟網頁連結
-的 Agent：
-
 ### 在你的專案使用 Orbit
 
+安裝 Orbit plugin 後，把這句話貼進 Claude Code 或 Codex：
+
 ```text
-閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
-幫我用 Orbit 跑起這個專案。需要安裝系統軟體或進行破壞性變更時再問我。
+幫我用 Orbit 跑起這個專案。
 ```
 
 Agent 會檢查現有 setup、加入最精簡的專案內 Orbit 設定，並持續到應用程式
 啟動且通過驗證。只有需要系統依賴、破壞性變更或產品決策時才會停下來詢問。
+
+還沒安裝 plugin？第一次可以直接從公開 skill 啟動相同流程：
+
+```text
+閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
+幫我用 Orbit 跑起這個專案。
+```
 
 ### 或試玩 public demo
 
@@ -52,8 +57,8 @@ Agent 會檢查 demo 需要什麼，並在安裝任何東西前詢問。完成�
 
 ### 讓 Agent 在之後的 session 直接使用 Orbit
 
-第一次體驗不需要預先設定。若要長期使用，安裝 Orbit plugin，之後的
-Agent 便會自帶操作說明。
+Bootstrap prompt 不需要預先設定。若要長期使用，安裝 Orbit plugin，之後的
+Agent 便會自帶操作說明，需求只需一行。
 
 在 terminal 執行你所使用 Agent 的指令。成功後離開目前的 Agent process，再
 開啟一個全新的 session。

@@ -27,21 +27,26 @@ CI, and coding agents.
 
 ## Get started
 
-Paste this into Claude Code, Codex, or another agent that can use a terminal and
-open a web link:
-
 ### Use Orbit in your project
 
+With the Orbit plugin installed, paste one request into Claude Code or Codex:
+
 ```text
-Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
-Help me get this project running with Orbit. Ask before installing system
-software or making destructive changes.
+Help me get this project running with Orbit.
 ```
 
 The agent inspects the existing setup, adds the narrowest project-local Orbit
 configuration, and keeps going until the application is running and verified.
 It stops when a system dependency, destructive change, or product decision
 needs you.
+
+Do not have the plugin yet? Bootstrap the same workflow once from the public
+skill:
+
+```text
+Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
+Help me get this project running with Orbit.
+```
 
 ### Or try the public demo
 
@@ -59,8 +64,9 @@ request cross the service graph.
 
 ### Use Orbit regularly with your agent
 
-The first prompt works without setup. For future sessions, install the Orbit
-plugin so your agent already has those instructions.
+The bootstrap prompt works without setup. For future sessions, install the
+Orbit plugin so your agent already has those instructions and the request stays
+one line.
 
 Run the commands for the agent you use in a terminal. After they succeed, exit
 the current agent process and start a fresh session.
