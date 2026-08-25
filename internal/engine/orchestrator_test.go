@@ -294,6 +294,7 @@ func TestHandleEvent_BuildLifecycle(t *testing.T) {
 	}
 	o := testOrchestrator(cfg)
 	ctx := context.Background()
+	setServiceState(o, "api", StateStarting, 0)
 
 	_ = o.handleEvent(ctx, Event{Type: EventBuildStarted, Service: "api"})
 	info, _ := o.GetServiceInfo("api")
@@ -317,6 +318,7 @@ func TestHandleEvent_BuildFailed(t *testing.T) {
 	}
 	o := testOrchestrator(cfg)
 	ctx := context.Background()
+	setServiceState(o, "api", StateStarting, 0)
 
 	_ = o.handleEvent(ctx, Event{Type: EventBuildStarted, Service: "api"})
 	_ = o.handleEvent(ctx, Event{Type: EventBuildFailed, Service: "api"})

@@ -110,12 +110,12 @@ type Event struct {
 	// name also carries startup and lifecycle failures, so consumers must not
 	// infer that every sender represents a health probe.
 	FailureKind FailureKind
-	// Generation identifies which start of the service produced a health
-	// event. handleEvent drops health events whose generation doesn't match
-	// the service's current one: a probe goroutine from a previous start —
+	// Generation identifies which start of the service produced a lifecycle
+	// event. handleEvent drops lifecycle events whose generation doesn't match
+	// the service's current one: a build or probe from a previous start —
 	// cancelled, but with a success already in flight — must not flip the
-	// new generation's state. Zero means unversioned (non-health events,
-	// which carry their own state guards).
+	// new generation's state. Zero identifies events for adopted services,
+	// which have not yet received an Orbit start generation.
 	Generation int
 }
 

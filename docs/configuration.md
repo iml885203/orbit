@@ -509,6 +509,13 @@ services:
 | `depends_on` | list | no | Names that must be `Healthy` before this starts |
 | `kafka` | object | no | `produces` / `consumes` topic lists — drawn as async edges on the graph |
 
+For non-watch .NET services, Orbit builds the configured projects one at a
+time before starting them. This keeps independently ready services from racing
+when MSBuild projects share output artifacts. Orbit evaluates each project's
+`TargetPath` after the build, so standard `bin` output and centralized artifact
+layouts work without a separate solution build or a hand-written DLL command.
+Other service and container startup remains parallel when dependencies allow.
+
 For example, `command: python3 -m http.server "$PORT"` receives Orbit's
 selected single-service port as one argument. Use an explicit shell command
 such as `sh -c "..."` only when the process genuinely needs pipes, redirects,
