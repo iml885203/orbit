@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/volume"
 	"gopkg.in/yaml.v3"
 )
 
@@ -76,9 +77,7 @@ func applyPathResolution(cfg *Config, cfgPath string) {
 // resolveRelativePaths rewrites path-valued fields inside cfg so they are
 // absolute, interpreted relative to the config file's directory. This lets
 // an env yaml live at ~/.orbit/envs/example.yaml and still reference
-// ./data/kafka-topics.yaml next to it. Volumes are intentionally skipped:
-// a "./data:/container/path" mount is rare locally and the host-side
-// resolution semantics depend on docker context, not yaml dir.
+// ./data/kafka-topics.yaml next to it.
 func resolveRelativePaths(cfg *Config, cfgPath string) {
 	absCfg, err := filepath.Abs(cfgPath)
 	if err != nil {
@@ -91,10 +90,19 @@ func resolveRelativePaths(cfg *Config, cfgPath string) {
 		}
 		return filepath.Join(baseDir, p)
 	}
+	resolveVolumes := func(volumes []string) {
+		for i, value := range volumes {
+			source, suffix := volume.SplitShort(value)
+			if volume.IsRelativeBindSource(source) {
+				volumes[i] = resolve(source) + suffix
+			}
+		}
+	}
 	for _, s := range cfg.Services {
 		s.Path = resolve(s.Path)
 	}
 	for _, c := range cfg.Containers {
+		resolveVolumes(c.Volumes)
 		if c.Init != nil {
 			c.Init.TopicsFile = resolve(c.Init.TopicsFile)
 		}
@@ -102,6 +110,9 @@ func resolveRelativePaths(cfg *Config, cfgPath string) {
 			for i, f := range c.Seed.Files {
 				c.Seed.Files[i] = resolve(f)
 			}
+		}
+		for i := range c.Sidecars {
+			resolveVolumes(c.Sidecars[i].Volumes)
 		}
 	}
 }
@@ -131,17 +142,13 @@ func expandHome(p string) string {
 // Running the whole string through expandHome would filepath.Join the tail and
 // flip the container path's "/" to "\" on Windows (e.g.
 // "~/db:/var/lib/pg" -> "C:\Users\me\db:\var\lib\pg"), breaking the mount — the
-// container path is always a Linux path. A leading "~" never carries a
-// drive-letter colon, so the first ":" delimits the host side unambiguously.
+// container path is always a Linux path.
 func expandHomeVolume(v string) string {
 	if v != "~" && !strings.HasPrefix(v, "~/") {
 		return v
 	}
-	host, rest := v, ""
-	if i := strings.Index(v, ":"); i != -1 {
-		host, rest = v[:i], v[i:]
-	}
-	return expandHome(host) + rest
+	host, suffix := volume.SplitShort(v)
+	return expandHome(host) + suffix
 }
 
 // expandHomePaths walks every path-valued field in cfg and rewrites leading

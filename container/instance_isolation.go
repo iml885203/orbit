@@ -3,11 +3,11 @@ package container
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/iml885203/orbit/dockerctx"
+	orbitvolume "github.com/iml885203/orbit/volume"
 	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 )
@@ -18,12 +18,12 @@ func namespaceVolumeBinds(namespace string, binds []string) []string {
 	}
 	isolated := make([]string, len(binds))
 	for i, bind := range binds {
-		parts := strings.SplitN(bind, ":", 2)
-		if len(parts) != 2 || filepath.IsAbs(parts[0]) || strings.HasPrefix(parts[0], ".") || strings.HasPrefix(parts[0], "~") {
+		source, suffix := orbitvolume.SplitShort(bind)
+		if suffix == "" || orbitvolume.IsBindSource(source) {
 			isolated[i] = bind
 			continue
 		}
-		isolated[i] = "orbit-" + namespace + "-" + parts[0] + ":" + parts[1]
+		isolated[i] = "orbit-" + namespace + "-" + source + suffix
 	}
 	return isolated
 }
@@ -33,27 +33,27 @@ func ensureNamespaceVolumes(ctx context.Context, cli *client.Client, namespace s
 		return nil
 	}
 	for _, bind := range namespaceVolumeBinds(namespace, binds) {
-		parts := strings.SplitN(bind, ":", 2)
-		if len(parts) != 2 || !strings.HasPrefix(parts[0], "orbit-"+namespace+"-") {
+		source, suffix := orbitvolume.SplitShort(bind)
+		if suffix == "" || !strings.HasPrefix(source, "orbit-"+namespace+"-") {
 			continue
 		}
-		if result, err := cli.VolumeInspect(ctx, parts[0], client.VolumeInspectOptions{}); err == nil {
+		if result, err := cli.VolumeInspect(ctx, source, client.VolumeInspectOptions{}); err == nil {
 			if err := validateNamespaceVolume(result.Volume, namespace); err != nil {
 				return err
 			}
 			continue
 		} else if !cerrdefs.IsNotFound(err) {
-			return fmt.Errorf("inspecting instance volume %s: %w", parts[0], err)
+			return fmt.Errorf("inspecting instance volume %s: %w", source, err)
 		}
 		result, err := cli.VolumeCreate(ctx, client.VolumeCreateOptions{
-			Name: parts[0],
+			Name: source,
 			Labels: map[string]string{
 				labelManaged:   "true",
 				labelNamespace: namespace,
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("creating instance volume %s: %w", parts[0], err)
+			return fmt.Errorf("creating instance volume %s: %w", source, err)
 		}
 		if err := validateNamespaceVolume(result.Volume, namespace); err != nil {
 			return err

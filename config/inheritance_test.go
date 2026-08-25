@@ -79,6 +79,42 @@ services:
 	}
 }
 
+func TestLoadInheritedRelativeVolumeUsesChildDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeEnvFile(t, dir, "parents/base.yaml", `
+version: "3"
+containers:
+  inherited:
+    image: postgres:18
+    volumes:
+      - ./fixtures/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  overridden:
+    image: postgres:18
+    volumes:
+      - ./parent:/data
+`)
+	childPath := writeEnvFile(t, dir, "child.yaml", `
+extends: parents/base.yaml
+containers:
+  overridden:
+    volumes:
+      - ../shared:/data:ro
+`)
+
+	cfg, err := Load(childPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "fixtures", "init.sql") + ":/docker-entrypoint-initdb.d/init.sql:ro"
+	if got := cfg.Containers["inherited"].Volumes[0]; got != want {
+		t.Fatalf("inherited volume = %q, want child-relative %q", got, want)
+	}
+	wantOverride := filepath.Join(dir, "..", "shared") + ":/data:ro"
+	if got := cfg.Containers["overridden"].Volumes[0]; got != wantOverride {
+		t.Fatalf("overridden volume = %q, want child-relative %q", got, wantOverride)
+	}
+}
+
 func TestLoadExtendsPathAndValuesUseEnvironmentSubstitution(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ORBIT_TEST_PARENT", "parents/base.yaml")

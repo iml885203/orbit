@@ -262,7 +262,7 @@ containers:
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
 | `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port` |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
-| `volumes` | list | no | Docker volume / bind mount strings |
+| `volumes` | list | no | Docker volume / bind mount strings. Relative bind sources resolve from the selected `orbit.yaml` directory, including values inherited from a parent; they do not use the shell's current directory |
 | `command` | list | no | Override the image's default command |
 | `user` | string | no | Container user for `docker --user`, e.g. `"0:0"` — needed by images that require root on a fresh named volume |
 | `entrypoint` | list | no | Override the image's entrypoint |
@@ -272,6 +272,12 @@ containers:
 | `seed` | object | no | Run SQL/init scripts once the container is healthy |
 | `init` | object | no | Typed init hooks (Kafka topics, Mongo replica set) |
 | `sidecars` | list | no | Per-container sidecar containers (web UIs, agents) |
+
+Relative bind sources such as `./fixtures/init.sql:/docker-entrypoint-initdb.d/init.sql:ro`
+become absolute host paths before Orbit calls Docker. This targets a local
+Docker daemon that can see the Orbit host filesystem. Orbit does not upload
+files to a remote Docker context; the resolved absolute path must also exist on
+that daemon host.
 
 ### Native database clients
 

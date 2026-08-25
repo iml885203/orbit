@@ -7,9 +7,69 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestE2E_RelativeFileBindRecreatesFromConfigDirectory(t *testing.T) {
+	env := setupE2E(t)
+	configDir := filepath.Dir(env.envYaml)
+	fixtureDir := filepath.Join(configDir, "fixtures")
+	if err := os.MkdirAll(fixtureDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, contents := range map[string]string{"first.txt": "first", "second.txt": "second"} {
+		if err := os.WriteFile(filepath.Join(fixtureDir, name), []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRelativeFileBindConfig(t, env.envYaml, "first.txt")
+	env.run(t, "-c", env.envYaml, "up", "--json")
+	containerName := "orbit-" + env.namespace + "-probe"
+	firstID := dockerOutput(t, "inspect", "--format", "{{.Id}}", containerName)
+	assertRelativeFileBind(t, containerName, filepath.Join(fixtureDir, "first.txt"), "first")
+
+	writeRelativeFileBindConfig(t, env.envYaml, "second.txt")
+	env.run(t, "-c", env.envYaml, "up", "--json")
+	secondID := dockerOutput(t, "inspect", "--format", "{{.Id}}", containerName)
+	if secondID == firstID {
+		t.Fatal("bind source change did not recreate the container")
+	}
+	assertRelativeFileBind(t, containerName, filepath.Join(fixtureDir, "second.txt"), "second")
+}
+
+func writeRelativeFileBindConfig(t *testing.T, path, fixture string) {
+	t.Helper()
+	configYAML := fmt.Sprintf(`version: "3"
+settings:
+  health_check_interval: 500ms
+  docker_poll_interval: 500ms
+containers:
+  probe:
+    image: alpine:3.22
+    command: ["sh", "-c", "sleep 300"]
+    volumes:
+      - ./fixtures/%s:/fixture/input.txt:ro
+    health_check:
+      type: exec
+      command: ["test", "-f", "/fixture/input.txt"]
+`, fixture)
+	if err := os.WriteFile(path, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertRelativeFileBind(t *testing.T, containerName, wantSource, wantContents string) {
+	t.Helper()
+	gotMount := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/fixture/input.txt\"}}{{.Type}}:{{.Source}}:{{.RW}}{{end}}{{end}}", containerName)
+	if gotMount != "bind:"+wantSource+":false" {
+		t.Fatalf("container bind mount = %q, want bind:%s:false", gotMount, wantSource)
+	}
+	if got := dockerOutput(t, "exec", containerName, "cat", "/fixture/input.txt"); got != wantContents {
+		t.Fatalf("bound fixture = %q, want %q", got, wantContents)
+	}
+}
 
 func TestE2E_NamedInstancesRunAndCleanIndependently(t *testing.T) {
 	env := setupNamedInstanceE2E(t)
@@ -48,7 +108,7 @@ server.serve_forever()
 
 func writeNamedInstanceConfig(t *testing.T, env *e2eEnv) {
 	t.Helper()
-	bindPath := env.home + "/bind-proof"
+	bindPath := filepath.Join(filepath.Dir(env.envYaml), "bind-proof")
 	if err := os.MkdirAll(bindPath, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +124,7 @@ containers:
     image: redis:7.4-alpine
     volumes:
       - data:/data
-      - %q
+      - ./bind-proof:/proof
     ports:
       redis: "26379:6379"
     health_check:
@@ -76,7 +136,7 @@ containers:
       REPLACEMENT_PROOF: before
     volumes:
       - cache-data:/named
-      - %q
+      - ./bind-proof:/proof
     ports:
       redis: "26380:6379"
     health_check:
@@ -94,7 +154,7 @@ services:
       type: http
       path: /
       port: 28080
-`, bindPath+":/proof", bindPath+":/proof", env.home)
+`, env.home)
 	if err := os.WriteFile(env.envYaml, []byte(configYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +214,7 @@ func assertOrdinaryDownCleansAnonymousAndPreservesNamedVolume(t *testing.T, env 
 	redisContainer := "orbit-" + namespace + "-redis"
 	cacheContainer := "orbit-" + namespace + "-cache"
 	namedVolume := "orbit-" + namespace + "-data"
-	bindPath := env.home + "/bind-proof"
+	bindPath := filepath.Join(filepath.Dir(env.envYaml), "bind-proof")
 	anonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", cacheContainer)
 	if anonymousVolume == "" {
 		t.Fatal("cache container did not receive its image-declared anonymous volume")
@@ -191,7 +251,7 @@ func assertStaleReplacementCleansAnonymousAndPreservesConfiguredStorage(t *testi
 	namespace := instanceNamespaceFromList(t, env, name)
 	redisContainer := "orbit-" + namespace + "-redis"
 	cacheContainer := "orbit-" + namespace + "-cache"
-	bindPath := env.home + "/bind-proof"
+	bindPath := filepath.Join(filepath.Dir(env.envYaml), "bind-proof")
 	oldAnonymousVolume := dockerOutput(t, "inspect", "--format", "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Name}}{{end}}{{end}}", cacheContainer)
 	cacheNamedVolume := "orbit-" + namespace + "-cache-data"
 	namedVolumeID := dockerOutput(t, "volume", "inspect", "--format", "{{.Name}}", cacheNamedVolume)
