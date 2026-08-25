@@ -195,6 +195,29 @@ func (e *e2eEnv) runNoFail(t *testing.T, args ...string) (string, error) {
 	return out, err
 }
 
+func (e *e2eEnv) runJSON(t *testing.T, args ...string) string {
+	t.Helper()
+	stdout, stderr, err := e.runJSONNoFail(t, args...)
+	if err != nil {
+		t.Fatalf("orbit %s: %v\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), err, stdout, stderr)
+	}
+	return stdout
+}
+
+func (e *e2eEnv) runJSONNoFail(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := e.cmd(args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if testing.Verbose() {
+		t.Logf("$ orbit %s\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout.String(), stderr.String())
+	}
+	return stdout.String(), stderr.String(), err
+}
+
 type e2eStatus struct {
 	Daemon struct {
 		Running bool   `json:"running"`
@@ -1172,7 +1195,7 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 	if err != nil {
 		t.Fatalf("inspect redis before apply: %v", err)
 	}
-	output := env.run(t, "env", "apply", "--json")
+	output := env.runJSON(t, "env", "apply", "--json")
 	envelope := parseE2EEnvelope(t, output)
 	if !envelope.OK {
 		t.Fatalf("env apply failed: %+v\n%s", envelope.Error, output)
@@ -1216,7 +1239,7 @@ func TestE2E_EnvApplyRestoresRunningResourcesAndRejectsInvalidChangesSafely(t *t
 		t.Fatalf("write invalid env: %v", err)
 	}
 	previousPID = readE2EDaemonPID(t, env.home)
-	output, err = env.runNoFail(t, "env", "apply", "--json")
+	output, _, err = env.runJSONNoFail(t, "env", "apply", "--json")
 	if err == nil {
 		t.Fatalf("invalid environment was applied:\n%s", output)
 	}
@@ -1258,7 +1281,7 @@ func TestE2E_UpAppliesChangedConfigAndPreservesRunningIntent(t *testing.T) {
 	}
 
 	previousPID := readE2EDaemonPID(t, env.home)
-	output := env.run(t, "up", "redis", "--json")
+	output := env.runJSON(t, "up", "redis", "--json")
 	envelope := parseE2EEnvelope(t, output)
 	if !envelope.OK {
 		t.Fatalf("up did not converge changed config: %+v\n%s", envelope.Error, output)
@@ -1487,9 +1510,12 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 		t.Fatalf("human output exposed an implementation count:\n%s", human)
 	}
 
-	jsonOutput, err := command(ctx, "up", "--json").CombinedOutput()
+	jsonCommand := command(ctx, "up", "--json")
+	var jsonStderr bytes.Buffer
+	jsonCommand.Stderr = &jsonStderr
+	jsonOutput, err := jsonCommand.Output()
 	if err != nil {
-		t.Fatalf("json up failed: %v\n%s", err, jsonOutput)
+		t.Fatalf("json up failed: %v\nstdout:\n%s\nstderr:\n%s", err, jsonOutput, jsonStderr.String())
 	}
 	envelope := parseE2EEnvelope(t, string(jsonOutput))
 	if !envelope.OK {
@@ -1899,7 +1925,7 @@ containers:
 func TestE2E_AgentJSONWorkflow(t *testing.T) {
 	env := setupE2E(t)
 
-	upOut := env.run(t, "up", "--infra", "--json")
+	upOut := env.runJSON(t, "up", "--infra", "--json")
 	upEnvelope := parseE2EEnvelope(t, upOut)
 	if !upEnvelope.OK {
 		t.Fatalf("up envelope not ok: %+v\n%s", upEnvelope.Error, upOut)
@@ -2960,7 +2986,7 @@ func TestE2E_UpJSONFailureCarriesResourceEvidence(t *testing.T) {
 		t.Fatalf("write crashing env: %v", err)
 	}
 
-	output, err := env.runNoFail(t, "up", "--json")
+	output, _, err := env.runJSONNoFail(t, "up", "--json")
 	if err == nil {
 		t.Fatalf("up succeeded for a crashing service:\n%s", output)
 	}

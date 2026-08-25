@@ -157,6 +157,10 @@ func nextSnapshots(prev map[string]progressSnapshot, statuses []daemon.ResourceS
 // recent status poll. Pure function so we can test it without mocking
 // the daemon client or the clock.
 func diffProgress(prev, curr map[string]progressSnapshot, now time.Time) []progressEvent {
+	return diffProgressAtInterval(prev, curr, now, heartbeatInterval)
+}
+
+func diffProgressAtInterval(prev, curr map[string]progressSnapshot, now time.Time, interval time.Duration) []progressEvent {
 	var events []progressEvent
 	for name, c := range curr {
 		p, existed := prev[name]
@@ -170,7 +174,7 @@ func diffProgress(prev, curr map[string]progressSnapshot, now time.Time) []progr
 			})
 			continue
 		}
-		if heartbeatable[c.state] && now.Sub(maxTime(c.since, c.lastHeartbeat)) >= heartbeatInterval {
+		if heartbeatable[c.state] && now.Sub(maxTime(c.since, c.lastHeartbeat)) >= interval {
 			events = append(events, progressEvent{
 				kind:    eventHeartbeat,
 				name:    name,

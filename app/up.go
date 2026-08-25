@@ -149,11 +149,18 @@ func validateUpSelection(args []string) error {
 }
 
 func runUpJSON(ctx context.Context, args []string, contextSwitch *projectContextSwitch) error {
+	progress := newLifecycleProgress(ctx, os.Stderr, time.Now())
+	return runUpJSONWithProgress(ctx, args, contextSwitch, progress)
+}
+
+func runUpJSONWithProgress(ctx context.Context, args []string, contextSwitch *projectContextSwitch, progress *lifecycleProgress) error {
+	defer progress.Close()
+	progress.Phase(phaseEnsuringDaemon)
 	client, err := daemon.EnsureDaemonWithOperationContext(ctx, configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return lifecycleOperationError(ctx, renderDaemonStartError(err), false)
 	}
-	client, appliedChanges, err := convergeEnvironmentChangesForUpContext(ctx, client, nil)
+	client, appliedChanges, err := convergeEnvironmentChangesForUpContext(ctx, client, nil, progress)
 	if err != nil {
 		return lifecycleOperationError(ctx, err, appliedChanges.reconcileDispatched)
 	}
@@ -167,23 +174,26 @@ func runUpJSON(ctx context.Context, args []string, contextSwitch *projectContext
 		req,
 		appliedChanges,
 		nil,
+		progress,
 	)
 	if err != nil {
 		return lifecycleOperationError(ctx, fmt.Errorf("up failed: %w", err), appliedChanges.reconcileDispatched)
 	}
 	names := resp.AffectedResources
-	finalStatus, err := waitForLifecycleJSONContext(ctx, client, names, "healthy")
+	finalStatus, err := waitForLifecycleJSONContextWithProgress(ctx, client, names, "healthy", progress)
 	if err != nil {
 		err = lifecycleOperationError(ctx, err, appliedChanges.reconcileDispatched)
 		failure := cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
 		data := buildUpFailureJSONData(names, finalStatus, func(name string) []string {
-			return recentLogTail(client.WithContext(ctx), name)
+			return recentLogTailWithProgress(progress, client.WithContext(ctx), name)
 		})
+		progress.Close()
 		if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), data, failure, nil); writeErr != nil {
 			return writeErr
 		}
 		return errCLIJSONAlreadyRendered{err: failure}
 	}
+	progress.Close()
 	return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
 		Operation:          "up",
 		Message:            resp.Message,
@@ -209,8 +219,8 @@ func convergeEnvironmentChangesForUp(
 	return client, result, nil
 }
 
-func convergeEnvironmentChangesForUpContext(ctx context.Context, client *daemon.Client, report func(string)) (*daemon.Client, environmentApplyResult, error) {
-	result, err := applyEnvironmentChangesContext(ctx, report)
+func convergeEnvironmentChangesForUpContext(ctx context.Context, client *daemon.Client, report func(string), progress *lifecycleProgress) (*daemon.Client, environmentApplyResult, error) {
+	result, err := applyEnvironmentChangesContextWithProgress(ctx, report, progress)
 	if err != nil {
 		return client, result, err
 	}
@@ -243,14 +253,15 @@ func startWithEnvironmentConvergence(
 	return client, response, applied, err
 }
 
-func startWithEnvironmentConvergenceContext(ctx context.Context, client *daemon.Client, request daemon.UpRequest, applied environmentApplyResult, report func(string)) (*daemon.Client, *daemon.APIResponse, environmentApplyResult, error) {
+func startWithEnvironmentConvergenceContext(ctx context.Context, client *daemon.Client, request daemon.UpRequest, applied environmentApplyResult, report func(string), progress *lifecycleProgress) (*daemon.Client, *daemon.APIResponse, environmentApplyResult, error) {
+	progress.Phase(phaseRequestingResourceStart)
 	response, err := client.Up(request)
 	var stale *daemon.ConfigStaleError
 	if !errors.As(err, &stale) {
 		return client, response, applied, err
 	}
 
-	applied, err = applyEnvironmentChangesKnownPendingContext(ctx, report)
+	applied, err = applyEnvironmentChangesKnownPendingContextWithProgress(ctx, report, progress)
 	if err != nil {
 		return client, nil, applied, err
 	}
@@ -258,6 +269,7 @@ func startWithEnvironmentConvergenceContext(ctx context.Context, client *daemon.
 	if err := validateUpResourceNames(client, request.Resources); err != nil {
 		return client, nil, applied, err
 	}
+	progress.Phase(phaseRequestingResourceStart)
 	response, err = client.Up(request)
 	return client, response, applied, err
 }

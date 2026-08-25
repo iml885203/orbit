@@ -62,10 +62,15 @@ func buildUpFailureJSONData(names []string, status *daemon.StatusResponse, logTa
 }
 
 func recentLogTail(client *daemon.Client, name string) []string {
+	return recentLogTailWithProgress(nil, client, name)
+}
+
+func recentLogTailWithProgress(progress *lifecycleProgress, client *daemon.Client, name string) []string {
 	const maxTailLines = 20
 	if client == nil {
 		return nil
 	}
+	progress.Phase(phaseCollectingFailureEvidence)
 	response, err := client.Logs(name, maxTailLines)
 	if err != nil || response == nil {
 		return nil
@@ -74,9 +79,14 @@ func recentLogTail(client *daemon.Client, name string) []string {
 }
 
 func recentLogEvidence(client *daemon.Client, name string) string {
+	return recentLogEvidenceWithProgress(nil, client, name)
+}
+
+func recentLogEvidenceWithProgress(progress *lifecycleProgress, client *daemon.Client, name string) string {
 	if client == nil {
 		return ""
 	}
+	progress.Phase(phaseCollectingFailureEvidence)
 	response, err := client.Logs(name, 20)
 	if err != nil || response == nil {
 		return ""

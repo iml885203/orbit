@@ -481,7 +481,11 @@ func waitForLifecycleJSON(client *daemon.Client, names []string, wantState strin
 }
 
 func waitForLifecycleJSONContext(ctx context.Context, client *daemon.Client, names []string, wantState string) (*daemon.StatusResponse, error) {
-	return waitForLifecycleJSONOrPastWithTerminalContext(ctx, client.WithContext(ctx), names, wantState, nil, true)
+	return waitForLifecycleJSONContextWithProgress(ctx, client, names, wantState, nil)
+}
+
+func waitForLifecycleJSONContextWithProgress(ctx context.Context, client *daemon.Client, names []string, wantState string, progress *lifecycleProgress) (*daemon.StatusResponse, error) {
+	return waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx, client.WithContext(ctx), names, wantState, nil, true, progress)
 }
 
 func waitForLifecycleRestartHealthyJSON(client *daemon.Client, names []string) (*daemon.StatusResponse, error) {
@@ -504,9 +508,14 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 }
 
 func waitForLifecycleJSONOrPastWithTerminalContext(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
+	return waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx, client, names, wantState, pastState, failStopped, nil)
+}
+
+func waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool, progress *lifecycleProgress) (*daemon.StatusResponse, error) {
 	if len(names) == 0 {
 		return client.Status()
 	}
+	progress.Phase(phaseWaitingForReadiness)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
@@ -536,9 +545,13 @@ func waitForLifecycleJSONOrPastWithTerminalContext(ctx context.Context, client *
 					watched = append(watched, status.Resources[i])
 				}
 			}
-			snapshots = emitJSONHeartbeats(snapshots, nextSnapshots(snapshots, watched, now), now)
+			if progress == nil {
+				snapshots = emitJSONHeartbeats(snapshots, nextSnapshots(snapshots, watched, now), now)
+			} else {
+				progress.ObserveResources(watched, now)
+			}
 			if wantState == "healthy" {
-				if err := lifecycleTerminalError(client, status, names, failStopped); err != nil {
+				if err := lifecycleTerminalErrorWithProgress(client, status, names, failStopped, progress); err != nil {
 					return last, err
 				}
 			}
@@ -603,6 +616,10 @@ func waitForLifecycleRestartObserved(client *daemon.Client, name string, priorRe
 }
 
 func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse, names []string, failStopped bool) error {
+	return lifecycleTerminalErrorWithProgress(client, status, names, failStopped, nil)
+}
+
+func lifecycleTerminalErrorWithProgress(client *daemon.Client, status *daemon.StatusResponse, names []string, failStopped bool, progress *lifecycleProgress) error {
 	if status == nil {
 		return nil
 	}
@@ -633,7 +650,7 @@ func lifecycleTerminalError(client *daemon.Client, status *daemon.StatusResponse
 			if reason != "" {
 				message += ": " + reason
 			}
-			if evidence := recentLogEvidence(client, svc.Name); evidence != "" && evidence != reason {
+			if evidence := recentLogEvidenceWithProgress(progress, client, svc.Name); evidence != "" && evidence != reason {
 				message += "\nLast log: " + evidence
 			}
 			return cli.NewServiceStartFailedError(message)

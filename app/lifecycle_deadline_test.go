@@ -79,8 +79,19 @@ func TestUpJSONCatchableSignalWritesOneCanceledEnvelope(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if scanner := bufio.NewScanner(stderr); !scanner.Scan() || scanner.Text() != "blocked" {
-		t.Fatalf("child did not block in pre-wait daemon RPC: %v", scanner.Err())
+	scanner := bufio.NewScanner(stderr)
+	var progressLines []string
+	blocked := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "blocked" {
+			blocked = true
+			break
+		}
+		progressLines = append(progressLines, line)
+	}
+	if err := scanner.Err(); err != nil || !blocked || len(progressLines) == 0 || progressLines[0] != "⋯ ensuring daemon" {
+		t.Fatalf("child progress before blocked RPC = %q, blocked = %v, scanner error = %v", progressLines, blocked, err)
 	}
 	if err := cmd.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
