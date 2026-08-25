@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -103,9 +104,12 @@ func TestE2E_StaleDaemonMetadataNeverKillsUnrelatedProcess(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = command("daemon", "stop", "--json").Run() })
 
-	output, err := command("up", "--json").CombinedOutput()
+	upCommand := command("up", "--json")
+	var stderr bytes.Buffer
+	upCommand.Stderr = &stderr
+	output, err := upCommand.Output()
 	if err != nil {
-		t.Fatalf("up with stale daemon metadata: %v\n%s", err, output)
+		t.Fatalf("up with stale daemon metadata: %v\nstdout:\n%s\nstderr:\n%s", err, output, stderr.String())
 	}
 	envelope := parseE2EEnvelope(t, string(output))
 	if !envelope.OK {
