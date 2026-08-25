@@ -48,7 +48,7 @@ func envApplyCmd() *cobra.Command {
 		Short: "Apply a previously deferred environment update",
 		RunE:  runEnvApply,
 	}
-	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum duration for the complete operation (default 5m)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum duration for the complete JSON operation; in human output, how long to wait for resources to settle (default 5m)")
 	return cmd
 }
 

@@ -663,7 +663,7 @@ Resource names, --infra, and --group are separate selection modes and cannot be 
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "start only infrastructure containers")
-	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for resources to settle (default 5m)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum duration for the complete JSON operation; in human output, how long to wait for resources to settle (default 5m)")
 	cmd.Flags().BoolVarP(&projectContextYes, "yes", "y", false, "confirm stopping resources from another context")
 	return cmd
 }

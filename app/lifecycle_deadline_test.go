@@ -18,7 +18,21 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/spf13/cobra"
 )
+
+func TestAgentLifecycleTimeoutHelpDistinguishesJSONAndHumanScope(t *testing.T) {
+	const want = "maximum duration for the complete JSON operation; in human output, how long to wait for resources to settle (default 5m)"
+	for name, command := range map[string]*cobra.Command{
+		"up":        upCmd(),
+		"env apply": envApplyCmd(),
+	} {
+		flag := command.Flags().Lookup("timeout")
+		if flag == nil || flag.Usage != want {
+			t.Errorf("%s timeout help = %#v, want %q", name, flag, want)
+		}
+	}
+}
 
 func TestUpJSONCatchableSignalWritesOneCanceledEnvelope(t *testing.T) {
 	if os.Getenv("ORBIT_TEST_SIGNAL_ENVELOPE") == "1" {
