@@ -86,23 +86,22 @@ func runEnvApply(cmd *cobra.Command, _ []string) error {
 }
 
 func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), effectiveTimeout(timeout))
-	defer cancel()
-	return applyEnvironmentChangesContext(ctx, report)
+	return applyEnvironmentChangesWithEvidence(context.Background(), report, false, false)
 }
 
 func applyEnvironmentChangesContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(ctx, report, false)
+	return applyEnvironmentChangesWithEvidence(ctx, report, false, true)
 }
 
 func applyEnvironmentChangesKnownPendingContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(ctx, report, true)
+	return applyEnvironmentChangesWithEvidence(ctx, report, true, true)
 }
 
 func applyEnvironmentChangesWithEvidence(
 	ctx context.Context,
 	report func(string),
 	knownPending bool,
+	operationWide bool,
 ) (environmentApplyResult, error) {
 	result := emptyEnvironmentApplyResult()
 	if err := ctx.Err(); err != nil {
@@ -151,8 +150,10 @@ func applyEnvironmentChangesWithEvidence(
 		result.StartedDependencies = append(result.StartedDependencies, reconciled.StartedDependencies...)
 		if len(reconciled.AffectedResources) == 0 {
 			result.FinalStatus, err = client.Status()
-		} else {
+		} else if operationWide {
 			result.FinalStatus, err = waitForLifecycleJSONContext(ctx, client, reconciled.AffectedResources, "healthy")
+		} else {
+			result.FinalStatus, err = waitForLifecycleJSON(client, reconciled.AffectedResources, "healthy")
 		}
 		if err != nil {
 			return result, fmt.Errorf("environment applied, but affected resources could not recover: %w", err)
@@ -206,7 +207,12 @@ func applyEnvironmentChangesWithEvidence(
 	}
 	result.StartedDependencies = daemonsrv.AdditionalResourceNames(requestedRestores, response.AffectedResources)
 	sort.Strings(result.RestoredResources)
-	finalStatus, err := waitForLifecycleJSONContext(ctx, client, response.AffectedResources, "healthy")
+	var finalStatus *daemon.StatusResponse
+	if operationWide {
+		finalStatus, err = waitForLifecycleJSONContext(ctx, client, response.AffectedResources, "healthy")
+	} else {
+		finalStatus, err = waitForLifecycleJSON(client, response.AffectedResources, "healthy")
+	}
 	result.FinalStatus = finalStatus
 	if err != nil {
 		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)
