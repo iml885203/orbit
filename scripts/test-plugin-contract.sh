@@ -42,6 +42,8 @@ for required in \
   "not a reason to hand environment" \
   "concrete required behavior" \
   'explicit request to set up or run the project with Orbit authorizes creating' \
+  'including `$HOME/.dotnet/dotnet`' \
+  "worker-like executables" \
   "without Aspire"
 do
   if ! grep -F -- "$required" "$skill" "$aspire_migration" >/dev/null; then
@@ -82,6 +84,18 @@ for installer in \
 do
   if ! grep -F -- "$installer" "$skill" >/dev/null; then
     echo "plugin is missing first-run installer guidance: $installer" >&2
+    exit 1
+  fi
+done
+
+for required in \
+  'author the project-local config' \
+  'Do not run the `setup_required` demo initialization action' \
+  'Start a new config with `version: "3"`' \
+  'project display name is not a top-level schema field'
+do
+  if ! grep -F -- "$required" "$skill" >/dev/null; then
+    echo "plugin is missing the real-project bootstrap boundary: $required" >&2
     exit 1
   fi
 done

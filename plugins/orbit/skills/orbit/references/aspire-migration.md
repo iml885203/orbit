@@ -19,6 +19,13 @@ container prerequisites, and existing developer workflow. Do not install
 tools, generate artifacts inside the repository, or edit project files before
 the user approves those actions.
 
+Treat a missing command on `PATH` as a discovery problem before declaring a
+runtime absent. Check the project's documented bootstrap paths and standard
+user-local installation locations, including `$HOME/.dotnet/dotnet` for .NET,
+then invoke the exact binary or prefix each tool call with its directory. Agent
+shell calls may not preserve a previous `PATH` export. Installing or upgrading
+the runtime still requires approval when no usable installation exists.
+
 If the Aspire CLI is available, evaluate the executable application model into
 a temporary file outside the repository instead of attempting to parse
 arbitrary AppHost source:
@@ -93,10 +100,12 @@ Orbit's existing runtime behavior:
   the original developer workflow. A successful compile does not prove the
   process can be launched from the repository root.
 - Treat project names such as `Worker` or `Processor` as labels, not protocol
-  evidence. Inspect the executable and its configuration for hosted HTTP or
-  gRPC endpoints, give every hosted endpoint a distinct declared port, and set
-  the application's normal listen-address setting when it would otherwise
-  fall back to a shared default.
+  evidence. Inspect every executable for hosted HTTP or gRPC endpoints,
+  including service-default health endpoints. Give every hosted endpoint a
+  distinct declared port and set the application's normal listen-address
+  setting when it would otherwise fall back to a shared default. Do not leave
+  worker-like executables on an implicit common port merely because users do
+  not browse to them.
 - Applications using .NET service discovery may consume keys shaped like
   `services__<resource>__http__0` or `services__<resource>__https__0`. Orbit's
   dependency injection does not replace that application-level contract:

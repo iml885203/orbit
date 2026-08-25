@@ -45,8 +45,11 @@ Then pick the path that matches the user:
   `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
 - **Their real project has no `orbit.yaml`** — inspect its existing development
-  setup first. Do not initialize the public demo. An explicit request to set up
-  or run the project with Orbit authorizes the narrowest non-destructive,
+  setup first, then author the project-local config before the first Orbit
+  inspect. Do not run the `setup_required` demo initialization action in this
+  branch. Start a new config with `version: "3"` and only documented top-level
+  fields; a project display name is not a top-level schema field. An explicit
+  request to set up or run the project with Orbit authorizes the narrowest non-destructive,
   project-local `orbit.yaml` and support files needed for that goal: summarize
   the resources and checks, then continue without asking for a second approval.
   Ask before writing only when the user requested assessment or a plan rather
@@ -60,12 +63,15 @@ Then pick the path that matches the user:
   the fastest way to show what Orbit does.
 
 If a command reports that Orbit is not set up, follow its stated next step
-rather than guessing between these paths.
+rather than guessing between these paths, except when the already-selected
+real-project branch is still authoring its first project-local config.
 
 ## Core loop
 
 1. Run `orbit inspect --json` once to get readiness, environment/resource
-   state, risks, and recommended actions.
+   state, risks, and recommended actions. For a real project without
+   `orbit.yaml`, first complete the project inspection and create the initial
+   config described above, then run this step.
 2. If blocked, follow the one applicable `recommended_actions` entry after
    checking its scope and `destructive` flag. Do not invent an intermediate
    diagnostic command.

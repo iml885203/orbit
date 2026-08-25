@@ -1,6 +1,6 @@
 {
   "name": "orbit",
-  "version": "2026.8.3",
+  "version": "2026.8.4",
   "description": "Operate local development environments safely with Orbit.",
   "author": {
     "name": "Logan Guo"
