@@ -385,6 +385,11 @@ check with `tls_skip_verify: true`. The relaxation follows redirects: every hop
 this check makes skips verification, including one to another host. The final
 response must still be 2xx.
 
+Cleartext `scheme: http` checks automatically discover HTTP/2 without TLS
+(h2c) or HTTP/1.1. Orbit remembers the working protocol for the resource's
+current start, so regular probes make one request. A valid non-2xx response is
+authoritative and never causes a retry over the other protocol.
+
 A resource with no explicit `health_check` gets a TCP readiness check when it
 declares one port, or an `http` or `https` port among several. This applies equally to
 host services and containers: declaring the endpoint is enough for Orbit to

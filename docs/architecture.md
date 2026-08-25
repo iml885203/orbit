@@ -187,13 +187,18 @@ it owns.
 
 | Type | Use case | Cadence |
 |---|---|---|
-| `http` | HTTP endpoint returns 2xx | Polled every `health_check_interval` |
+| `http` | HTTP endpoint returns 2xx; cleartext probes discover h2c or HTTP/1.1 per service generation and origin | Polled every `health_check_interval` |
 | `tcp` | TCP port accepts connection | Polled |
 | `exec` | Run a command inside the container; exit 0 = healthy | Polled |
 | `log` | Regex match against container logs | Triggered by log tail |
 | `healthcheck` | Defer to Docker's own `HEALTHCHECK` result | Polled via inspect |
 
 Probes run in a per-service goroutine with a context cancelled at stop — see `internal/health/checker.go` and the tests under `internal/health/` (e.g. `checker_test.go`, `recover_test.go`) for the contract.
+
+Cleartext HTTP protocol discovery tries h2c before HTTP/1.1 and caches the
+first protocol that returns a valid response. A valid non-2xx is an unhealthy
+verdict, not a fallback signal. Redirect targets are discovered per origin;
+the generation-scoped probe session drops all choices when the service stops.
 
 After startup, every repeatable probe (`http`, `tcp`, `exec`, and Docker
 `healthcheck`) keeps running. A configurable consecutive-failure threshold

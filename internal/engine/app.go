@@ -252,6 +252,7 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 		cfg := holder.Load()
 		info, _ := a.Orchestrator.GetServiceInfo(name)
 		hc := readinessCheckForResource(cfg, name, info.Kind)
+		probeSession := checker.NewProbeSession(ctx, name, generation, hc)
 		managedProcess := info.Kind != "container"
 		onProbeResult := func(r health.Result) {
 			if !r.Healthy {
@@ -297,10 +298,10 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 					return
 				}
 			}
-			err := checker.WaitForHealthy(ctx, name, hc, onProbeResult)
+			err := probeSession.WaitForHealthy(onProbeResult)
 			if err == nil {
 				if health.SupportsRecovery(hc) {
-					_ = checker.MonitorHealthy(ctx, name, hc, onRuntimeResult)
+					_ = probeSession.MonitorHealthy(onRuntimeResult)
 				}
 				return
 			}
@@ -329,14 +330,14 @@ func (a *App) wireHealthCallbacks(checker *health.Checker, holder *config.Holder
 			// until someone runs a manual restart. Cancelled by the same
 			// per-service ctx that stops the startup poll.
 			slog.Info("health budget spent — probing for recovery", "component", "health", "name", name)
-			if err := checker.RecoverHealthy(ctx, name, generation, hc, onProbeResult); err == nil {
+			if err := probeSession.RecoverHealthy(onProbeResult); err == nil {
 				// onProbeResult may have vetoed the success as a zombie —
 				// don't log a recovery the state machine rejected.
 				if _, isSvc := cfg.Services[name]; isSvc && !a.ProcessMgr.IsAlive(name) {
 					return
 				}
 				slog.Info("service recovered", "component", "health", "name", name)
-				_ = checker.MonitorHealthy(ctx, name, hc, onRuntimeResult)
+				_ = probeSession.MonitorHealthy(onRuntimeResult)
 			}
 		}()
 		return nil
