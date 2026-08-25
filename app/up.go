@@ -150,6 +150,10 @@ func validateUpSelection(args []string) error {
 
 func runUpJSON(ctx context.Context, args []string, contextSwitch *projectContextSwitch) error {
 	progress := newLifecycleProgress(ctx, os.Stderr, time.Now())
+	return runUpJSONWithProgress(ctx, args, contextSwitch, progress)
+}
+
+func runUpJSONWithProgress(ctx context.Context, args []string, contextSwitch *projectContextSwitch, progress *lifecycleProgress) error {
 	defer progress.Close()
 	progress.Phase(phaseEnsuringDaemon)
 	client, err := daemon.EnsureDaemonWithOperationContext(ctx, configFile, groups, environmentContextKind(configFile))
@@ -181,8 +185,7 @@ func runUpJSON(ctx context.Context, args []string, contextSwitch *projectContext
 		err = lifecycleOperationError(ctx, err, appliedChanges.reconcileDispatched)
 		failure := cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus(names, finalStatus))
 		data := buildUpFailureJSONData(names, finalStatus, func(name string) []string {
-			progress.Phase(phaseCollectingFailureEvidence)
-			return recentLogTail(client.WithContext(ctx), name)
+			return recentLogTailWithProgress(progress, client.WithContext(ctx), name)
 		})
 		progress.Close()
 		if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), data, failure, nil); writeErr != nil {

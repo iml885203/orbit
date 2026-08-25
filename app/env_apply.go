@@ -67,6 +67,10 @@ func runEnvApply(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := lifecycleOperationContext(ctx)
 	defer cancel()
 	progress := newLifecycleProgress(ctx, os.Stderr, time.Now())
+	return runEnvApplyJSON(ctx, progress)
+}
+
+func runEnvApplyJSON(ctx context.Context, progress *lifecycleProgress) error {
 	defer progress.Close()
 	result, err := applyEnvironmentChangesContextWithProgress(ctx, environmentApplyProgress(), progress)
 	if err != nil {

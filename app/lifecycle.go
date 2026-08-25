@@ -512,10 +512,10 @@ func waitForLifecycleJSONOrPastWithTerminalContext(ctx context.Context, client *
 }
 
 func waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool, progress *lifecycleProgress) (*daemon.StatusResponse, error) {
-	progress.Phase(phaseWaitingForReadiness)
 	if len(names) == 0 {
 		return client.Status()
 	}
+	progress.Phase(phaseWaitingForReadiness)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
@@ -650,10 +650,7 @@ func lifecycleTerminalErrorWithProgress(client *daemon.Client, status *daemon.St
 			if reason != "" {
 				message += ": " + reason
 			}
-			if client != nil {
-				progress.Phase(phaseCollectingFailureEvidence)
-			}
-			if evidence := recentLogEvidence(client, svc.Name); evidence != "" && evidence != reason {
+			if evidence := recentLogEvidenceWithProgress(progress, client, svc.Name); evidence != "" && evidence != reason {
 				message += "\nLast log: " + evidence
 			}
 			return cli.NewServiceStartFailedError(message)
