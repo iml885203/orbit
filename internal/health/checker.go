@@ -39,6 +39,18 @@ type Checker struct {
 	recoveryInterval time.Duration
 }
 
+// ProbeSession keeps protocol choices inside one engine-owned service
+// generation so a stopped lifecycle cannot influence its successor.
+type ProbeSession struct {
+	checker    *Checker
+	ctx        context.Context
+	name       string
+	generation int
+	hc         *config.HealthCheckConfig
+	client     *http.Client
+	transport  *protocolTransport
+}
+
 // NewChecker builds a Checker. Pass nil for dependencies you don't need:
 // log strategy wants mux, exec/healthcheck want inspector.
 func NewChecker(mux *logging.Multiplexer, inspector ContainerInspector) *Checker {
@@ -59,29 +71,71 @@ func NewChecker(mux *logging.Multiplexer, inspector ContainerInspector) *Checker
 	}
 }
 
+// NewProbeSession binds all startup, recovery, and monitoring probes for one
+// service generation to the same protocol-discovery state.
+func (c *Checker) NewProbeSession(ctx context.Context, name string, generation int, hc *config.HealthCheckConfig) *ProbeSession {
+	httpsTransport := c.httpClient.Transport
+	if httpsTransport == nil {
+		httpsTransport = http.DefaultTransport
+	}
+	if hc != nil && hc.TLSSkipVerify {
+		httpsTransport = c.insecureHTTPClient.Transport
+	}
+	timeout := 5 * time.Second
+	if hc != nil && hc.Timeout != 0 {
+		timeout = hc.Timeout
+	}
+	transport := newProtocolTransport(ctx, httpsTransport, timeout)
+	session := &ProbeSession{
+		checker:    c,
+		ctx:        ctx,
+		name:       name,
+		generation: generation,
+		hc:         hc,
+		client:     &http.Client{Transport: transport},
+		transport:  transport,
+	}
+	if ctx.Done() != nil {
+		go func() {
+			<-ctx.Done()
+			transport.close()
+		}()
+	}
+	return session
+}
+
 // Check performs a single health check based on config.
 func (c *Checker) Check(ctx context.Context, name string, hc *config.HealthCheckConfig) Result {
+	session := c.NewProbeSession(ctx, name, 0, hc)
+	defer session.close()
+	return session.Check()
+}
+
+func (s *ProbeSession) close() { s.transport.close() }
+
+func (s *ProbeSession) Check() Result {
+	hc := s.hc
 	if hc == nil {
-		return Result{Service: name, Healthy: true, Message: "no health check configured"}
+		return Result{Service: s.name, Healthy: true, Message: "no health check configured"}
 	}
 
 	start := time.Now()
 
 	switch hc.Type {
 	case "http":
-		return c.checkHTTP(ctx, name, hc, start)
+		return s.checkHTTP(s.ctx, hc, start)
 	case "tcp":
-		return c.checkTCP(ctx, name, hc, start)
+		return s.checker.checkTCP(s.ctx, s.name, hc, start)
 	case "exec":
-		return c.checkExec(ctx, name, hc, start)
+		return s.checker.checkExec(s.ctx, s.name, hc, start)
 	case "healthcheck":
-		return c.checkContainerHealth(ctx, name, start)
+		return s.checker.checkContainerHealth(s.ctx, s.name, start)
 	default:
-		return Result{Service: name, Healthy: false, Message: fmt.Sprintf("unknown check type: %s", hc.Type)}
+		return Result{Service: s.name, Healthy: false, Message: fmt.Sprintf("unknown check type: %s", hc.Type)}
 	}
 }
 
-func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {
+func (s *ProbeSession) checkHTTP(ctx context.Context, hc *config.HealthCheckConfig, start time.Time) Result {
 	scheme := hc.Scheme
 	if scheme == "" {
 		scheme = "http"
@@ -99,18 +153,22 @@ func (c *Checker) checkHTTP(ctx context.Context, name string, hc *config.HealthC
 	url := fmt.Sprintf("%s://localhost:%d%s", scheme, hc.Port, hc.Path)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return Result{Service: name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
+		return Result{Service: s.name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}
 
-	resp, err := c.clientFor(hc).Do(req)
+	client := s.client
+	if scheme == "https" {
+		client = s.checker.clientFor(hc)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return Result{Service: name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
+		return Result{Service: s.name, Healthy: false, Message: err.Error(), Latency: time.Since(start)}
 	}
 	_ = resp.Body.Close()
 
 	healthy := resp.StatusCode >= 200 && resp.StatusCode < 300
 	return Result{
-		Service: name,
+		Service: s.name,
 		Healthy: healthy,
 		Message: fmt.Sprintf("HTTP %d from %s", resp.StatusCode, url),
 		Latency: time.Since(start),
@@ -184,8 +242,15 @@ func (c *Checker) checkContainerHealth(ctx context.Context, name string, start t
 
 // WaitForHealthy polls health checks until the service is healthy or context is cancelled.
 func (c *Checker) WaitForHealthy(ctx context.Context, name string, hc *config.HealthCheckConfig, onResult func(Result)) error {
+	session := c.NewProbeSession(ctx, name, 0, hc)
+	defer session.close()
+	return session.WaitForHealthy(onResult)
+}
+
+func (s *ProbeSession) WaitForHealthy(onResult func(Result)) error {
+	hc := s.hc
 	if hc == nil {
-		r := Result{Service: name, Healthy: true, Message: "no health check configured"}
+		r := Result{Service: s.name, Healthy: true, Message: "no health check configured"}
 		if onResult != nil {
 			onResult(r)
 		}
@@ -194,17 +259,17 @@ func (c *Checker) WaitForHealthy(ctx context.Context, name string, hc *config.He
 
 	switch hc.Type {
 	case "log":
-		return c.waitForLog(ctx, name, hc, onResult)
+		return s.checker.waitForLog(s.ctx, s.name, hc, onResult)
 	case "exec":
-		return c.waitForExec(ctx, name, hc, onResult)
+		return s.checker.waitForExec(s.ctx, s.name, hc, onResult)
 	case "healthcheck":
-		return c.waitForHealthcheck(ctx, name, hc, onResult)
+		return s.checker.waitForHealthcheck(s.ctx, s.name, hc, onResult)
 	case "http", "tcp":
-		return c.pollWithProbe(ctx, name, hc, onResult, func(ctx context.Context) Result {
-			return c.Check(ctx, name, hc)
+		return s.checker.pollWithProbe(s.ctx, s.name, hc, onResult, func(ctx context.Context) Result {
+			return s.Check()
 		})
 	default:
-		return fmt.Errorf("health check for %s: unknown type %q", name, hc.Type)
+		return fmt.Errorf("health check for %s: unknown type %q", s.name, hc.Type)
 	}
 }
 
@@ -222,6 +287,7 @@ func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.Hea
 	// Probe once immediately — don't make a service that's already ready
 	// wait for the first tick.
 	first := true
+	var last Result
 	for i := 0; i < retries; i++ {
 		if !first {
 			select {
@@ -233,6 +299,7 @@ func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.Hea
 		first = false
 
 		result := probe(ctx)
+		last = result
 		if onResult != nil {
 			onResult(result)
 		}
@@ -242,7 +309,7 @@ func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.Hea
 		}
 		c.recordProgress(name, true, i+1, retries, errResult(result))
 	}
-	return fmt.Errorf("health check for %s failed after %d retries", name, retries)
+	return fmt.Errorf("health check for %s failed after %d retries: %s", name, retries, last.Message)
 }
 
 // ErrRecoveryUnsupported reports that a health-check strategy has no
@@ -272,6 +339,13 @@ func SupportsRecovery(hc *config.HealthCheckConfig) bool {
 // manual restart. Progress is flagged Recovering with a live LastErr while
 // the loop runs, so status/UI can show that probing continues.
 func (c *Checker) RecoverHealthy(ctx context.Context, name string, generation int, hc *config.HealthCheckConfig, onResult func(Result)) error {
+	session := c.NewProbeSession(ctx, name, generation, hc)
+	defer session.close()
+	return session.RecoverHealthy(onResult)
+}
+
+func (s *ProbeSession) RecoverHealthy(onResult func(Result)) error {
+	hc := s.hc
 	if !SupportsRecovery(hc) {
 		return ErrRecoveryUnsupported
 	}
@@ -279,33 +353,33 @@ func (c *Checker) RecoverHealthy(ctx context.Context, name string, generation in
 
 	// Idempotent with the caller's MarkRecovering — kept here too so the
 	// flag survives callers that skip the pre-announcement.
-	c.MarkRecovering(name, generation)
+	s.checker.MarkRecovering(s.name, s.generation)
 
-	ticker := time.NewTicker(c.recoveryInterval)
+	ticker := time.NewTicker(s.checker.recoveryInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-ctx.Done():
-			c.clearRecovering(name, generation)
-			return ctx.Err()
+		case <-s.ctx.Done():
+			s.checker.clearRecovering(s.name, s.generation)
+			return s.ctx.Err()
 		case <-ticker.C:
 		}
-		result := c.Check(ctx, name, hc)
+		result := s.Check()
 		// A probe in flight across a stop/restart can report success after
 		// cancellation (checkTCP dials without honoring ctx) — re-check so
 		// a cancelled loop never reports a recovery it no longer owns.
-		if ctx.Err() != nil {
-			c.clearRecovering(name, generation)
-			return ctx.Err()
+		if s.ctx.Err() != nil {
+			s.checker.clearRecovering(s.name, s.generation)
+			return s.ctx.Err()
 		}
 		if result.Healthy {
-			c.recordProgress(name, true, retries, retries, nil)
+			s.checker.recordProgress(s.name, true, retries, retries, nil)
 			if onResult != nil {
 				onResult(result)
 			}
 			return nil
 		}
-		c.recordRecovering(name, generation, errResult(result))
+		s.checker.recordRecovering(s.name, s.generation, errResult(result))
 	}
 }
 
@@ -314,6 +388,13 @@ func (c *Checker) RecoverHealthy(ctx context.Context, name string, generation in
 // from flapping the environment. Once degraded, one successful probe is
 // enough to recover because the probe itself is the recovery evidence.
 func (c *Checker) MonitorHealthy(ctx context.Context, name string, hc *config.HealthCheckConfig, onResult func(Result)) error {
+	session := c.NewProbeSession(ctx, name, 0, hc)
+	defer session.close()
+	return session.MonitorHealthy(onResult)
+}
+
+func (s *ProbeSession) MonitorHealthy(onResult func(Result)) error {
+	hc := s.hc
 	if !SupportsRecovery(hc) {
 		return ErrRecoveryUnsupported
 	}
@@ -329,13 +410,13 @@ func (c *Checker) MonitorHealthy(ctx context.Context, name string, hc *config.He
 
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-s.ctx.Done():
+			return s.ctx.Err()
 		case <-ticker.C:
 		}
-		result := c.Check(ctx, name, hc)
-		if ctx.Err() != nil {
-			return ctx.Err()
+		result := s.Check()
+		if s.ctx.Err() != nil {
+			return s.ctx.Err()
 		}
 		if result.Healthy {
 			failures = 0

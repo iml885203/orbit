@@ -364,6 +364,10 @@ certificate 的本機服務，可針對該 check 明確設定 `tls_skip_verify: 
 此放寬會沿用到 redirect：該 check 的每一跳都會略過驗證，包含 redirect 到
 其他 host 的情況。最終 response 仍必須是 2xx。
 
+明文 `scheme: http` check 會自動探測無 TLS 的 HTTP/2（h2c）或
+HTTP/1.1。Orbit 會在 resource 這次啟動期間記住所用協定，因此一般 probe
+只送出一個 request。有效的 non-2xx response 是權威結果，不會改用另一協定重試。
+
 Resource 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個 port
 中包含 `http` 或 `https`，Orbit 會自動使用 TCP readiness check。Host service 與
 container 採用同一規則：宣告 endpoint 就足以讓 Orbit 等到它可用再放行

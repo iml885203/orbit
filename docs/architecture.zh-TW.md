@@ -170,13 +170,18 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 
 | Type | 用途 | 節奏 |
 |---|---|---|
-| `http` | HTTP endpoint 回傳 2xx | 每 `health_check_interval` poll 一次 |
+| `http` | HTTP endpoint 回傳 2xx；明文 probe 依 service generation 與 origin 探測 h2c 或 HTTP/1.1 | 每 `health_check_interval` poll 一次 |
 | `tcp` | TCP port 接受連線 | Polled |
 | `exec` | 在 container 裡跑一個 command;exit 0 視為 healthy | Polled |
 | `log` | 對 container log 做 regex 比對 | 由 log tail 觸發 |
 | `healthcheck` | 直接用 Docker 自己的 `HEALTHCHECK` 結果 | 透過 inspect polling |
 
 Probe 在 per-service 的 goroutine 跑，context 會在 stop 時被 cancel —— 參考 `internal/health/checker.go` 與 `internal/health/` 底下的測試(例如 `checker_test.go`、`recover_test.go`)看完整契約。
+
+明文 HTTP 協定探測會先嘗試 h2c，再嘗試 HTTP/1.1，並快取第一個回傳有效
+response 的協定。有效的 non-2xx 是 unhealthy 結果，不是 fallback 訊號。
+Redirect target 依 origin 分別探測；service 停止時，generation-scoped probe
+session 會丟棄所有協定選擇。
 
 啟動完成後，可重複的 probe（`http`、`tcp`、`exec` 與 Docker
 `healthcheck`）都會持續執行。可設定的連續失敗門檻避免單次暫時性失敗讓
