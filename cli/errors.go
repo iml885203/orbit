@@ -13,6 +13,7 @@ import (
 var (
 	ErrUnknownResource      = errors.New("unknown resource")
 	ErrTimeout              = errors.New("timeout")
+	ErrCanceled             = errors.New("canceled")
 	ErrNotConfigured        = errors.New("not configured")
 	ErrChecksFailed         = errors.New("checks failed")
 	ErrDependencyBlocked    = errors.New("dependency blocked")
@@ -65,6 +66,10 @@ func NewUnknownResourceError(name string) error {
 
 func NewTimeoutError(msg string) error {
 	return classifiedError{kind: ErrTimeout, msg: msg}
+}
+
+func NewCanceledError(msg string) error {
+	return classifiedError{kind: ErrCanceled, msg: msg}
 }
 
 func NewNotConfiguredError(msg string) error {

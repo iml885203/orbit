@@ -1,6 +1,10 @@
 package daemon
 
 import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -36,6 +40,56 @@ func TestDashboardListenerProvesDaemonOwnership(t *testing.T) {
 	}
 	if daemonOwnsDashboardPort(os.Getpid()+100000, record.DashboardPort) {
 		t.Fatal("unrelated live PID was accepted as the dashboard owner")
+	}
+}
+
+func TestWaitForProcessExitHonorsOperationCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	exited, err := waitForProcessExit(ctx, os.Getpid(), 5*time.Second)
+	if !errors.Is(err, context.Canceled) || exited {
+		t.Fatalf("waitForProcessExit() = (%v, %v), want canceled", exited, err)
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("canceled process wait took %s", elapsed)
+	}
+}
+
+func TestCanceledDaemonHealthDoesNotRetireLiveDaemon(t *testing.T) {
+	home, err := os.MkdirTemp("/tmp", "o115-daemon-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	t.Setenv("ORBIT_HOME", home)
+	if err := os.MkdirAll(OrbitDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePID(); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", DefaultSocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = EnsureDaemonWithOperationContext(ctx, "unused.yaml", nil, "")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("EnsureDaemonWithOperationContext() error = %v", err)
+	}
+	if ReadPID() != os.Getpid() {
+		t.Fatal("operation timeout removed the live daemon PID record")
+	}
+	if _, err := os.Stat(DefaultSocketPath()); err != nil {
+		t.Fatalf("operation timeout removed the live daemon socket: %v", err)
 	}
 }
 
@@ -81,7 +135,7 @@ func TestRetireUnreachableDaemonWaitsForProcessExit(t *testing.T) {
 		}
 	})
 
-	if err := retireUnreachableDaemon(pid); err != nil {
+	if err := retireUnreachableDaemon(context.Background(), pid); err != nil {
 		t.Fatal(err)
 	}
 	if platform.IsProcessAlive(pid) {

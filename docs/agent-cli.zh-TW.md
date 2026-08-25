@@ -56,6 +56,13 @@ resource endpoints。`orbit instance clean <name> --json` 只會停止並移除�
 
 已轉換的指令在 `--json` 模式下若失敗，Orbit 會在 stdout 印出單一 JSON 物件，並以 exit code `1` 結束。
 
+`orbit up --json` 與 `orbit env apply --json` 共用同一個 operation-wide
+`--timeout`，預設為五分鐘。Deadline 從指令開始執行時計算，並涵蓋 daemon
+readiness、lifecycle RPC、status polling 與 failure-evidence collection。
+Deadline 用盡時回傳 `timeout`；caller 或可攔截 signal 取消時回傳 `canceled`。
+若 environment reconcile request 已 dispatch，canceled message 會如實說明 daemon
+可能已接受並繼續該工作，並建議執行 `orbit status --json`。
+
 ## Error Shape
 
 結構化錯誤使用以下形狀：

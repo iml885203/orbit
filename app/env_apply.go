@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -24,6 +25,7 @@ type environmentApplyResult struct {
 	StartedDependencies  []string
 	UnavailableResources []string
 	FinalStatus          *daemon.StatusResponse
+	reconcileDispatched  bool
 }
 
 type environmentApplyJSONData struct {
@@ -41,43 +43,71 @@ type environmentApplyJSONData struct {
 }
 
 func envApplyCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply a previously deferred environment update",
 		RunE:  runEnvApply,
 	}
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum duration for the complete operation (default 5m)")
+	return cmd
 }
 
-func runEnvApply(_ *cobra.Command, _ []string) error {
-	result, err := applyEnvironmentChanges(environmentApplyProgress())
+func runEnvApply(cmd *cobra.Command, _ []string) error {
+	if !cli.JSONOutput {
+		result, err := applyEnvironmentChanges(environmentApplyProgress())
+		if err != nil {
+			return err
+		}
+		printEnvironmentApplyResult(result)
+		return nil
+	}
+	ctx, stopSignals := lifecycleSignalContext(cmd.Context())
+	defer stopSignals()
+	ctx, cancel := lifecycleOperationContext(ctx)
+	defer cancel()
+	result, err := applyEnvironmentChangesContext(ctx, environmentApplyProgress())
 	if err != nil {
+		err = lifecycleOperationError(ctx, err, result.reconcileDispatched)
+		if cli.JSONOutput {
+			failure := cli.WithJSONReplacementActions(err, []cli.JSONAction{cli.StatusAction()})
+			if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), buildEnvironmentApplyJSONData(result), failure, nil); writeErr != nil {
+				return writeErr
+			}
+			return errCLIJSONAlreadyRendered{err: failure}
+		}
 		return err
 	}
-	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(
-			os.Stdout,
-			commandString(),
-			buildEnvironmentApplyJSONData(result),
-			environmentApplyRecommendedActions(result),
-		)
-	}
-	printEnvironmentApplyResult(result)
-	return nil
+	return cli.WriteJSONSuccess(
+		os.Stdout,
+		commandString(),
+		buildEnvironmentApplyJSONData(result),
+		environmentApplyRecommendedActions(result),
+	)
 }
 
 func applyEnvironmentChanges(report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(report, false)
+	ctx, cancel := context.WithTimeout(context.Background(), effectiveTimeout(timeout))
+	defer cancel()
+	return applyEnvironmentChangesContext(ctx, report)
 }
 
-func applyEnvironmentChangesKnownPending(report func(string)) (environmentApplyResult, error) {
-	return applyEnvironmentChangesWithEvidence(report, true)
+func applyEnvironmentChangesContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(ctx, report, false)
+}
+
+func applyEnvironmentChangesKnownPendingContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(ctx, report, true)
 }
 
 func applyEnvironmentChangesWithEvidence(
+	ctx context.Context,
 	report func(string),
 	knownPending bool,
 ) (environmentApplyResult, error) {
 	result := emptyEnvironmentApplyResult()
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	previousPID, alive := daemon.IsDaemonRunning()
 	result.DaemonRunning = alive
 	result.PreviousPID = previousPID
@@ -85,7 +115,7 @@ func applyEnvironmentChangesWithEvidence(
 		return result, nil
 	}
 
-	client := daemon.NewClient(daemon.DefaultSocketPath())
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 	status, err := client.Status()
 	if err != nil {
 		return result, fmt.Errorf("checking environment changes: %w", err)
@@ -101,6 +131,10 @@ func applyEnvironmentChangesWithEvidence(
 		return result, fmt.Errorf("cannot apply environment changes: %w", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	result.reconcileDispatched = true
 	reconciled, err := client.ReconcileEnvironment()
 	if err != nil {
 		return result, fmt.Errorf("reconciling environment changes: %w", err)
@@ -118,7 +152,7 @@ func applyEnvironmentChangesWithEvidence(
 		if len(reconciled.AffectedResources) == 0 {
 			result.FinalStatus, err = client.Status()
 		} else {
-			result.FinalStatus, err = waitForLifecycleJSON(client, reconciled.AffectedResources, "healthy")
+			result.FinalStatus, err = waitForLifecycleJSONContext(ctx, client, reconciled.AffectedResources, "healthy")
 		}
 		if err != nil {
 			return result, fmt.Errorf("environment applied, but affected resources could not recover: %w", err)
@@ -140,7 +174,7 @@ func applyEnvironmentChangesWithEvidence(
 	if _, err := client.DownAndWait(); err != nil {
 		return result, fmt.Errorf("preparing running resources for environment update: %w", err)
 	}
-	_, pid, running, err := restartDaemon(configFile, previousPID, true)
+	_, pid, running, err := restartDaemonOperationContext(ctx, configFile, previousPID, true)
 	if err != nil {
 		return result, fmt.Errorf("applying environment changes: %w", err)
 	}
@@ -148,7 +182,7 @@ func applyEnvironmentChangesWithEvidence(
 	result.PID = pid
 	result.Applied = true
 
-	client = daemon.NewClient(daemon.DefaultSocketPath())
+	client = daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 	freshStatus, err := client.Status()
 	if err != nil {
 		return result, fmt.Errorf("checking applied environment: %w", err)
@@ -172,7 +206,7 @@ func applyEnvironmentChangesWithEvidence(
 	}
 	result.StartedDependencies = daemonsrv.AdditionalResourceNames(requestedRestores, response.AffectedResources)
 	sort.Strings(result.RestoredResources)
-	finalStatus, err := waitForLifecycleJSON(client, response.AffectedResources, "healthy")
+	finalStatus, err := waitForLifecycleJSONContext(ctx, client, response.AffectedResources, "healthy")
 	result.FinalStatus = finalStatus
 	if err != nil {
 		return result, fmt.Errorf("environment applied, but running resources could not be restored: %w", err)

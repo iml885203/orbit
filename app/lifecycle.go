@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -469,7 +471,17 @@ func lifecycleEvidenceResource(service *daemon.ResourceStatus, byName map[string
 }
 
 func waitForLifecycleJSON(client *daemon.Client, names []string, wantState string) (*daemon.StatusResponse, error) {
-	return waitForLifecycleJSONOrPast(client, names, wantState, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), effectiveTimeout(timeout))
+	defer cancel()
+	status, err := waitForLifecycleJSONContext(ctx, client, names, wantState)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status, newWaitTimeoutError(fmt.Sprintf("resources to become %s", wantState), timeout, effectiveTimeout(timeout), effectiveTimeout(timeout))
+	}
+	return status, err
+}
+
+func waitForLifecycleJSONContext(ctx context.Context, client *daemon.Client, names []string, wantState string) (*daemon.StatusResponse, error) {
+	return waitForLifecycleJSONOrPastWithTerminalContext(ctx, client.WithContext(ctx), names, wantState, nil, true)
 }
 
 func waitForLifecycleRestartHealthyJSON(client *daemon.Client, names []string) (*daemon.StatusResponse, error) {
@@ -481,12 +493,20 @@ func waitForLifecycleJSONOrPast(client *daemon.Client, names []string, wantState
 }
 
 func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
+	budget := effectiveTimeout(timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
+	defer cancel()
+	status, err := waitForLifecycleJSONOrPastWithTerminalContext(ctx, client.WithContext(ctx), names, wantState, pastState, failStopped)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status, newWaitTimeoutError(fmt.Sprintf("resources to become %s", wantState), timeout, budget, budget)
+	}
+	return status, err
+}
+
+func waitForLifecycleJSONOrPastWithTerminalContext(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
 	if len(names) == 0 {
 		return client.Status()
 	}
-	budget := effectiveTimeout(timeout)
-	started := time.Now()
-	deadline := time.After(budget)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
@@ -502,9 +522,8 @@ func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []strin
 	watch := watchSet(names)
 	for {
 		select {
-		case <-deadline:
-			return last, newWaitTimeoutError(
-				fmt.Sprintf("resources to become %s", wantState), timeout, budget, time.Since(started))
+		case <-ctx.Done():
+			return last, ctx.Err()
 		case now := <-ticker.C:
 			status, err := client.Status()
 			if err != nil {

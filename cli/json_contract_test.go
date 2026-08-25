@@ -454,6 +454,20 @@ func TestWriteJSONErrorClassifiesTimeout(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorClassifiesCancellation(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteJSONError(&buf, "orbit env apply --json", NewCanceledError("operation canceled")); err != nil {
+		t.Fatalf("WriteJSONError: %v", err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error == nil || got.Error.Code != "canceled" {
+		t.Fatalf("error = %+v", got.Error)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit status --json" {
+		t.Fatalf("recommended actions = %+v", got.RecommendedActions)
+	}
+}
+
 func TestWriteJSONErrorClassifiesDependencyBlocked(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteJSONError(&buf, "orbit restart api --json", NewDependencyBlockedError("api is blocked by redis"))

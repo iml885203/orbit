@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -222,9 +223,13 @@ func EnsureDaemon(configPath string, features []string) (*Client, error) {
 }
 
 func EnsureDaemonWithContext(configPath string, features []string, contextKind string) (*Client, error) {
+	return EnsureDaemonWithOperationContext(context.Background(), configPath, features, contextKind)
+}
+
+func EnsureDaemonWithOperationContext(ctx context.Context, configPath string, features []string, contextKind string) (*Client, error) {
 	if pid, alive := IsDaemonRunning(); alive {
 		// Verify we can actually connect
-		client := NewClient(DefaultSocketPath())
+		client := NewClient(DefaultSocketPath()).WithContext(ctx)
 		if err := client.Health(); err == nil {
 			if status, statusErr := client.Status(); statusErr == nil {
 				if mismatch := CheckConfigMatch(configPath, status.ConfigPath); mismatch != nil {
@@ -232,13 +237,15 @@ func EnsureDaemonWithContext(configPath string, features []string, contextKind s
 				}
 			}
 			return client, nil
+		} else if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
 		// A stale PID can be reused after reboot. The dashboard listener is
 		// independent ownership evidence; without it, killing the recorded PID
 		// could terminate an unrelated user process.
 		record := readPIDRecord()
 		if record.PID == pid && daemonOwnsDashboardPort(pid, record.DashboardPort) {
-			if err := retireUnreachableDaemon(pid); err != nil {
+			if err := retireUnreachableDaemon(ctx, pid); err != nil {
 				return nil, fmt.Errorf("%w: %w", ErrDaemonNotReady, err)
 			}
 		}
@@ -266,8 +273,8 @@ func EnsureDaemonWithContext(configPath string, features []string, contextKind s
 		return nil, fmt.Errorf("starting daemon: %w", err)
 	}
 
-	client := NewClient(DefaultSocketPath())
-	if err := waitForReadyOrDeath(client, pid, 30*time.Second); err != nil {
+	client := NewClient(DefaultSocketPath()).WithContext(ctx)
+	if err := waitForReadyOrDeath(ctx, client, pid, 30*time.Second); err != nil {
 		tail := tailDaemonLog(logOffset, 20)
 		switch {
 		case errors.Is(err, ErrDaemonExitedEarly):
@@ -292,27 +299,39 @@ func daemonOwnsDashboardPort(pid, port int) bool {
 	return false
 }
 
-func retireUnreachableDaemon(pid int) error {
+func retireUnreachableDaemon(ctx context.Context, pid int) error {
 	_ = platform.SendTermSignal(pid)
-	if waitForProcessExit(pid, 3*time.Second) {
+	if exited, err := waitForProcessExit(ctx, pid, 3*time.Second); err != nil {
+		return err
+	} else if exited {
 		return nil
 	}
 	_ = platform.SendKillSignal(pid)
-	if waitForProcessExit(pid, 2*time.Second) {
+	if exited, err := waitForProcessExit(ctx, pid, 2*time.Second); err != nil {
+		return err
+	} else if exited {
 		return nil
 	}
 	return fmt.Errorf("owned Orbit daemon pid %d did not exit after termination", pid)
 }
 
-func waitForProcessExit(pid int, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+func waitForProcessExit(ctx context.Context, pid int, timeout time.Duration) (bool, error) {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
 		if !platform.IsProcessAlive(pid) {
-			return true
+			return true, nil
 		}
-		time.Sleep(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-deadline.C:
+			return !platform.IsProcessAlive(pid), nil
+		case <-ticker.C:
+		}
 	}
-	return !platform.IsProcessAlive(pid)
 }
 
 // StartDaemon forks a new daemon process in a new session. Returns the
@@ -396,14 +415,17 @@ func StartDaemonWithContext(configPath string, features []string, contextKind st
 // ErrDaemonExitedEarly instead of a 30s timeout. Returns nil on ready,
 // ErrDaemonExitedEarly if the PID disappears, or a plain timeout error
 // (which EnsureDaemon converts to ErrDaemonNotReady) on deadline.
-func waitForReadyOrDeath(client *Client, pid int, timeout time.Duration) error {
-	deadline := time.After(timeout)
+func waitForReadyOrDeath(ctx context.Context, client *Client, pid int, timeout time.Duration) error {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-deadline:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
 			return fmt.Errorf("daemon did not become ready within %s", timeout)
 		case <-ticker.C:
 			if err := client.Health(); err == nil {
