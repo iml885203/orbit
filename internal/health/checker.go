@@ -171,13 +171,6 @@ func (s *ProbeSession) checkHTTP(ctx context.Context, hc *config.HealthCheckConf
 	}
 }
 
-func (c *Checker) clientFor(hc *config.HealthCheckConfig) *http.Client {
-	if hc.TLSSkipVerify {
-		return c.insecureHTTPClient
-	}
-	return c.httpClient
-}
-
 func (c *Checker) checkTCP(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {
 	timeout := hc.Timeout
 	if timeout == 0 {
