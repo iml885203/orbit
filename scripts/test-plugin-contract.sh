@@ -26,6 +26,16 @@ done
 for required in \
   "aspire do publish-manifest" \
   "Do not silently wrap" \
+  'receives `<DEPENDENCY_NAME>_URL`' \
+  "isolated local resource" \
+  "Treat it as public repository data" \
+  "share a central artifacts directory" \
+  "preserve each project's working directory" \
+  "protocol-correct probe" \
+  "never invoke" \
+  "do not infer a product gap from the manifest" \
+  "not a reason to hand environment" \
+  "concrete required behavior" \
   'Get approval before creating or changing `orbit.yaml`' \
   "without Aspire"
 do
