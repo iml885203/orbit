@@ -109,13 +109,16 @@ Show the user:
 4. unsupported behavior and its impact;
 5. the verification and rollback plan.
 
-Get approval before creating or changing `orbit.yaml`. Removing the AppHost,
-Aspire packages, or existing developer workflow is a separate destructive
-migration step and requires separate approval.
+An explicit request to set up or run the project with Orbit authorizes creating
+or changing the narrowest project-local `orbit.yaml`; an assessment-only
+request does not. Removing the AppHost, Aspire packages, or the existing
+developer workflow is a separate destructive migration step and requires
+separate approval.
 
 ## Implement and verify
 
-After approval, create the narrowest project-local `orbit.yaml`. The first
+After that scope is established, create the narrowest project-local
+`orbit.yaml`. The first
 attempt should use fixed, non-conflicting ports and the project's existing
 local HTTP mode when available; this separates application wiring failures
 from named-instance and certificate concerns. Validate before starting, then

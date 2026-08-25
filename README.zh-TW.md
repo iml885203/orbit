@@ -32,13 +32,11 @@ stack。
 
 ```text
 閱讀並遵循 https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md 的 Orbit 操作說明。
-協助我為這個專案設定 Orbit。先檢查目前的開發環境並提出方案，安裝軟體或
-修改專案檔案前先詢問我。如果專案使用其他本機 orchestrator，先評估直接
-migration，不要默默把它包成單一 Orbit service。
+幫我用 Orbit 跑起這個專案。需要安裝系統軟體或進行破壞性變更時再問我。
 ```
 
-Agent 會先說明 Orbit 將管理什麼、哪些仍由專案負責，以及無法安全 migration
-的行為。只有在你同意方案後才會修改專案。
+Agent 會檢查現有 setup、加入最精簡的專案內 Orbit 設定，並持續到應用程式
+啟動且通過驗證。只有需要系統依賴、破壞性變更或產品決策時才會停下來詢問。
 
 ### 或試玩 public demo
 

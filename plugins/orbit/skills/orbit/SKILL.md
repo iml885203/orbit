@@ -45,11 +45,15 @@ Then pick the path that matches the user:
   `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
 - **Their real project has no `orbit.yaml`** — inspect its existing development
-  setup read-only. Do not initialize the public demo or write project files.
-  Propose the resources, dependencies, readiness checks, and files Orbit would
-  manage, then get approval before creating `orbit.yaml`. When the project uses
-  another local orchestrator, prefer a migration plan over wrapping that
-  orchestrator as one opaque Orbit service. For an Aspire AppHost, read
+  setup first. Do not initialize the public demo. An explicit request to set up
+  or run the project with Orbit authorizes the narrowest non-destructive,
+  project-local `orbit.yaml` and support files needed for that goal: summarize
+  the resources and checks, then continue without asking for a second approval.
+  Ask before writing only when the user requested assessment or a plan rather
+  than implementation. When the project uses another local orchestrator,
+  migrate its resources directly instead of wrapping it as one opaque Orbit
+  service, but preserve the existing orchestration path unless removal is
+  explicitly requested. For an Aspire AppHost, read
   [references/aspire-migration.md](references/aspire-migration.md).
 - **They have neither a project nor an environment** — run
   `orbit inspect --json` and follow its exact setup action. The public demo is

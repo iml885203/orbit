@@ -36,7 +36,7 @@ for required in \
   "do not infer a product gap from the manifest" \
   "not a reason to hand environment" \
   "concrete required behavior" \
-  'Get approval before creating or changing `orbit.yaml`' \
+  'explicit request to set up or run the project with Orbit authorizes creating' \
   "without Aspire"
 do
   if ! grep -F -- "$required" "$skill" "$aspire_migration" >/dev/null; then

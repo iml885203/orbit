@@ -34,15 +34,14 @@ open a web link:
 
 ```text
 Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
-Help me set up Orbit for this project. Inspect its current development setup
-and propose a plan before installing software or changing project files. If it
-uses another local orchestrator, assess a direct migration instead of silently
-wrapping it as one Orbit service.
+Help me get this project running with Orbit. Ask before installing system
+software or making destructive changes.
 ```
 
-The agent first shows what Orbit would manage, what remains the project's
-responsibility, and any behavior that cannot migrate safely. It changes the
-project only after you approve the plan.
+The agent inspects the existing setup, adds the narrowest project-local Orbit
+configuration, and keeps going until the application is running and verified.
+It stops when a system dependency, destructive change, or product decision
+needs you.
 
 ### Or try the public demo
 
