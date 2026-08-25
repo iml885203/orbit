@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -293,6 +294,50 @@ containers:
 		if c.got != c.want {
 			t.Errorf("%s = %q, want %q", c.field, c.got, c.want)
 		}
+	}
+}
+
+func TestLoad_ResolvesRelativeVolumeSourcesFromConfigDirectory(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "orbit.yaml")
+	source := `version: "3"
+containers:
+  db:
+    image: postgres:18
+    volumes:
+      - ./fixtures/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../shared:/shared
+      - named-data:/var/lib/postgresql/data
+      - /absolute/host:/absolute/container:cached
+      - C:/windows/host:/windows/container:ro
+    sidecars:
+      - name: admin
+        image: admin:latest
+        volumes:
+          - ./admin:/admin:delegated
+`
+	if err := os.WriteFile(configPath, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		filepath.Join(configDir, "fixtures", "init.sql") + ":/docker-entrypoint-initdb.d/init.sql:ro",
+		filepath.Join(configDir, "..", "shared") + ":/shared",
+		"named-data:/var/lib/postgresql/data",
+		"/absolute/host:/absolute/container:cached",
+		"C:/windows/host:/windows/container:ro",
+	}
+	if got := cfg.Containers["db"].Volumes; !reflect.DeepEqual(got, want) {
+		t.Fatalf("volumes = %#v, want %#v", got, want)
+	}
+	wantSidecar := filepath.Join(configDir, "admin") + ":/admin:delegated"
+	if got := cfg.Containers["db"].Sidecars[0].Volumes[0]; got != wantSidecar {
+		t.Fatalf("sidecar volume = %q, want %q", got, wantSidecar)
 	}
 }
 

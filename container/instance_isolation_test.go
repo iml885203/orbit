@@ -15,8 +15,8 @@ import (
 )
 
 func TestNamespaceVolumeBindsIsolatesNamedVolumesOnly(t *testing.T) {
-	binds := []string{"data:/var/lib/data", "/host/config:/etc/config", "./src:/app"}
-	want := []string{"orbit-instance-a-data:/var/lib/data", "/host/config:/etc/config", "./src:/app"}
+	binds := []string{"data:/var/lib/data", "C:/data", "/host/config:/etc/config", "./src:/app", `C:\work\config:/windows:ro`, "C:/work/config:/windows-forward:ro"}
+	want := []string{"orbit-instance-a-data:/var/lib/data", "orbit-instance-a-C:/data", "/host/config:/etc/config", "./src:/app", `C:\work\config:/windows:ro`, "C:/work/config:/windows-forward:ro"}
 	if got := namespaceVolumeBinds("instance-a", binds); !reflect.DeepEqual(got, want) {
 		t.Fatalf("binds = %#v, want %#v", got, want)
 	}

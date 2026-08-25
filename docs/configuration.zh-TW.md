@@ -251,7 +251,7 @@ containers:
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
 | `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
-| `volumes` | list | no | Docker volume 或 bind mount 字串 |
+| `volumes` | list | no | Docker volume 或 bind mount 字串。相對 bind source 會以選定的 `orbit.yaml` 目錄解析，包含從 parent 繼承的值；不使用 shell 的目前目錄 |
 | `command` | list | no | 覆寫 image 預設的 command |
 | `user` | string | no | Container user，對應 `docker --user`，例如 `"0:0"`——需要在全新 named volume 上以 root 執行的 image 會用到 |
 | `entrypoint` | list | no | 覆寫 image 的 entrypoint |
@@ -261,6 +261,11 @@ containers:
 | `seed` | object | no | container healthy 後執行一次的 SQL/init 腳本 |
 | `init` | object | no | 有型別的 init hook（Kafka topics、Mongo replica set） |
 | `sidecars` | list | no | 隸屬於該 container 的 sidecar container（web UI、agent 等） |
+
+`./fixtures/init.sql:/docker-entrypoint-initdb.d/init.sql:ro` 這類相對 bind
+source，會在 Orbit 呼叫 Docker 前成為絕對 host path。此行為以能看見 Orbit host
+filesystem 的本機 Docker daemon 為目標。Orbit 不會把檔案上傳至 remote Docker
+context；解析後的絕對路徑也必須存在於該 daemon host。
 
 ### Database 原生 clients
 
