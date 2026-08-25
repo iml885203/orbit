@@ -199,7 +199,14 @@ func convergeEnvironmentChangesForUp(
 	client *daemon.Client,
 	report func(string),
 ) (*daemon.Client, environmentApplyResult, error) {
-	return convergeEnvironmentChangesForUpContext(context.Background(), client, report)
+	result, err := applyEnvironmentChanges(report)
+	if err != nil {
+		return client, result, err
+	}
+	if result.Applied {
+		client = daemon.NewClient(daemon.DefaultSocketPath())
+	}
+	return client, result, nil
 }
 
 func convergeEnvironmentChangesForUpContext(ctx context.Context, client *daemon.Client, report func(string)) (*daemon.Client, environmentApplyResult, error) {
@@ -219,7 +226,21 @@ func startWithEnvironmentConvergence(
 	applied environmentApplyResult,
 	report func(string),
 ) (*daemon.Client, *daemon.APIResponse, environmentApplyResult, error) {
-	return startWithEnvironmentConvergenceContext(context.Background(), client, request, applied, report)
+	response, err := client.Up(request)
+	var stale *daemon.ConfigStaleError
+	if !errors.As(err, &stale) {
+		return client, response, applied, err
+	}
+	applied, err = applyEnvironmentChangesKnownPending(report)
+	if err != nil {
+		return client, nil, applied, err
+	}
+	client = daemon.NewClient(daemon.DefaultSocketPath())
+	if err := validateUpResourceNames(client, request.Resources); err != nil {
+		return client, nil, applied, err
+	}
+	response, err = client.Up(request)
+	return client, response, applied, err
 }
 
 func startWithEnvironmentConvergenceContext(ctx context.Context, client *daemon.Client, request daemon.UpRequest, applied environmentApplyResult, report func(string)) (*daemon.Client, *daemon.APIResponse, environmentApplyResult, error) {

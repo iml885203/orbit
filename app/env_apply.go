@@ -93,6 +93,10 @@ func applyEnvironmentChangesContext(ctx context.Context, report func(string)) (e
 	return applyEnvironmentChangesWithEvidence(ctx, report, false, true)
 }
 
+func applyEnvironmentChangesKnownPending(report func(string)) (environmentApplyResult, error) {
+	return applyEnvironmentChangesWithEvidence(context.Background(), report, true, false)
+}
+
 func applyEnvironmentChangesKnownPendingContext(ctx context.Context, report func(string)) (environmentApplyResult, error) {
 	return applyEnvironmentChangesWithEvidence(ctx, report, true, true)
 }
