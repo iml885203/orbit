@@ -35,6 +35,41 @@ install_dir="$test_root/install"
 user_home="$test_root/user"
 mkdir -p "$mock_bin" "$fixtures" "$install_dir" "$user_home/config" "$user_home/cache" "$user_home/gh" "$test_root/tmp" "$test_root/build-home"
 
+cat >"$test_root/read-version.go" <<'EOF'
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+func main() {
+	var envelope struct {
+		SchemaVersion string `json:"schema_version"`
+		OK            bool   `json:"ok"`
+		Data struct {
+			Version string `json:"version"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(os.Stdin)
+	if err := decoder.Decode(&envelope); err != nil || envelope.SchemaVersion != "orbit.cli.v1" || !envelope.OK || envelope.Data.Version == "" {
+		os.Exit(1)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		os.Exit(1)
+	}
+	var semanticVersion string
+	if _, err := fmt.Sscan(envelope.Data.Version, &semanticVersion); err != nil {
+		os.Exit(1)
+	}
+	fmt.Println(semanticVersion)
+}
+EOF
+HOME="$test_root/build-home" GOTELEMETRY=off GOMODCACHE="$build_gomodcache" GOCACHE="$build_gocache" \
+  go build -o "$test_root/read-version" "$test_root/read-version.go"
+
 platform="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
 case "$platform" in
   darwin-x86_64) asset="orbit-darwin-amd64" ;;
@@ -112,7 +147,7 @@ probe_version() {
     XDG_CONFIG_HOME="$user_home/config" XDG_CACHE_HOME="$user_home/cache" \
     GH_CONFIG_DIR="$user_home/gh" ORBIT_HOME="$user_home/orbit" \
     ORBIT_UPDATE_HOME="$user_home/update" ORBIT_UPDATE_BACKGROUND=1 \
-    "$1" version --json | jq -er '.data.version | split(" ")[0]'
+    "$1" version --json | "$test_root/read-version"
 }
 
 write_release "0.0.1"
