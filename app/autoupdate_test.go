@@ -1,11 +1,15 @@
 package app
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/daemon"
@@ -121,6 +125,7 @@ func TestUpdateWorkerReplacesVerifiedBinaryAndKeepsBackup(t *testing.T) {
 	}
 	state.TargetVersion = "v0.17.0"
 	state.StagedBinary = staged
+	state.StagedEvidence = testStagedEvidence(t, staged, state.TargetVersion)
 	if err := autoupdate.Save(state); err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +167,7 @@ func TestUpdateWorkerRollsBackWrongReportedVersion(t *testing.T) {
 	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
 		next.TargetVersion = "v0.17.0"
 		next.StagedBinary = staged
+		next.StagedEvidence = testStagedEvidence(t, staged, next.TargetVersion)
 		return nil
 	})
 	if err != nil {
@@ -177,5 +183,119 @@ func TestUpdateWorkerRollsBackWrongReportedVersion(t *testing.T) {
 	installed, err := os.ReadFile(target)
 	if err != nil || string(installed) != oldScript {
 		t.Fatalf("installed=%q err=%v", installed, err)
+	}
+}
+
+func TestUpdateWorkerRejectsStagedMutationBeforeReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture is a POSIX executable script")
+	}
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target := filepath.Join(dir, "orbit")
+	staged := filepath.Join(dir, "staged")
+	oldScript := []byte("#!/bin/sh\necho 'v0.16.0'\n")
+	verifiedScript := []byte("#!/bin/sh\necho 'v0.17.0'\n")
+	if err := os.WriteFile(target, oldScript, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, verifiedScript, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion = "v0.17.0"
+		next.StagedBinary = staged
+		next.StagedEvidence = testStagedEvidence(t, staged, next.TargetVersion)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte("mutated"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := false
+	previousDrain := drainUpdateRuntimes
+	drainUpdateRuntimes = func(autoupdate.State, bool) (map[string]drainedRuntime, error) {
+		drained = true
+		return nil, nil
+	}
+	defer func() { drainUpdateRuntimes = previousDrain }()
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("mutated staged binary was accepted")
+	}
+	if drained {
+		t.Fatal("runtime drain started before staged evidence validation")
+	}
+	installed, err := os.ReadFile(target)
+	if err != nil || !bytes.Equal(installed, oldScript) {
+		t.Fatalf("installed=%q err=%v", installed, err)
+	}
+	if _, err := os.Stat(target + ".prev"); !os.IsNotExist(err) {
+		t.Fatalf("backup created before evidence failure: %v", err)
+	}
+	final, err := autoupdate.Load(target)
+	if err != nil || final.Transaction == nil || final.Transaction.Phase != "failed" {
+		t.Fatalf("final=%+v err=%v", final, err)
+	}
+}
+
+func TestUpdateWorkerRejectsMissingEvidenceBeforeRuntimeDrain(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target, staged := filepath.Join(dir, "orbit"), filepath.Join(dir, "staged")
+	for _, path := range []string{target, staged} {
+		if err := os.WriteFile(path, []byte("candidate"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion, next.StagedBinary, next.StagedEvidence = "v0.17.0", staged, nil
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := false
+	previousDrain := drainUpdateRuntimes
+	drainUpdateRuntimes = func(autoupdate.State, bool) (map[string]drainedRuntime, error) { drained = true; return nil, nil }
+	defer func() { drainUpdateRuntimes = previousDrain }()
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("missing staged evidence was accepted")
+	}
+	if drained {
+		t.Fatal("runtime drain started before missing evidence was rejected")
+	}
+}
+
+func testStagedEvidence(t *testing.T, path, tag string) *autoupdate.VerificationRecord {
+	t.Helper()
+	previous := distribution.ReleaseRepository
+	distribution.ReleaseRepository = "test/repo"
+	t.Cleanup(func() { distribution.ReleaseRepository = previous })
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(contents)
+	assetName, err := autoupdate.PlatformAssetName()
+	if err != nil {
+		panic(err)
+	}
+	return &autoupdate.VerificationRecord{
+		PolicyVersion: "github-release-v1", Repository: "test/repo", Tag: tag,
+		TargetCommit: strings.Repeat("a", 40), AssetName: assetName,
+		AssetSHA256: hex.EncodeToString(digest[:]), ChecksumsSHA256: strings.Repeat("b", 64),
+		VerifiedAt: time.Now().UTC(),
 	}
 }

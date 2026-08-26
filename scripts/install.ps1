@@ -146,11 +146,11 @@ function Add-OrbitToUserPath {
     param([Parameter(Mandatory)] [string] $Directory)
 
     if ($env:ORBIT_SKIP_PATH_UPDATE -eq "1") { return }
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $userPath = Get-OrbitUserPath
     $entries = @($userPath -split ";" | Where-Object { $_ })
     if ($entries.Where({ $_.TrimEnd("\") -ieq $Directory.TrimEnd("\") }).Count -eq 0) {
         $updated = (@($entries) + $Directory) -join ";"
-        [Environment]::SetEnvironmentVariable("Path", $updated, "User")
+        Set-OrbitUserPath $updated
         Write-Host "Added $Directory to your user PATH."
     }
 
@@ -158,6 +158,29 @@ function Add-OrbitToUserPath {
     if ($processEntries.Count -eq 0 -or $processEntries[0].TrimEnd("\") -ine $Directory.TrimEnd("\")) {
         $env:Path = (@($Directory) + $processEntries) -join ";"
     }
+}
+
+function Get-OrbitUserPath {
+    if ($env:ORBIT_INSTALL_TEST_USER_PATH_FILE) {
+        if (Test-Path $env:ORBIT_INSTALL_TEST_USER_PATH_FILE) {
+            return Get-Content -Raw $env:ORBIT_INSTALL_TEST_USER_PATH_FILE
+        }
+        return ""
+    }
+    return [Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Set-OrbitUserPath {
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Value)
+
+    if ($env:ORBIT_INSTALL_TEST_USER_PATH_FILE) {
+        if ($env:ORBIT_INSTALL_TEST_USER_PATH_SET_LOG) {
+            Add-Content -Path $env:ORBIT_INSTALL_TEST_USER_PATH_SET_LOG -Value "set"
+        }
+        Set-Content -NoNewline -Path $env:ORBIT_INSTALL_TEST_USER_PATH_FILE -Value $Value
+        return
+    }
+    [Environment]::SetEnvironmentVariable("Path", $Value, "User")
 }
 
 function Invoke-OrbitBinarySwap {

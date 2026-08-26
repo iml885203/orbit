@@ -70,7 +70,7 @@ jobs:
         run: |
           mkdir -p bin
           go build -ldflags "-s -w -X main.version=${ORBIT_SMOKE_VERSION}" -o bin/orbit ./cmd/orbit
-          ORBIT_BIN="$PWD/bin/orbit" go test -tags=platformsmoke -run TestPlatformSmokeCleanUserJourney -v ./app
+          ORBIT_BIN="$PWD/bin/orbit" go test -tags=platformsmoke -run 'TestPlatformSmoke(CleanUserJourney|AutomaticUpdateWorker)' -v ./app
       - name: Exercise native Unix uninstall command
         if: ${{ !matrix.windows }}
         shell: bash
@@ -97,7 +97,7 @@ jobs:
           New-Item -ItemType Directory -Force bin | Out-Null
           go build -ldflags "-s -w -X main.version=$env:ORBIT_SMOKE_VERSION" -o bin/orbit.exe ./cmd/orbit
           $env:ORBIT_BIN = "$PWD\bin\orbit.exe"
-          go test -tags=platformsmoke -run TestPlatformSmokeCleanUserJourney -v ./app
+          go test -tags=platformsmoke -run 'TestPlatformSmoke(CleanUserJourney|AutomaticUpdateWorker)' -v ./app
       - name: Exercise native Windows uninstall command
         if: ${{ matrix.windows }}
         shell: pwsh

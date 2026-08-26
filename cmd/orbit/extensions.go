@@ -11,11 +11,13 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/extension"
 	"github.com/iml885203/orbit/internal/devdb"
+	"github.com/iml885203/orbit/internal/distribution"
 	"github.com/iml885203/orbit/internal/tunnel"
 )
 
 // Extensions returns the feature set shipped in the official binary.
 func Extensions() []extension.Extension {
+	official := distribution.Official()
 	return []extension.Extension{{
 		Name: "official",
 		Commands: func() []*cobra.Command {
@@ -35,13 +37,7 @@ func Extensions() []extension.Extension {
 			Checks:     devdb.CLIDoctorChecks,
 			PrintHuman: devdb.PrintDBWorkflowChecks,
 		},
-		Distribution: &extension.Distribution{
-			EnvRepoURL:    "https://github.com/iml885203/orbit-demo.git",
-			EnvRepoRef:    "v2026.8.1",
-			InstallURL:    "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
-			ReleaseAPIURL: "https://api.github.com/repos/iml885203/orbit/releases/latest",
-			DefaultEnv:    "quickstart.yaml",
-		},
+		Distribution: &official,
 	}}
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/internal/devdb"
+	officialdistribution "github.com/iml885203/orbit/internal/distribution"
 	"github.com/iml885203/orbit/internal/tunnel"
 )
 
@@ -18,6 +19,10 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 	}
 
 	distribution := extensions[0].Distribution
+	official := officialdistribution.Official()
+	if *distribution != official {
+		t.Fatalf("runtime distribution = %#v, official = %#v", *distribution, official)
+	}
 	if distribution.EnvRepoURL != "https://github.com/iml885203/orbit-demo.git" {
 		t.Errorf("env repo URL = %q", distribution.EnvRepoURL)
 	}

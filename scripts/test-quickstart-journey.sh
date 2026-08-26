@@ -50,6 +50,16 @@ if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
   exit 0
 fi
 
+metadata_fixture="${ORBIT_DISTRIBUTION_METADATA_TEST_FILE:-}"
+if [[ -n "$metadata_fixture" ]]; then
+  expected_demo_ref="$("$repo_root/scripts/distribution-metadata-field.sh" environment_ref "$metadata_fixture")"
+else
+  expected_demo_ref="$("$repo_root/scripts/distribution-metadata-field.sh" environment_ref)"
+fi
+if [[ "${ORBIT_DISTRIBUTION_METADATA_VALIDATE_ONLY:-}" == "1" ]]; then
+  exit 0
+fi
+
 if [ ! -x "$orbit_bin" ]; then
   echo "Orbit binary not found at $orbit_bin; run 'make build' or set ORBIT_BIN." >&2
   exit 1
@@ -366,10 +376,6 @@ smoke_environment["PATH"] = os.pathsep.join(
 )
 subprocess.run([sys.executable, sys.argv[2]], check=True, env=smoke_environment)
 PY
-
-expected_demo_ref="$(
-  sed -n 's/.*EnvRepoRef:[[:space:]]*"\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
-)"
 
 python3 - "$test_root" "$demo_url" "$expected_demo_ref" <<'PY'
 import json

@@ -50,7 +50,7 @@ batch's user outcome first; individual fixes are supporting details.
 ## The demo repository versions itself
 
 `orbit init` clones [orbit-demo](https://github.com/iml885203/orbit-demo) at the
-ref pinned by `EnvRepoRef` in `cmd/orbit/extensions.go`, so that ref must always
+ref pinned by `EnvRepoRef` in `internal/distribution`, so that ref must always
 exist — `make release-check` fails if it does not.
 
 The demo is **not** re-tagged for each Orbit release. It uses calendar
@@ -58,6 +58,14 @@ versioning, `vYEAR.MONTH.N` where `N` counts releases within that month
 (`v2026.8.1` is August's first), and it is tagged only when the demo itself
 changes. Bump `EnvRepoRef` in the same commit that adopts a new demo tag, which
 is a demo-driven change rather than a step in cutting an Orbit release.
+
+Repository automation reads these compile-time values through
+`make distribution-metadata`. Its `orbit.distribution.v1` JSON schema is a
+maintainer contract independent of the Orbit release version; runtime code
+continues to consume the Go declaration directly. The standalone installers
+keep their repository default inline so `curl | sh` and `irm | iex` remain
+self-contained, and `make test-distribution-metadata` checks those bootstrap
+defaults against the exported metadata.
 
 Sharing Orbit's version number was the earlier scheme. It forced an empty demo
 tag per Orbit release whose only content was a pairing declaration, so the two
@@ -76,6 +84,12 @@ prevents package promotion but cannot retroactively make a mutable publication
 immutable. Build-provenance and SBOM attestations remain separate evidence of
 how the binaries were produced; the immutable-release attestation binds the
 published tag, target commit, and release assets.
+
+Official direct-install updates independently consume that release attestation
+in process. They bind the selected platform binary and `checksums.txt` to the
+attested digests before staging, retain bounded evidence for offline delayed
+apply, and revalidate the staged bytes immediately before replacement. This
+runtime boundary is separate from publication verification and build provenance.
 
 Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 
