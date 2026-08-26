@@ -63,7 +63,7 @@ func TestUpJSONCatchableSignalWritesOneCanceledEnvelope(t *testing.T) {
 		os.Exit(1)
 	}
 
-	home, err := os.MkdirTemp("/tmp", "o115-signal-")
+	home, err := os.MkdirTemp(shortTestTempRoot(), "o115-signal-")
 	if err != nil {
 		t.Fatal(err)
 	}

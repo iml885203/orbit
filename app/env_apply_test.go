@@ -41,7 +41,7 @@ func TestLifecycleCancellationReportsAcceptedReconcileHandoff(t *testing.T) {
 }
 
 func TestLifecycleWaitBlockedStatusHonorsOperationDeadline(t *testing.T) {
-	home, err := os.MkdirTemp("/tmp", "o115-")
+	home, err := os.MkdirTemp(shortTestTempRoot(), "o115-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestEnvApplyProgrammaticCancellationWritesOneEnvelope(t *testing.T) {
 }
 
 func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
-	home, err := os.MkdirTemp("/tmp", "o115-apply-")
+	home, err := os.MkdirTemp(shortTestTempRoot(), "o115-apply-")
 	if err != nil {
 		t.Fatal(err)
 	}

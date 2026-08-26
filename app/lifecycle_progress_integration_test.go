@@ -140,7 +140,7 @@ func TestUpJSONReadinessFeedsResourceHeartbeatIntoSharedReporter(t *testing.T) {
 
 func prepareLifecycleProgressTest(t *testing.T) {
 	t.Helper()
-	home, err := os.MkdirTemp("/tmp", "o119-")
+	home, err := os.MkdirTemp(shortTestTempRoot(), "o119-")
 	if err != nil {
 		t.Fatal(err)
 	}
