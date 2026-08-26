@@ -225,8 +225,12 @@ func TestTrustedRootCreatesMissingUpdateHomeBeforeLocking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o700 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
 		t.Fatalf("update home mode=%#o", info.Mode().Perm())
+	}
+	probe := filepath.Join(dir, "probe")
+	if err := os.WriteFile(probe, []byte("usable"), 0o600); err != nil {
+		t.Fatalf("new update home is not usable: %v", err)
 	}
 }
 

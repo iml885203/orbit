@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -36,6 +37,9 @@ func TestReplacePreservesPreviousBinary(t *testing.T) {
 }
 
 func TestReplaceCandidateRejectsPathSwapAfterOpen(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows prevents renaming an open file; native staged mutation is covered by the platform smoke test")
+	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "orbit")
 	staged := filepath.Join(dir, "staged")
