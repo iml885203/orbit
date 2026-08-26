@@ -112,7 +112,7 @@ probe_version() {
     XDG_CONFIG_HOME="$user_home/config" XDG_CACHE_HOME="$user_home/cache" \
     GH_CONFIG_DIR="$user_home/gh" ORBIT_HOME="$user_home/orbit" \
     ORBIT_UPDATE_HOME="$user_home/update" ORBIT_UPDATE_BACKGROUND=1 \
-    "$1" --version
+    "$1" version --json | jq -er '.data.version | split(" ")[0]'
 }
 
 write_release "0.0.1"
@@ -120,7 +120,7 @@ rm -f "$test_root/curl.log"
 install_output="$(install_version "0.0.1")"
 test "$(wc -l <"$test_root/curl.log" | tr -d ' ')" = "1"
 test -x "$install_dir/orbit"
-test "$(probe_version "$install_dir/orbit")" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.1"
 grep -F "Next: export PATH=${install_dir}:\"\$PATH\" && orbit init" <<<"$install_output" >/dev/null
 PATH="$install_dir:$mock_bin:/usr/bin:/bin" probe_version orbit >/dev/null
 
@@ -133,11 +133,11 @@ if install_version "0.0.0" >/dev/null 2>&1; then
   echo "installer unexpectedly downgraded an existing binary" >&2
   exit 1
 fi
-test "$(probe_version "$install_dir/orbit")" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.1"
 
 ORBIT_ALLOW_DOWNGRADE=1 install_version "0.0.0" >/dev/null
-test "$(probe_version "$install_dir/orbit")" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
-test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.0"
+test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1"
 
 write_release "0.0.2"
 printf 'bad-checksum  %s\n' "$asset" >"$fixtures/checksums.txt"
@@ -145,8 +145,8 @@ if install_version "0.0.2" >/dev/null 2>&1; then
   echo "installer accepted a bad checksum" >&2
   exit 1
 fi
-test "$(probe_version "$install_dir/orbit")" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
-test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.0"
+test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1"
 test -z "$(find "$install_dir" -maxdepth 1 -name '.orbit-install.*' -print -quit)"
 
 write_release "0.0.3"
@@ -154,14 +154,14 @@ if ORBIT_INSTALL_TEST_FAIL_ASSET="$asset" install_version "0.0.3" >/dev/null 2>&
   echo "installer accepted an interrupted download" >&2
   exit 1
 fi
-test "$(probe_version "$install_dir/orbit")" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
-test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.0"
+test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.1"
 test -z "$(find "$install_dir" -maxdepth 1 -name '.orbit-install.*' -print -quit)"
 
 write_release "0.0.2"
 install_version "0.0.2" >/dev/null
-test "$(probe_version "$install_dir/orbit")" = "v0.0.2 (2026-07-27 12:44:56 +0800)"
-test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.0 (2026-07-27 12:44:56 +0800)"
+test "$(probe_version "$install_dir/orbit")" = "v0.0.2"
+test "$(probe_version "$install_dir/orbit.prev")" = "v0.0.0"
 
 test "$(boundary_snapshot)" = "$boundary_before"
 
