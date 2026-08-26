@@ -103,7 +103,7 @@ func runSelfUpdate(ctx context.Context) error {
 	if managed := packageManagerForBinary(invoked, runtime.GOOS); managed != nil {
 		return *managed
 	}
-	if distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "" {
+	if os.Getenv("ORBIT_INSTALL_URL") == "" && (distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "") {
 		return runVerifiedSelfUpdate(ctx, invoked)
 	}
 	exe, err := currentBinaryPath()
@@ -249,17 +249,17 @@ func runRollback() error {
 	if err != nil {
 		return fmt.Errorf("resolve current binary: %w", err)
 	}
-	if distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "" {
+	verifiedState, verifiedStateErr := autoupdate.Load(invoked)
+	useVerifiedRollback := verifiedStateErr == nil && verifiedState.Transaction != nil &&
+		(distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "")
+	if useVerifiedRollback {
 		if managed := packageManagerForBinary(invoked, runtime.GOOS); managed != nil {
 			return managedRollbackError{manager: managed.manager}
 		}
 		if _, err := os.Stat(invoked + ".prev"); err != nil {
 			return fmt.Errorf("no previous version to roll back to (expected %s)", invoked+".prev")
 		}
-		state, err := autoupdate.Load(invoked)
-		if err != nil {
-			return err
-		}
+		state := verifiedState
 		wait := runtime.GOOS != "windows"
 		parentPID := 0
 		if !wait {
