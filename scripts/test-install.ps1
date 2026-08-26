@@ -99,11 +99,13 @@ $savedEnvironment = @{
     ORBIT_VERSION = $env:ORBIT_VERSION
     ORBIT_ALLOW_DOWNGRADE = $env:ORBIT_ALLOW_DOWNGRADE
     ORBIT_SKIP_PATH_UPDATE = $env:ORBIT_SKIP_PATH_UPDATE
+    ORBIT_UPDATE_BACKGROUND = $env:ORBIT_UPDATE_BACKGROUND
 }
 $savedUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 try {
     $env:ORBIT_INSTALL_DIR = $installDirectory
+    $env:ORBIT_UPDATE_BACKGROUND = "1"
     $target = Join-Path $installDirectory "orbit.exe"
 
     Write-TestRelease "0.0.1"
