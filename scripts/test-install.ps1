@@ -4,7 +4,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "orbit-install-test-$PID"
 $fixtures = Join-Path $testRoot "fixtures"
 $installDirectory = Join-Path $testRoot "install"
-$null = New-Item -ItemType Directory -Force -Path $fixtures, $installDirectory
+$userHome = Join-Path $testRoot "user"
+$userPathStore = Join-Path $testRoot "user-path.txt"
+$userPathSetLog = Join-Path $testRoot "user-path-set.log"
+$null = New-Item -ItemType Directory -Force -Path $fixtures, $installDirectory, $userHome
+Set-Content -NoNewline -Path $userPathStore -Value "C:\isolated-existing"
+Set-Content -NoNewline -Path $userPathSetLog -Value ""
 $server = $null
 
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
@@ -100,12 +105,27 @@ $savedEnvironment = @{
     ORBIT_ALLOW_DOWNGRADE = $env:ORBIT_ALLOW_DOWNGRADE
     ORBIT_SKIP_PATH_UPDATE = $env:ORBIT_SKIP_PATH_UPDATE
     ORBIT_UPDATE_BACKGROUND = $env:ORBIT_UPDATE_BACKGROUND
+    ORBIT_INSTALL_TEST_USER_PATH_FILE = $env:ORBIT_INSTALL_TEST_USER_PATH_FILE
+    ORBIT_INSTALL_TEST_USER_PATH_SET_LOG = $env:ORBIT_INSTALL_TEST_USER_PATH_SET_LOG
+    ORBIT_HOME = $env:ORBIT_HOME
+    ORBIT_UPDATE_HOME = $env:ORBIT_UPDATE_HOME
+    HOME = $env:HOME
+    USERPROFILE = $env:USERPROFILE
+    APPDATA = $env:APPDATA
+    LOCALAPPDATA = $env:LOCALAPPDATA
 }
-$savedUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 try {
     $env:ORBIT_INSTALL_DIR = $installDirectory
     $env:ORBIT_UPDATE_BACKGROUND = "1"
+    $env:ORBIT_INSTALL_TEST_USER_PATH_FILE = $userPathStore
+    $env:ORBIT_INSTALL_TEST_USER_PATH_SET_LOG = $userPathSetLog
+    $env:HOME = $userHome
+    $env:USERPROFILE = $userHome
+    $env:APPDATA = Join-Path $userHome "AppData\Roaming"
+    $env:LOCALAPPDATA = Join-Path $userHome "AppData\Local"
+    $env:ORBIT_HOME = Join-Path $userHome ".orbit"
+    $env:ORBIT_UPDATE_HOME = Join-Path $userHome "update"
     $target = Join-Path $installDirectory "orbit.exe"
 
     Write-TestRelease "0.0.1"
@@ -115,6 +135,14 @@ try {
     if ((Get-Command orbit -ErrorAction Stop).Source -ne $target) {
         throw "newly installed Orbit is not available in the current PowerShell process"
     }
+    $storedPath = Get-Content -Raw $userPathStore
+    if ($storedPath -ne "C:\isolated-existing;$installDirectory") {
+        throw "installer did not persist the isolated user PATH: $storedPath"
+    }
+    if (@(Get-Content $userPathSetLog).Count -ne 1) {
+        throw "initial install did not invoke the isolated persistent PATH setter exactly once"
+    }
+    Set-Content -NoNewline -Path $userPathSetLog -Value ""
     if (-not ($installOutput -contains "Next: orbit init")) {
         throw "installer did not provide the immediate init command: $($installOutput -join '; ')"
     }
@@ -126,8 +154,6 @@ try {
     if (Test-Path "$target.prev") {
         throw "same-version install replaced the rollback backup"
     }
-
-    $env:ORBIT_SKIP_PATH_UPDATE = "1"
 
     Write-TestRelease "0.0.0"
     $downgradeBlocked = $false
@@ -155,6 +181,12 @@ try {
     if (-not $downloadBlocked) { throw "installer accepted an interrupted download" }
     Assert-Version $target "0.0.0"
     Assert-Version "$target.prev" "0.0.1"
+    if ((Get-Content -Raw $userPathStore) -ne "C:\isolated-existing;$installDirectory") {
+        throw "a failed install changed the persistent PATH store"
+    }
+    if (@(Get-Content $userPathSetLog).Count -ne 0) {
+        throw "a failed install invoked the persistent PATH setter"
+    }
 
     Write-TestRelease "0.0.2"
     $env:ORBIT_BASE_URL = Start-FixtureServer
@@ -171,7 +203,6 @@ try {
 }
 finally {
     Stop-FixtureServer
-    [Environment]::SetEnvironmentVariable("Path", $savedUserPath, "User")
     foreach ($name in $savedEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], "Process")
     }

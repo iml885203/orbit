@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-browser-setup docs-site-linux-deps docs-site-check test-release test-release-security release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: distribution-metadata build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-check test-release test-release-security test-distribution-metadata release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -12,6 +12,9 @@ LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_
 # Go package tests and Vitest run together in `make test`. Capping Go's
 # package fan-out avoids both runners oversubscribing the same machine.
 GO_TEST_PARALLELISM ?= 4
+
+distribution-metadata:
+	@go run ./internal/distribution/cmd/metadata
 
 ui:
 	pnpm --dir ui run build
@@ -159,12 +162,15 @@ docs-site-linux-deps: docs-site-deps
 docs-site-check: docs-site-browser-setup
 	pnpm --dir website run check
 
-test-release:
+test-release: test-distribution-metadata
 	@version="$$(tr -d '[:space:]' < VERSION)"; \
 	./scripts/verify-release-candidate.sh "v$$version"
 
 test-release-security:
 	@./scripts/test-release-security.sh
+
+test-distribution-metadata:
+	@./scripts/test-distribution-metadata.sh
 
 release-check:
 	@./scripts/verify-release-candidate.sh "$(RELEASE_VERSION)"
