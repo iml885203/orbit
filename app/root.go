@@ -245,6 +245,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
+		scheduleAutomaticUpdateCheck()
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/instance"
 	"github.com/spf13/cobra"
 )
 
@@ -27,6 +28,7 @@ func TestUpdateMutationCommandKeepsObservationAvailable(t *testing.T) {
 
 func TestWorkerTransactionBypassesItsOwnPendingGate(t *testing.T) {
 	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
 	launch := filepath.Join(t.TempDir(), "orbit")
 	t.Setenv(autoupdate.EnvLaunchPath, launch)
 	state, err := autoupdate.BeginTransaction(launch, "update", "v0.17.0")
@@ -83,16 +85,30 @@ func TestAutomaticUpdateSettingUsesDocumentedKey(t *testing.T) {
 	}
 }
 
+func TestNamedContextStillDiscoversDefaultRuntimeSocket(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv(instance.EnvBaseHome, base)
+	t.Setenv(instance.EnvName, "agent-one")
+	t.Setenv("ORBIT_HOME", filepath.Join(base, "instances", "agent-one"))
+	sockets := discoverableDefaultRuntimeSockets()
+	wantDefault := filepath.Join(base, "orbit.sock")
+	wantNamed := filepath.Join(base, "instances", "agent-one", "orbit.sock")
+	if len(sockets) != 2 || sockets[0] != wantDefault || sockets[1] != wantNamed {
+		t.Fatalf("sockets = %v, want [%s %s]", sockets, wantDefault, wantNamed)
+	}
+}
+
 func TestUpdateWorkerReplacesVerifiedBinaryAndKeepsBackup(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture is a POSIX executable script")
 	}
 	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
 	dir := t.TempDir()
 	target := filepath.Join(dir, "orbit")
 	staged := filepath.Join(dir, "staged")
 	oldScript := "#!/bin/sh\necho 'v0.16.0'\n"
-	newScript := "#!/bin/sh\necho '{\"schema_version\":\"orbit.cli.v1\",\"ok\":true}'\n"
+	newScript := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'v0.17.0'; else echo '{\"schema_version\":\"orbit.cli.v1\",\"ok\":true}'; fi\n"
 	if err := os.WriteFile(target, []byte(oldScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -123,5 +139,43 @@ func TestUpdateWorkerReplacesVerifiedBinaryAndKeepsBackup(t *testing.T) {
 	final, err := autoupdate.Load(target)
 	if err != nil || final.Phase != "succeeded" {
 		t.Fatalf("final=%+v err=%v", final, err)
+	}
+}
+
+func TestUpdateWorkerRollsBackWrongReportedVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture is a POSIX executable script")
+	}
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target := filepath.Join(dir, "orbit")
+	staged := filepath.Join(dir, "staged")
+	oldScript := "#!/bin/sh\necho 'v0.16.0'\n"
+	wrongScript := "#!/bin/sh\necho 'v9.9.9'\n"
+	if err := os.WriteFile(target, []byte(oldScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte(wrongScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion = "v0.17.0"
+		next.StagedBinary = staged
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("wrong target version was accepted")
+	}
+	installed, err := os.ReadFile(target)
+	if err != nil || string(installed) != oldScript {
+		t.Fatalf("installed=%q err=%v", installed, err)
 	}
 }

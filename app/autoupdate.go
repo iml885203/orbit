@@ -98,7 +98,7 @@ func invokedBinaryPath() (string, error) {
 }
 
 func showAutomaticUpdateDisclosure(cmd *cobra.Command) {
-	if distribution.ReleaseAPIURL == "" || cli.JSONOutput || os.Getenv(backgroundUpdateEnv) == "1" || cmd.Name() == "__update-check" {
+	if distribution.ReleaseAPIURL == "" || cli.JSONOutput || os.Getenv(backgroundUpdateEnv) == "1" || cmd.Name() == "__update-check" || cmd.Name() == "version" {
 		return
 	}
 	launchPath, err := invokedBinaryPath()
@@ -250,6 +250,9 @@ func scheduleAutomaticUpdateCheck() {
 }
 
 func automaticApplyEligible(state autoupdate.State) bool {
+	if hasUnregisteredDiscoverableRuntime(state) {
+		return false
+	}
 	for _, runtimeState := range state.Runtimes {
 		if !runtimeRegistrationCurrent(runtimeState) {
 			continue
@@ -265,6 +268,39 @@ func automaticApplyEligible(state autoupdate.State) bool {
 		}
 	}
 	return true
+}
+
+func hasUnregisteredDiscoverableRuntime(state autoupdate.State) bool {
+	registered := make(map[string]bool, len(state.Runtimes))
+	for _, runtimeState := range state.Runtimes {
+		if runtimeRegistrationCurrent(runtimeState) {
+			registered[filepath.Clean(runtimeState.SocketPath)] = true
+		}
+	}
+	for _, socketPath := range discoverableDefaultRuntimeSockets() {
+		if daemon.NewClient(socketPath).Health() == nil && !registered[socketPath] {
+			return true
+		}
+	}
+	instances, err := instance.List(instance.BaseHome())
+	if err != nil {
+		return true
+	}
+	for _, summary := range instances {
+		if summary.State == "running" && !registered[filepath.Clean(summary.SocketPath)] {
+			return true
+		}
+	}
+	return false
+}
+
+func discoverableDefaultRuntimeSockets() []string {
+	current := filepath.Clean(daemon.DefaultSocketPath())
+	base := filepath.Clean(filepath.Join(instance.BaseHome(), "orbit.sock"))
+	if current == base {
+		return []string{current}
+	}
+	return []string{base, current}
 }
 
 func recordAutomaticApplyEligibility(state autoupdate.State) autoupdate.State {
@@ -451,7 +487,11 @@ func runUpdateWorker(operation, launchPath, stagedPath, installationID, transact
 	}
 	probeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := exec.CommandContext(probeCtx, launchPath, "version", "--json").Output(); err != nil {
+	installedVersion, verifyErr := probeInstalledVersion(probeCtx, launchPath)
+	if verifyErr == nil && !autoupdate.VersionsMatch(installedVersion, state.Transaction.TargetVersion) {
+		verifyErr = fmt.Errorf("target reported %s, expected %s", installedVersion, state.Transaction.TargetVersion)
+	}
+	if verifyErr != nil {
 		var restoreErr error
 		if operation == "rollback" {
 			restoreErr = autoupdate.UndoRestore(launchPath)
@@ -459,11 +499,11 @@ func runUpdateWorker(operation, launchPath, stagedPath, installationID, transact
 			restoreErr = autoupdate.Restore(launchPath)
 		}
 		if restoreErr != nil {
-			err = fmt.Errorf("target verification failed: %w; rollback failed: %v", err, restoreErr)
+			verifyErr = fmt.Errorf("target verification failed: %w; rollback failed: %v", verifyErr, restoreErr)
 		}
 		reconnectDrainedRuntimes(launchPath, snapshots)
-		_, _ = autoupdate.FinishTransaction(launchPath, transactionID, "failed", err)
-		return err
+		_, _ = autoupdate.FinishTransaction(launchPath, transactionID, "failed", verifyErr)
+		return verifyErr
 	}
 	started := make(map[string]drainedRuntime)
 	for identity, snapshot := range snapshots {
@@ -570,6 +610,9 @@ type drainedRuntime struct {
 var errUpdateResourcesRunning = errors.New("product resources started before automatic update apply")
 
 func drainRegisteredRuntimes(state autoupdate.State, allowRunning bool) (map[string]drainedRuntime, error) {
+	if hasUnregisteredDiscoverableRuntime(state) {
+		return nil, fmt.Errorf("a discoverable Orbit runtime has not registered for coordinated update; restart it with the installed Orbit build")
+	}
 	snapshots := make(map[string]drainedRuntime)
 	for identity, runtimeState := range state.Runtimes {
 		if !runtimeRegistrationCurrent(runtimeState) {

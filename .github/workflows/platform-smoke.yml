@@ -55,7 +55,7 @@ jobs:
       - name: Compile the full native codebase
         run: go build ./...
       - name: Run OS-specific native tests
-        run: go test ./app ./platform
+        run: go test ./app ./autoupdate ./platform
       - name: Exercise install, downgrade, failure, rollback, and uninstall
         if: ${{ !matrix.windows }}
         shell: bash

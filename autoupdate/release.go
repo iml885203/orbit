@@ -448,3 +448,9 @@ func releaseVersionParts(value string) ([3]int, bool) {
 func normalizeVersion(value string) string {
 	return strings.TrimPrefix(strings.Fields(value)[0], "v")
 }
+
+// VersionsMatch keeps post-replacement verification on the same normalization
+// rule used when a downloaded candidate is first staged.
+func VersionsMatch(actual, expected string) bool {
+	return normalizeVersion(actual) == normalizeVersion(expected)
+}
