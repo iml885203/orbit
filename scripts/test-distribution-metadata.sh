@@ -11,6 +11,23 @@ make --no-print-directory -C "$repo_root" distribution-metadata >"$test_root/met
 cmp "$metadata" "$test_root/metadata-again.json"
 test "$("$repo_root/scripts/distribution-metadata-field.sh" release_repository "$metadata")" = "iml885203/orbit"
 
+reader_pids=()
+for index in 1 2 3 4; do
+  "$repo_root/scripts/distribution-metadata-field.sh" environment_ref >"$test_root/parallel-$index" &
+  reader_pids+=("$!")
+done
+for pid in "${reader_pids[@]}"; do
+  wait "$pid"
+done
+for output in "$test_root"/parallel-*; do
+  test -s "$output"
+  test "$(<"$output")" = "$("$repo_root/scripts/distribution-metadata-field.sh" environment_ref "$metadata")"
+done
+if grep -E '(^|[[:space:]])make([[:space:]]|$)' "$repo_root/scripts/distribution-metadata-field.sh" >/dev/null; then
+  echo "distribution metadata field reader must not invoke recursive make" >&2
+  exit 1
+fi
+
 python3 - "$metadata" "$repo_root/scripts/install.sh" "$repo_root/scripts/install.ps1" <<'PY'
 import json
 import pathlib
