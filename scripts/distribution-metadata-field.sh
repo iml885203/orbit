@@ -9,7 +9,10 @@ trap 'rm -f "$metadata_file"' EXIT
 if [[ -n "${2:-}" ]]; then
   cp "$2" "$metadata_file"
 else
-  make --no-print-directory -C "$repo_root" distribution-metadata >"$metadata_file"
+  (
+    cd "$repo_root"
+    go run ./internal/distribution/cmd/metadata
+  ) >"$metadata_file"
 fi
 
 python3 - "$metadata_file" "$field" <<'PY'
