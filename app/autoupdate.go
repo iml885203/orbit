@@ -78,7 +78,9 @@ func automaticUpdateChecker() autoupdate.Checker {
 	if override := strings.TrimSpace(os.Getenv("ORBIT_RELEASE_API_URL")); override != "" {
 		endpoint = override
 	}
-	return autoupdate.Checker{Channel: autoupdate.Channel{ReleaseAPIURL: endpoint}}
+	return autoupdate.Checker{Channel: autoupdate.Channel{
+		ReleaseAPIURL: endpoint, ReleaseRepository: distribution.ReleaseRepository,
+	}}
 }
 
 func invokedBinaryPath() (string, error) {
@@ -454,13 +456,22 @@ func runUpdateWorker(operation, launchPath, stagedPath, installationID, transact
 	if state.Transaction == nil || state.Transaction.FinishedAt != nil || state.Transaction.ID != transactionID || state.Transaction.Operation != operation {
 		return fmt.Errorf("update helper does not own the active transaction")
 	}
+	var candidate *autoupdate.VerifiedCandidate
+	if operation != "rollback" {
+		candidate, err = openUpdateCandidate(state, stagedPath)
+		if err != nil {
+			_, _ = autoupdate.FinishTransaction(launchPath, transactionID, "failed", err)
+			return err
+		}
+		defer func(opened *autoupdate.VerifiedCandidate) { _ = opened.Close() }(candidate)
+	}
 	if err := os.Setenv(daemon.UpdateTransactionEnv, transactionID); err != nil {
 		return fmt.Errorf("configure update transaction context: %w", err)
 	}
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
 	go heartbeatUpdateTransaction(launchPath, state.Transaction.ID, heartbeatDone)
-	snapshots, err := drainRegisteredRuntimes(state, operation != "automatic")
+	snapshots, err := drainUpdateRuntimes(state, operation != "automatic")
 	if err != nil {
 		if errors.Is(err, errUpdateResourcesRunning) {
 			_, _ = autoupdate.Update(launchPath, func(next *autoupdate.State) error {
@@ -478,7 +489,9 @@ func runUpdateWorker(operation, launchPath, stagedPath, installationID, transact
 	if operation == "rollback" {
 		replaceErr = autoupdate.Restore(launchPath)
 	} else {
-		_, replaceErr = autoupdate.Replace(launchPath, stagedPath)
+		_, replaceErr = autoupdate.ReplaceCandidate(launchPath, candidate)
+		_ = candidate.Close()
+		candidate = nil
 	}
 	if replaceErr != nil {
 		reconnectDrainedRuntimes(launchPath, snapshots)
@@ -546,6 +559,21 @@ func runUpdateWorker(operation, launchPath, stagedPath, installationID, transact
 	return err
 }
 
+func openUpdateCandidate(state autoupdate.State, stagedPath string) (*autoupdate.VerifiedCandidate, error) {
+	if filepath.Clean(stagedPath) != filepath.Clean(state.StagedBinary) || state.StagedEvidence == nil {
+		return nil, fmt.Errorf("staged Orbit has no matching verified release evidence")
+	}
+	assetName, err := autoupdate.PlatformAssetName()
+	if err != nil {
+		return nil, err
+	}
+	if err := state.StagedEvidence.ValidateForApply(
+		state.Transaction.TargetVersion, distribution.ReleaseRepository, assetName); err != nil {
+		return nil, err
+	}
+	return autoupdate.OpenVerifiedCandidate(stagedPath, state.StagedEvidence.AssetSHA256)
+}
+
 func heartbeatUpdateTransaction(launchPath, transactionID string, done <-chan struct{}) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -608,6 +636,8 @@ type drainedRuntime struct {
 }
 
 var errUpdateResourcesRunning = errors.New("product resources started before automatic update apply")
+
+var drainUpdateRuntimes = drainRegisteredRuntimes
 
 func drainRegisteredRuntimes(state autoupdate.State, allowRunning bool) (map[string]drainedRuntime, error) {
 	if hasUnregisteredDiscoverableRuntime(state) {

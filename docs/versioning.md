@@ -77,6 +77,12 @@ immutable. Build-provenance and SBOM attestations remain separate evidence of
 how the binaries were produced; the immutable-release attestation binds the
 published tag, target commit, and release assets.
 
+Official direct-install updates independently consume that release attestation
+in process. They bind the selected platform binary and `checksums.txt` to the
+attested digests before staging, retain bounded evidence for offline delayed
+apply, and revalidate the staged bytes immediately before replacement. This
+runtime boundary is separate from publication verification and build provenance.
+
 Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 
 - PATCH releases contain backward-compatible fixes.

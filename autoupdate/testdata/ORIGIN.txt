@@ -1,0 +1,11 @@
+Release-attestation fixtures
+
+github_release_bundle.json is GitHub CLI's public immutable-release fixture
+from cli/cli commit 606cda4a9b1a703ad7c2e353a77bce0d93d21b0e
+(pkg/cmd/attestation/test/data/github_release_bundle.json). The repository is
+MIT licensed.
+
+github_trusted_root.json was captured from gh attestation trusted-root on
+2026-08-26. Tests keep both inputs local so signature, timestamp, and release
+certificate policy regressions do not depend on a live release or mutable
+network response.

@@ -115,9 +115,10 @@ changing its `.prev` backup.
 Official release builds check for a newer release at most once every 24 hours.
 The foreground command performs no release network request: one detached check
 downloads the matching artifact and checksum, verifies both the checksum and
-the candidate binary's reported version, and stages it in the user-global Orbit
-update registry. Source, dirty, and unbranded builds have no implicit release
-channel.
+the candidate binary's reported version, and cryptographically verifies the
+immutable-release attestation that binds the tag, commit, artifact, and checksum
+file. It stages the bytes and bounded evidence in the user-global Orbit update
+registry. Source, dirty, and unbranded builds have no implicit release channel.
 
 Automatic updates default to on. Orbit applies a verified staged update only
 after a command finishes, every registered product environment has zero running
@@ -126,6 +127,14 @@ to the target build; a running product environment defers apply and exposes one
 `orbit update` / **Update now** action that restores its prior running intent.
 Read-only `status --json` and `inspect --json` continue reporting the durable
 transaction while mutations wait for replacement or rollback to finish.
+Delayed apply revalidates the local staged bytes without a GitHub request, so an
+already verified update can apply offline.
+
+The verifier bootstraps GitHub's trust repository from the root embedded in the
+Orbit build, refreshes TUF metadata when its one-day cache expires, and fails the
+check closed when current trusted material cannot be obtained. Root rotation is
+accepted only through TUF. Once a candidate is staged, apply uses the recorded
+verification result and does not refresh trust metadata.
 
 Set the installation-wide preference from any default or named runtime:
 
