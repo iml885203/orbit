@@ -9,3 +9,8 @@ github_trusted_root.json was captured from gh attestation trusted-root on
 2026-08-26. Tests keep both inputs local so signature, timestamp, and release
 certificate policy regressions do not depend on a live release or mutable
 network response.
+
+github_annotated_release_bundle.json is the public GitHub immutable-release
+attestation for goreleaser/goreleaser v2.18.0. Its annotated tag object is
+3fc1d21a1a701a587a3837374cb94e9d8aede5e3 and peels to commit
+a38ac3174c591f95049234d25bb326104d3ca820.

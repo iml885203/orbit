@@ -37,12 +37,13 @@ type githubRelease struct {
 }
 
 type Checker struct {
-	Client          *http.Client
-	Channel         Channel
-	Now             func() time.Time
-	Explicit        bool
-	verifyRelease   func(context.Context, githubRelease) (*VerificationRecord, error)
-	trustedRootJSON func(context.Context) ([]byte, error)
+	Client           *http.Client
+	Channel          Channel
+	Now              func() time.Time
+	Explicit         bool
+	verifyRelease    func(context.Context, githubRelease) (*VerificationRecord, error)
+	trustedRootJSON  func(context.Context) ([]byte, error)
+	releaseAssetName func() (string, error)
 }
 
 func (c Checker) CheckAndStage(ctx context.Context, launchPath, currentVersion string) (State, error) {

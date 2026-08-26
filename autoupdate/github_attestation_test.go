@@ -59,7 +59,7 @@ func TestCapturedGitHubReleaseBundleCryptographicallyVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Statement.PredicateType != releasePredicate {
+	if result.Statement.PredicateType != releasePredicateV01 {
 		t.Fatalf("predicate=%q", result.Statement.PredicateType)
 	}
 	wrongDigest := append([]byte(nil), digest...)
@@ -89,12 +89,12 @@ func TestCapturedGitHubReleaseBundleCryptographicallyVerifies(t *testing.T) {
 		t.Fatal("insufficient signed timestamps accepted")
 	}
 	result.Statement.PredicateType = "https://example.invalid/predicate"
-	if _, err := verificationRecord(result, "bdehamer/delme", "v6", strings.Repeat("a", 40)); err == nil {
+	if _, err := verificationRecord(result, "bdehamer/delme", "v6", strings.Repeat("a", 40), strings.Repeat("a", 40), "artifact.zip"); err == nil {
 		t.Fatal("wrong predicate accepted")
 	}
 }
 
-func TestCapturedBundleRunsThroughProductionReleaseVerification(t *testing.T) {
+func TestCapturedBundleVerifiesAnnotatedTagThroughProductionReleaseVerification(t *testing.T) {
 	bundleJSON, err := os.ReadFile("testdata/github_release_bundle.json")
 	if err != nil {
 		t.Fatal(err)
@@ -104,11 +104,14 @@ func TestCapturedBundleRunsThroughProductionReleaseVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	const digest = "c5e17a62e06a1d201570249c61fae531e9244e1b"
+	const peeledCommit = "0123456789abcdef0123456789abcdef01234567"
 	initiator, copies := "github", 1
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/repos/bdehamer/delme/git/ref/tags/v6":
-			_, _ = w.Write([]byte(`{"object":{"sha":"` + digest + `","type":"commit"}}`))
+			_, _ = w.Write([]byte(`{"object":{"sha":"` + digest + `","type":"tag"}}`))
+		case r.URL.Path == "/repos/bdehamer/delme/git/tags/"+digest:
+			_, _ = w.Write([]byte(`{"object":{"sha":"` + peeledCommit + `","type":"commit"}}`))
 		case strings.HasPrefix(r.URL.Path, "/repos/bdehamer/delme/attestations/"):
 			_, _ = w.Write([]byte(`{"attestations":[`))
 			for i := 0; i < copies; i++ {
@@ -140,6 +143,48 @@ func TestCapturedBundleRunsThroughProductionReleaseVerification(t *testing.T) {
 	initiator, copies = "github", 2
 	if _, err := checker.verifyGitHubRelease(context.Background(), githubRelease{TagName: "v6", Immutable: true}); err == nil || !strings.Contains(err.Error(), "2 matching") {
 		t.Fatalf("duplicate matching bundles accepted: %v", err)
+	}
+}
+
+func TestRealAnnotatedReleaseBundleProducesVerifiedRecord(t *testing.T) {
+	bundleJSON, err := os.ReadFile("testdata/github_annotated_release_bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootJSON, err := os.ReadFile("testdata/github_trusted_root.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const tagObject = "3fc1d21a1a701a587a3837374cb94e9d8aede5e3"
+	const peeledCommit = "a38ac3174c591f95049234d25bb326104d3ca820"
+	const asset = "goreleaser_Linux_x86_64.tar.gz"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/goreleaser/goreleaser/git/ref/tags/v2.18.0":
+			_, _ = w.Write([]byte(`{"object":{"sha":"` + tagObject + `","type":"tag"}}`))
+		case "/repos/goreleaser/goreleaser/git/tags/" + tagObject:
+			_, _ = w.Write([]byte(`{"object":{"sha":"` + peeledCommit + `","type":"commit"}}`))
+		case "/repos/goreleaser/goreleaser/attestations/sha1:" + tagObject:
+			_, _ = w.Write([]byte(`{"attestations":[{"initiator":"github","bundle":`))
+			_, _ = w.Write(bundleJSON)
+			_, _ = w.Write([]byte(`}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	checker := Checker{
+		Client:           server.Client(),
+		Channel:          Channel{ReleaseAPIURL: server.URL + "/repos/goreleaser/goreleaser/releases/latest", ReleaseRepository: "goreleaser/goreleaser"},
+		trustedRootJSON:  func(context.Context) ([]byte, error) { return rootJSON, nil },
+		releaseAssetName: func() (string, error) { return asset, nil },
+	}
+	record, err := checker.verifyGitHubRelease(context.Background(), githubRelease{TagName: "v2.18.0", Immutable: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.TargetCommit != peeledCommit || record.AssetName != asset || record.Tag != "v2.18.0" {
+		t.Fatalf("record=%+v", record)
 	}
 }
 
@@ -251,7 +296,7 @@ func TestVerificationRecordAllowsExtraSubjectsAndRejectsDuplicateRequiredSubject
 	if err := protojson.Unmarshal([]byte(statementJSON), &statement); err != nil {
 		t.Fatal(err)
 	}
-	record, err := verificationRecord(&verify.VerificationResult{Statement: &statement}, "iml885203/orbit", "v1.2.3", commit)
+	record, err := verificationRecord(&verify.VerificationResult{Statement: &statement}, "iml885203/orbit", "v1.2.3", commit, commit, asset)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +304,7 @@ func TestVerificationRecordAllowsExtraSubjectsAndRejectsDuplicateRequiredSubject
 		t.Fatalf("record=%+v", record)
 	}
 	statement.Subject = append(statement.Subject, statement.Subject[1])
-	if _, err := verificationRecord(&verify.VerificationResult{Statement: &statement}, "iml885203/orbit", "v1.2.3", commit); err == nil {
+	if _, err := verificationRecord(&verify.VerificationResult{Statement: &statement}, "iml885203/orbit", "v1.2.3", commit, commit, asset); err == nil {
 		t.Fatal("duplicate required subject accepted")
 	}
 }

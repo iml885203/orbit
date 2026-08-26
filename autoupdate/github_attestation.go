@@ -33,7 +33,8 @@ import (
 
 const (
 	githubReleasePolicyVersion = "github-release-v1"
-	releasePredicate           = "https://in-toto.io/attestation/release/v0.1"
+	releasePredicateV01        = "https://in-toto.io/attestation/release/v0.1"
+	releasePredicateV02        = "https://in-toto.io/attestation/release/v0.2"
 	githubTUFMirror            = "https://tuf-repo.github.com"
 	maxEvidenceBody            = 4 << 20
 	maxBundleBody              = 16 << 20
@@ -136,7 +137,15 @@ func (c Checker) verifyGitHubRelease(ctx context.Context, release githubRelease)
 	if err != nil {
 		return nil, fmt.Errorf("verify immutable-release attestation: %w", err)
 	}
-	record, err := verificationRecord(result, repository, release.TagName, commit)
+	assetName := c.releaseAssetName
+	if assetName == nil {
+		assetName = func() (string, error) { return platformAsset(runtime.GOOS, runtime.GOARCH) }
+	}
+	expectedAsset, err := assetName()
+	if err != nil {
+		return nil, err
+	}
+	record, err := verificationRecord(result, repository, release.TagName, tagDigest, commit, expectedAsset)
 	if err != nil {
 		return nil, err
 	}
@@ -325,23 +334,19 @@ func withTrustCacheLock(ctx context.Context, dir string, load func() ([]byte, er
 	return load()
 }
 
-func verificationRecord(result *verify.VerificationResult, repository, tag, commit string) (*VerificationRecord, error) {
-	if result.Statement == nil || result.Statement.PredicateType != releasePredicate {
+func verificationRecord(result *verify.VerificationResult, repository, tag, tagObjectDigest, commit, assetName string) (*VerificationRecord, error) {
+	if result.Statement == nil || (result.Statement.PredicateType != releasePredicateV01 && result.Statement.PredicateType != releasePredicateV02) {
 		return nil, fmt.Errorf("attestation has the wrong release predicate")
 	}
 	predicate := result.Statement.Predicate.GetFields()
 	if predicate["repository"].GetStringValue() != repository || predicate["tag"].GetStringValue() != tag {
 		return nil, fmt.Errorf("attestation identifies another release")
 	}
-	assetName, err := platformAsset(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		return nil, err
-	}
 	required := map[string]string{assetName: "", "checksums.txt": ""}
 	commitBound := false
 	for _, subject := range result.Statement.Subject {
 		if subject.Name == "" && subject.Uri != "" {
-			if strings.EqualFold(subject.Digest[gitDigestAlgorithm(commit)], commit) {
+			if strings.EqualFold(subject.Digest[gitDigestAlgorithm(tagObjectDigest)], tagObjectDigest) {
 				commitBound = true
 			}
 			continue
