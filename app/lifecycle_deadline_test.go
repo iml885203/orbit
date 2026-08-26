@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +36,9 @@ func TestAgentLifecycleTimeoutHelpDistinguishesJSONAndHumanScope(t *testing.T) {
 }
 
 func TestUpJSONCatchableSignalWritesOneCanceledEnvelope(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Interrupt cannot be sent to a Windows process")
+	}
 	if os.Getenv("ORBIT_TEST_SIGNAL_ENVELOPE") == "1" {
 		home := os.Getenv("ORBIT_TEST_HOME")
 		_ = os.MkdirAll(home, 0o755)
