@@ -17,7 +17,8 @@ versions independently so skill-only changes do not force a CLI release.
   compatibility contracts below are documented, tested, and ready for external
   users. [The 1.0 test matrix](1.0-test-matrix.md) holds the platform evidence
   that tag requires and records what has actually been exercised.
-- Release tags are immutable. Fixes are published as a new version.
+- Published GitHub releases are immutable: their tag and assets cannot be
+  changed or reused. Fixes are published as a new version.
 
 ## Preview batching
 
@@ -34,8 +35,13 @@ Freeze a preview batch in this order:
    yet.
 4. Prepare and review the user-facing release notes.
 5. Run the candidate and platform gates, then manually approve publication.
-   The release workflow creates the immutable Orbit tag only after every gate
-   passes, so a failed candidate never leaves a release tag behind.
+   The release workflow creates the Orbit tag only after every gate passes, so
+   a failed candidate never leaves a release tag behind. GitHub locks the tag
+   and complete asset set when the release is published, then emits an
+   immutable-release attestation covering their digests and target commit.
+6. The workflow verifies that release attestation and every published asset
+   before either package repository can be updated. Homebrew and Scoop repeat
+   the same read-only verification before their write-capable update jobs.
 
 Release notes are entered when the release workflow is approved and live in
 GitHub Releases rather than accumulating in the source tree. They describe the
@@ -62,6 +68,14 @@ the App only on `iml885203/homebrew-tap` and `iml885203/scoop-bucket` with
 `Actions: Read and write` and `Contents: Read`. Configure its client ID as the
 `PACKAGE_SYNC_APP_CLIENT_ID` repository variable and its private key as the
 `PACKAGE_SYNC_APP_PRIVATE_KEY` repository secret.
+
+Immutable Releases is an owner-managed repository prerequisite. The workflow
+does not hold repository-administration credentials: after publication it
+fails closed if GitHub does not report an immutable, attested release, which
+prevents package promotion but cannot retroactively make a mutable publication
+immutable. Build-provenance and SBOM attestations remain separate evidence of
+how the binaries were produced; the immutable-release attestation binds the
+published tag, target commit, and release assets.
 
 Pre-1.0 releases may introduce breaking changes. From `v1.0.0` onward:
 

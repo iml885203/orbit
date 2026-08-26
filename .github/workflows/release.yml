@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 5
     environment: release
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Verify explicit release approval
@@ -135,18 +135,18 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.8.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: pnpm
@@ -175,7 +175,7 @@ jobs:
             go version -m "$output" | grep -F "vcs.revision=$GITHUB_SHA"
           done
       - name: Generate release SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           path: .
           format: spdx-json
@@ -187,14 +187,19 @@ jobs:
           set -euo pipefail
           (cd dist && sha256sum orbit-* > checksums.txt)
           (cd dist && sha256sum --check checksums.txt)
+      - name: Verify complete release inventory
+        uses: ./.github/actions/verify-orbit-release
+        with:
+          mode: local
+          asset-directory: dist
       - name: Attest build provenance
         if: ${{ github.event.repository.visibility == 'public' }}
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: dist/checksums.txt
       - name: Attest release SBOM
         if: ${{ github.event.repository.visibility == 'public' }}
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: dist/checksums.txt
           sbom-path: dist/orbit.spdx.json
@@ -214,10 +219,20 @@ jobs:
           if [[ "$RELEASE_VERSION" =~ ^v0\. ]]; then
             release_title="$release_title (Preview)"
           fi
-          gh release create "$RELEASE_VERSION" dist/* \
+          mapfile -t release_assets < <(sed 's|^|dist/|' .github/actions/verify-orbit-release/assets.txt)
+          gh release create "$RELEASE_VERSION" "${release_assets[@]}" \
             --target "$GITHUB_SHA" \
             --notes "$RELEASE_NOTES" \
             --title "$release_title"
+      - name: Verify immutable published release
+        uses: ./.github/actions/verify-orbit-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          mode: published
+          tag: ${{ inputs.tag }}
+          expected-commit: ${{ github.sha }}
+          asset-directory: dist
 
   update-homebrew:
     needs: release

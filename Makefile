@@ -1,4 +1,4 @@
-.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-browser-setup docs-site-linux-deps docs-site-check test-release release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-browser-setup docs-site-linux-deps docs-site-check test-release test-release-security release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -163,6 +163,9 @@ test-release:
 	@version="$$(tr -d '[:space:]' < VERSION)"; \
 	./scripts/verify-release-candidate.sh "v$$version"
 
+test-release-security:
+	@./scripts/test-release-security.sh
+
 release-check:
 	@./scripts/verify-release-candidate.sh "$(RELEASE_VERSION)"
 
@@ -231,5 +234,6 @@ preflight:
 	$(MAKE) test-docs
 	$(MAKE) docs-site-check
 	$(MAKE) test-release
+	$(MAKE) test-release-security
 	$(MAKE) verify-types
 	@echo "preflight OK - matches the CI gate"

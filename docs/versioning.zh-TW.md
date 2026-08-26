@@ -16,7 +16,8 @@ skill 的更新不必連帶發布 CLI。
   已有文件與測試，並已準備好提供外部使用者使用。
   [1.0 test matrix](https://orbit.dotw.me/docs/1.0-test-matrix) 記錄該 tag 所需的平台證據，
   以及目前實際已驗證的項目。
-- Release tag 不可修改；修正必須發布成新版本。
+- 已發布的 GitHub Release 不可修改；其 tag 與 assets 都不能變更或重用。
+  修正必須發布成新版本。
 
 ## Preview 批次原則
 
@@ -32,8 +33,11 @@ Preview batch 依照下列順序 freeze：
 3. 決定下一個版本並更新 `VERSION`；此時先不要建立 Orbit tag。
 4. 準備並 review 對使用者說明的 release notes。
 5. 執行 candidate 與 platform gates，再手動 approve 發布。Release workflow
-   只會在所有 gate 通過後建立不可修改的 Orbit tag，失敗的 candidate 不會留下
-   release tag。
+   只會在所有 gate 通過後建立 Orbit tag，失敗的 candidate 不會留下 release
+   tag。GitHub 會在 release 發布時鎖定 tag 與完整 asset set，並產生涵蓋其 digest
+   與 target commit 的 immutable-release attestation。
+6. Workflow 會先驗證 release attestation 與每個發布 asset，才允許更新 package
+   repository。Homebrew 與 Scoop 也會在取得寫入權限前重複相同的唯讀驗證。
 
 Release notes 在 approve release workflow 時輸入，保留於 GitHub Releases，
 不再累積在 source tree。內容先描述整個 batch 的使用者成果，個別修正則作為
@@ -44,6 +48,13 @@ Package updates 使用 private `iml885203-package-sync` GitHub App。只將 App
 `Actions: Read and write` 與 `Contents: Read`。將 client ID 設為
 `PACKAGE_SYNC_APP_CLIENT_ID` repository variable，private key 設為
 `PACKAGE_SYNC_APP_PRIVATE_KEY` repository secret。
+
+Immutable Releases 是由 repository owner 管理的發布前提。Workflow 不持有
+repository administration credential；發布後若 GitHub 沒有回報 immutable 且
+已 attested 的 release，流程會 fail closed 並阻止 package promotion，但不能把
+已發布的 mutable release 追溯改成 immutable。Build provenance 與 SBOM
+attestation 是 binary 如何產生的獨立證據；immutable-release attestation 則綁定
+已發布的 tag、target commit 與 release assets。
 
 1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：
 
