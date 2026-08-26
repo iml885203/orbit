@@ -4,8 +4,6 @@
   import { store, toast } from '$lib/stores.svelte'
   import type { VersionRestartResponse } from '$lib/types.gen'
 
-  const cmd = 'orbit daemon restart'
-
   type Phase = 'ready' | 'restarting' | 'success' | 'failed'
 
   let phase = $state<Phase>('ready')
@@ -15,6 +13,9 @@
   let successTimer: ReturnType<typeof setTimeout> | undefined
 
   const version = $derived(store.ui.version)
+	const release = $derived(version?.release_update)
+	const packageManaged = $derived(release?.owner === 'homebrew' || release?.owner === 'scoop')
+	const cmd = $derived(release?.owner === 'homebrew' ? 'brew upgrade orbit' : release?.owner === 'scoop' ? 'scoop update orbit' : release?.target_version ? 'orbit update' : 'orbit daemon restart')
   const targetToken = $derived(version?.on_disk?.split(/\s+/)[0] ?? '')
   const runningToken = $derived(version?.running?.split(/\s+/)[0] ?? '')
 
@@ -41,13 +42,14 @@
   }
 
   async function restart() {
-    const expected = version?.on_disk
+		const expected = release?.target_version ?? version?.on_disk
     if (!expected) return
     targetVersion = expected
     failure = ''
     phase = 'restarting'
     store.ui.versionRestarting = true
-    const result = await apiPost<VersionRestartResponse>('/api/version/restart')
+		const endpoint = release?.target_version ? '/api/update/apply' : '/api/version/restart'
+		const result = await apiPost<VersionRestartResponse>(endpoint)
     if (!result.ok) {
       failRestart(result.data?.error ?? 'Orbit could not schedule the restart.')
       return
@@ -80,7 +82,8 @@
   }
 
   function dismiss() {
-    if (version?.on_disk) dismissedVersion = version.on_disk
+		const dismissTarget = release?.target_version ?? version?.on_disk
+		if (dismissTarget) dismissedVersion = dismissTarget
   }
 
   onDestroy(() => clearTimeout(successTimer))
@@ -90,7 +93,7 @@
   <div class="banner success" role="status">
     <span class="text"><strong>Orbit updated to <code>{targetVersion.split(/\s+/)[0]}</code></strong></span>
   </div>
-{:else if version?.update_available && dismissedVersion !== version.on_disk}
+{:else if (version?.update_available || release?.phase === 'ready' || release?.phase === 'available' || release?.phase === 'partial' || release?.phase === 'failed') && dismissedVersion !== (release?.target_version ?? version?.on_disk)}
   <div class:error={phase === 'failed'} class="banner" role="status" aria-live="polite">
     {#if phase === 'restarting'}
       <span class="text"><strong>Restarting Orbit…</strong> Reconnecting to <code>{targetVersion.split(/\s+/)[0]}</code>.</span>
@@ -105,17 +108,33 @@
       </div>
     {:else}
       <span class="text">
-        <strong>Orbit <code>{targetToken}</code> is ready.</strong>
-        The daemon is still running <code>{runningToken}</code>. Restart Orbit to apply it; running resources will be restored.
+				{#if release?.phase === 'partial'}
+					<strong>Orbit updated with partial restoration.</strong>
+					Some resources need attention. Inspect <code>orbit status --json</code> for exact recovery.
+				{:else if release?.phase === 'failed'}
+					<strong>Orbit couldn’t finish the update.</strong>
+					{release.last_error ?? 'The current installation remains available.'}
+				{:else if release?.target_version}
+					<strong>Orbit <code>{release.target_version}</code> is verified and ready.</strong>
+					{release.defer_reason === 'resources_running'
+						? 'It will update automatically after all product resources stop.'
+						: 'Orbit will apply it at the next safe command boundary.'}
+				{:else}
+					<strong>Orbit <code>{targetToken}</code> is ready.</strong>
+					The daemon is still running <code>{runningToken}</code>. Restart Orbit to apply it; running resources will be restored.
+				{/if}
         <details>
           <summary>Build details</summary>
-          <span>Installed: <code>{version.on_disk}</code></span>
-          <span>Running: <code>{version.running}</code></span>
-          {#if version.on_disk_path}<span>Binary: <code>{version.on_disk_path}</code></span>{/if}
+					{#if release?.target_version}<span>Released: <code>{release.target_version}</code></span>{/if}
+					<span>Installed: <code>{version?.on_disk ?? version?.running ?? 'unknown'}</code></span>
+					<span>Running: <code>{version?.running ?? 'unknown'}</code></span>
+					{#if version?.on_disk_path}<span>Binary: <code>{version.on_disk_path}</code></span>{/if}
         </details>
       </span>
       <div class="actions">
-        <button class="primary" onclick={restart}>Restart now</button>
+				{#if release?.phase !== 'partial' && release?.phase !== 'failed'}
+					<button class="primary" onclick={packageManaged ? copyCmd : restart}>{packageManaged ? 'Copy upgrade command' : release?.target_version ? 'Update now' : 'Restart now'}</button>
+				{/if}
         <button onclick={dismiss}>Later</button>
       </div>
     {/if}

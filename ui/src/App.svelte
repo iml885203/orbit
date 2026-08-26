@@ -50,6 +50,7 @@
     fetchEnvToggles().then(t => { store.daemon.envToggles = t })
     fetchSettings().then(s => {
       store.ui.showHistory = (s as typeof s & { show_history?: boolean }).show_history === true
+		store.ui.automaticUpdates = (s as typeof s & { automatic_updates?: 'automatic' | 'off' }).automatic_updates ?? 'automatic'
       extDaemonState(s)
     })
     fetchEnvs().then(e => { store.daemon.envs = e })

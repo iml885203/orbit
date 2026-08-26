@@ -230,6 +230,27 @@ func launchDashboardRestart(configPath, contextKind string) error {
 	return nil
 }
 
+func launchDashboardUpdate() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding orbit executable: %w", err)
+	}
+	logFile, err := daemon.OpenDaemonLog()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = logFile.Close() }()
+	cmd := exec.Command(exe, "update", "--json")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	platform.DetachProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting Orbit update: %w", err)
+	}
+	_ = cmd.Process.Release()
+	return nil
+}
+
 func ensureDaemonStarted(configPath string) error {
 	kind := daemonContextKind
 	if kind == "" {
@@ -460,6 +481,8 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	if err := daemon.WritePID(); err != nil {
 		return fmt.Errorf("writing PID file: %w", err)
 	}
+	unregisterUpdateRuntime := registerUpdateRuntime()
+	defer unregisterUpdateRuntime()
 	defer daemon.Cleanup()
 
 	slog.Info("starting", "component", "daemon", "pid", os.Getpid(), "config", configFile)
@@ -543,6 +566,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	server := daemonsrv.NewServer(app, holder, stateFile, settings, buildVersion(), dashboardFS, extensions)
 	server.SetEnvironmentContext(configFile, daemonContextKind)
 	server.SetRestartLauncher(launchDashboardRestart)
+	server.SetUpdateLauncher(launchDashboardUpdate)
 	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
 	app.ProcessMgr.OnStarted = func(_ string) {
 		server.PersistState()

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/iml885203/orbit/autoupdate"
 )
 
 // probeVersion execs `<path> --version` with a short timeout and returns the
@@ -210,6 +212,12 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := VersionResponse{Running: s.version}
+	if launchPath, err := autoupdate.LaunchPath(); err == nil {
+		if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
+			summary := updateState.Summary()
+			resp.ReleaseUpdate = &summary
+		}
+	}
 	if onDisk, path := detectUpdate(s.version); onDisk != "" {
 		resp.OnDisk = onDisk
 		resp.OnDiskPath = path
@@ -241,4 +249,54 @@ func (s *Server) handleVersionRestart(w http.ResponseWriter, r *http.Request) {
 		Message:       "Orbit is restarting; running resources will be restored",
 		TargetVersion: onDisk,
 	})
+}
+
+func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	if requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	launchPath, err := autoupdate.LaunchPath()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	state, err := autoupdate.Load(launchPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	if state.TargetVersion == "" {
+		writeJSON(w, http.StatusConflict, APIResponse{Error: "no verified Orbit update is ready"})
+		return
+	}
+	if s.updateLauncher == nil {
+		writeJSON(w, http.StatusServiceUnavailable, APIResponse{Error: "Orbit update launcher is unavailable"})
+		return
+	}
+	if err := s.updateLauncher(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, VersionRestartResponse{
+		OK: true, Message: "Orbit update scheduled", TargetVersion: state.TargetVersion,
+	})
+}
+
+func (s *Server) handleUpdateDrain(w http.ResponseWriter, r *http.Request) {
+	if requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	s.updateAdmissionMu.Lock()
+	defer s.updateAdmissionMu.Unlock()
+	drained := make(chan struct{})
+	go func() {
+		s.background.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: "daemon mutations drained"})
+	case <-time.After(5 * time.Minute):
+		writeJSON(w, http.StatusRequestTimeout, APIResponse{Error: "timed out waiting for daemon mutations to drain", Code: "update_drain_timeout"})
+	}
 }

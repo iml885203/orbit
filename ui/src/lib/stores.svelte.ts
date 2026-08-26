@@ -86,6 +86,7 @@ class UIStore {
   envPopoverOpen = $state(false)
   sourceMigrationNoticeSeen = $state(false)
   showHistory = $state(false)
+	automaticUpdates = $state<'automatic' | 'off'>('automatic')
   version = $state<VersionResponse | null>(null)
   versionRestarting = $state(false)
   // Persisted across reloads so the user's layout preference sticks.

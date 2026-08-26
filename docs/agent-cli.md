@@ -212,8 +212,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 |---|---|
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
-| `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, and recommended follow-up commands. |
-| `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon state, and configured resource state in `data.resources`. |
+| `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, release-update state, and recommended follow-up commands. Read-only inspection remains available during an update transaction. |
+| `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon and release-update state, and configured resource state in `data.resources`. Read-only status remains available during an update transaction. |
 | `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
 | `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
 | `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line. |
@@ -226,7 +226,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit source sync [<name>] --json` | Returns per-source results; `--all` continues independent sources and reports every success or failure. |
 | `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. It accepts the same operation-wide `--timeout` as `up`. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
-| `orbit update --json` | Updates the invoked binary and, when an environment is running, reconnects it and returns the resources restored across the handoff. `--rollback` applies the same contract to the previous binary. |
+| `orbit update --json` | Checks/downloads when no target is staged, applies the verified target across registered default/named runtimes, and returns additive phase and per-runtime outcomes. Existing binary/resource fields remain compatible. `--rollback` uses the same installation-wide journal. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |

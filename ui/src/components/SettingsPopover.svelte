@@ -19,6 +19,20 @@
     }
   }
 
+	async function setAutomaticUpdates(policy: 'automatic' | 'off') {
+		const previous = store.ui.automaticUpdates
+		store.ui.automaticUpdates = policy
+		const { ok, data } = await apiPut<SettingsResponse>('/api/settings', {
+			automatic_updates: policy,
+		})
+		if (ok) {
+			toast(policy === 'automatic' ? 'Automatic updates enabled' : 'Automatic updates disabled')
+		} else {
+			store.ui.automaticUpdates = previous
+			toast(data?.error || 'Failed to update automatic updates')
+		}
+	}
+
   function openDiagnostics() {
     store.ui.settingsOpen = false
     void push('/healthcheck')
@@ -40,6 +54,16 @@
       <Section />
     {/each}
     <div class="setting-row">
+		<div>
+			<div class="setting-label">Automatic Updates</div>
+			<div class="setting-desc">Check, verify, and apply when product resources are stopped</div>
+		</div>
+		<div class="toggle-group">
+			<button class:active={store.ui.automaticUpdates === 'off'} onclick={() => setAutomaticUpdates('off')}>Off</button>
+			<button class:active={store.ui.automaticUpdates === 'automatic'} onclick={() => setAutomaticUpdates('automatic')}>On</button>
+		</div>
+	</div>
+	<div class="setting-row">
       <div>
         <div class="setting-label">Command History</div>
         <div class="setting-desc">

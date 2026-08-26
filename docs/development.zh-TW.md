@@ -84,8 +84,9 @@ orbit update
 Orbit。若環境正在執行，指令會用新 binary 重新連接，並恢復更新前正在跑的
 resources；正常更新不需要再執行 daemon 指令或第二次 `orbit up`。
 
-Windows Beta 請重新執行 `install.ps1` 來更新；Windows 無法可靠地原地替換
-正在執行的 `.exe`，因此尚不支援 `orbit update`。
+Windows Beta 會把 updater 複製到 installation 外，等待目前 invocation 與已註冊
+daemon 結束後才替換 `.exe`、驗證新版並恢復 runtime intent，避免覆蓋 Windows
+仍保持開啟的 executable。
 
 手動替換 binary 後，`orbit status` 仍可能顯示 `Orbit update ready`；
 resource mutation 會先暫停，避免跨版本操作。請依照它顯示的精確 recovery
@@ -96,6 +97,31 @@ Installer 會先驗證 checksum 與下載 binary 回報的版本，確認成功�
 安裝；替換檔會放在 target 同一個 filesystem，再用 atomic rename 安裝。
 除非明確允許 downgrade，否則不會用舊版覆蓋較新的版本。若已安裝版本與
 release 相同，installer 會成功結束，且不替換 binary 或改動 `.prev` backup。
+
+#### 自動更新
+
+官方 release build 最多每 24 小時檢查一次新版。Foreground command 不會執行
+release network request；detached checker 會下載符合平台的 artifact 與 checksum，
+驗證 checksum 及候選 binary 回報的版本，再暫存在 OS user-global Orbit update
+registry。Source、dirty 與 unbranded build 沒有隱含的官方 update channel。
+
+自動更新預設開啟。只有 command 已結束、所有已註冊 product environment 都沒有
+running／restoring resource，而且 daemon convergence 已 idle，Orbit 才會套用已驗證
+的更新。Idle daemon 會一起切到 target build；若 product environment 仍在執行，
+則延後更新並只顯示一個 `orbit update`／**Update now** 動作，用來恢復原本的
+running intent。Mutation 等待 replacement 或 rollback 時，read-only
+`status --json` 與 `inspect --json` 仍可讀取 durable transaction。
+
+可從 default 或任何 named runtime 設定同一份 installation-wide preference：
+
+```bash
+orbit settings set automatic-updates off
+```
+
+Off 會停用自動檢查、下載與套用，也不會產生 update-related background network
+traffic；明確執行 `orbit update` 仍可進行 bounded foreground check。Homebrew 與
+Scoop installation 只檢查與通知，仍由 package manager 管理。Agent plugin 維持
+獨立版本並由 host marketplace 更新，不與此機制綁定。
 
 ### Rollback
 

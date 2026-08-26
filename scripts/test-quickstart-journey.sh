@@ -368,7 +368,7 @@ subprocess.run([sys.executable, sys.argv[2]], check=True, env=smoke_environment)
 PY
 
 expected_demo_ref="$(
-  sed -n 's/.*EnvRepoRef: "\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
+  sed -n 's/.*EnvRepoRef:[[:space:]]*"\(v[0-9][^"]*\)".*/\1/p' "$repo_root/cmd/orbit/extensions.go"
 )"
 
 python3 - "$test_root" "$demo_url" "$expected_demo_ref" <<'PY'

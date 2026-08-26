@@ -35,6 +35,7 @@ type Server struct {
 	holder                  *config.Holder
 	configWriteMu           sync.Mutex
 	environmentTransitionMu sync.RWMutex
+	updateAdmissionMu       sync.RWMutex
 	environmentGeneration   atomic.Uint64
 	background              sync.WaitGroup
 	settings                *Settings
@@ -58,9 +59,10 @@ type Server struct {
 	// engineStale closes the handoff window after an API env switch publishes
 	// new config but before the replacement daemon rebuilds the service graph.
 	engineStale atomic.Bool
-	// restartLauncher crosses the daemon/app package boundary because only the
-	// assembled binary knows how to replace itself on every supported OS.
+	// Launchers cross the daemon/app package boundary because only the assembled
+	// binary knows how to restart or replace itself on every supported OS.
 	restartLauncher func(string, string) error
+	updateLauncher  func() error
 	startedAt       time.Time
 	stateFile       *StateFile
 	history         *history.Recorder
@@ -129,6 +131,10 @@ func (s *Server) SetRestartLauncher(launcher func(string, string) error) {
 	s.restartLauncher = launcher
 }
 
+func (s *Server) SetUpdateLauncher(launcher func() error) {
+	s.updateLauncher = launcher
+}
+
 // ListenAndServe starts the HTTP server on both unix socket and TCP (dashboard).
 func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) error {
 	s.cancelFunc = cancel
@@ -174,6 +180,8 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	mux.HandleFunc("/api/service-mode/", s.handleServiceMode)
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/version/restart", s.handleVersionRestart)
+	mux.HandleFunc("/api/update/apply", s.handleUpdateApply)
+	mux.HandleFunc("/api/update/drain", s.handleUpdateDrain)
 	mux.HandleFunc("/api/envs", s.handleEnvs)
 	mux.HandleFunc("/api/envs/current", s.handleEnvSwitch)
 	mux.HandleFunc("/api/sources", s.handleSources)
@@ -205,7 +213,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	mux.Handle("/", s.staticHandler())
 
 	s.httpServer = &http.Server{
-		Handler: dashboardAccessMiddleware(HistoryMiddleware(s.history, s.gaps)(mux)),
+		Handler: dashboardAccessMiddleware(s.updateAdmissionMiddleware(HistoryMiddleware(s.history, s.gaps)(mux))),
 	}
 
 	slog.Info("listening", "component", "daemon", "socket", sockPath)

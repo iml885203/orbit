@@ -11,18 +11,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/spf13/cobra"
 )
 
 type selfUpdateJSONData struct {
-	Operation                     string   `json:"operation"`
-	BinaryPath                    string   `json:"binary_path"`
-	PreviousBinaryPath            string   `json:"previous_binary_path"`
-	RunningEnvironmentReconnected bool     `json:"running_environment_reconnected"`
-	PreviouslyRunning             []string `json:"previously_running"`
-	RestoredResources             []string `json:"restored_resources"`
+	Operation                     string                               `json:"operation"`
+	BinaryPath                    string                               `json:"binary_path"`
+	PreviousBinaryPath            string                               `json:"previous_binary_path"`
+	RunningEnvironmentReconnected bool                                 `json:"running_environment_reconnected"`
+	PreviouslyRunning             []string                             `json:"previously_running"`
+	RestoredResources             []string                             `json:"restored_resources"`
+	Phase                         string                               `json:"phase,omitempty"`
+	TargetVersion                 string                               `json:"target_version,omitempty"`
+	RuntimeOutcomes               map[string]autoupdate.RuntimeOutcome `json:"runtime_outcomes,omitempty"`
 }
 
 type managedInstallError struct {
@@ -92,12 +96,19 @@ func selfUpdateCmd() *cobra.Command {
 }
 
 func runSelfUpdate(ctx context.Context) error {
-	exe, err := currentBinaryPath()
+	invoked, err := invokedBinaryPath()
 	if err != nil {
 		return fmt.Errorf("resolve current binary: %w", err)
 	}
-	if managed := packageManagerForBinary(exe, runtime.GOOS); managed != nil {
+	if managed := packageManagerForBinary(invoked, runtime.GOOS); managed != nil {
 		return *managed
+	}
+	if os.Getenv("ORBIT_INSTALL_URL") == "" && (distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "") {
+		return runVerifiedSelfUpdate(ctx, invoked)
+	}
+	exe, err := currentBinaryPath()
+	if err != nil {
+		return fmt.Errorf("resolve current binary: %w", err)
 	}
 	if runtime.GOOS == "windows" {
 		return fmt.Errorf(
@@ -173,7 +184,101 @@ func runSelfUpdate(ctx context.Context) error {
 	return nil
 }
 
+func runVerifiedSelfUpdate(ctx context.Context, launchPath string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	checker := automaticUpdateChecker()
+	checker.Explicit = true
+	state, err := checker.CheckAndStage(ctx, launchPath, buildVersion())
+	if err != nil {
+		return err
+	}
+	if state.StagedBinary == "" {
+		if cli.JSONOutput {
+			return writeVerifiedUpdateJSON(state)
+		}
+		fmt.Fprintf(os.Stderr, "Orbit %s is already current.\n", buildVersion())
+		return nil
+	}
+	wait := runtime.GOOS != "windows"
+	parentPID := 0
+	if !wait {
+		parentPID = os.Getpid()
+	}
+	if err := launchUpdateWorker(state, parentPID, wait, false); err != nil {
+		return err
+	}
+	if !wait {
+		if cli.JSONOutput {
+			state.Phase = "applying"
+			return writeVerifiedUpdateJSON(state)
+		}
+		fmt.Fprintf(os.Stderr, "Orbit %s is verified and will be installed after this process exits.\n", state.TargetVersion)
+		return nil
+	}
+	final, err := autoupdate.Load(launchPath)
+	if err != nil {
+		return err
+	}
+	if cli.JSONOutput {
+		return writeVerifiedUpdateJSON(final)
+	}
+	if final.Phase == "partial" {
+		fmt.Fprintf(os.Stderr, "Orbit updated, but one or more runtimes could not be fully restored. Run orbit status --json.\n")
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "Orbit updated successfully.\n")
+	return nil
+}
+
+func writeVerifiedUpdateJSON(state autoupdate.State) error {
+	outcomes := map[string]autoupdate.RuntimeOutcome(nil)
+	if state.Transaction != nil {
+		outcomes = state.Transaction.RuntimeOutcomes
+	}
+	return cli.WriteJSONSuccess(os.Stdout, commandString(), selfUpdateJSONData{
+		Operation: "update", BinaryPath: state.LaunchPath,
+		PreviousBinaryPath: state.LaunchPath + ".prev", Phase: state.Phase,
+		TargetVersion: state.TargetVersion, RuntimeOutcomes: outcomes,
+		PreviouslyRunning: []string{}, RestoredResources: []string{},
+	}, nil)
+}
+
 func runRollback() error {
+	invoked, err := invokedBinaryPath()
+	if err != nil {
+		return fmt.Errorf("resolve current binary: %w", err)
+	}
+	verifiedState, verifiedStateErr := autoupdate.Load(invoked)
+	useVerifiedRollback := verifiedStateErr == nil && verifiedState.Transaction != nil &&
+		(distribution.ReleaseAPIURL != "" || os.Getenv("ORBIT_RELEASE_API_URL") != "")
+	if useVerifiedRollback {
+		if managed := packageManagerForBinary(invoked, runtime.GOOS); managed != nil {
+			return managedRollbackError{manager: managed.manager}
+		}
+		if _, err := os.Stat(invoked + ".prev"); err != nil {
+			return fmt.Errorf("no previous version to roll back to (expected %s)", invoked+".prev")
+		}
+		state := verifiedState
+		wait := runtime.GOOS != "windows"
+		parentPID := 0
+		if !wait {
+			parentPID = os.Getpid()
+		}
+		if err := launchRollbackWorker(state, parentPID, wait); err != nil {
+			return err
+		}
+		if cli.JSONOutput {
+			if wait {
+				state, _ = autoupdate.Load(invoked)
+			} else {
+				state.Phase = "applying"
+			}
+			return writeVerifiedUpdateJSON(state)
+		}
+		fmt.Fprintln(os.Stderr, "Orbit rollback scheduled; registered runtimes will be restored.")
+		return nil
+	}
 	exe, err := currentBinaryPath()
 	if err != nil {
 		return fmt.Errorf("resolve current binary: %w", err)
@@ -225,6 +330,9 @@ func runRollback() error {
 }
 
 func packageManagerForBinary(executable, goos string) *managedInstallError {
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		executable = resolved
+	}
 	normalized := strings.ToLower(strings.ReplaceAll(filepath.ToSlash(executable), `\`, "/"))
 	if goos == "windows" && strings.Contains(normalized, "/apps/orbit/") {
 		return &managedInstallError{manager: "Scoop", command: "scoop update orbit"}
