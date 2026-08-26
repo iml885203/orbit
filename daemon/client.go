@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -18,19 +19,24 @@ import (
 // history middleware can distinguish them from dashboard traffic.
 const CLIOriginHeader = "X-Orbit-Origin"
 
+const UpdateTransactionHeader = "X-Orbit-Update-Transaction"
+const UpdateTransactionEnv = "ORBIT_UPDATE_TRANSACTION"
+
 // Client is a thin HTTP client that communicates with the daemon via unix socket.
 type Client struct {
-	http       *http.Client
-	socketPath string
-	ctx        context.Context
+	http          *http.Client
+	socketPath    string
+	ctx           context.Context
+	transactionID string
 }
 
 // NewClient creates a new daemon client.
 func NewClient(socketPath string) *Client {
 	return &Client{
-		http:       SocketHTTPClient(socketPath),
-		socketPath: socketPath,
-		ctx:        context.Background(),
+		http:          SocketHTTPClient(socketPath),
+		socketPath:    socketPath,
+		ctx:           context.Background(),
+		transactionID: os.Getenv(UpdateTransactionEnv),
 	}
 }
 
@@ -39,7 +45,7 @@ func (c *Client) WithContext(ctx context.Context) *Client {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return &Client{http: c.http, socketPath: c.socketPath, ctx: ctx}
+	return &Client{http: c.http, socketPath: c.socketPath, ctx: ctx, transactionID: c.transactionID}
 }
 
 // ErrDaemonUnreachable indicates the daemon socket is unreachable or not
@@ -76,6 +82,9 @@ func (c *Client) get(rawURL string) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("building GET request: %w", err)
 	}
+	if c.transactionID != "" {
+		req.Header.Set(UpdateTransactionHeader, c.transactionID)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, unreachable(err)
@@ -84,6 +93,9 @@ func (c *Client) get(rawURL string) (*http.Response, error) {
 }
 
 func (c *Client) do(req *http.Request) (*http.Response, error) {
+	if c.transactionID != "" {
+		req.Header.Set(UpdateTransactionHeader, c.transactionID)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, unreachable(err)
@@ -213,6 +225,18 @@ func (c *Client) Up(req UpRequest) (*APIResponse, error) {
 // Down sends a down request to the daemon.
 func (c *Client) Down(all bool) (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{All: all})
+}
+
+func (c *Client) DownForUpdate(all bool, transactionID string) (*APIResponse, error) {
+	return c.postJSONWithHeaders("/api/down", DownRequest{All: all}, map[string]string{
+		CLIOriginHeader: "cli", UpdateTransactionHeader: transactionID,
+	})
+}
+
+func (c *Client) DrainForUpdate(transactionID string) (*APIResponse, error) {
+	return c.postJSONWithHeaders("/api/update/drain", struct{}{}, map[string]string{
+		CLIOriginHeader: "cli", UpdateTransactionHeader: transactionID,
+	})
 }
 
 func (c *Client) StopSelection(req DownRequest) (*APIResponse, error) {

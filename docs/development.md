@@ -92,9 +92,10 @@ the command reconnects it with the new binary and restores exactly the
 resources that were running. A normal update therefore needs no separate
 daemon command or second `orbit up`.
 
-On Windows Beta, rerun `install.ps1` to update; replacing a running `.exe`
-in-place is not reliable on Windows, so `orbit update` is not yet supported
-there.
+On Windows Beta, Orbit copies a detached updater outside the installation,
+waits for the invoking process and registered daemons to exit, then replaces
+the `.exe`, verifies it, and restores the prior runtime intent. This avoids
+overwriting an executable while Windows still has it open.
 
 After a manual binary replacement, `orbit status` may report
 `Orbit update ready`; resource mutations pause rather than crossing versions.
@@ -108,6 +109,35 @@ target for an atomic rename. It refuses to replace a newer installed version
 unless the downgrade is explicit. When the installed and released versions
 match, the installer exits successfully without replacing the binary or
 changing its `.prev` backup.
+
+#### Automatic updates
+
+Official release builds check for a newer release at most once every 24 hours.
+The foreground command performs no release network request: one detached check
+downloads the matching artifact and checksum, verifies both the checksum and
+the candidate binary's reported version, and stages it in the user-global Orbit
+update registry. Source, dirty, and unbranded builds have no implicit release
+channel.
+
+Automatic updates default to on. Orbit applies a verified staged update only
+after a command finishes, every registered product environment has zero running
+or restoring resources, and daemon convergence is idle. Idle daemons are moved
+to the target build; a running product environment defers apply and exposes one
+`orbit update` / **Update now** action that restores its prior running intent.
+Read-only `status --json` and `inspect --json` continue reporting the durable
+transaction while mutations wait for replacement or rollback to finish.
+
+Set the installation-wide preference from any default or named runtime:
+
+```bash
+orbit settings set automatic-updates off
+```
+
+Off disables automatic checks, downloads, and apply, including update-related
+background network traffic. An explicit `orbit update` still performs a bounded
+foreground check. Homebrew and Scoop installations are check-only and retain
+the package-manager commands described above. Agent plugins remain independently
+versioned and are updated by their host marketplace, not this mechanism.
 
 ### Rollback
 

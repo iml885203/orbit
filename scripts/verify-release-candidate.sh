@@ -17,7 +17,7 @@ fi
 # The demo is versioned on its own calendar scheme (vYEAR.MONTH.N) and is NOT
 # re-tagged for every Orbit release — it moves only when the demo itself
 # changes. So the pin is checked for existence, never for matching this tag.
-env_repo_ref="$(sed -n 's/.*EnvRepoRef: "\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
+env_repo_ref="$(sed -n 's/.*EnvRepoRef:[[:space:]]*"\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
 if [[ -z "$env_repo_ref" ]]; then
   echo "cmd/orbit/extensions.go has no EnvRepoRef; \`orbit init\` needs a pinned demo ref" >&2
   exit 1

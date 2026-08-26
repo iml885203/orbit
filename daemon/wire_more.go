@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/iml885203/orbit/autoupdate"
 )
 
 // DoctorCheckStatus represents the result of a health check.
@@ -109,10 +111,11 @@ type EnvironmentReconcileResponse struct {
 // order after it. Older or incomparable builds are omitted so
 // clients never recommend a restart that could downgrade the user.
 type VersionResponse struct {
-	Running         string `json:"running"`
-	OnDisk          string `json:"on_disk,omitempty"`
-	OnDiskPath      string `json:"on_disk_path,omitempty"`
-	UpdateAvailable bool   `json:"update_available"`
+	Running         string              `json:"running"`
+	OnDisk          string              `json:"on_disk,omitempty"`
+	OnDiskPath      string              `json:"on_disk_path,omitempty"`
+	UpdateAvailable bool                `json:"update_available"`
+	ReleaseUpdate   *autoupdate.Summary `json:"release_update,omitempty"`
 }
 
 type VersionRestartResponse struct {

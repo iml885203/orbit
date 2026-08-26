@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/spf13/cobra"
@@ -18,7 +19,8 @@ var settingsKeyMap = map[string]struct {
 	jsonKey string
 	kind    string // "string" | "bool"
 }{
-	"show-history": {"show_history", "bool"},
+	"show-history":      {"show_history", "bool"},
+	"automatic-updates": {"automatic_updates", "policy"},
 }
 
 func translateSettingsKey(cliKey string) (string, error) {
@@ -44,6 +46,15 @@ func coerceSettingsValue(jsonKey, raw string) (any, error) {
 			return parseOnOff(raw)
 		case "string":
 			return raw, nil
+		case "policy":
+			enabled, err := parseOnOff(raw)
+			if err != nil {
+				return nil, err
+			}
+			if enabled {
+				return autoupdate.PolicyAutomatic, nil
+			}
+			return autoupdate.PolicyOff, nil
 		}
 	}
 	return raw, nil
@@ -110,6 +121,23 @@ func runSettingsSet(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if jsonKey == "automatic_updates" {
+		launchPath, err := invokedBinaryPath()
+		if err != nil {
+			return err
+		}
+		state, err := autoupdate.SetPolicy(launchPath, value.(string))
+		if err != nil {
+			return err
+		}
+		if cli.JSONOutput {
+			return cli.WriteJSONSuccess(os.Stdout, commandString(), map[string]any{
+				"operation": "settings_set", "key": args[0], "value": state.Policy,
+			}, nil)
+		}
+		fmt.Printf("✓ %s = %s\n", args[0], state.Policy)
+		return nil
+	}
 
 	client := daemon.NewClient(daemon.DefaultSocketPath())
 	if client.Health() == nil {
@@ -172,6 +200,11 @@ func runSettingsList(_ *cobra.Command, _ []string) error {
 	delete(current, "workspace_root")
 	delete(current, "env_repo_url")
 	delete(current, "env_repo_ref")
+	if launchPath, err := invokedBinaryPath(); err == nil {
+		if state, stateErr := autoupdate.Load(launchPath); stateErr == nil {
+			current["automatic_updates"] = state.Policy
+		}
+	}
 	normalizeSettingsListMaps(current)
 
 	cliKeys := make([]string, 0, len(settingsKeyMap))

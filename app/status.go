@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
@@ -40,6 +41,12 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	daemonRunningForConfig := daemonRunning
 
 	dstatus := daemonStatus{Running: daemonRunning}
+	if launchPath, err := invokedBinaryPath(); err == nil {
+		if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
+			summary := updateState.Summary()
+			dstatus.ReleaseUpdate = &summary
+		}
+	}
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {
@@ -74,6 +81,9 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			dstatus.OnDisk = v.OnDisk
 			dstatus.OnDiskPath = v.OnDiskPath
 			dstatus.UpdateAvailable = v.UpdateAvailable
+			if v.ReleaseUpdate != nil {
+				dstatus.ReleaseUpdate = v.ReleaseUpdate
+			}
 		}
 	}
 
@@ -520,6 +530,7 @@ type daemonStatus struct {
 	OnDisk             string                    `json:"on_disk,omitempty"`
 	OnDiskPath         string                    `json:"on_disk_path,omitempty"`
 	UpdateAvailable    bool                      `json:"update_available"`
+	ReleaseUpdate      *autoupdate.Summary       `json:"release_update,omitempty"`
 	ConfigPath         string                    `json:"config_path,omitempty"`
 	RunningEnvironment string                    `json:"running_environment,omitempty"`
 	ContextMismatch    bool                      `json:"context_mismatch,omitempty"`
@@ -588,6 +599,7 @@ func writeStatusJSON(
 		}
 		return resources[i].Name < resources[j].Name
 	})
+	decorateReleaseUpdate(dstatus.ReleaseUpdate, resources)
 
 	var actions []cli.JSONAction
 	if setup.SelectionRequired {
@@ -610,6 +622,11 @@ func writeStatusJSON(
 			Command: orbitRestartCommand(true),
 			Reason:  "Apply the Orbit update before operating resources.",
 		})
+	} else if updateNeedsUserAction(dstatus.ReleaseUpdate) {
+		actions = append(actions, cli.JSONAction{
+			Command: releaseUpdateCommand(dstatus.ReleaseUpdate, true),
+			Reason:  releaseUpdateReason(dstatus.ReleaseUpdate),
+		})
 	} else if setup.Required {
 		actions = append(actions, cli.JSONAction{
 			Command: "orbit init --yes --json",
@@ -621,7 +638,7 @@ func writeStatusJSON(
 			Reason:  "Start the selected environment.",
 		})
 	}
-	if !setup.SelectionRequired && !dstatus.ContextMismatch && !dstatus.ConfigStale && !dstatus.UpdateAvailable {
+	if !setup.SelectionRequired && !dstatus.ContextMismatch && !dstatus.ConfigStale && !dstatus.UpdateAvailable && !updateNeedsUserAction(dstatus.ReleaseUpdate) {
 		recoveryActions := statusRecoveryActions(running)
 		if len(recoveryActions) > 0 {
 			actions = cli.MergeActions(actions, recoveryActions)
@@ -659,6 +676,47 @@ func writeStatusJSON(
 		Daemon:            dstatus,
 		Resources:         resources,
 	}, actions)
+}
+
+func decorateReleaseUpdate(update *autoupdate.Summary, resources []jsonService) {
+	if update == nil || update.Phase != "ready" {
+		return
+	}
+	for _, resource := range resources {
+		if resource.State != "stopped" {
+			update.ApplyEligible = false
+			update.DeferReason = "resources_running"
+			return
+		}
+	}
+}
+
+func updateNeedsUserAction(update *autoupdate.Summary) bool {
+	return update != nil && ((update.Phase == "ready" && !update.ApplyEligible) ||
+		(update.Phase == "available" && update.Owner != autoupdate.OwnerDirect))
+}
+
+func releaseUpdateCommand(update *autoupdate.Summary, jsonOutput bool) string {
+	if update != nil {
+		switch update.Owner {
+		case autoupdate.OwnerHomebrew:
+			return "brew upgrade orbit"
+		case autoupdate.OwnerScoop:
+			return "scoop update orbit"
+		}
+	}
+	command := "orbit update"
+	if jsonOutput {
+		command += " --json"
+	}
+	return command
+}
+
+func releaseUpdateReason(update *autoupdate.Summary) string {
+	if update != nil && update.Owner != autoupdate.OwnerDirect {
+		return "Update Orbit with the package manager that owns this installation."
+	}
+	return "Apply the verified Orbit update now; running resources will be restored."
 }
 
 func statusPrimaryOpenAction(resources []jsonService) (cli.JSONAction, bool) {

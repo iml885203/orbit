@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
@@ -57,6 +58,15 @@ func runUninstall(opts uninstallOptions) error {
 		}
 	}
 	artifacts := uninstallArtifacts(binary, orbitHome, opts.purge)
+	if opts.purge {
+		if updateArtifacts, updateErr := autoupdate.InstallationArtifacts(binary); updateErr == nil {
+			for _, artifact := range updateArtifacts {
+				if pathExists(artifact) {
+					artifacts = append(artifacts, artifact)
+				}
+			}
+		}
+	}
 	data := uninstallData{
 		Operation:          "uninstall",
 		Binary:             binary,
@@ -88,6 +98,11 @@ func runUninstall(opts uninstallOptions) error {
 	scheduled, err := removeUninstallArtifacts(artifacts)
 	if err != nil {
 		return err
+	}
+	if opts.purge {
+		if err := autoupdate.RemoveInstallation(binary); err != nil {
+			return fmt.Errorf("remove automatic update state: %w", err)
+		}
 	}
 	data.Removed = !scheduled
 	data.Scheduled = scheduled

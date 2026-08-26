@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/iml885203/orbit/autoupdate"
 )
 
 type settingsUpdate struct {
-	ShowHistory *bool             `json:"show_history,omitempty"`
-	UserEnv     map[string]string `json:"user_env,omitempty"`
+	ShowHistory      *bool             `json:"show_history,omitempty"`
+	UserEnv          map[string]string `json:"user_env,omitempty"`
+	AutomaticUpdates *string           `json:"automatic_updates,omitempty"`
 }
 
 // handleSettings handles GET (read) and PUT (update) for user settings.
@@ -20,6 +23,11 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 			return
 		}
+		if launchPath, launchErr := autoupdate.LaunchPath(); launchErr == nil {
+			if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
+				settings["automatic_updates"] = updateState.Policy
+			}
+		}
 		writeJSON(w, http.StatusOK, settings)
 
 	case http.MethodPut:
@@ -29,6 +37,17 @@ func (srv *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var changes []SettingsChange
+		if update.AutomaticUpdates != nil {
+			launchPath, err := autoupdate.LaunchPath()
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+				return
+			}
+			if _, err := autoupdate.SetPolicy(launchPath, *update.AutomaticUpdates); err != nil {
+				writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error()})
+				return
+			}
+		}
 		if update.ShowHistory != nil {
 			if err := srv.settings.SetShowHistory(update.ShowHistory); err != nil {
 				slog.Error("persist show_history", "component", "settings", "err", err)

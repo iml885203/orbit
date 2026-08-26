@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/instance"
 	"github.com/iml885203/orbit/internal/engine"
@@ -99,6 +100,67 @@ func TestHandleVersion_RejectsNonGet(t *testing.T) {
 	s.handleVersion(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want 405", rr.Code)
+	}
+}
+
+func TestHandleSettingsSharesAutomaticUpdatePolicyAcrossRuntimeHomes(t *testing.T) {
+	updateHome := t.TempDir()
+	t.Setenv("ORBIT_UPDATE_HOME", updateHome)
+	launch := filepath.Join(t.TempDir(), "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	s := newTestServer(t, testConfig())
+
+	put := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(`{"automatic_updates":"off"}`))
+	putRecorder := httptest.NewRecorder()
+	s.handleSettings(putRecorder, put)
+	if putRecorder.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d body=%s", putRecorder.Code, putRecorder.Body.String())
+	}
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	getRecorder := httptest.NewRecorder()
+	s.handleSettings(getRecorder, httptest.NewRequest(http.MethodGet, "/api/settings", nil))
+	var got map[string]any
+	if err := json.Unmarshal(getRecorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["automatic_updates"] != "off" {
+		t.Fatalf("automatic_updates = %v, want off", got["automatic_updates"])
+	}
+}
+
+func TestUpdateAdmissionKeepsReadsAvailableAndBlocksNewMutations(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	state, err := autoupdate.BeginTransaction(launch, "automatic", "v0.17.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newTestServer(t, testConfig())
+	reached := false
+	handler := s.updateAdmissionMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	readRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(readRecorder, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+	if readRecorder.Code != http.StatusNoContent || !reached {
+		t.Fatalf("read status=%d reached=%v", readRecorder.Code, reached)
+	}
+	reached = false
+	writeRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(writeRecorder, httptest.NewRequest(http.MethodPost, "/api/up", nil))
+	if writeRecorder.Code != http.StatusConflict || reached || !strings.Contains(writeRecorder.Body.String(), "update_in_progress") {
+		t.Fatalf("write status=%d reached=%v body=%s", writeRecorder.Code, reached, writeRecorder.Body.String())
+	}
+	reached = false
+	workerRequest := httptest.NewRequest(http.MethodPost, "/api/up", nil)
+	workerRequest.Header.Set(UpdateTransactionHeader, state.Transaction.ID)
+	workerRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(workerRecorder, workerRequest)
+	if workerRecorder.Code != http.StatusNoContent || !reached {
+		t.Fatalf("worker write status=%d reached=%v", workerRecorder.Code, reached)
 	}
 }
 

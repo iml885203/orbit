@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/iml885203/orbit/autoupdate"
 )
 
 func TestHandleVersionRestartSchedulesCurrentContext(t *testing.T) {
@@ -80,6 +82,29 @@ func TestHandleVersionRestartSurfacesLaunchFailure(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "launcher unavailable") {
 		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdateApplySchedulesVerifiedTarget(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	state, err := autoupdate.Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TargetVersion = "v0.17.0"
+	state.Phase = "ready"
+	if err := autoupdate.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	srv := newTestServer(t, testConfig())
+	launched := false
+	srv.SetUpdateLauncher(func() error { launched = true; return nil })
+	w := httptest.NewRecorder()
+	srv.handleUpdateApply(w, httptest.NewRequest(http.MethodPost, "/api/update/apply", nil))
+	if w.Code != http.StatusAccepted || !launched || !strings.Contains(w.Body.String(), "v0.17.0") {
+		t.Fatalf("status=%d launched=%v body=%s", w.Code, launched, w.Body.String())
 	}
 }
 

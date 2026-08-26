@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
@@ -49,13 +50,14 @@ type inspectReadiness struct {
 }
 
 type inspectDaemonSummary struct {
-	Running         bool   `json:"running"`
-	PID             int    `json:"pid,omitempty"`
-	Version         string `json:"version,omitempty"`
-	OnDisk          string `json:"on_disk,omitempty"`
-	OnDiskPath      string `json:"on_disk_path,omitempty"`
-	UpdateAvailable bool   `json:"update_available,omitempty"`
-	Dashboard       string `json:"dashboard,omitempty"`
+	Running         bool                `json:"running"`
+	PID             int                 `json:"pid,omitempty"`
+	Version         string              `json:"version,omitempty"`
+	OnDisk          string              `json:"on_disk,omitempty"`
+	OnDiskPath      string              `json:"on_disk_path,omitempty"`
+	UpdateAvailable bool                `json:"update_available,omitempty"`
+	ReleaseUpdate   *autoupdate.Summary `json:"release_update,omitempty"`
+	Dashboard       string              `json:"dashboard,omitempty"`
 }
 
 type inspectEnvSummary struct {
@@ -101,6 +103,7 @@ type inspectBuildOptions struct {
 	OnDisk              string
 	OnDiskPath          string
 	UpdateAvailable     bool
+	ReleaseUpdate       *autoupdate.Summary
 	Dashboard           string
 	Status              *daemon.StatusResponse
 	StatusErr           error
@@ -188,6 +191,12 @@ func runInspect(cmd *cobra.Command, _ []string) error {
 		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
 		Selection:     activeEnvironmentSelection(selection, configFile),
 	}
+	if launchPath, err := invokedBinaryPath(); err == nil {
+		if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
+			summary := updateState.Summary()
+			opts.ReleaseUpdate = &summary
+		}
+	}
 	if cfg != nil {
 		opts.Configured = configuredInspectServices(cfg)
 		opts.ReadinessChecks = daemonsrv.DependencyReadinessChecks(cfg)
@@ -226,6 +235,9 @@ func runInspect(cmd *cobra.Command, _ []string) error {
 			opts.OnDisk = version.OnDisk
 			opts.OnDiskPath = version.OnDiskPath
 			opts.UpdateAvailable = version.UpdateAvailable
+			if version.ReleaseUpdate != nil {
+				opts.ReleaseUpdate = version.ReleaseUpdate
+			}
 		}
 		if opts.DaemonEnv == "" {
 			if envs, err := client.Envs(); err == nil {
@@ -298,9 +310,16 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	} else if len(opts.Configured) > 0 {
 		services = buildInspectServiceSummary(opts.Configured)
 	}
+	decorateInspectReleaseUpdate(opts.ReleaseUpdate, services)
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
 	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.ConfigEnvName, opts.Selection)
+	if updateNeedsUserAction(opts.ReleaseUpdate) {
+		actions = []cli.JSONAction{{
+			Command: releaseUpdateCommand(opts.ReleaseUpdate, true),
+			Reason:  releaseUpdateReason(opts.ReleaseUpdate),
+		}}
+	}
 	daemonEnv := opts.DaemonEnv
 	if opts.ConfigMatchesDaemon && opts.ConfigEnvName != "" {
 		daemonEnv = opts.ConfigEnvName
@@ -335,12 +354,26 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 			OnDisk:          opts.OnDisk,
 			OnDiskPath:      opts.OnDiskPath,
 			UpdateAvailable: opts.UpdateAvailable,
+			ReleaseUpdate:   opts.ReleaseUpdate,
 			Dashboard:       inspectDashboard(opts),
 		},
 		Environment:        environment,
 		Resources:          services,
 		Risks:              risks,
 		RecommendedActions: actions,
+	}
+}
+
+func decorateInspectReleaseUpdate(update *autoupdate.Summary, services inspectServiceSummary) {
+	if update == nil || update.Phase != "ready" {
+		return
+	}
+	for state, names := range services.ByState {
+		if state != "stopped" && len(names) > 0 {
+			update.ApplyEligible = false
+			update.DeferReason = "resources_running"
+			return
+		}
 	}
 }
 

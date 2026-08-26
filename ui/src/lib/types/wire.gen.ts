@@ -350,6 +350,7 @@ export interface VersionResponse {
   on_disk?: string;
   on_disk_path?: string;
   update_available: boolean;
+  release_update?: any /* autoupdate.Summary */;
 }
 export interface VersionRestartResponse {
   ok?: boolean;

@@ -111,11 +111,20 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		if isCommandTreeQuery(cmd) {
 			return nil
 		}
+		if strings.HasPrefix(cmd.Name(), "__update-") {
+			configureAutomaticUpdateInstallation()
+			return nil
+		}
 		if instanceName != "" {
 			if _, err := instance.Activate(instanceName); err != nil {
 				return cli.NewInvalidArgumentError(err.Error())
 			}
 		}
+		configureAutomaticUpdateInstallation()
+		if err := waitForPendingAutomaticUpdate(cmd); err != nil {
+			return err
+		}
+		showAutomaticUpdateDisclosure(cmd)
 		// Apply saved settings (workspace root, SQL mode) to env for all commands
 		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 		s.ApplyToEnv()
@@ -218,6 +227,8 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.AddCommand(switchCmd())
 	rootCmd.AddCommand(daemonCmd())
 	rootCmd.AddCommand(selfUpdateCmd())
+	rootCmd.AddCommand(automaticUpdateCmd())
+	rootCmd.AddCommand(automaticUpdateWorkerCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(uninstallCmd())
 	rootCmd.AddCommand(historyCmd())
@@ -237,6 +248,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+	scheduleAutomaticUpdateCheck()
 }
 
 func isDaemonRestartCommand(cmd *cobra.Command) bool {

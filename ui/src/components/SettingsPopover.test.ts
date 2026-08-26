@@ -12,6 +12,8 @@ describe('SettingsPopover', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     store.ui.settingsOpen = true
+		store.ui.automaticUpdates = 'automatic'
+		apiPut.mockResolvedValue({ ok: true, data: { ok: true } })
   })
 
   it('keeps diagnostics out of primary navigation but reachable from settings', async () => {
@@ -22,4 +24,12 @@ describe('SettingsPopover', () => {
     expect(store.ui.settingsOpen).toBe(false)
     expect(push).toHaveBeenCalledWith('/healthcheck')
   })
+
+	it('changes the installation-wide automatic update policy', async () => {
+		render(SettingsPopover)
+		await fireEvent.click(screen.getByRole('button', { name: 'Off' }))
+
+		expect(apiPut).toHaveBeenCalledWith('/api/settings', { automatic_updates: 'off' })
+		expect(store.ui.automaticUpdates).toBe('off')
+	})
 })

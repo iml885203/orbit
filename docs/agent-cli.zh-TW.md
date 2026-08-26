@@ -4,6 +4,11 @@
 
 Orbit 的設計初衷就是讓 coding agent 透過 CLI 來驅動。Agent 在需要解析狀態、決定下一步動作，或從錯誤中復原時，應優先選擇結構化輸出，而非給人看的文字格式。
 
+自動更新的 policy、release target、defer reason 與 per-runtime outcome 會以 additive
+fields 出現在 `status --json`／`inspect --json`；update transaction 進行期間，這兩個
+read-only command 仍可觀察 durable state。完整 command behavior table 由
+[English contract](./agent-cli.md#converted-commands) 維護。
+
 ## Rule of Thumb
 
 程式化的讀寫請使用 `--json`：

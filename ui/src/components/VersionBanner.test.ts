@@ -41,6 +41,26 @@ describe('VersionBanner', () => {
     expect(screen.getByText('Build details')).toBeInTheDocument()
   })
 
+	it('offers one-click apply for a verified release deferred by running resources', async () => {
+		store.ui.version = {
+			running: 'v0.16.0',
+			update_available: false,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'direct', policy: 'automatic',
+				disclosure_shown: true, target_version: 'v0.17.0', phase: 'ready',
+				apply_eligible: false, defer_reason: 'resources_running',
+			},
+		}
+		apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: 'v0.17.0' } })
+		fetchVersion.mockResolvedValue({ running: 'v0.17.0', update_available: false })
+		render(VersionBanner)
+
+		expect(screen.getByRole('status')).toHaveTextContent('verified and ready')
+		expect(screen.getByRole('status')).toHaveTextContent('after all product resources stop')
+		await fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+		expect(apiPost).toHaveBeenCalledWith('/api/update/apply')
+	})
+
   it('dismisses only the current installed version', async () => {
     render(VersionBanner)
     await fireEvent.click(screen.getByRole('button', { name: 'Later' }))
