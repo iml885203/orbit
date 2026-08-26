@@ -102,8 +102,10 @@ release 相同，installer 會成功結束，且不替換 binary 或改動 `.pre
 
 官方 release build 最多每 24 小時檢查一次新版。Foreground command 不會執行
 release network request；detached checker 會下載符合平台的 artifact 與 checksum，
-驗證 checksum 及候選 binary 回報的版本，再暫存在 OS user-global Orbit update
-registry。Source、dirty 與 unbranded build 沒有隱含的官方 update channel。
+驗證 checksum、候選 binary 回報的版本，以及綁定 tag、commit、artifact 與
+checksum file 的 immutable-release attestation，再把 bytes 與 bounded evidence
+暫存在 OS user-global Orbit update registry。Source、dirty 與 unbranded build
+沒有隱含的官方 update channel。
 
 自動更新預設開啟。只有 command 已結束、所有已註冊 product environment 都沒有
 running／restoring resource，而且 daemon convergence 已 idle，Orbit 才會套用已驗證
@@ -111,6 +113,13 @@ running／restoring resource，而且 daemon convergence 已 idle，Orbit 才會
 則延後更新並只顯示一個 `orbit update`／**Update now** 動作，用來恢復原本的
 running intent。Mutation 等待 replacement 或 rollback 時，read-only
 `status --json` 與 `inspect --json` 仍可讀取 durable transaction。
+延後套用只重新驗證本機 staged bytes，不會要求 GitHub request，因此已驗證的
+更新可在離線狀態套用。
+
+Verifier 以 Orbit build 內嵌的 root 啟動 GitHub trust repository，TUF metadata
+cache 超過一天後會 refresh；無法取得目前可信材料時，本次檢查會 fail closed。
+Root rotation 只能透過 TUF 接受。Candidate 完成 staging 後，apply 使用已記錄的
+verification result，不會再 refresh trust metadata。
 
 可從 default 或任何 named runtime 設定同一份 installation-wide preference：
 

@@ -11,11 +11,12 @@ import (
 const Schema = "orbit.distribution.v1"
 
 var official = extension.Distribution{
-	EnvRepoURL:    "https://github.com/iml885203/orbit-demo.git",
-	EnvRepoRef:    "v2026.8.1",
-	InstallURL:    "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
-	ReleaseAPIURL: "https://api.github.com/repos/iml885203/orbit/releases/latest",
-	DefaultEnv:    "quickstart.yaml",
+	EnvRepoURL:        "https://github.com/iml885203/orbit-demo.git",
+	EnvRepoRef:        "v2026.8.1",
+	InstallURL:        "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
+	ReleaseAPIURL:     "https://api.github.com/repos/iml885203/orbit/releases/latest",
+	ReleaseRepository: "iml885203/orbit",
+	DefaultEnv:        "quickstart.yaml",
 }
 
 type Metadata struct {
@@ -35,10 +36,13 @@ func Export() (Metadata, error) {
 	if err != nil {
 		return Metadata{}, err
 	}
+	if repository != official.ReleaseRepository {
+		return Metadata{}, errors.New("official release repository does not match its API URL")
+	}
 	metadata := Metadata{
 		Schema: Schema, EnvironmentRepo: official.EnvRepoURL,
 		EnvironmentRef: official.EnvRepoRef, InstallURL: official.InstallURL,
-		ReleaseAPIURL: official.ReleaseAPIURL, ReleaseRepository: repository,
+		ReleaseAPIURL: official.ReleaseAPIURL, ReleaseRepository: official.ReleaseRepository,
 		DefaultEnvironment: official.DefaultEnv,
 	}
 	if metadata.EnvironmentRepo == "" || metadata.EnvironmentRef == "" || metadata.InstallURL == "" || metadata.DefaultEnvironment == "" {

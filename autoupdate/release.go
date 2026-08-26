@@ -23,22 +23,27 @@ import (
 const CheckInterval = 24 * time.Hour
 
 type Channel struct {
-	ReleaseAPIURL string
+	ReleaseAPIURL     string
+	ReleaseRepository string
 }
 
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName   string `json:"tag_name"`
+	Immutable bool   `json:"immutable"`
+	Assets    []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
 }
 
 type Checker struct {
-	Client   *http.Client
-	Channel  Channel
-	Now      func() time.Time
-	Explicit bool
+	Client           *http.Client
+	Channel          Channel
+	Now              func() time.Time
+	Explicit         bool
+	verifyRelease    func(context.Context, githubRelease) (*VerificationRecord, error)
+	trustedRootJSON  func(context.Context) ([]byte, error)
+	releaseAssetName func() (string, error)
 }
 
 func (c Checker) CheckAndStage(ctx context.Context, launchPath, currentVersion string) (State, error) {
@@ -70,7 +75,18 @@ func (c Checker) CheckAndStage(ctx context.Context, launchPath, currentVersion s
 	if assetURL == "" || checksumURL == "" {
 		return c.recordCheckFailure(launchPath, fmt.Errorf("release %s is missing %s or checksums.txt", release.TagName, assetName))
 	}
-	staged, err := c.downloadAndVerify(ctx, state.InstallationID, release.TagName, assetName, assetURL, checksumURL)
+	verify := c.verifyRelease
+	if verify == nil {
+		verify = c.verifyGitHubRelease
+	}
+	evidence, err := verify(ctx, release)
+	if err != nil {
+		return c.recordCheckFailure(launchPath, err)
+	}
+	if evidence.AssetName != assetName {
+		return c.recordCheckFailure(launchPath, fmt.Errorf("verified release evidence is missing %s", assetName))
+	}
+	staged, err := c.downloadAndVerify(ctx, state.InstallationID, release.TagName, assetName, assetURL, checksumURL, evidence)
 	if err != nil {
 		return c.recordCheckFailure(launchPath, err)
 	}
@@ -82,6 +98,7 @@ func (c Checker) CheckAndStage(ctx context.Context, launchPath, currentVersion s
 		next.ApplyEligible = false
 		next.DeferReason = "eligibility_pending"
 		next.StagedBinary = staged
+		next.StagedEvidence = evidence
 		next.LastCheckedAt = &now
 		following := now.Add(CheckInterval + checkJitter(next.InstallationID))
 		next.NextCheckAt = &following
@@ -127,6 +144,7 @@ func (c Checker) fetchRelease(ctx context.Context) (githubRelease, error) {
 		return githubRelease{}, fmt.Errorf("build update request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
 	client := c.Client
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
@@ -177,6 +195,7 @@ func (c Checker) recordCurrent(launchPath, currentVersion string) (State, error)
 		state.CurrentVersion = currentVersion
 		state.TargetVersion = ""
 		state.StagedBinary = ""
+		state.StagedEvidence = nil
 		state.Phase = "current"
 		state.ApplyEligible = false
 		state.DeferReason = ""
@@ -218,7 +237,7 @@ func checkJitter(installationID string) time.Duration {
 	return time.Duration(int(sum[0])%61) * time.Minute
 }
 
-func (c Checker) downloadAndVerify(ctx context.Context, installationID, targetVersion, assetName, assetURL, checksumURL string) (string, error) {
+func (c Checker) downloadAndVerify(ctx context.Context, installationID, targetVersion, assetName, assetURL, checksumURL string, evidence *VerificationRecord) (string, error) {
 	dir, err := GlobalDir()
 	if err != nil {
 		return "", err
@@ -240,6 +259,13 @@ func (c Checker) downloadAndVerify(ctx context.Context, installationID, targetVe
 	if err := c.download(ctx, checksumURL, checksums); err != nil {
 		return "", err
 	}
+	checksumsDigest, err := fileSHA256(checksums)
+	if err != nil {
+		return "", err
+	}
+	if !strings.EqualFold(checksumsDigest, evidence.ChecksumsSHA256) {
+		return "", fmt.Errorf("checksums.txt does not match verified release evidence")
+	}
 	expected, err := checksumFor(checksums, assetName)
 	if err != nil {
 		return "", err
@@ -250,6 +276,9 @@ func (c Checker) downloadAndVerify(ctx context.Context, installationID, targetVe
 	}
 	if !strings.EqualFold(expected, actual) {
 		return "", fmt.Errorf("checksum mismatch for %s", assetName)
+	}
+	if !strings.EqualFold(actual, evidence.AssetSHA256) {
+		return "", fmt.Errorf("%s does not match verified release evidence", assetName)
 	}
 	if err := os.Chmod(candidate, 0o700); err != nil {
 		return "", fmt.Errorf("make staged Orbit executable: %w", err)
@@ -366,6 +395,10 @@ func platformAsset(goos, goarch string) (string, error) {
 		name += ".exe"
 	}
 	return name, nil
+}
+
+func PlatformAssetName() (string, error) {
+	return platformAsset(runtime.GOOS, runtime.GOARCH)
 }
 
 func checksumFor(path, assetName string) (string, error) {

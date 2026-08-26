@@ -11,8 +11,17 @@ func TestOfficialAndExportShareDistribution(t *testing.T) {
 	if m.Schema != Schema || m.EnvironmentRepo != d.EnvRepoURL || m.EnvironmentRef != d.EnvRepoRef || m.InstallURL != d.InstallURL || m.ReleaseAPIURL != d.ReleaseAPIURL || m.DefaultEnvironment != d.DefaultEnv {
 		t.Fatalf("export does not match official distribution: %#v %#v", m, d)
 	}
-	if m.ReleaseRepository != "iml885203/orbit" {
+	if m.ReleaseRepository != d.ReleaseRepository || m.ReleaseRepository != "iml885203/orbit" {
 		t.Fatalf("release_repository = %q", m.ReleaseRepository)
+	}
+}
+
+func TestExportRejectsReleaseRepositoryThatDoesNotMatchAPI(t *testing.T) {
+	previous := official
+	t.Cleanup(func() { official = previous })
+	official.ReleaseRepository = "iml885203/different"
+	if _, err := Export(); err == nil {
+		t.Fatal("Export succeeded with a mismatched release repository")
 	}
 }
 
