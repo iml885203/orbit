@@ -88,8 +88,9 @@ type Distribution struct {
 	// InstallURL is the install script `orbit update` pipes to
 	// bash, unless ORBIT_INSTALL_URL overrides it.
 	InstallURL string
-	// ReleaseAPIURL returns immutable release metadata and artifact URLs used
-	// for background update discovery. Empty disables automatic discovery.
+	// ReleaseAPIURL returns release metadata and artifact URLs used for
+	// background update discovery. Empty disables automatic discovery; the
+	// update channel decides which integrity evidence it requires.
 	ReleaseAPIURL string
 	// DefaultEnv is the env file preferred when none is selected: the
 	// fallback config path when no current env is set, and the init

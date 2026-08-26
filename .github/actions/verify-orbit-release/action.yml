@@ -1,0 +1,27 @@
+name: Verify Orbit release
+description: Verify the exact local or immutable published Orbit release asset set
+
+inputs:
+  mode:
+    description: local or published
+    required: true
+  tag:
+    description: Published semantic version tag
+    required: false
+  expected-commit:
+    description: Expected release tag commit
+    required: false
+  asset-directory:
+    description: Existing directory containing the release assets
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERIFY_MODE: ${{ inputs.mode }}
+        VERIFY_TAG: ${{ inputs.tag }}
+        VERIFY_EXPECTED_COMMIT: ${{ inputs.expected-commit }}
+        VERIFY_ASSET_DIRECTORY: ${{ inputs.asset-directory }}
+      run: "$GITHUB_ACTION_PATH/verify.sh"

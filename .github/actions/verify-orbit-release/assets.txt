@@ -1,0 +1,8 @@
+checksums.txt
+orbit-darwin-amd64
+orbit-darwin-arm64
+orbit-linux-amd64
+orbit-linux-arm64
+orbit-windows-amd64.exe
+orbit-windows-arm64.exe
+orbit.spdx.json
