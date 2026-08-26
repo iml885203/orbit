@@ -93,7 +93,7 @@ jobs:
           # binary pins exists and passed the demo's own journey — checked
           # against whatever EnvRepoRef points at, not this release's tag.
           demo_repository="iml885203/orbit-demo"
-          demo_ref="$(sed -n 's/.*EnvRepoRef: "\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
+          demo_ref="$(sed -n 's/.*EnvRepoRef:[[:space:]]*"\([^"]*\)".*/\1/p' cmd/orbit/extensions.go)"
           if [ -z "$demo_ref" ]; then
             echo "cmd/orbit/extensions.go has no EnvRepoRef to verify" >&2
             exit 1
