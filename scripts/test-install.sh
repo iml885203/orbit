@@ -7,8 +7,11 @@ test_root="$(mktemp -d)"
 real_home_boundary="$(mktemp -d)"
 trap 'rm -rf "$test_root" "$real_home_boundary"' EXIT
 
-build_gomodcache="$(go env GOMODCACHE)"
-build_gocache="$(go env GOCACHE)"
+original_home="${HOME:?HOME must be set}"
+build_gopath="${GOPATH:-$original_home/go}"
+build_gopath_first="${build_gopath%%:*}"
+build_gomodcache="${GOMODCACHE:-$build_gopath_first/pkg/mod}"
+build_gocache="$test_root/build-cache/go-build"
 
 mkdir -p "$real_home_boundary/.config/orbit" "$real_home_boundary/.orbit" "$real_home_boundary/.config/gh"
 printf 'unchanged\n' >"$real_home_boundary/.config/orbit/canary"
@@ -67,7 +70,8 @@ func main() {
 	fmt.Println(semanticVersion)
 }
 EOF
-HOME="$test_root/build-home" GOTELEMETRY=off GOMODCACHE="$build_gomodcache" GOCACHE="$build_gocache" \
+HOME="$test_root/build-home" XDG_CONFIG_HOME="$test_root/build-config" XDG_CACHE_HOME="$test_root/build-cache" \
+  GOTELEMETRY=off GOMODCACHE="$build_gomodcache" GOCACHE="$build_gocache" \
   go build -o "$test_root/read-version" "$test_root/read-version.go"
 
 platform="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
@@ -81,7 +85,10 @@ esac
 
 write_release() {
   local version="$1" checksum
-  (cd "$repo_root" && HOME="$test_root/build-home" GOTELEMETRY=off GOMODCACHE="$build_gomodcache" GOCACHE="$build_gocache" go build -ldflags "-s -w -X main.version=v$version -X main.buildTime=2026-07-27T04:44:56Z" -o "$fixtures/$asset" ./cmd/orbit)
+  (cd "$repo_root" && HOME="$test_root/build-home" XDG_CONFIG_HOME="$test_root/build-config" \
+    XDG_CACHE_HOME="$test_root/build-cache" GOTELEMETRY=off GOMODCACHE="$build_gomodcache" \
+    GOCACHE="$build_gocache" go build -ldflags "-s -w -X main.version=v$version -X main.buildTime=2026-07-27T04:44:56Z" \
+    -o "$fixtures/$asset" ./cmd/orbit)
   checksum="$(shasum -a 256 "$fixtures/$asset" | awk '{print $1}')"
   printf '%s  %s\n' "$checksum" "$asset" >"$fixtures/checksums.txt"
 }
