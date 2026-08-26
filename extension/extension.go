@@ -92,6 +92,9 @@ type Distribution struct {
 	// background update discovery. Empty disables automatic discovery; the
 	// update channel decides which integrity evidence it requires.
 	ReleaseAPIURL string
+	// ReleaseRepository pins the identity whose release evidence the update
+	// channel accepts. A URL alone is discovery metadata, not a trust policy.
+	ReleaseRepository string
 	// DefaultEnv is the env file preferred when none is selected: the
 	// fallback config path when no current env is set, and the init
 	// wizard's pick when several envs are available. Empty means no

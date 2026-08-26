@@ -33,23 +33,35 @@ func LaunchPath() (string, error) {
 }
 
 type State struct {
-	InstallationID  string             `json:"installation_id"`
-	LaunchPath      string             `json:"launch_path"`
-	Owner           string             `json:"owner"`
-	Policy          string             `json:"policy"`
-	DisclosureShown bool               `json:"disclosure_shown"`
-	CurrentVersion  string             `json:"current_version,omitempty"`
-	TargetVersion   string             `json:"target_version,omitempty"`
-	Phase           string             `json:"phase,omitempty"`
-	ApplyEligible   bool               `json:"apply_eligible"`
-	DeferReason     string             `json:"defer_reason,omitempty"`
-	StagedBinary    string             `json:"staged_binary,omitempty"`
-	LastCheckedAt   *time.Time         `json:"last_checked_at,omitempty"`
-	NextCheckAt     *time.Time         `json:"next_check_at,omitempty"`
-	LastError       string             `json:"last_error,omitempty"`
-	CheckFailures   int                `json:"check_failures,omitempty"`
-	Transaction     *Transaction       `json:"transaction,omitempty"`
-	Runtimes        map[string]Runtime `json:"runtimes,omitempty"`
+	InstallationID  string              `json:"installation_id"`
+	LaunchPath      string              `json:"launch_path"`
+	Owner           string              `json:"owner"`
+	Policy          string              `json:"policy"`
+	DisclosureShown bool                `json:"disclosure_shown"`
+	CurrentVersion  string              `json:"current_version,omitempty"`
+	TargetVersion   string              `json:"target_version,omitempty"`
+	Phase           string              `json:"phase,omitempty"`
+	ApplyEligible   bool                `json:"apply_eligible"`
+	DeferReason     string              `json:"defer_reason,omitempty"`
+	StagedBinary    string              `json:"staged_binary,omitempty"`
+	StagedEvidence  *VerificationRecord `json:"staged_evidence,omitempty"`
+	LastCheckedAt   *time.Time          `json:"last_checked_at,omitempty"`
+	NextCheckAt     *time.Time          `json:"next_check_at,omitempty"`
+	LastError       string              `json:"last_error,omitempty"`
+	CheckFailures   int                 `json:"check_failures,omitempty"`
+	Transaction     *Transaction        `json:"transaction,omitempty"`
+	Runtimes        map[string]Runtime  `json:"runtimes,omitempty"`
+}
+
+type VerificationRecord struct {
+	PolicyVersion   string    `json:"policy_version"`
+	Repository      string    `json:"repository"`
+	Tag             string    `json:"tag"`
+	TargetCommit    string    `json:"target_commit"`
+	AssetName       string    `json:"asset_name"`
+	AssetSHA256     string    `json:"asset_sha256"`
+	ChecksumsSHA256 string    `json:"checksums_sha256"`
+	VerifiedAt      time.Time `json:"verified_at"`
 }
 
 type Runtime struct {
@@ -207,6 +219,7 @@ func FinishTransaction(launchPath, transactionID, phase string, transactionErr e
 			state.CurrentVersion = state.TargetVersion
 			state.TargetVersion = ""
 			state.StagedBinary = ""
+			state.StagedEvidence = nil
 			state.ApplyEligible = false
 			state.DeferReason = ""
 		}

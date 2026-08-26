@@ -36,11 +36,12 @@ func Extensions() []extension.Extension {
 			PrintHuman: devdb.PrintDBWorkflowChecks,
 		},
 		Distribution: &extension.Distribution{
-			EnvRepoURL:    "https://github.com/iml885203/orbit-demo.git",
-			EnvRepoRef:    "v2026.8.1",
-			InstallURL:    "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
-			ReleaseAPIURL: "https://api.github.com/repos/iml885203/orbit/releases/latest",
-			DefaultEnv:    "quickstart.yaml",
+			EnvRepoURL:        "https://github.com/iml885203/orbit-demo.git",
+			EnvRepoRef:        "v2026.8.1",
+			InstallURL:        "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
+			ReleaseAPIURL:     "https://api.github.com/repos/iml885203/orbit/releases/latest",
+			ReleaseRepository: "iml885203/orbit",
+			DefaultEnv:        "quickstart.yaml",
 		},
 	}}
 }

@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestStateIsSharedOutsideRuntimeHomes(t *testing.T) {
@@ -88,6 +90,31 @@ func TestUpdateSerializesStateChanges(t *testing.T) {
 	}
 }
 
+func TestVerificationEvidenceSurvivesRegistryReload(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "orbit")
+	want := &VerificationRecord{
+		PolicyVersion: "github-release-v1", Repository: "iml885203/orbit", Tag: "v0.17.0",
+		TargetCommit: strings.Repeat("a", 40), AssetName: "orbit-linux-amd64",
+		AssetSHA256: strings.Repeat("b", 64), ChecksumsSHA256: strings.Repeat("c", 64),
+		VerifiedAt: time.Now().UTC().Truncate(time.Second),
+	}
+	if _, err := Update(launch, func(state *State) error {
+		state.StagedBinary = filepath.Join(t.TempDir(), "orbit")
+		state.StagedEvidence = want
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StagedEvidence == nil || *got.StagedEvidence != *want {
+		t.Fatalf("evidence=%+v want=%+v", got.StagedEvidence, want)
+	}
+}
+
 func TestLoadQuarantinesCorruptRegistry(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ORBIT_UPDATE_HOME", dir)
@@ -125,5 +152,34 @@ func TestTransactionWritesRejectStaleWorker(t *testing.T) {
 	}
 	if _, err := FinishTransaction(launch, state.Transaction.ID, "failed", nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFinishTransactionEvidenceLifecycle(t *testing.T) {
+	for _, phase := range []string{"succeeded", "partial", "failed"} {
+		t.Run(phase, func(t *testing.T) {
+			t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+			launch := filepath.Join(t.TempDir(), "orbit")
+			evidence := &VerificationRecord{PolicyVersion: githubReleasePolicyVersion}
+			state, err := Update(launch, func(next *State) error {
+				next.TargetVersion, next.StagedBinary, next.StagedEvidence = "v2", "staged", evidence
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = BeginTransaction(launch, "update", "v2")
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = FinishTransaction(launch, state.Transaction.ID, phase, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleared := state.StagedEvidence == nil && state.StagedBinary == ""
+			if cleared != (phase != "failed") {
+				t.Fatalf("phase=%s cleared=%v state=%+v", phase, cleared, state)
+			}
+		})
 	}
 }

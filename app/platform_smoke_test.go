@@ -3,6 +3,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -10,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/autoupdate"
 )
@@ -107,7 +110,7 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	updateHome := filepath.Join(root, "update-home")
 	orbitHome := filepath.Join(root, "orbit-home")
 	target := filepath.Join(root, "installed", "orbit")
-	staged := filepath.Join(root, "staged", "orbit")
+	staged := filepath.Join(updateHome, "updates", "platform-smoke", "orbit")
 	if runtime.GOOS == "windows" {
 		target += ".exe"
 		staged += ".exe"
@@ -128,6 +131,7 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
 		next.TargetVersion = expectedVersion
 		next.StagedBinary = staged
+		next.StagedEvidence = platformSmokeEvidence(t, staged, expectedVersion)
 		return nil
 	})
 	if err != nil {
@@ -151,10 +155,54 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	if _, err := os.Stat(target + ".prev"); err != nil {
 		t.Fatalf("rollback backup missing: %v", err)
 	}
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Fatalf("successful update left staged binary: %v", err)
+	}
+
+	targetBefore, _ := os.ReadFile(target)
+	backupBefore, _ := os.ReadFile(target + ".prev")
+	mutated := filepath.Join(updateHome, "updates", "platform-smoke-mutated", filepath.Base(staged))
+	if err := os.MkdirAll(filepath.Dir(mutated), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mutated, targetBefore, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion = "v9.9.8"
+		next.StagedBinary = mutated
+		next.StagedEvidence = platformSmokeEvidence(t, mutated, "v9.9.8")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mutated, []byte("mutated after verification"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", "v9.9.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(binary, "__update-apply", "--operation", "update", "--launch-path", target,
+		"--staged", mutated, "--installation", state.InstallationID, "--transaction", state.Transaction.ID)
+	command.Env = append(os.Environ(), env...)
+	if output, err := command.CombinedOutput(); err == nil {
+		t.Fatalf("mutated staged binary succeeded:\n%s", output)
+	}
+	if after, _ := os.ReadFile(target); string(after) != string(targetBefore) {
+		t.Fatal("mutation failure changed installed target")
+	}
+	if after, _ := os.ReadFile(target + ".prev"); string(after) != string(backupBefore) {
+		t.Fatal("mutation failure changed rollback backup")
+	}
 
 	bad := filepath.Join(root, "staged", "invalid")
 	if runtime.GOOS == "windows" {
 		bad += ".exe"
+	}
+	if err := os.MkdirAll(filepath.Dir(bad), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(bad, []byte("not an executable"), 0o755); err != nil {
 		t.Fatal(err)
@@ -162,6 +210,7 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	state, err = autoupdate.Update(target, func(next *autoupdate.State) error {
 		next.TargetVersion = "v9.9.9"
 		next.StagedBinary = bad
+		next.StagedEvidence = platformSmokeEvidence(t, bad, "v9.9.9")
 		return nil
 	})
 	if err != nil {
@@ -171,7 +220,7 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command(binary, "__update-apply", "--operation", "update", "--launch-path", target,
+	command = exec.Command(binary, "__update-apply", "--operation", "update", "--launch-path", target,
 		"--staged", bad, "--installation", state.InstallationID, "--transaction", state.Transaction.ID)
 	command.Env = append(os.Environ(), env...)
 	if output, err := command.CombinedOutput(); err == nil {
@@ -179,6 +228,25 @@ func TestPlatformSmokeAutomaticUpdateWorker(t *testing.T) {
 	}
 	if output := runPlatformSmokeCommand(t, "", nil, target, "--version"); !strings.Contains(output, expectedVersion) {
 		t.Fatalf("rollback version = %q, want %q", output, expectedVersion)
+	}
+}
+
+func platformSmokeEvidence(t *testing.T, staged, tag string) *autoupdate.VerificationRecord {
+	t.Helper()
+	contents, err := os.ReadFile(staged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(contents)
+	assetName, err := autoupdate.PlatformAssetName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &autoupdate.VerificationRecord{
+		PolicyVersion: "github-release-v1", Repository: "iml885203/orbit", Tag: tag,
+		TargetCommit: strings.Repeat("a", 40), AssetName: assetName,
+		AssetSHA256: hex.EncodeToString(digest[:]), ChecksumsSHA256: strings.Repeat("b", 64),
+		VerifiedAt: time.Now().UTC(),
 	}
 }
 

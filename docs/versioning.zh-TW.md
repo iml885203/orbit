@@ -56,6 +56,11 @@ repository administration credential；發布後若 GitHub 沒有回報 immutabl
 attestation 是 binary 如何產生的獨立證據；immutable-release attestation 則綁定
 已發布的 tag、target commit 與 release assets。
 
+Official direct-install 更新會在 Orbit process 內獨立消費這份 release attestation。
+Binary 進入 staging 前，會把目前平台的 binary 與 `checksums.txt` 綁定到 attested
+digest；延後套用所需的 bounded evidence 會保存在本機，實際替換前再驗證 staged
+bytes。這個 runtime boundary 與發布流程的驗證、build provenance 各自獨立。
+
 1.0 前的 release 之間可以有 breaking change。從 `v1.0.0` 起：
 
 - PATCH：向後相容的修正；
