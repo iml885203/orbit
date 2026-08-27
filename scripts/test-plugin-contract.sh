@@ -39,8 +39,6 @@ for required in \
   "protocol-correct probe" \
   "never invoke" \
   "do not infer a product gap from the manifest" \
-  "not a reason to hand environment" \
-  "concrete required behavior" \
   'explicit request to set up or run the project with Orbit authorizes creating' \
   'including `$HOME/.dotnet/dotnet`' \
   "worker-like executables" \
@@ -80,10 +78,28 @@ fi
 for installer in \
   "scripts/install.sh" \
   "scripts/install.ps1" \
-  "orbit version --json"
+  "orbit version --json" \
+  "claude plugin install orbit@orbit" \
+  "codex plugin add orbit@orbit"
 do
   if ! grep -F -- "$installer" "$skill" >/dev/null; then
     echo "plugin is missing first-run installer guidance: $installer" >&2
+    exit 1
+  fi
+done
+
+for completion_contract in \
+  "representative evidence" \
+  "intended resource selection is non-empty and ready" \
+  "expected application content" \
+  "dependency-backed flow" \
+  "HTTP 200" \
+  "activation is never a reason to stop onboarding" \
+  "files changed" \
+  "one-line request"
+do
+  if ! grep -F -- "$completion_contract" "$skill" >/dev/null; then
+    echo "plugin is missing the real-application completion contract: $completion_contract" >&2
     exit 1
   fi
 done

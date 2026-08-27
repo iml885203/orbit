@@ -10,24 +10,14 @@ example_config="$repo_root/docs/examples/local-first/orbit.yaml"
 for guide in docs/local-first.md docs/local-first.zh-TW.md; do
   guide_path="$repo_root/$guide"
 
-  for command in \
-    "orbit doctor" \
-    "orbit up" \
-    "orbit open app" \
-    "orbit logs app" \
-    "orbit down"; do
-    if ! grep -Fx "$command" "$guide_path" >/dev/null; then
-      echo "$guide is missing the local-first command: $command" >&2
-      exit 1
-    fi
-  done
-
-  for concept in "orbit init" "~/.orbit" 'path: ${WORKSPACE_ROOT}'; do
-    if ! grep -F "$concept" "$guide_path" >/dev/null; then
-      echo "$guide does not explain the local-to-shared boundary: $concept" >&2
-      exit 1
-    fi
-  done
+  if ! grep -F "https://orbit.dotw.me" "$guide_path" >/dev/null; then
+    echo "$guide is missing the URL-first onboarding request." >&2
+    exit 1
+  fi
+  if grep -F "~/.orbit" "$guide_path" >/dev/null || grep -F 'path: ${WORKSPACE_ROOT}' "$guide_path" >/dev/null; then
+    echo "$guide leaks advanced runtime or team-adoption concepts into first use." >&2
+    exit 1
+  fi
 
   if grep -F "ORBIT_AUTO_PORT_" "$guide_path" >/dev/null; then
     echo "$guide exposes the legacy movable-port expression." >&2
@@ -51,7 +41,7 @@ for redundant_field in "type: python" "path: ."; do
 done
 
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
-  echo "Local-first guides preserve the five-command trial and promotion path"
+  echo "Local-first guides preserve one URL-first onboarding path"
   exit 0
 fi
 

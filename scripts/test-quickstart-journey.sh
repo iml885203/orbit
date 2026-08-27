@@ -15,38 +15,18 @@ for readme in README.md README.zh-TW.md; do
     ' "$repo_root/$readme"
   )"
 
-  for requirement in Git Docker "Python 3"; do
-    if ! grep -F "$requirement" <<<"$demo_section" >/dev/null; then
-      echo "$readme demo section must name $requirement." >&2
-      exit 1
-    fi
-  done
-
-  for command in \
-    "git clone https://github.com/iml885203/orbit-demo.git" \
-    "cd orbit-demo" \
-    "orbit up" \
-    "orbit status" \
-    "orbit open demo-shop"; do
-    if ! grep -Fx "$command" <<<"$demo_section" >/dev/null; then
-      echo "$readme demo section is missing: $command" >&2
-      exit 1
-    fi
-  done
-
-  if ! grep -F '`orbit down`' <<<"$demo_section" >/dev/null; then
-    echo "$readme demo section must tell the user how to stop the demo." >&2
+  if ! grep -F "https://orbit.dotw.me" <<<"$demo_section" >/dev/null; then
+    echo "$readme is missing the URL-first onboarding request." >&2
     exit 1
   fi
-
-  if grep -E 'orbit .*docs/examples/|orbit .*README' <<<"$demo_section" >/dev/null; then
-    echo "$readme demo section depends on a source checkout." >&2
+  if grep -F "git clone https://github.com/iml885203/orbit-demo.git" <<<"$demo_section" >/dev/null; then
+    echo "$readme leaks the manual demo journey into first use." >&2
     exit 1
   fi
 done
 
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
-  echo "README demo section matches the clone-based quickstart"
+  echo "README keeps one URL-first onboarding path"
   exit 0
 fi
 

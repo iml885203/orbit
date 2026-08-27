@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev .",
-    "build": "vitepress build . && node scripts/legacy-locale-routes.mjs",
+    "build": "vitepress build . && node scripts/legacy-locale-routes.mjs && node scripts/publish-agent-skill.mjs",
     "preview": "vitepress preview .",
     "check": "pnpm run build && node scripts/site-contract.mjs && playwright test"
   },

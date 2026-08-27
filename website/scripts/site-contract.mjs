@@ -16,9 +16,14 @@ const requiredPages = [
   'docs/configuration.html',
   'docs/architecture.html',
   'docs/troubleshooting.html',
+  'agent/SKILL.md',
+  'agent/references/workflows.md',
+  'agent/references/aspire-migration.md',
 ]
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
+const docsWorkflow = readFileSync(join(sourceRoot, '.github/workflows/docs.yml'), 'utf8')
+assert.match(docsWorkflow, /- 'plugins\/orbit\/skills\/orbit\/\*\*'/, 'skill changes must publish the website mirror')
 const translatedSources = readdirSync(join(sourceRoot, 'docs'))
   .filter((name) => name.endsWith('.zh-TW.md'))
 for (const source of translatedSources) {
@@ -37,29 +42,28 @@ assert.equal(adapters.length, translatedSources.length, 'every locale adapter mu
 for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), `missing required page: ${page}`)
 
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
-assert.match(home, /Build the product\. Let agents run the environment\./)
+assert.match(home, /Build the product\. Let your agent run the project\./)
 assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/#get-started"/)
-assert.match(home, /href="\/docs\/development#install-orbit"/)
 assert.match(home, /<title>Orbit<\/title>/)
-assert.ok(home.includes('Help me get this project running with Orbit'), 'project onboarding prompt is missing')
-assert.ok(home.includes('Help me try the public demo'), 'agent-first demo prompt is missing')
-assert.ok(
-  home.indexOf('Help me get this project running with Orbit') < home.indexOf('Help me try the public demo') &&
-    home.indexOf('Help me try the public demo') < home.indexOf('Use Orbit regularly with your agent'),
-  'first-time value must appear before plugin distribution details',
-)
+assert.ok(home.includes('Read https://orbit.dotw.me and help me get this project running with Orbit'), 'URL-first project onboarding prompt is missing')
+assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
 
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
-assert.ok(chineseHome.includes('幫我用 Orbit 跑起這個專案'), 'Traditional Chinese project onboarding prompt is missing')
-assert.ok(chineseHome.includes('協助我試玩 public demo'), 'Traditional Chinese agent-first demo prompt is missing')
-assert.ok(
-  chineseHome.indexOf('幫我用 Orbit 跑起這個專案') < chineseHome.indexOf('協助我試玩 public demo') &&
-    chineseHome.indexOf('協助我試玩 public demo') < chineseHome.indexOf('讓 Agent 在之後的 session 直接使用 Orbit'),
-  'Traditional Chinese first-time value must appear before plugin distribution details',
-)
+assert.ok(chineseHome.includes('閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來'), 'Traditional Chinese URL-first project onboarding prompt is missing')
+
+const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
+assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
+const skillDirectory = join(sourceRoot, 'plugins/orbit/skills/orbit')
+const skillFiles = filesBelow(skillDirectory)
+for (const source of skillFiles) {
+  const path = relative(skillDirectory, source).split(sep).join('/')
+  assert.deepEqual(readFileSync(join(outputPath, 'agent', path)), readFileSync(source), `published skill does not match source: ${path}`)
+}
+const mirroredSkillFiles = filesBelow(join(outputPath, 'agent'))
+assert.equal(mirroredSkillFiles.length, skillFiles.length, 'published skill contains files outside the canonical source')
 
 const chineseGuide = readFileSync(join(outputPath, 'zh-TW/docs/local-first.html'), 'utf8')
 for (const route of ['sql-workflow', 'architecture', 'agent-cli', 'versioning', 'CODE_CONVENTIONS']) {
@@ -73,8 +77,8 @@ for (const [page, language, counterpart] of [
   const html = readFileSync(join(outputPath, page), 'utf8')
   assert.match(html, new RegExp(`<html lang="${language}"`))
   assert.match(html, language === 'zh-TW'
-    ? /<meta name="description" content="為 Agent 而生的本機開發環境編排工具。">/
-    : /<meta name="description" content="Agent-native orchestration for local development.">/)
+    ? /<meta name="description" content="讓 coding agents 跑起並驗證專案的本機環境。">/
+    : /<meta name="description" content="Let coding agents run and verify your project's local environment.">/)
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
   assert.match(html, /name="twitter:card"/)
@@ -110,7 +114,7 @@ function outputFileFor(url) {
   const relativePath = decodeURIComponent(url.pathname.slice(baseURL.pathname.length))
   if (!relativePath) return join(outputPath, 'index.html')
   if (relativePath.endsWith('/')) return join(outputPath, relativePath, 'index.html')
-  return /\.(?:css|gif|ico|jpe?g|js|json|png|svg|webp|woff2?|xml)$/.test(relativePath)
+  return /\.(?:css|gif|gz|ico|jpe?g|js|json|md|png|svg|txt|webp|woff2?|xml)$/.test(relativePath)
     ? join(outputPath, relativePath)
     : join(outputPath, `${relativePath}.html`)
 }
