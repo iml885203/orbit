@@ -10,9 +10,10 @@ CLI over invoking Docker, databases, or service processes directly.
 
 ## Setup
 
-If `orbit` is not installed, identify the host platform, explain the matching
-official installer, and get the user's approval before running it. On macOS or
-Linux:
+If `orbit` is not installed, identify the host platform and explain the
+matching official installer. A request that explicitly authorizes installing
+Orbit includes approval for the official Orbit CLI installer; otherwise get
+approval before running it. On macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
@@ -32,6 +33,26 @@ reported. Do not install or update Docker, package managers, or project
 runtimes without the user's approval. Docker must be running when the selected
 environment declares containers; the public demo does.
 
+When the user explicitly authorized the Orbit plugin, install the official
+plugin for the current coding agent when that surface supports plugins. A
+newly installed plugin may load only in a new agent session: continue the
+current task with this skill, then mention the restart at handoff. Plugin
+activation is never a reason to stop onboarding.
+
+Claude Code:
+
+```bash
+claude plugin marketplace add iml885203/orbit
+claude plugin install orbit@orbit
+```
+
+Codex CLI:
+
+```bash
+codex plugin marketplace add iml885203/orbit
+codex plugin add orbit@orbit
+```
+
 Then pick the path that matches the user:
 
 - **They explicitly asked for the public demo** — work from a new empty
@@ -39,8 +60,10 @@ Then pick the path that matches the user:
   its exact non-destructive `orbit init --yes --json` action, and continue the
   core loop. Do not present the other setup paths unless the request is
   ambiguous.
-- **Their project already has `orbit.yaml`** — nothing to set up. Run
-  `orbit up` from anywhere inside the project; Orbit finds the nearest config.
+- **Their project already has `orbit.yaml`** — identify the application workflow
+  the user expects to work, then enter the core loop. Orbit finds the nearest
+  config from anywhere inside the project. A ready but incomplete resource
+  selection is not proof that the existing file covers that workflow.
 - **They have a team environment repository** —
   `orbit init --yes --source <name> --url <url> [--env <name>]` configures a named source,
   syncs the repository, and selects an environment.
@@ -68,6 +91,13 @@ real-project branch is still authoring its first project-local config.
 
 ## Core loop
 
+For a setup or run request, first define the smallest representative evidence
+appropriate to the application: expected content for a web endpoint,
+observable output or a safe existing behavior for a worker or CLI, and an
+existing dependency-backed flow when one is part of the user's multi-service
+goal. A ready resource, open port, or HTTP 200 alone is not evidence. Do not
+invent a write solely to satisfy verification.
+
 1. Run `orbit inspect --json` once to get readiness, environment/resource
    state, risks, and recommended actions. For a real project without
    `orbit.yaml`, first complete the project inspection and create the initial
@@ -76,7 +106,16 @@ real-project branch is still authoring its first project-local config.
    checking its scope and `destructive` flag. Do not invent an intermediate
    diagnostic command.
 3. Make the requested change with the narrowest lifecycle command.
-4. Verify the result with `orbit status --json`.
+4. Verify the intended resource selection is non-empty and ready with
+   `orbit status --json`.
+5. For setup or run onboarding, verify the applicable completion evidence below.
+
+When readiness or application evidence fails, use the structured status,
+recommended action, and narrowest relevant logs to fix one cause and retry.
+Continue while the next action is non-destructive and within the requested
+scope. Stop only for missing approval or credentials, an unavailable external
+prerequisite, a product decision, or a concrete required behavior Orbit cannot
+express.
 
 If the user names an instance, or the task runs beside another checkout or CI
 job, choose one instance name before the first inspect and pass
@@ -142,6 +181,21 @@ and destructive-operation rules. Deeper references live in the repository's
   audit trail; they are not startup prerequisites.
 - Treat the JSON envelope's final state and actions as authoritative rather
   than inferring success from exit code or transport state.
+
+## Onboarding completion
+
+Before reporting a setup or run onboarding request as successful, require the
+evidence that applies to the user's project:
+
+- the intended Orbit resource selection is non-empty and ready;
+- a web endpoint returns the expected application content;
+- a worker or CLI produces its expected observable output or safe behavior;
+- an existing multi-service flow succeeds when it is part of the user's goal;
+- the inspected response, output, and relevant logs contain no framework or
+  dependency error masked by successful transport state.
+
+Report the files changed, resource evidence, representative behavior evidence,
+any remaining limitation, and the one-line request the user can use next time.
 
 ## Safety
 

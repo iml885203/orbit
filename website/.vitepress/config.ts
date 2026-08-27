@@ -86,7 +86,7 @@ function counterpartPath(relativePath: string) {
 export default defineConfig({
   srcDir: '..',
   title: 'Orbit',
-  description: 'Agent-native orchestration for local development.',
+  description: "Let coding agents run and verify your project's local environment.",
   lang: 'en-US',
   base: siteBase,
   appearance: 'dark',
@@ -169,7 +169,7 @@ export default defineConfig({
       label: '繁體中文',
       lang: 'zh-TW',
       link: '/zh-TW/',
-      description: '為 Agent 而生的本機開發環境編排工具。',
+      description: '讓 coding agents 跑起並驗證專案的本機環境。',
       themeConfig: {
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
@@ -216,18 +216,17 @@ export default defineConfig({
       pageData.frontmatter.layout = 'home'
       pageData.frontmatter.hero = {
         name: 'Orbit',
-        text: '專心打造產品，讓 Agent 運行環境。',
-        tagline: '預覽版。為整套本機 stack 而生的 agent-native orchestration，讓開發者、CI 與 coding agents 共用同一個可靠介面。',
+        text: '專心打造產品，讓 Agent 把專案跑起來。',
+        tagline: '把一個網址交給 coding agent。Orbit 會協助它取得工具、啟動專案需要的本機環境，並驗證應用程式真的可以使用。',
         image: { src: '/orbit-logo-badge.svg', alt: 'Orbit' },
         actions: [
           { theme: 'brand', text: '與 Agent 開始使用', link: '/zh-TW/#開始使用' },
-          { theme: 'alt', text: '安裝 Orbit', link: '/zh-TW/docs/development#安裝-orbit' },
         ],
       }
       pageData.frontmatter.features = [
-        { title: '環境只定義一次', details: '把 dependencies、commands、ports 與 readiness 集中在同一份版本化定義。' },
-        { title: '放心委派給 Agent', details: '透過穩定的 JSON CLI 提供可觀測狀態、結構化錯誤與安全的下一步。' },
-        { title: '讓人專注在產品', details: '讓 Orbit 協調 host processes 與 containers，團隊專心打造產品。' },
+        { title: '只要一個需求', details: '把 Orbit 網址交給 coding agent；它會取得工具並理解現有專案。' },
+        { title: '留下可重現的設定', details: '成功的方法會保存在程式碼旁的 orbit.yaml，不再只存在某個人的腦中。' },
+        { title: '證明應用真的可用', details: 'Orbit 回報預期環境的狀態，Agent 再驗證適合該 application 的代表性行為。' },
       ]
       return
     }
@@ -237,21 +236,20 @@ export default defineConfig({
     pageData.frontmatter.layout = 'home'
     pageData.frontmatter.hero = {
       name: 'Orbit',
-      text: 'Build the product. Let agents run the environment.',
-      tagline: 'Preview release. Agent-native orchestration for your entire local stack, with one reliable interface for developers, CI, and coding agents.',
+      text: 'Build the product. Let your agent run the project.',
+      tagline: 'Give your coding agent one URL. Orbit helps it get the tools, start the local environment this project needs, and verify that the application actually works.',
       image: {
         src: '/orbit-logo-badge.svg',
         alt: 'Orbit',
       },
       actions: [
         { theme: 'brand', text: 'Get started with your agent', link: '/#get-started' },
-        { theme: 'alt', text: 'Install Orbit', link: '/docs/development#install-orbit' },
       ],
     }
     pageData.frontmatter.features = [
-      { title: 'Encode the environment once', details: 'Put dependencies, commands, ports, and readiness in one versioned definition—not scattered setup notes.' },
-      { title: 'Delegate with confidence', details: 'Give agents observable state, structured errors, and safe next actions through a stable JSON CLI.' },
-      { title: 'Keep humans focused', details: 'Let Orbit coordinate host processes and containers while your team builds the product.' },
+      { title: 'One request to your agent', details: 'Give it the Orbit URL; it gets the tools and understands the existing project.' },
+      { title: 'One repeatable setup', details: 'The working environment stays beside the code in orbit.yaml instead of one person’s head.' },
+      { title: 'Proof that the app works', details: 'Orbit reports the intended environment; the agent verifies representative application behavior.' },
     ]
   },
   transformHead({ pageData }) {
@@ -260,8 +258,8 @@ export default defineConfig({
     const alternate = counterpartPath(pageData.relativePath)
     const title = !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
     const summary = pageData.relativePath.startsWith('zh-TW/')
-      ? '為 Agent 而生的本機開發環境編排工具。'
-      : 'Agent-native orchestration for local development.'
+      ? '讓 coding agents 跑起並驗證專案的本機環境。'
+      : "Let coding agents run and verify your project's local environment."
     const description = pageData.frontmatter.description || (pageData.title ? `${pageData.title}. ${summary}` : summary)
     const locale = pageData.relativePath.startsWith('zh-TW/') ? 'zh_TW' : 'en_US'
     return [
@@ -276,6 +274,7 @@ export default defineConfig({
       ['meta', { name: 'twitter:title', content: title }],
       ['meta', { name: 'twitter:description', content: description }],
       ['meta', { name: 'twitter:image', content: 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg' }],
+      ['link', { rel: 'alternate', type: 'text/markdown', href: `${siteBase}agent/SKILL.md`, title: 'Orbit instructions for coding agents' }],
       ...(alternate ? [
         ['link', { rel: 'alternate', hreflang: locale === 'zh_TW' ? 'en' : 'zh-TW', href: `${siteOrigin}${alternate}` }],
       ] as const : []),

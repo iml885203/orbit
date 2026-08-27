@@ -7,6 +7,7 @@ on:
       - '.github/workflows/docs.yml'
       - 'Makefile'
       - 'docs/**'
+      - 'plugins/orbit/skills/orbit/**'
       - 'ui/public/**'
       - 'website/**'
       - 'scripts/test-docs-site-setup.sh'

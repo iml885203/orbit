@@ -132,8 +132,7 @@ test-docs: test-docs-site-setup
 	@! grep -F 'Orbit 永遠不會移動 port' docs/configuration.zh-TW.md
 	@test ! -d docs/examples/mini-shop
 	@grep -F 'codex plugin marketplace add iml885203/orbit' README.md README.zh-TW.md docs/development.md docs/development.zh-TW.md >/dev/null
-	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.md >/dev/null
-	@grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.zh-TW.md >/dev/null
+	@! grep -F 'git clone https://github.com/iml885203/orbit-demo.git' README.md README.zh-TW.md
 	@! grep -F 'iml885203/orbit-examples' README.md README.zh-TW.md
 
 test-docs-site-setup:

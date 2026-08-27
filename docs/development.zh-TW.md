@@ -4,7 +4,7 @@
 
 兩種讀者：**使用 Orbit**（安裝方式、upgrade / rollback / uninstall）與
 **在 Orbit 本身上動手**（從原始碼 build、開發流程、dashboard hot reload）。
-日常基本流程請參考[網站概覽](https://orbit.dotw.me/zh-TW/#一份檔案描述整個環境)。
+日常基本流程請參考[網站概覽](https://orbit.dotw.me/zh-TW/#開始使用)。
 
 ## 使用 Orbit
 

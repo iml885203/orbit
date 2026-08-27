@@ -5,16 +5,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 orbit_bin="${ORBIT_BIN:-$repo_root/bin/orbit}"
 
-for guide in docs/local-first.md docs/local-first.zh-TW.md; do
-  if ! grep -F "orbit up" "$repo_root/$guide" |
-    grep -Ei "switch|切換" >/dev/null; then
-    echo "$guide must explain that orbit up switches projects." >&2
-    exit 1
-  fi
-done
-
 if [ "${ORBIT_DOCS_ONLY:-}" = "1" ]; then
-  echo "Project-switch guides preserve the one-command mental model"
+  echo "Project switching remains a behavioral contract, not a first-use concept"
   exit 0
 fi
 

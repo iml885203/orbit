@@ -5,7 +5,7 @@
 Two audiences: **using Orbit** (install alternatives, upgrade / rollback /
 uninstall) and **hacking on Orbit itself** (build from source, dev workflow,
 dashboard hot reload). For the basic day-to-day workflow, see the
-[website overview](https://orbit.dotw.me/#one-file-describes-the-environment).
+[website overview](https://orbit.dotw.me/#get-started).
 
 ## Using Orbit
 

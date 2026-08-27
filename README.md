@@ -1,170 +1,28 @@
 # ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
-**Build the product. Let agents run the environment.**
+**Build the product. Let your agent run the project.**
 
-Orbit is an agent-native local development orchestrator. It gives developers
-and coding agents one reliable interface to set up, run, inspect, and manage a
-project's entire local stack.
+Orbit gives coding agents a reliable way to get the local environment a
+project needs running, understand failures, and verify that the application
+actually works.
 
-[Official website](https://orbit.dotw.me/) · [Get started](#get-started) ·
-[Use Orbit with your project](docs/local-first.md) · [Install](docs/development.md) ·
-[Documentation](#documentation) ·
+[Official website](https://orbit.dotw.me/) · [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
-
-![Orbit dashboard showing a healthy mini-shop dependency graph](docs/assets/orbit-demo-dashboard.jpg)
-
-Local setup should not live in a developer's head. Orbit turns one
-`orbit.yaml` into an executable environment contract shared by developers,
-CI, and coding agents.
-
-- **Encode the environment once:** dependencies, commands, ports, and readiness
-  live in one versioned definition instead of setup notes and tribal knowledge.
-- **Delegate with confidence:** the stable JSON CLI gives agents observable
-  state, structured errors, and safe next actions instead of brittle shell
-  automation.
-- **Keep humans focused:** Orbit coordinates host processes and containers and
-  surfaces health, logs, ports, traces, and failures in one place.
 
 ## Get started
 
-### Use Orbit in your project
+### Give your agent one request
 
-With the Orbit plugin installed, paste one request into Claude Code or Codex:
-
-```text
-Help me get this project running with Orbit.
-```
-
-The agent inspects the existing setup, adds the narrowest project-local Orbit
-configuration, and keeps going until the application is running and verified.
-It stops when a system dependency, destructive change, or product decision
-needs you.
-
-Do not have the plugin yet? Bootstrap the same workflow once from the public
-skill:
+Paste this into your coding agent from the project you want to run:
 
 ```text
-Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
-Help me get this project running with Orbit.
+Read https://orbit.dotw.me and help me get this project running with Orbit.
+You may install the official Orbit CLI and plugin. Ask before installing other
+software or making destructive changes.
 ```
 
-### Or try the public demo
-
-```text
-Read and follow the Orbit instructions at https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md.
-Help me try the public demo in a new empty directory, outside any existing
-project. Install Orbit if needed, start and verify the demo, then open its
-dashboard and demo-shop. Ask before installing software or changing anything
-outside the demo.
-```
-
-The agent checks what the demo needs and asks before installing anything. When
-it finishes, the dashboard and tiny storefront are open; buy a mug to watch one
-request cross the service graph.
-
-### Use Orbit regularly with your agent
-
-The bootstrap prompt works without setup. For future sessions, install the
-Orbit plugin so your agent already has those instructions and the request stays
-one line.
-
-Run the commands for the agent you use in a terminal. After they succeed, exit
-the current agent process and start a fresh session.
-
-Claude Code:
-
-```bash
-claude plugin marketplace add iml885203/orbit
-claude plugin install orbit@orbit
-```
-
-Codex CLI:
-
-```bash
-codex plugin marketplace add iml885203/orbit
-codex plugin add orbit@orbit
-```
-
-On an agent surface without plugin support, keep using the prompt for your
-chosen path.
-
-### Prefer the CLI?
-
-The manual demo needs Git, Docker, and Python 3.
-Install Orbit using the [platform instructions](docs/development.md#install-orbit),
-then run the same journey yourself:
-
-```bash
-git clone https://github.com/iml885203/orbit-demo.git
-cd orbit-demo
-orbit up
-orbit status
-orbit open demo-shop
-```
-
-The [Orbit demo](https://github.com/iml885203/orbit-demo) contains three host
-APIs, live stock in a Redis container, and orders in SQLite. Use `orbit down`
-to stop it.
-
-## One file describes the environment
-
-Save an `orbit.yaml` beside your code
-([runnable example](https://github.com/iml885203/orbit/tree/main/docs/examples/local-first)):
-
-```yaml
-version: "3"
-
-containers:
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      redis: "26379:6379"
-
-services:
-  app:
-    kind: frontend
-    command: python3 -m http.server "$PORT"
-    ports:
-      http: 28080
-    depends_on: [redis]
-```
-
-The daily loop is four commands:
-
-```bash
-orbit up       # start everything in dependency order
-orbit status   # see what is actually ready
-orbit logs app # inspect application output
-orbit down     # stop the environment
-```
-
-Orbit starts Redis before the host process, waits for real readiness instead
-of equating "process exists" with "ready", and injects the declared port as
-`PORT`. The default runtime keeps ports fixed: a conflict is reported with its
-owning process and the remedy. After editing `orbit.yaml`, run `orbit up`
-again: the new config is validated before anything is interrupted.
-
-For parallel local checkouts or CI jobs, select a named instance. Named
-instances isolate daemon state, Docker resources, volumes, networks, and host
-ports while leaving the unnamed runtime backward compatible:
-
-```bash
-orbit up --instance checkout-a
-orbit status --instance checkout-a --json
-orbit instance list --json
-orbit instance clean checkout-a
-```
-
-Declared host ports are preferences inside a named instance. Orbit persists
-the resolved ports for stable restarts and reports the actual endpoints in
-`up`, `status`, and `instance list`; callers do not need to coordinate
-`ORBIT_HOME`, `ORBIT_NAMESPACE`, `ORBIT_DASHBOARD_PORT`, or `ORBIT_SOCKET`.
-See [Isolated runtime instances](docs/instances.md) for targeting, isolation,
-port resolution, and cleanup semantics.
-
-[Use Orbit with your project](docs/local-first.md) walks this path and shows
-how to promote the proven file into a shared team environment. Every field is
-documented in [Configuration](docs/configuration.md).
+The agent inspects the existing setup, starts the intended environment,
+verifies a real application flow, and reports anything that still needs you.
 
 ## Install
 
@@ -200,24 +58,6 @@ what the selected environment expects and the specific remedy. Upgrade,
 rollback, uninstall, and platform details are in
 [Installation and development](docs/development.md).
 
-## Using Orbit with an AI agent
-
-Agents read state through the same CLI with `--json`; errors carry stable
-codes and executable recommended actions:
-
-```bash
-orbit inspect --json       # one runtime-readiness decision and safe next actions
-orbit status --json        # selected environment and current resource states
-orbit doctor --json        # host prerequisites and setup diagnostics
-orbit env info --json   # ports, URLs, and credentials-by-reference for anything living beside the stack
-```
-
-The independently versioned plugin used in the [getting-started journey](#get-started) teaches agents
-to inspect state first, prefer `--json`, and confirm destructive operations.
-Without the plugin, point an agent to the
-[skill](https://github.com/iml885203/orbit/blob/main/plugins/orbit/skills/orbit/SKILL.md)
-and [JSON contract](docs/agent-cli.md).
-
 ## Dashboard
 
 `orbit open` opens the local dashboard: the dependency graph with service
@@ -249,6 +89,7 @@ For adopters and contributors:
 - [Architecture](docs/architecture.md)
 - [Development](docs/development.md)
 - [Agent CLI contract](docs/agent-cli.md)
+- [Agent instructions](https://orbit.dotw.me/agent/SKILL.md)
 - [Contributing](CONTRIBUTING.md)
 - [Documentation website maintenance](docs/website.md)
 

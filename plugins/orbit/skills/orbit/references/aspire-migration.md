@@ -15,9 +15,11 @@ Treat any of these as evidence of Aspire:
 - A file-based or TypeScript AppHost is configured under `.aspire`.
 
 Inspect the repository read-only first. Identify the AppHost, runtime and
-container prerequisites, and existing developer workflow. Do not install
-tools, generate artifacts inside the repository, or edit project files before
-the user approves those actions.
+container prerequisites, and existing developer workflow. A request to set up
+or run the project with Orbit already authorizes the narrowest project-local
+configuration described below; summarize that scope and continue without a
+second approval. Installing tools, generating other repository artifacts, or
+removing the existing orchestration path still requires explicit approval.
 
 Treat a missing command on `PATH` as a discovery problem before declaring a
 runtime absent. Check the project's documented bootstrap paths and standard
@@ -132,7 +134,8 @@ integrations, runtime-generated credentials, generated proxies, and callback
 expressions visible in the plan, then prove whether each is essential by
 starting the direct resources and exercising the requested workflow.
 
-Show the user:
+Summarize these as a progress update and continue without waiting for another
+approval unless one of the boundaries below requires it:
 
 1. the resources and dependency graph Orbit would own;
 2. the project files and commands that would change;
@@ -158,24 +161,8 @@ use the normal Orbit inspect/action/status loop.
 Start the infrastructure and services directly under Orbit; never invoke
 `aspire run` during the migration verification. Recover one failure at a time
 from Orbit's structured status and logs. Verify every Orbit-owned resource,
-one real application endpoint, and the smallest representative user flow that
-crosses service boundaries. Record the exact configuration or runtime behavior
-behind any remaining failure; do not infer a product gap from the manifest
-alone.
-
-Do not equate a healthy process, open port, or HTTP 200 with a usable product.
-Inspect the representative response for expected application content and
-framework-rendering errors, then exercise one real dependency-backed flow.
-This catches server-rendered pages that return 200 while an internal service
-lookup failed.
-
-A failed first attempt is recovery evidence, not a reason to hand environment
-ownership back to the user. Continue the inspect/log/fix/verify loop while the
-next action is non-destructive and within the approved project scope. Stop only
-for missing user intent or approval, an unavailable external prerequisite, or
-a concrete required behavior that current Orbit configuration cannot express.
-When stopping, report the executed evidence and the narrow gap instead of a
-general statement that the project is too complex or Aspire-specific.
+then apply the main skill's completion contract. Record the exact configuration
+or runtime behavior behind any remaining failure; do not infer a product gap from the manifest alone.
 
 Match readiness to the protocol the application actually serves. If Orbit's
 HTTP probe fails but a direct protocol-correct probe succeeds (for example an
