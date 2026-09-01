@@ -1,0 +1,20 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Orbit",
+    "identifier": "did:web:orbit.dotw.me"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:orbit.dotw.me:skill:orbit",
+      "displayName": "Orbit local environment operations",
+      "type": "text/markdown",
+      "url": "https://orbit.dotw.me/agent/SKILL.md",
+      "representativeQueries": [
+        "set up this project with Orbit",
+        "start and verify my local development environment",
+        "diagnose an Orbit-managed service that is not ready"
+      ]
+    }
+  ]
+}

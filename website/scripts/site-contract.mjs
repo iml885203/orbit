@@ -19,6 +19,9 @@ const requiredPages = [
   'agent/SKILL.md',
   'agent/references/workflows.md',
   'agent/references/aspire-migration.md',
+  '.well-known/agent-skills/index.json',
+  '.well-known/ai-catalog.json',
+  'orbit-social-card.png',
 ]
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -52,9 +55,22 @@ assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.m
 assert.match(home, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
 assert.match(home, /type="application\/ld\+json"/)
 assert.match(home, /"@type":"SoftwareApplication"/)
+assert.match(home, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbit-social-card\.png"/)
+assert.match(home, /property="og:image:width" content="1200"/)
+assert.match(home, /property="og:image:height" content="630"/)
+assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
-assert.equal(robots, 'User-agent: *\nAllow: /\n\nSitemap: https://orbit.dotw.me/sitemap.xml\n')
+assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
+
+const skillIndex = JSON.parse(readFileSync(join(outputPath, '.well-known/agent-skills/index.json'), 'utf8'))
+assert.equal(skillIndex.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json')
+assert.equal(skillIndex.skills[0].url, 'https://orbit.dotw.me/agent/SKILL.md')
+assert.match(skillIndex.skills[0].digest, /^sha256:[a-f0-9]{64}$/)
+
+const agentCatalog = JSON.parse(readFileSync(join(outputPath, '.well-known/ai-catalog.json'), 'utf8'))
+assert.equal(agentCatalog.host.identifier, 'did:web:orbit.dotw.me')
+assert.equal(agentCatalog.entries[0].url, 'https://orbit.dotw.me/agent/SKILL.md')
 
 const notFound = readFileSync(join(outputPath, '404.html'), 'utf8')
 assert.match(notFound, /<meta name="robots" content="noindex, nofollow">/)
@@ -93,7 +109,7 @@ for (const [page, language, counterpart] of [
   assert.match(html, /property="og:title"/)
   assert.match(html, /property="og:site_name" content="Orbit"/)
   assert.match(html, /name="twitter:card"/)
-  assert.match(html, /property="og:image" content="https:\/\/raw\.githubusercontent\.com\/iml885203\/orbit\/main\/docs\/assets\/orbit-demo-dashboard\.jpg"/)
+  assert.match(html, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbit-social-card\.png"/)
   assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://orbit.dotw.me${counterpart}"`))
   assert.match(html, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
 }
