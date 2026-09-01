@@ -48,6 +48,16 @@ assert.match(home, /href="\/#get-started"/)
 assert.match(home, /<title>Orbit<\/title>/)
 assert.ok(home.includes('Read https://orbit.dotw.me and help me get this project running with Orbit'), 'URL-first project onboarding prompt is missing')
 assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
+assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.me\/"/)
+assert.match(home, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
+assert.match(home, /type="application\/ld\+json"/)
+assert.match(home, /"@type":"SoftwareApplication"/)
+
+const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
+assert.equal(robots, 'User-agent: *\nAllow: /\n\nSitemap: https://orbit.dotw.me/sitemap.xml\n')
+
+const notFound = readFileSync(join(outputPath, '404.html'), 'utf8')
+assert.match(notFound, /<meta name="robots" content="noindex, nofollow">/)
 
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
@@ -81,9 +91,11 @@ for (const [page, language, counterpart] of [
     : /<meta name="description" content="Let coding agents run and verify your project's local environment.">/)
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
+  assert.match(html, /property="og:site_name" content="Orbit"/)
   assert.match(html, /name="twitter:card"/)
   assert.match(html, /property="og:image" content="https:\/\/raw\.githubusercontent\.com\/iml885203\/orbit\/main\/docs\/assets\/orbit-demo-dashboard\.jpg"/)
   assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://orbit.dotw.me${counterpart}"`))
+  assert.match(html, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
 }
 assert.match(chineseGuide, /href="https:\/\/github.com\/iml885203\/orbit\/edit\/main\/docs\/local-first\.zh-TW\.md"/)
 

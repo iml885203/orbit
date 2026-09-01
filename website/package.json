@@ -7,10 +7,12 @@
     "dev": "vitepress dev .",
     "build": "vitepress build . && node scripts/legacy-locale-routes.mjs && node scripts/publish-agent-skill.mjs",
     "preview": "vitepress preview .",
-    "check": "pnpm run build && node scripts/site-contract.mjs && playwright test"
+    "check": "pnpm run build && node scripts/site-contract.mjs && node scripts/seo-audit.mjs && playwright test",
+    "seo:audit": "pnpm run build && node scripts/site-contract.mjs && node scripts/seo-audit.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
+    "lighthouse": "13.4.1",
     "vitepress": "1.6.4",
     "vue": "3.5.41"
   }

@@ -256,28 +256,54 @@ export default defineConfig({
     const pagePath = publicPath(pageData.relativePath)
     const canonical = `${siteOrigin}${pagePath}`
     const alternate = counterpartPath(pageData.relativePath)
+    const isTraditionalChinese = pageData.relativePath.startsWith('zh-TW/')
     const title = !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
-    const summary = pageData.relativePath.startsWith('zh-TW/')
+    const summary = isTraditionalChinese
       ? '讓 coding agents 跑起並驗證專案的本機環境。'
       : "Let coding agents run and verify your project's local environment."
     const description = pageData.frontmatter.description || (pageData.title ? `${pageData.title}. ${summary}` : summary)
-    const locale = pageData.relativePath.startsWith('zh-TW/') ? 'zh_TW' : 'en_US'
+    const locale = isTraditionalChinese ? 'zh_TW' : 'en_US'
+    const language = isTraditionalChinese ? 'zh-TW' : 'en'
+    const homepageSchema = pagePath === siteBase
+      ? [[
+          'script',
+          { type: 'application/ld+json' },
+          JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'Orbit',
+            description: summary,
+            url: canonical,
+            applicationCategory: 'DeveloperApplication',
+            operatingSystem: 'macOS, Linux, Windows',
+            codeRepository: 'https://github.com/iml885203/orbit',
+            license: 'https://opensource.org/license/mit',
+          }),
+        ] as const]
+      : []
     return [
       ['link', { rel: 'canonical', href: canonical }],
+      ...(pageData.isNotFound ? [['meta', { name: 'robots', content: 'noindex, nofollow' }] as const] : []),
       ['meta', { property: 'og:title', content: title }],
       ['meta', { property: 'og:description', content: description }],
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:url', content: canonical }],
       ['meta', { property: 'og:locale', content: locale }],
+      ['meta', { property: 'og:site_name', content: 'Orbit' }],
       ['meta', { property: 'og:image', content: 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg' }],
+      ['meta', { property: 'og:image:alt', content: 'Orbit local development dashboard' }],
       ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
       ['meta', { name: 'twitter:title', content: title }],
       ['meta', { name: 'twitter:description', content: description }],
       ['meta', { name: 'twitter:image', content: 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg' }],
+      ['meta', { name: 'twitter:image:alt', content: 'Orbit local development dashboard' }],
       ['link', { rel: 'alternate', type: 'text/markdown', href: `${siteBase}agent/SKILL.md`, title: 'Orbit instructions for coding agents' }],
+      ['link', { rel: 'alternate', hreflang: language, href: canonical }],
       ...(alternate ? [
         ['link', { rel: 'alternate', hreflang: locale === 'zh_TW' ? 'en' : 'zh-TW', href: `${siteOrigin}${alternate}` }],
       ] as const : []),
+      ['link', { rel: 'alternate', hreflang: 'x-default', href: `${siteOrigin}${siteBase}` }],
+      ...homepageSchema,
     ]
   },
   transformHtml(code) {
