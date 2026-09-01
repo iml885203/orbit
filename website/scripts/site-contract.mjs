@@ -27,6 +27,7 @@ const requiredPages = [
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
 const docsWorkflow = readFileSync(join(sourceRoot, '.github/workflows/docs.yml'), 'utf8')
 assert.match(docsWorkflow, /- 'plugins\/orbit\/skills\/orbit\/\*\*'/, 'skill changes must publish the website mirror')
+assert.match(docsWorkflow, /include-hidden-files: true/, 'Pages deployment must publish agent discovery files below .well-known')
 const translatedSources = readdirSync(join(sourceRoot, 'docs'))
   .filter((name) => name.endsWith('.zh-TW.md'))
 for (const source of translatedSources) {

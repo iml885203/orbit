@@ -45,6 +45,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: website/.vitepress/dist
+          include-hidden-files: true
 
   deploy:
     needs: build
