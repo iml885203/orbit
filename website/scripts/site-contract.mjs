@@ -49,7 +49,10 @@ const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
 assert.match(home, /Build the product\. Let your agent run the project\./)
 assert.match(home, /aria-label="Search"/)
 assert.match(home, /href="\/#get-started"/)
-assert.match(home, /<title>Orbit<\/title>/)
+assert.match(home, /<title>Local Dev Environments for Coding Agents \| Orbit<\/title>/)
+assert.match(home, /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
+assert.match(home, /property="og:title" content="Orbit — Local Dev Environments for Coding Agents"/)
+assert.match(home, /property="og:description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
 assert.ok(home.includes('Read https://orbit.dotw.me and help me get this project running with Orbit'), 'URL-first project onboarding prompt is missing')
 assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
 assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.me\/"/)
@@ -104,8 +107,8 @@ for (const [page, language, counterpart] of [
   const html = readFileSync(join(outputPath, page), 'utf8')
   assert.match(html, new RegExp(`<html lang="${language}"`))
   assert.match(html, language === 'zh-TW'
-    ? /<meta name="description" content="讓 coding agents 跑起並驗證專案的本機環境。">/
-    : /<meta name="description" content="Let coding agents run and verify your project's local environment.">/)
+    ? /<meta name="description" content="Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。">/
+    : /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.">/)
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
   assert.match(html, /property="og:site_name" content="Orbit"/)

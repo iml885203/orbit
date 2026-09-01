@@ -3,6 +3,9 @@ import { fileURLToPath } from 'node:url'
 
 const siteOrigin = 'https://orbit.dotw.me'
 const siteBase = '/'
+const homepageTitle = 'Orbit — Local Dev Environments for Coding Agents'
+const homepageDescription = 'Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.'
+const traditionalChineseHomepageDescription = 'Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。'
 const untranslatedRoutes = new Set([
   'CODE_OF_CONDUCT',
   'CONTRIBUTING',
@@ -86,7 +89,7 @@ function counterpartPath(relativePath: string) {
 export default defineConfig({
   srcDir: '..',
   title: 'Orbit',
-  description: "Let coding agents run and verify your project's local environment.",
+  description: homepageDescription,
   lang: 'en-US',
   base: siteBase,
   appearance: 'dark',
@@ -170,7 +173,7 @@ export default defineConfig({
       label: '繁體中文',
       lang: 'zh-TW',
       link: '/zh-TW/',
-      description: '讓 coding agents 跑起並驗證專案的本機環境。',
+      description: traditionalChineseHomepageDescription,
       themeConfig: {
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
@@ -215,6 +218,7 @@ export default defineConfig({
     if (pageData.relativePath === 'zh-TW/index.md') {
       pageData.title = 'Orbit（繁體中文）'
       pageData.frontmatter.layout = 'home'
+      pageData.frontmatter.description = traditionalChineseHomepageDescription
       pageData.frontmatter.hero = {
         name: 'Orbit',
         text: '專心打造產品，讓 Agent 把專案跑起來。',
@@ -233,8 +237,9 @@ export default defineConfig({
     }
     if (pageData.relativePath !== 'index.md') return
 
-    pageData.title = 'Orbit'
+    pageData.title = 'Local Dev Environments for Coding Agents'
     pageData.frontmatter.layout = 'home'
+    pageData.frontmatter.description = homepageDescription
     pageData.frontmatter.hero = {
       name: 'Orbit',
       text: 'Build the product. Let your agent run the project.',
@@ -258,10 +263,12 @@ export default defineConfig({
     const canonical = `${siteOrigin}${pagePath}`
     const alternate = counterpartPath(pageData.relativePath)
     const isTraditionalChinese = pageData.relativePath.startsWith('zh-TW/')
-    const title = !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
+    const title = pagePath === siteBase
+      ? homepageTitle
+      : !pageData.title || pageData.title === 'Orbit' ? 'Orbit' : `${pageData.title} | Orbit`
     const summary = isTraditionalChinese
-      ? '讓 coding agents 跑起並驗證專案的本機環境。'
-      : "Let coding agents run and verify your project's local environment."
+      ? traditionalChineseHomepageDescription
+      : homepageDescription
     const description = pageData.frontmatter.description || (pageData.title ? `${pageData.title}. ${summary}` : summary)
     const locale = isTraditionalChinese ? 'zh_TW' : 'en_US'
     const language = isTraditionalChinese ? 'zh-TW' : 'en'
