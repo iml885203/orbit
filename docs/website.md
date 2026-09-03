@@ -27,9 +27,9 @@ make docs-site-check
 The check fails for broken internal links or assets. It also verifies the
 landing page, stable core-document routes, locale metadata, heading anchors,
 and the local search index. A headless browser also verifies search, keyboard
-navigation, landmarks, the short-phone layout, and the homepage showcase's
-locale, motion, and visibility behavior. Preview the generated production site
-with:
+navigation, landmarks, the short-phone layout, and the homepage product demo's
+locale, one-shot scene progression, final graph, and visibility behavior.
+Preview the generated production site with:
 
 ```bash
 make docs-site-preview
@@ -42,8 +42,8 @@ those files directly and adds navigation, responsive presentation, code
 highlighting, stable heading links, and local full-site search. Update
 `website/.vitepress/config.ts` when a document needs to enter or leave the
 top-level navigation. Localized homepage presentation copy, including the hero,
-features, and workflow showcase, also lives there; keep it concise and link each
-item to its authoritative Markdown owner.
+features, and product demo, also lives there; keep it concise and link the demo
+to its authoritative Markdown owner.
 
 Links to Markdown pages should stay relative so they work on GitHub and on the
 website. Links to repository files that are not website pages should use their

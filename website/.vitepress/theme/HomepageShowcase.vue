@@ -2,26 +2,45 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useData, useRoute } from 'vitepress'
 
-type ShowcaseStage = {
-  signal: string
-  title: string
-  details: string
-  link: string
-  linkText: string
-}
-
 type ShowcaseContent = {
   label: string
   title: string
   description: string
-  persistence: string
-  stages: ShowcaseStage[]
+  requestLabel: string
+  request: string
+  agentLabel: string
+  agentResponse: string
+  dashboardLabel: string
+  environment: string
+  starting: string
+  healthy: string
+  scenes: string[]
+  relationships: string[]
+  link: string
+  linkText: string
 }
+
+const nodes = [
+  { id: 'web', name: 'web', kind: 'frontend', readyAt: 5 },
+  { id: 'api', name: 'api', kind: 'backend', readyAt: 4 },
+  { id: 'worker', name: 'worker', kind: 'backend', readyAt: 4 },
+  { id: 'postgres', name: 'postgresql', kind: 'infra', readyAt: 3 },
+  { id: 'redis', name: 'redis', kind: 'infra', readyAt: 3 },
+  { id: 'kafka', name: 'kafka', kind: 'infra', readyAt: 3 },
+]
+const edges = [
+  { id: 'web-api', readyAt: 5 },
+  { id: 'api-postgres', readyAt: 4 },
+  { id: 'api-redis', readyAt: 4 },
+  { id: 'worker-postgres', readyAt: 4 },
+  { id: 'worker-kafka', readyAt: 4 },
+]
+const finalScene = 5
 
 const { frontmatter } = useData()
 const route = useRoute()
 const root = ref<HTMLElement>()
-const activeStage = ref(0)
+const scene = ref(finalScene)
 const visible = ref(false)
 const pageVisible = ref(true)
 const reducedMotion = ref(false)
@@ -32,25 +51,33 @@ const showcase = computed(() => {
 })
 const motion = computed(() => {
   if (reducedMotion.value) return 'reduced'
-  return visible.value && pageVisible.value && showcase.value ? 'running' : 'paused'
+  if (!visible.value || !pageVisible.value || !showcase.value) return 'paused'
+  return scene.value === finalScene ? 'complete' : 'running'
 })
+const status = computed(() => showcase.value?.scenes[scene.value] ?? '')
 
-let stageTimer: ReturnType<typeof setInterval> | undefined
+let sceneTimer: ReturnType<typeof setInterval> | undefined
 let intersectionObserver: IntersectionObserver | undefined
 let motionQuery: MediaQueryList | undefined
 
-function stopStageTimer() {
-  if (!stageTimer) return
-  clearInterval(stageTimer)
-  stageTimer = undefined
+function stopSceneTimer() {
+  if (!sceneTimer) return
+  clearInterval(sceneTimer)
+  sceneTimer = undefined
 }
 
-function syncStageTimer() {
-  stopStageTimer()
-  if (motion.value !== 'running' || !showcase.value) return
-  stageTimer = setInterval(() => {
-    activeStage.value = (activeStage.value + 1) % showcase.value!.stages.length
-  }, 1800)
+function syncSceneTimer() {
+  stopSceneTimer()
+  if (motion.value !== 'running') return
+  sceneTimer = setInterval(() => {
+    if (scene.value < finalScene) scene.value += 1
+    if (scene.value === finalScene) stopSceneTimer()
+  }, 1200)
+}
+
+function resetScene() {
+  stopSceneTimer()
+  scene.value = reducedMotion.value ? finalScene : 0
 }
 
 function onVisibilityChange() {
@@ -59,9 +86,14 @@ function onVisibilityChange() {
 
 function onMotionChange(event: MediaQueryListEvent | MediaQueryList) {
   reducedMotion.value = event.matches
+  resetScene()
 }
 
-watch(motion, syncStageTimer)
+watch(motion, syncSceneTimer)
+watch(() => route.path, (current, previous) => {
+  const homepage = (path: string) => path === '/' || path === '/zh-TW/'
+  if (current !== previous && (homepage(current) || homepage(previous))) resetScene()
+})
 watch(root, (current, previous) => {
   visible.value = false
   if (previous) intersectionObserver?.unobserve(previous)
@@ -72,17 +104,18 @@ onMounted(() => {
   pageVisible.value = !document.hidden
   motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   reducedMotion.value = motionQuery.matches
+  resetScene()
   motionQuery.addEventListener('change', onMotionChange)
   intersectionObserver = new IntersectionObserver(([entry]) => {
     if (entry.target === root.value) visible.value = entry.isIntersecting
   }, { threshold: 0.05 })
   if (root.value) intersectionObserver.observe(root.value)
   document.addEventListener('visibilitychange', onVisibilityChange)
-  syncStageTimer()
+  syncSceneTimer()
 })
 
 onUnmounted(() => {
-  stopStageTimer()
+  stopSceneTimer()
   intersectionObserver?.disconnect()
   motionQuery?.removeEventListener('change', onMotionChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -94,7 +127,9 @@ onUnmounted(() => {
     v-if="showcase"
     ref="root"
     class="homepage-showcase"
+    :class="`scene-${scene}`"
     :data-motion="motion"
+    :data-scene="scene"
     aria-labelledby="homepage-showcase-title"
   >
     <div class="homepage-showcase-heading">
@@ -103,31 +138,54 @@ onUnmounted(() => {
       <p>{{ showcase.description }}</p>
     </div>
 
-    <ol class="homepage-showcase-flow">
-      <li
-        v-for="(stage, index) in showcase.stages"
-        :key="stage.title"
-        class="homepage-showcase-stage"
-        :class="{
-          'is-active': index === activeStage,
-          'is-complete': index === activeStage && index === showcase.stages.length - 1,
-        }"
-        :data-stage="index + 1"
-      >
-        <span class="homepage-showcase-rail" aria-hidden="true"><span /></span>
-        <div class="homepage-showcase-stage-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</div>
-        <div class="homepage-showcase-stage-content">
-          <code>{{ stage.signal }}</code>
-          <h3>{{ stage.title }}</h3>
-          <p>{{ stage.details }}</p>
-          <a :href="stage.link">{{ stage.linkText }} <span aria-hidden="true">→</span></a>
+    <div class="showcase-demo">
+      <div class="showcase-conversation">
+        <div class="showcase-message showcase-message-user">
+          <span>{{ showcase.requestLabel }}</span>
+          <p>{{ showcase.request }}</p>
         </div>
-      </li>
-    </ol>
+        <div class="showcase-message showcase-message-agent">
+          <span>{{ showcase.agentLabel }}</span>
+          <p>{{ showcase.agentResponse }}</p>
+        </div>
+      </div>
 
-    <p class="homepage-showcase-persistence">
-      <code>orbit.yaml</code>
-      <span>{{ showcase.persistence }}</span>
-    </p>
+      <div class="showcase-dashboard">
+        <div class="showcase-dashboard-bar">
+          <div><strong>{{ showcase.dashboardLabel }}</strong><span>{{ showcase.environment }}</span></div>
+          <span class="showcase-dashboard-health">{{ showcase.healthy }}</span>
+        </div>
+        <div class="showcase-graph">
+          <div class="showcase-edges" aria-hidden="true">
+            <span
+              v-for="edge in edges"
+              :key="edge.id"
+              class="showcase-edge"
+              :class="[`edge-${edge.id}`, { 'is-active': scene >= edge.readyAt }]"
+            />
+          </div>
+          <article
+            v-for="node in nodes"
+            :key="node.id"
+            class="showcase-node"
+            :class="[`node-${node.id}`, `kind-${node.kind}`, { 'is-healthy': scene >= node.readyAt }]"
+          >
+            <span class="showcase-node-kind">{{ node.kind }}</span>
+            <strong>{{ node.name }}</strong>
+            <span class="showcase-node-status">
+              <i aria-hidden="true" />{{ scene >= node.readyAt ? showcase.healthy : showcase.starting }}
+            </span>
+          </article>
+        </div>
+        <ul class="showcase-relationships">
+          <li v-for="relationship in showcase.relationships" :key="relationship">{{ relationship }}</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="showcase-outcome">
+      <p role="status" aria-live="polite">{{ status }}</p>
+      <a :href="showcase.link">{{ showcase.linkText }} <span aria-hidden="true">→</span></a>
+    </div>
   </section>
 </template>
