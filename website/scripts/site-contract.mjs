@@ -63,6 +63,11 @@ assert.match(home, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbi
 assert.match(home, /property="og:image:width" content="1200"/)
 assert.match(home, /property="og:image:height" content="630"/)
 assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
+assert.match(home, /<section class="homepage-showcase"/)
+assert.match(home, /From one request to verified behavior/)
+for (const route of ['local-first', 'configuration', 'tracing']) {
+  assert.match(home, new RegExp(`href="/docs/${route}"`))
+}
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
 assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
@@ -83,6 +88,11 @@ const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
 assert.ok(chineseHome.includes('閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來'), 'Traditional Chinese URL-first project onboarding prompt is missing')
+assert.match(chineseHome, /<section class="homepage-showcase"/)
+assert.match(chineseHome, /從一個需求到可驗證的行為/)
+for (const route of ['local-first', 'configuration', 'tracing']) {
+  assert.match(chineseHome, new RegExp(`href="/zh-TW/docs/${route}"`))
+}
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
 assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
@@ -105,6 +115,7 @@ for (const [page, language, counterpart] of [
   ['zh-TW/docs/local-first.html', 'zh-TW', '/docs/local-first'],
 ]) {
   const html = readFileSync(join(outputPath, page), 'utf8')
+  assert.doesNotMatch(html, /homepage-showcase/, 'showcase must render on homepages only')
   assert.match(html, new RegExp(`<html lang="${language}"`))
   assert.match(html, language === 'zh-TW'
     ? /<meta name="description" content="Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。">/

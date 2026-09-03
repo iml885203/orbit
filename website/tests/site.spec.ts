@@ -47,15 +47,19 @@ test('switches between distinct light and dark themes', async ({ page }) => {
   await page.goto('./')
 
   const appearance = page.locator('.VPSwitchAppearance').first()
+  const showcaseFlow = page.locator('.homepage-showcase-flow')
   await expect(page.locator('html')).not.toHaveClass(/dark/)
   const lightBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
+  const lightShowcaseBackground = await showcaseFlow.evaluate((flow) => getComputedStyle(flow).backgroundColor)
 
   await appearance.click()
   await expect(page.locator('html')).toHaveClass(/dark/)
   const darkBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
+  const darkShowcaseBackground = await showcaseFlow.evaluate((flow) => getComputedStyle(flow).backgroundColor)
 
   expect(lightBackground.trim()).toBe('#ffffff')
   expect(darkBackground.trim()).toBe('#0d1117')
+  expect(lightShowcaseBackground).not.toBe(darkShowcaseBackground)
 })
 
 test('uses dark mode on the first visit', async ({ page }) => {
@@ -87,6 +91,75 @@ test('renders a bounded animated hero and respects reduced motion', async ({ pag
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(hero).toHaveAttribute('data-motion', 'reduced')
+})
+
+test('renders a semantic localized showcase only on homepages', async ({ page }) => {
+  await page.goto('./')
+  const englishShowcase = page.getByRole('region', { name: 'From one request to verified behavior' })
+  await expect(englishShowcase).toBeVisible()
+  await expect(englishShowcase.locator('ol > li')).toHaveCount(5)
+  await expect(englishShowcase.getByRole('link', { name: 'See the configuration contract' })).toHaveAttribute('href', '/docs/configuration')
+  await expect(englishShowcase.getByRole('link', { name: 'Explore logs and traces' })).toHaveAttribute('href', '/docs/tracing')
+  await expect(page.locator('main, [role="main"]')).toHaveCount(1)
+
+  await englishShowcase.getByRole('link', { name: 'See the configuration contract' }).click()
+  await expect(page).toHaveURL(/\/docs\/configuration$/)
+  await expect(page.locator('.homepage-showcase')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Orbit', exact: true }).click()
+  await expect(page).toHaveURL(/:\d+\/$/)
+  await expect(englishShowcase).toHaveAttribute('data-motion', 'paused')
+  await englishShowcase.scrollIntoViewIfNeeded()
+  await expect(englishShowcase).toHaveAttribute('data-motion', 'running')
+
+  await page.goto('./zh-TW/')
+  const chineseShowcase = page.getByRole('region', { name: '從一個需求到可驗證的行為' })
+  await expect(chineseShowcase).toBeVisible()
+  await expect(chineseShowcase.locator('ol > li')).toHaveCount(5)
+  await expect(chineseShowcase.getByRole('link', { name: '查看設定契約' })).toHaveAttribute('href', '/zh-TW/docs/configuration')
+  await chineseShowcase.getByRole('link', { name: '探索 logs 與 traces' }).click()
+  await expect(page).toHaveURL(/\/zh-TW\/docs\/tracing$/)
+  await expect(page.locator('.homepage-showcase')).toHaveCount(0)
+
+  await page.goto('./')
+  await expect(page.getByRole('region', { name: 'From one request to verified behavior' })).toBeVisible()
+})
+
+test('bounds showcase motion and keeps the phone layout accessible', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('./')
+  const showcase = page.getByRole('region', { name: 'From one request to verified behavior' })
+  await showcase.scrollIntoViewIfNeeded()
+  await expect(showcase).toHaveAttribute('data-motion', 'running')
+  const initialActiveStage = await showcase.locator('.homepage-showcase-stage.is-active').getAttribute('data-stage')
+  await expect.poll(() => showcase.locator('.homepage-showcase-stage.is-active').getAttribute('data-stage')).not.toBe(initialActiveStage)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  const showcaseBox = await showcase.boundingBox()
+  expect(showcaseBox && showcaseBox.x >= 0 && showcaseBox.x + showcaseBox.width <= 320).toBe(true)
+
+  const firstLink = showcase.getByRole('link').first()
+  await firstLink.focus()
+  await expect(firstLink).toBeFocused()
+  expect(await firstLink.evaluate((link) => getComputedStyle(link).outlineStyle)).not.toBe('none')
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(showcase).toHaveAttribute('data-motion', 'paused')
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(showcase).toHaveAttribute('data-motion', 'running')
+
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await expect(showcase).toHaveAttribute('data-motion', 'paused')
+  await showcase.scrollIntoViewIfNeeded()
+  await expect(showcase).toHaveAttribute('data-motion', 'running')
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(showcase).toHaveAttribute('data-motion', 'reduced')
+  await expect(showcase.locator('.homepage-showcase-rail span').first()).toHaveCSS('display', 'none')
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {
