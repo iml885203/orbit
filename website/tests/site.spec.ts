@@ -47,7 +47,7 @@ test('switches between distinct light and dark themes', async ({ page }) => {
   await page.goto('./')
 
   const appearance = page.locator('.VPSwitchAppearance').first()
-  const showcaseFlow = page.locator('.homepage-showcase-flow')
+  const showcaseFlow = page.locator('.showcase-demo')
   await expect(page.locator('html')).not.toHaveClass(/dark/)
   const lightBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
   const lightShowcaseBackground = await showcaseFlow.evaluate((flow) => getComputedStyle(flow).backgroundColor)
@@ -93,45 +93,89 @@ test('renders a bounded animated hero and respects reduced motion', async ({ pag
   await expect(hero).toHaveAttribute('data-motion', 'reduced')
 })
 
-test('renders a semantic localized showcase only on homepages', async ({ page }) => {
+test('renders a semantic localized agent-to-dashboard showcase only on homepages', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeIntersectionObserver = window.IntersectionObserver
+    const callbacks: IntersectionObserverCallback[] = []
+    Object.assign(window, { __showcaseObserverCallbacks: callbacks })
+    window.IntersectionObserver = class extends NativeIntersectionObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super(callback, options)
+        callbacks.push(callback)
+      }
+    }
+  })
   await page.goto('./')
-  const englishShowcase = page.getByRole('region', { name: 'From one request to verified behavior' })
+  const englishShowcase = page.getByRole('region', { name: 'Ask once. See the whole environment come alive.' })
   await expect(englishShowcase).toBeVisible()
-  await expect(englishShowcase.locator('ol > li')).toHaveCount(5)
-  await expect(englishShowcase.getByRole('link', { name: 'See the configuration contract' })).toHaveAttribute('href', '/docs/configuration')
-  await expect(englishShowcase.getByRole('link', { name: 'Explore logs and traces' })).toHaveAttribute('href', '/docs/tracing')
+  await expect(englishShowcase.getByText('Read orbit.dotw.me and get this project running.')).toBeVisible()
+  await expect(englishShowcase.getByText('Orbit found the project environment. Starting its dependencies now.')).toBeAttached()
+  await expect(englishShowcase.locator('.showcase-node')).toHaveCount(6)
+  await expect(englishShowcase.getByText('API depends on PostgreSQL and Redis')).toBeAttached()
+  await expect(englishShowcase.getByRole('link', { name: 'Explore the dashboard workflow' })).toHaveAttribute('href', '/docs/tracing')
+  await expect(englishShowcase.locator('input, button, img, video, canvas, iframe')).toHaveCount(0)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __oldShowcase?: Element
+      __showcaseObserverCallback?: IntersectionObserverCallback
+      __showcaseObserverCallbacks?: IntersectionObserverCallback[]
+    }
+    state.__oldShowcase = document.querySelector('.homepage-showcase') ?? undefined
+    state.__showcaseObserverCallback = state.__showcaseObserverCallbacks?.at(-1)
+  })
 
-  await englishShowcase.getByRole('link', { name: 'See the configuration contract' }).click()
-  await expect(page).toHaveURL(/\/docs\/configuration$/)
+  await englishShowcase.getByRole('link', { name: 'Explore the dashboard workflow' }).click()
+  await expect(page).toHaveURL(/\/docs\/tracing$/)
   await expect(page.locator('.homepage-showcase')).toHaveCount(0)
   await page.getByRole('link', { name: 'Orbit', exact: true }).click()
   await expect(page).toHaveURL(/:\d+\/$/)
   await expect(englishShowcase).toHaveAttribute('data-motion', 'paused')
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __oldShowcase?: Element
+      __showcaseObserverCallback?: IntersectionObserverCallback
+    }
+    if (state.__oldShowcase && state.__showcaseObserverCallback) {
+      state.__showcaseObserverCallback([
+        { target: state.__oldShowcase, isIntersecting: true } as IntersectionObserverEntry,
+      ], {} as IntersectionObserver)
+    }
+  })
+  await expect(englishShowcase).toHaveAttribute('data-motion', 'paused')
   await englishShowcase.scrollIntoViewIfNeeded()
   await expect(englishShowcase).toHaveAttribute('data-motion', 'running')
+  await expect(englishShowcase).toHaveAttribute('data-scene', '0')
 
-  await page.goto('./zh-TW/')
-  const chineseShowcase = page.getByRole('region', { name: '從一個需求到可驗證的行為' })
+  await page.getByRole('button', { name: 'Change language' }).click()
+  await page.getByRole('banner').getByRole('link', { name: '繁體中文' }).click()
+  await expect(page).toHaveURL(/\/zh-TW\/$/)
+  const chineseShowcase = page.getByRole('region', { name: '問一次，看見整個環境依序啟動。' })
   await expect(chineseShowcase).toBeVisible()
-  await expect(chineseShowcase.locator('ol > li')).toHaveCount(5)
-  await expect(chineseShowcase.getByRole('link', { name: '查看設定契約' })).toHaveAttribute('href', '/zh-TW/docs/configuration')
-  await chineseShowcase.getByRole('link', { name: '探索 logs 與 traces' }).click()
+  await expect(chineseShowcase).toHaveAttribute('data-scene', '0')
+  await expect(chineseShowcase.getByText('閱讀 orbit.dotw.me，幫我把這個專案跑起來。')).toBeVisible()
+  await expect(chineseShowcase.getByText('API 依賴 PostgreSQL 與 Redis')).toBeAttached()
+  await chineseShowcase.getByRole('link', { name: '探索 dashboard workflow' }).click()
   await expect(page).toHaveURL(/\/zh-TW\/docs\/tracing$/)
   await expect(page.locator('.homepage-showcase')).toHaveCount(0)
 
   await page.goto('./')
-  await expect(page.getByRole('region', { name: 'From one request to verified behavior' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Ask once. See the whole environment come alive.' })).toBeVisible()
 })
 
-test('bounds showcase motion and keeps the phone layout accessible', async ({ page }) => {
+test('plays the dashboard sequence once and keeps the phone layout accessible', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
-  const showcase = page.getByRole('region', { name: 'From one request to verified behavior' })
+  const showcase = page.getByRole('region', { name: 'Ask once. See the whole environment come alive.' })
   await showcase.scrollIntoViewIfNeeded()
   await expect(showcase).toHaveAttribute('data-motion', 'running')
-  const initialActiveStage = await showcase.locator('.homepage-showcase-stage.is-active').getAttribute('data-stage')
-  await expect.poll(() => showcase.locator('.homepage-showcase-stage.is-active').getAttribute('data-stage')).not.toBe(initialActiveStage)
+  await expect(showcase).toHaveAttribute('data-scene', '0')
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveCount(0)
+  await expect(showcase).toHaveAttribute('data-scene', '1', { timeout: 2500 })
+  await expect(showcase.locator('.showcase-message-agent')).toHaveCSS('opacity', '1')
+  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '0')
+  await expect(showcase).toHaveAttribute('data-scene', '2', { timeout: 2500 })
+  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '1')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   const showcaseBox = await showcase.boundingBox()
   expect(showcaseBox && showcaseBox.x >= 0 && showcaseBox.x + showcaseBox.width <= 320).toBe(true)
@@ -154,12 +198,44 @@ test('bounds showcase motion and keeps the phone layout accessible', async ({ pa
 
   await page.evaluate(() => window.scrollTo(0, 0))
   await expect(showcase).toHaveAttribute('data-motion', 'paused')
+  const pausedScene = await showcase.getAttribute('data-scene')
+  await page.waitForTimeout(1400)
+  await expect(showcase).toHaveAttribute('data-scene', pausedScene!)
   await showcase.scrollIntoViewIfNeeded()
   await expect(showcase).toHaveAttribute('data-motion', 'running')
+  await expect(showcase).toHaveAttribute('data-scene', '3', { timeout: 2500 })
+  await expect(showcase.locator('.showcase-node.kind-infra.is-healthy')).toHaveCount(3)
+  await expect(showcase.locator('.showcase-node.kind-backend.is-healthy')).toHaveCount(0)
+  await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(0)
+  await expect(showcase).toHaveAttribute('data-scene', '4', { timeout: 2500 })
+  await expect(showcase.locator('.showcase-node.kind-backend.is-healthy')).toHaveCount(2)
+  await expect(showcase.locator('.showcase-node.kind-frontend.is-healthy')).toHaveCount(0)
+  await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(4)
+  await expect(showcase).toHaveAttribute('data-scene', '5', { timeout: 6000 })
+  await expect(showcase).toHaveAttribute('data-motion', 'complete')
+  await expect(showcase.locator('.showcase-node.is-healthy')).toHaveCount(6)
+  await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(5)
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveText('Healthy')
+  await expect(showcase.getByRole('status')).toHaveText('Environment ready · 6 nodes healthy')
+  await page.waitForTimeout(1400)
+  await expect(showcase).toHaveAttribute('data-scene', '5')
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(showcase).toHaveAttribute('data-motion', 'reduced')
-  await expect(showcase.locator('.homepage-showcase-rail span').first()).toHaveCSS('display', 'none')
+  await expect(showcase).toHaveAttribute('data-scene', '5')
+})
+
+test('shows the complete static graph when reduced motion is set before entry', async ({ browser }) => {
+  const page = await browser.newPage({ reducedMotion: 'reduce', viewport: { width: 320, height: 568 } })
+  await page.goto('./')
+  const showcase = page.getByRole('region', { name: 'Ask once. See the whole environment come alive.' })
+  await showcase.scrollIntoViewIfNeeded()
+  await expect(showcase).toHaveAttribute('data-motion', 'reduced')
+  await expect(showcase).toHaveAttribute('data-scene', '5')
+  await expect(showcase.locator('.showcase-node.is-healthy')).toHaveCount(6)
+  await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(5)
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveText('Healthy')
+  await page.close()
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

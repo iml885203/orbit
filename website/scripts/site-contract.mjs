@@ -63,11 +63,20 @@ assert.match(home, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbi
 assert.match(home, /property="og:image:width" content="1200"/)
 assert.match(home, /property="og:image:height" content="630"/)
 assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
-assert.match(home, /<section class="homepage-showcase"/)
-assert.match(home, /From one request to verified behavior/)
-for (const route of ['local-first', 'configuration', 'tracing']) {
-  assert.match(home, new RegExp(`href="/docs/${route}"`))
+assert.match(home, /<section class="homepage-showcase /)
+assert.match(home, /Ask once\. See the whole environment come alive\./)
+assert.match(home, /Read orbit\.dotw\.me and get this project running\./)
+assert.match(home, /Orbit found the project environment\. Starting its dependencies now\./)
+assert.match(home, /Environment ready · 6 nodes healthy/)
+assert.match(home, /href="\/docs\/tracing"/)
+const showcaseHtml = home.match(/<section class="homepage-showcase [\s\S]*?<\/section>/)?.[0] ?? ''
+for (const node of ['web', 'api', 'worker', 'postgresql', 'redis', 'kafka']) assert.match(showcaseHtml, new RegExp(`>${node}<`))
+for (const relationship of ['Web depends on API', 'API depends on PostgreSQL and Redis', 'Worker depends on PostgreSQL and Kafka']) {
+  assert.ok(showcaseHtml.includes(relationship), `English showcase relationship is missing: ${relationship}`)
 }
+assert.ok((showcaseHtml.match(/>Healthy</g) ?? []).length >= 6, 'every SSR graph node must expose its healthy state')
+assert.doesNotMatch(showcaseHtml, /<(?:input|button|img|video|canvas|iframe)\b/)
+assert.doesNotMatch(showcaseHtml, /homepage-showcase-stage|data-stage=/)
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
 assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
@@ -88,11 +97,17 @@ const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
 assert.ok(chineseHome.includes('閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來'), 'Traditional Chinese URL-first project onboarding prompt is missing')
-assert.match(chineseHome, /<section class="homepage-showcase"/)
-assert.match(chineseHome, /從一個需求到可驗證的行為/)
-for (const route of ['local-first', 'configuration', 'tracing']) {
-  assert.match(chineseHome, new RegExp(`href="/zh-TW/docs/${route}"`))
+assert.match(chineseHome, /<section class="homepage-showcase /)
+assert.match(chineseHome, /問一次，看見整個環境依序啟動。/)
+assert.match(chineseHome, /閱讀 orbit\.dotw\.me，幫我把這個專案跑起來。/)
+assert.match(chineseHome, /環境已就緒 · 6 個 nodes 健康/)
+assert.match(chineseHome, /href="\/zh-TW\/docs\/tracing"/)
+const chineseShowcaseHtml = chineseHome.match(/<section class="homepage-showcase [\s\S]*?<\/section>/)?.[0] ?? ''
+for (const node of ['web', 'api', 'worker', 'postgresql', 'redis', 'kafka']) assert.match(chineseShowcaseHtml, new RegExp(`>${node}<`))
+for (const relationship of ['Web 依賴 API', 'API 依賴 PostgreSQL 與 Redis', 'Worker 依賴 PostgreSQL 與 Kafka']) {
+  assert.ok(chineseShowcaseHtml.includes(relationship), `Traditional Chinese showcase relationship is missing: ${relationship}`)
 }
+assert.ok((chineseShowcaseHtml.match(/>健康</g) ?? []).length >= 6, 'every Traditional Chinese SSR graph node must expose its healthy state')
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
 assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
