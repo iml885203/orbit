@@ -252,12 +252,6 @@
   border: 1px solid var(--vp-c-success-1);
   border-radius: 999px;
   color: var(--vp-c-success-1) !important;
-  opacity: 0;
-  transition: opacity 240ms ease;
-}
-
-.scene-5 .showcase-dashboard-health {
-  opacity: 1;
 }
 
 .showcase-graph {

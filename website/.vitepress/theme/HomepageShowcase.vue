@@ -153,7 +153,7 @@ onUnmounted(() => {
       <div class="showcase-dashboard">
         <div class="showcase-dashboard-bar">
           <div><strong>{{ showcase.dashboardLabel }}</strong><span>{{ showcase.environment }}</span></div>
-          <span class="showcase-dashboard-health">{{ showcase.healthy }}</span>
+          <span v-if="scene === finalScene" class="showcase-dashboard-health">{{ showcase.healthy }}</span>
         </div>
         <div class="showcase-graph">
           <div class="showcase-edges" aria-hidden="true">

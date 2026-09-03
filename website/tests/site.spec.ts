@@ -170,6 +170,7 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   await showcase.scrollIntoViewIfNeeded()
   await expect(showcase).toHaveAttribute('data-motion', 'running')
   await expect(showcase).toHaveAttribute('data-scene', '0')
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveCount(0)
   await expect(showcase).toHaveAttribute('data-scene', '1', { timeout: 2500 })
   await expect(showcase.locator('.showcase-message-agent')).toHaveCSS('opacity', '1')
   await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '0')
@@ -214,6 +215,7 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   await expect(showcase).toHaveAttribute('data-motion', 'complete')
   await expect(showcase.locator('.showcase-node.is-healthy')).toHaveCount(6)
   await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(5)
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveText('Healthy')
   await expect(showcase.getByRole('status')).toHaveText('Environment ready · 6 nodes healthy')
   await page.waitForTimeout(1400)
   await expect(showcase).toHaveAttribute('data-scene', '5')
@@ -221,6 +223,19 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(showcase).toHaveAttribute('data-motion', 'reduced')
   await expect(showcase).toHaveAttribute('data-scene', '5')
+})
+
+test('shows the complete static graph when reduced motion is set before entry', async ({ browser }) => {
+  const page = await browser.newPage({ reducedMotion: 'reduce', viewport: { width: 320, height: 568 } })
+  await page.goto('./')
+  const showcase = page.getByRole('region', { name: 'Ask once. See the whole environment come alive.' })
+  await showcase.scrollIntoViewIfNeeded()
+  await expect(showcase).toHaveAttribute('data-motion', 'reduced')
+  await expect(showcase).toHaveAttribute('data-scene', '5')
+  await expect(showcase.locator('.showcase-node.is-healthy')).toHaveCount(6)
+  await expect(showcase.locator('.showcase-edge.is-active')).toHaveCount(5)
+  await expect(showcase.locator('.showcase-dashboard-health')).toHaveText('Healthy')
+  await page.close()
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

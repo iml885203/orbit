@@ -45,7 +45,7 @@ const traditionalChineseShowcase = {
   dashboardLabel: 'Orbit dashboard',
   environment: 'storefront · local',
   starting: '啟動中',
-  healthy: 'Healthy',
+  healthy: '健康',
   scenes: [
     '已收到需求',
     'Agent 正在準備 Orbit',

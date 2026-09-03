@@ -107,7 +107,7 @@ for (const node of ['web', 'api', 'worker', 'postgresql', 'redis', 'kafka']) ass
 for (const relationship of ['Web 依賴 API', 'API 依賴 PostgreSQL 與 Redis', 'Worker 依賴 PostgreSQL 與 Kafka']) {
   assert.ok(chineseShowcaseHtml.includes(relationship), `Traditional Chinese showcase relationship is missing: ${relationship}`)
 }
-assert.ok((chineseShowcaseHtml.match(/>Healthy</g) ?? []).length >= 6, 'every Traditional Chinese SSR graph node must expose its healthy state')
+assert.ok((chineseShowcaseHtml.match(/>健康</g) ?? []).length >= 6, 'every Traditional Chinese SSR graph node must expose its healthy state')
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
 assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
