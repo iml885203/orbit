@@ -6,6 +6,92 @@ const siteBase = '/'
 const homepageTitle = 'Orbit — Local Dev Environments for Coding Agents'
 const homepageDescription = 'Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.'
 const traditionalChineseHomepageDescription = 'Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。'
+const englishShowcase = {
+  label: 'Illustrative workflow',
+  title: 'From one request to verified behavior',
+  description: 'A sample path through Orbit. The page illustrates the sequence; your agent reports the evidence from the project it actually runs.',
+  persistence: 'The environment intent stays beside the code in orbit.yaml, ready for the team to version and reuse.',
+  stages: [
+    {
+      signal: 'orbit.dotw.me',
+      title: 'Give the agent one URL',
+      details: 'The agent starts from Orbit’s published workflow and the project already in front of it.',
+      link: '/docs/local-first',
+      linkText: 'Use Orbit with your project',
+    },
+    {
+      signal: 'orbit.yaml',
+      title: 'Describe the environment',
+      details: 'It inspects the existing setup, then reads or authors the project-local Orbit configuration before startup.',
+      link: '/docs/configuration',
+      linkText: 'See the configuration contract',
+    },
+    {
+      signal: 'doctor → up',
+      title: 'Start and check resources',
+      details: 'Orbit starts the configured services and containers, then reports readiness and health.',
+      link: '/docs/local-first',
+      linkText: 'Follow the local-first flow',
+    },
+    {
+      signal: 'graph · logs · traces',
+      title: 'Inspect connected signals',
+      details: 'The local dashboard brings dependencies, health, logs, and trace context into one workflow.',
+      link: '/docs/tracing',
+      linkText: 'Explore logs and traces',
+    },
+    {
+      signal: 'verified',
+      title: 'Prove the application works',
+      details: 'The agent exercises representative application behavior and reports what passed or still needs attention.',
+      link: '/docs/local-first',
+      linkText: 'Review the verification standard',
+    },
+  ],
+}
+const traditionalChineseShowcase = {
+  label: '示意流程',
+  title: '從一個需求到可驗證的行為',
+  description: '這是 Orbit 的範例流程；頁面只呈現順序，實際證據由 agent 從真正執行的專案回報。',
+  persistence: 'Environment intent 會留在程式碼旁的 orbit.yaml，讓團隊納入版本控制並重複使用。',
+  stages: [
+    {
+      signal: 'orbit.dotw.me',
+      title: '交給 Agent 一個網址',
+      details: 'Agent 從 Orbit 發布的 workflow 與眼前的既有專案開始。',
+      link: '/zh-TW/docs/local-first',
+      linkText: '在你的專案使用 Orbit',
+    },
+    {
+      signal: 'orbit.yaml',
+      title: '描述需要的環境',
+      details: '它先理解現有 setup，再於啟動前讀取或建立專案內的 Orbit 設定。',
+      link: '/zh-TW/docs/configuration',
+      linkText: '查看設定契約',
+    },
+    {
+      signal: 'doctor → up',
+      title: '啟動並檢查 Resources',
+      details: 'Orbit 啟動設定中的 services 與 containers，接著回報 readiness 與 health。',
+      link: '/zh-TW/docs/local-first',
+      linkText: '查看 local-first 流程',
+    },
+    {
+      signal: 'graph · logs · traces',
+      title: '檢視彼此連結的訊號',
+      details: '本機 dashboard 把 dependencies、health、logs 與 trace context 放進同一個 workflow。',
+      link: '/zh-TW/docs/tracing',
+      linkText: '探索 logs 與 traces',
+    },
+    {
+      signal: 'verified',
+      title: '證明應用程式可用',
+      details: 'Agent 執行具代表性的應用行為，回報哪些通過、哪些仍需處理。',
+      link: '/zh-TW/docs/local-first',
+      linkText: '查看驗證標準',
+    },
+  ],
+}
 const untranslatedRoutes = new Set([
   'CODE_OF_CONDUCT',
   'CONTRIBUTING',
@@ -233,6 +319,7 @@ export default defineConfig({
         { title: '留下可重現的設定', details: '成功的方法會保存在程式碼旁的 orbit.yaml，不再只存在某個人的腦中。' },
         { title: '證明應用真的可用', details: 'Orbit 回報預期環境的狀態，Agent 再驗證適合該 application 的代表性行為。' },
       ]
+      pageData.frontmatter.showcase = traditionalChineseShowcase
       return
     }
     if (pageData.relativePath !== 'index.md') return
@@ -257,6 +344,7 @@ export default defineConfig({
       { title: 'One repeatable setup', details: 'The working environment stays beside the code in orbit.yaml instead of one person’s head.' },
       { title: 'Proof that the app works', details: 'Orbit reports the intended environment; the agent verifies representative application behavior.' },
     ]
+    pageData.frontmatter.showcase = englishShowcase
   },
   transformHead({ pageData }) {
     const pagePath = publicPath(pageData.relativePath)
