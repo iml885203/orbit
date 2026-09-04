@@ -1155,7 +1155,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 		svc := &status.Resources[i]
 		if svc.Name == name {
 			if svc.URL == "" {
-				return resourceURLNotConfiguredError{name: name}
+				return resourceURLNotConfiguredError{name: name, kind: svc.Kind}
 			}
 			if svc.State != "healthy" {
 				command := "orbit status"
@@ -1177,7 +1177,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 					}},
 				)
 			}
-			return openURL(svc.URL, "service", name)
+			return openURL(svc.URL, string(svc.Kind), name)
 		}
 	}
 	return newResourceNameError(status, name, func(suggestion string) string {
@@ -1187,6 +1187,7 @@ func runOpen(_ *cobra.Command, args []string) error {
 
 type resourceURLNotConfiguredError struct {
 	name string
+	kind daemon.ResourceKind
 }
 
 func (e resourceURLNotConfiguredError) Error() string {
@@ -1198,6 +1199,9 @@ func (e resourceURLNotConfiguredError) Unwrap() error {
 }
 
 func (e resourceURLNotConfiguredError) CLIJSONHint() string {
+	if e.kind == daemon.ResourceKindContainer {
+		return "Open the dashboard to inspect this resource. Environment authors can set 'url' or name an application port 'http' or 'https'."
+	}
 	return "Open the dashboard to inspect this resource. Environment authors can add 'url' when it represents an application."
 }
 

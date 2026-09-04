@@ -56,10 +56,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 	for i := range services {
 		svc := &services[i]
 		ports := getServicePorts(cfg, svc.Name, svc.Kind)
-		url := ""
-		if svcCfg, ok := cfg.Services[svc.Name]; ok {
-			url = svcCfg.ResolveURL()
-		}
+		url := getResourceURL(cfg, svc.Name, svc.Kind)
 		startupTime := ""
 		uptime := ""
 		if !svc.StartedAt.IsZero() && !svc.HealthyAt.IsZero() {

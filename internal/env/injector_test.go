@@ -39,6 +39,43 @@ func TestBuildEnv_Redis(t *testing.T) {
 	}
 }
 
+func TestBuildEnv_ContainerApplicationURL(t *testing.T) {
+	svc := &config.Service{Name: "api", DependsOn: []string{"store-front"}}
+	containers := map[string]*config.Container{
+		"store-front": {
+			Name:  "store-front",
+			Image: "nginx:alpine",
+			URL:   "http://localhost:8080/admin",
+			Ports: map[string]config.PortDef{"http": {Host: 8080, Target: 80}},
+		},
+	}
+
+	env := BuildEnv(svc, configWithContainers(containers), nil)
+	if got := env["STORE_FRONT_URL"]; got != "http://localhost:8080/admin" {
+		t.Fatalf("STORE_FRONT_URL = %q, want canonical container endpoint", got)
+	}
+}
+
+func TestBuildEnv_ContainerApplicationURLPreservesSpecializedConnectionURL(t *testing.T) {
+	svc := &config.Service{Name: "api", DependsOn: []string{"redis"}}
+	containers := map[string]*config.Container{
+		"redis": {
+			Name:  "redis",
+			Image: "redis:7.4",
+			URL:   "http://localhost:8080/admin",
+			Ports: map[string]config.PortDef{
+				"redis": p(6379),
+				"http":  p(8080),
+			},
+		},
+	}
+
+	env := BuildEnv(svc, configWithContainers(containers), nil)
+	if got := env["REDIS_URL"]; got != "localhost:6379" {
+		t.Fatalf("REDIS_URL = %q, want specialized connection URL", got)
+	}
+}
+
 func TestBuildEnv_Kafka(t *testing.T) {
 	svc := &config.Service{
 		Name:      "api",

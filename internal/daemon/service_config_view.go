@@ -37,6 +37,19 @@ func getResourceRole(cfg *config.Config, name, kind string) string {
 	return ""
 }
 
+func getResourceURL(cfg *config.Config, name, kind string) string {
+	if kind == "container" {
+		if container, ok := cfg.Containers[name]; ok {
+			return container.ResolveURL()
+		}
+		return ""
+	}
+	if service, ok := cfg.Services[name]; ok {
+		return service.ResolveURL()
+	}
+	return ""
+}
+
 // getServicePorts returns host ports for a service/container from config.
 func getServicePorts(cfg *config.Config, name, kind string) map[string]int {
 	ports := make(map[string]int)

@@ -76,6 +76,7 @@ export interface External {
 export interface Container {
   image: string;
   icon: string;
+  url: string; // entry point URL for orbit open
   pull_policy: string; // always, if_not_present, never
   platform: string; // e.g. linux/amd64
   ports: { [key: string]: PortDef};

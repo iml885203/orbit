@@ -314,6 +314,7 @@ app_url = resources["app"]["url"]
 assert opened["data"] == {
     "url": app_url,
     "target": "service",
+    "resource": "app",
     "service": "app",
     "opened": True,
 }

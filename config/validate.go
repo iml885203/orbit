@@ -2,11 +2,8 @@ package config
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -50,7 +47,7 @@ func Validate(cfg *Config) error {
 				schemaValueSuggestion(s.Kind, "frontend", "backend", "infra"),
 			))
 		}
-		if err := validateServiceURL(name, s); err != nil {
+		if err := validateApplicationURL("service", name, s.URL, s.Ports); err != nil {
 			errs = append(errs, err.Error())
 		}
 		errs = append(errs, validateHealthCheck("service", name, s.HealthCheck, false)...)
@@ -73,6 +70,9 @@ func Validate(cfg *Config) error {
 				c.Kind,
 				schemaValueSuggestion(c.Kind, "frontend", "backend", "infra"),
 			))
+		}
+		if err := validateApplicationURL("container", name, c.URL, c.Ports); err != nil {
+			errs = append(errs, err.Error())
 		}
 		errs = append(errs, validateHealthCheck("container", name, c.HealthCheck, true)...)
 		if !isValidPullPolicy(c.PullPolicy) {
@@ -171,42 +171,6 @@ func configuredNameSuggestion(requested string, available []string) string {
 		return ""
 	}
 	return ` (did you mean "` + suggestion + `"?)`
-}
-
-func validateServiceURL(name string, service *Service) error {
-	if strings.TrimSpace(service.URL) == "" {
-		return nil
-	}
-	endpoint, err := url.Parse(service.URL)
-	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
-		return fmt.Errorf("service %q url must be an absolute http or https URL", name)
-	}
-	host := endpoint.Hostname()
-	if host != "localhost" && !net.ParseIP(host).IsLoopback() {
-		return nil
-	}
-	port, ok := service.Ports[endpoint.Scheme]
-	if !ok {
-		return nil
-	}
-	endpointPort := endpoint.Port()
-	if endpointPort == "" {
-		if endpoint.Scheme == "http" {
-			endpointPort = "80"
-		} else {
-			endpointPort = "443"
-		}
-	}
-	if endpointPort != strconv.Itoa(port.Host) {
-		return fmt.Errorf(
-			"service %q url uses port %s but ports.%s declares %d",
-			name,
-			endpointPort,
-			endpoint.Scheme,
-			port.Host,
-		)
-	}
-	return nil
 }
 
 func validateHealthCheck(resourceType, name string, check *HealthCheckConfig, container bool) []string {

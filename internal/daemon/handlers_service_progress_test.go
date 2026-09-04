@@ -81,6 +81,26 @@ func TestHandleStatus_OmitsHealthProgressWhenServiceHasNoHealthCheck(t *testing.
 	}
 }
 
+func TestHandleStatus_IncludesContainerApplicationURL(t *testing.T) {
+	cfg := &config.Config{
+		Services: map[string]*config.Service{},
+		Containers: map[string]*config.Container{
+			"store-front": {
+				Name:  "store-front",
+				Image: "nginx:alpine",
+				URL:   "http://localhost:8080/admin",
+				Ports: map[string]config.PortDef{"http": {Host: 8080, Target: 80}},
+			},
+		},
+	}
+	srv := newTestServer(t, cfg)
+
+	statuses := srv.computeStatuses(cfg)
+	if len(statuses) != 1 || statuses[0].URL != "http://localhost:8080/admin" {
+		t.Fatalf("container status = %+v, want application URL", statuses)
+	}
+}
+
 func TestHandleStatus_ReportsBufferedLogsWithoutGuessingFromLifecycleState(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{

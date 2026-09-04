@@ -402,6 +402,7 @@ assert status["recommended_actions"][0]["command"] == "orbit open demo-shop --js
 assert service["data"] == {
     "url": demo_url,
     "target": "service",
+    "resource": "demo-shop",
     "service": "demo-shop",
     "opened": True,
 }

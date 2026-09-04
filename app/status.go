@@ -377,6 +377,7 @@ func persistedRuntimeStatus(configPath string, cfg *config.Config) map[string]da
 			if definition := cfg.Containers[name]; definition != nil {
 				resource.Role = definition.ResolveKind()
 				resource.Ports = configPortNumbers(definition.Ports)
+				resource.URL = definition.ResolveURL()
 			}
 		case daemon.ResourceKindService:
 			if definition := cfg.Services[name]; definition != nil {

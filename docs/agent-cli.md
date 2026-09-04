@@ -381,13 +381,21 @@ shape for compatibility:
 | `orbit history gaps --json` | Keeps its existing history gaps payload. |
 | `orbit tunnel claim --json` | Streams Tunlease-shaped NDJSON events (`schema_version: 1`, `type` per event) — it is a live stream, not a request-response. The upstream event shape also stays available on `list`/`release` behind `-o json`. |
 
+## Open
+
+`orbit open [resource] --json` opens the target and returns one success envelope.
+The payload contains `url`, `opened`, and a `target` of `dashboard`, `service`,
+or `container`. A named target includes its name in `resource`. Service targets
+also retain the same value in `service` for backward compatibility; container
+targets do not use that legacy field.
+
 ## Passthrough Commands
 
 These commands wrap an interactive or foreign process, so `--json` (a global
 flag) is accepted but has no effect — output is the wrapped tool's raw stream:
 
 `orbit exec`, `orbit query redis|mongo|postgres`, `orbit topics *`,
-`orbit sqlserver query`, `orbit open`. `orbit seed` prints human progress on
+`orbit sqlserver query`. `orbit seed` prints human progress on
 success; only its failures use the error envelope.
 
 Do not assume every `--json` command has an envelope. Check the command-specific

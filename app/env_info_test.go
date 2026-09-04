@@ -21,6 +21,11 @@ containers:
     environment:
       POSTGRES_PASSWORD: hunter2
       POSTGRES_USER: dev
+  store-front:
+    image: nginx:alpine
+    url: http://localhost:18082/admin
+    ports:
+      http: "18082:80"
 services:
   api:
     command: python3 -m http.server 0
@@ -63,6 +68,10 @@ func TestBuildEnvInfoReportsDeclaredValuesWithoutADaemon(t *testing.T) {
 	if db.Environment != nil {
 		t.Fatalf("db environment values leaked without --show-secrets: %v", db.Environment)
 	}
+	storeFront := data.Containers["store-front"]
+	if storeFront.URL == nil || storeFront.URL.Declared != "http://localhost:18082/admin" || storeFront.URL.Observed != "" {
+		t.Fatalf("store-front url = %+v", storeFront.URL)
+	}
 	api := data.Services["api"]
 	if got := api.Ports["http"]; got.Declared != 18080 || got.Observed != 0 {
 		t.Fatalf("api http port = %+v", got)
@@ -76,6 +85,7 @@ func TestBuildEnvInfoAttachesObservedValuesFromStatus(t *testing.T) {
 	cfg, path := loadEnvInfoFixture(t)
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{Name: "db", State: "healthy", Ports: map[string]int{"pg": 15432}},
+		{Name: "store-front", State: "healthy", Ports: map[string]int{"http": 18083}, URL: "http://localhost:18083/admin"},
 		{Name: "api", State: "healthy", Ports: map[string]int{"http": 18081}, URL: "http://localhost:18081"},
 		{Name: "not-in-config", State: "healthy"},
 	}}
@@ -91,6 +101,10 @@ func TestBuildEnvInfoAttachesObservedValuesFromStatus(t *testing.T) {
 	}
 	if api.URL == nil || api.URL.Observed != "http://localhost:18081" {
 		t.Fatalf("api url = %+v", api.URL)
+	}
+	storeFront := data.Containers["store-front"]
+	if storeFront.URL == nil || storeFront.URL.Declared != "http://localhost:18082/admin" || storeFront.URL.Observed != "http://localhost:18083/admin" {
+		t.Fatalf("store-front url = %+v", storeFront.URL)
 	}
 	if _, ok := data.Containers["not-in-config"]; ok {
 		t.Fatal("a resource unknown to the config leaked into the payload")

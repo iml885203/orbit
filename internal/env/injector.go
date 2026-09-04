@@ -42,12 +42,23 @@ func dependencyEnvironment(name string, cfg *config.Config) map[string]string {
 		return nil
 	}
 	if container := cfg.Containers[name]; container != nil {
-		return buildConnectionStrings(name, container)
+		return buildContainerEndpoints(name, container)
 	}
 	if service := cfg.Services[name]; service != nil {
 		return buildServiceEndpoint(name, service)
 	}
 	return nil
+}
+
+func buildContainerEndpoints(name string, container *config.Container) map[string]string {
+	env := buildConnectionStrings(name, container)
+	if endpoint := container.ResolveURL(); endpoint != "" {
+		key := strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_URL"
+		if _, exists := env[key]; !exists {
+			env[key] = endpoint
+		}
+	}
+	return env
 }
 
 func buildServiceEndpoint(name string, service *config.Service) map[string]string {
