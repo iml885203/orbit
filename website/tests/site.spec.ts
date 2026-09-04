@@ -213,6 +213,9 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   const sendIndicator = showcase.locator('.showcase-send-indicator')
   await expect(sendIndicator).toHaveCSS('animation-name', 'showcase-send')
   await expect(sendIndicator).toHaveCSS('animation-play-state', 'paused')
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
   const pausedSendTransform = await sendIndicator.evaluate((element) => getComputedStyle(element).transform)
   await page.waitForTimeout(300)
   await expect(sendIndicator).toHaveCSS('transform', pausedSendTransform)
