@@ -202,6 +202,7 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
     document.dispatchEvent(new Event('visibilitychange'))
   })
   const sendIndicator = showcase.locator('.showcase-send-indicator')
+  await expect(sendIndicator).toHaveCSS('animation-name', 'showcase-send')
   await expect(sendIndicator).toHaveCSS('animation-play-state', 'paused')
   const pausedSendTransform = await sendIndicator.evaluate((element) => getComputedStyle(element).transform)
   await page.waitForTimeout(300)
@@ -212,15 +213,18 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   })
   await expect(showcase).toHaveAttribute('data-scene', '2', { timeout: 2500 })
   await expect(showcase.locator('.showcase-message-user')).toHaveCSS('opacity', '1')
+  await expect(showcase.locator('.showcase-message-user')).toHaveCSS('animation-name', 'showcase-reveal')
   await expect(showcase.locator('.showcase-message-agent')).toHaveCSS('opacity', '0')
   await expect(showcase).toHaveAttribute('data-scene', '3', { timeout: 2500 })
   await expect(showcase.locator('.showcase-message-agent')).toHaveCSS('opacity', '1')
+  await expect(showcase.locator('.showcase-message-agent')).toHaveCSS('animation-name', 'showcase-reveal')
   const userBox = await showcase.locator('.showcase-message-user').boundingBox()
   const agentBox = await showcase.locator('.showcase-message-agent').boundingBox()
   expect(userBox && agentBox && userBox.x + userBox.width > agentBox.x + agentBox.width).toBe(true)
   expect(userBox && agentBox && agentBox.x < userBox.x).toBe(true)
   await expect(showcase).toHaveAttribute('data-scene', '4', { timeout: 2500 })
   await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '1')
+  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('animation-name', 'showcase-reveal')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   const showcaseBox = await showcase.boundingBox()
   expect(showcaseBox && showcaseBox.x >= 0 && showcaseBox.x + showcaseBox.width <= 320).toBe(true)
@@ -256,6 +260,7 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   for (const node of await showcase.locator('.showcase-node').all()) {
     await expect(node.locator('strong')).toBeVisible()
     await expect(node.locator('.showcase-node-status')).toBeVisible()
+    await expect(node.locator('.showcase-node-kind')).toBeVisible()
     const nodeBox = await node.boundingBox()
     for (const content of [node.locator('strong'), node.locator('.showcase-node-status')]) {
       const contentBox = await content.boundingBox()
@@ -302,6 +307,10 @@ test('matches Orbit dashboard tokens and node geometry in both website themes', 
   const showcase = page.locator('.homepage-showcase')
   const dashboard = showcase.locator('.showcase-dashboard')
   const node = showcase.locator('.showcase-node.kind-frontend').first()
+  const desktopUserBox = await showcase.locator('.showcase-message-user').boundingBox()
+  const desktopAgentBox = await showcase.locator('.showcase-message-agent').boundingBox()
+  expect(desktopUserBox && desktopAgentBox && desktopUserBox.x + desktopUserBox.width > desktopAgentBox.x + desktopAgentBox.width).toBe(true)
+  expect(desktopUserBox && desktopAgentBox && desktopAgentBox.x < desktopUserBox.x).toBe(true)
   const tokens = await dashboard.evaluate((element) => {
     const style = getComputedStyle(element)
     return Object.fromEntries([
@@ -331,6 +340,35 @@ test('matches Orbit dashboard tokens and node geometry in both website themes', 
   for (const background of kindBackgrounds) expect(background).not.toBe(cardColor)
   await expect(showcase.locator('.showcase-nav-active')).toHaveCSS('color', 'rgb(88, 166, 255)')
   await expect(showcase.locator('.showcase-view-switch .is-selected')).toHaveCSS('color', 'rgb(88, 166, 255)')
+  for (const kind of ['frontend', 'backend', 'infra']) {
+    const ratios = await showcase.locator(`.showcase-node.kind-${kind}`).first().evaluate((element) => {
+      const context = document.createElement('canvas').getContext('2d')!
+      context.canvas.width = 1
+      context.canvas.height = 1
+      const rgb = (color: string) => {
+        context.clearRect(0, 0, 1, 1)
+        context.fillStyle = color
+        context.fillRect(0, 0, 1, 1)
+        return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3))
+      }
+      const luminance = (color: number[]) => {
+        const linear = color.map((channel) => {
+          const value = channel / 255
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+      }
+      const background = luminance(rgb(getComputedStyle(element).backgroundColor))
+      return ['.showcase-node-status', '.showcase-node-kind', '.showcase-node-meta'].map((selector) => {
+        const foreground = luminance(rgb(getComputedStyle(element.querySelector(selector)!).color))
+        return (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05)
+      })
+    })
+    for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5)
+  }
+  const liveBox = await showcase.locator('.showcase-live').boundingBox()
+  const webBox = await showcase.locator('.showcase-node.node-web').boundingBox()
+  expect(liveBox && webBox && (liveBox.x + liveBox.width <= webBox.x || liveBox.x >= webBox.x + webBox.width || liveBox.y + liveBox.height <= webBox.y || liveBox.y >= webBox.y + webBox.height)).toBe(true)
   await expect(showcase.locator('.showcase-edge').first().locator('path')).toHaveCSS('stroke', 'rgb(139, 148, 158)')
   await expect(showcase.locator('.showcase-flow-dot')).toHaveCount(5)
   await expect(showcase.locator('.showcase-flow-dot').first()).toHaveCSS('animation-name', 'none')

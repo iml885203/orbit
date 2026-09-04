@@ -4,6 +4,7 @@ import DefaultTheme from 'vitepress/theme'
 import HeroOrbit from './HeroOrbit.vue'
 import HomepageShowcase from './HomepageShowcase.vue'
 import './orbit.css'
+import './homepage-showcase.css'
 
 function addMobileNavigationEscape() {
   const onKeydown = (event: KeyboardEvent) => {
