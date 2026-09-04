@@ -10,7 +10,11 @@ type ShowcaseContent = {
   request: string
   agentLabel: string
   agentResponse: string
-  dashboardLabel: string
+  connected: string
+  services: string
+  graph: string
+  table: string
+  live: string
   environment: string
   starting: string
   healthy: string
@@ -21,21 +25,21 @@ type ShowcaseContent = {
 }
 
 const nodes = [
-  { id: 'web', name: 'web', kind: 'frontend', readyAt: 5 },
-  { id: 'api', name: 'api', kind: 'backend', readyAt: 4 },
-  { id: 'worker', name: 'worker', kind: 'backend', readyAt: 4 },
-  { id: 'postgres', name: 'postgresql', kind: 'infra', readyAt: 3 },
-  { id: 'redis', name: 'redis', kind: 'infra', readyAt: 3 },
-  { id: 'kafka', name: 'kafka', kind: 'infra', readyAt: 3 },
+  { id: 'web', name: 'web', kind: 'frontend', detail: 'process', port: ':5173', readyAt: 7 },
+  { id: 'api', name: 'api', kind: 'backend', detail: 'process', port: ':8080', readyAt: 6 },
+  { id: 'worker', name: 'worker', kind: 'backend', detail: 'process', port: '', readyAt: 6 },
+  { id: 'postgres', name: 'postgresql', kind: 'infra', detail: 'container', port: ':5432', readyAt: 5 },
+  { id: 'redis', name: 'redis', kind: 'infra', detail: 'container', port: ':6379', readyAt: 5 },
+  { id: 'kafka', name: 'kafka', kind: 'infra', detail: 'container', port: ':9092', readyAt: 5 },
 ]
 const edges = [
-  { id: 'web-api', readyAt: 5 },
-  { id: 'api-postgres', readyAt: 4 },
-  { id: 'api-redis', readyAt: 4 },
-  { id: 'worker-postgres', readyAt: 4 },
-  { id: 'worker-kafka', readyAt: 4 },
+  { id: 'web-api', path: 'M140 108 C140 120 140 120 140 136', readyAt: 7 },
+  { id: 'api-postgres', path: 'M140 228 C140 248 140 248 140 272', readyAt: 6 },
+  { id: 'api-redis', path: 'M140 228 C140 252 420 248 420 272', readyAt: 6 },
+  { id: 'worker-postgres', path: 'M480 228 C480 252 140 248 140 272', readyAt: 6 },
+  { id: 'worker-kafka', path: 'M480 228 C480 288 480 350 480 400', readyAt: 6 },
 ]
-const finalScene = 5
+const finalScene = 7
 
 const { frontmatter } = useData()
 const route = useRoute()
@@ -44,6 +48,7 @@ const scene = ref(finalScene)
 const visible = ref(false)
 const pageVisible = ref(true)
 const reducedMotion = ref(false)
+const typedCharacters = ref(1)
 
 const showcase = computed(() => {
   if (route.path !== '/' && route.path !== '/zh-TW/') return undefined
@@ -55,8 +60,14 @@ const motion = computed(() => {
   return scene.value === finalScene ? 'complete' : 'running'
 })
 const status = computed(() => showcase.value?.scenes[scene.value] ?? '')
+const typedRequest = computed(() => {
+  const request = showcase.value?.request ?? ''
+  if (scene.value > 0 || reducedMotion.value) return request
+  return Array.from(request).slice(0, typedCharacters.value).join('')
+})
 
 let sceneTimer: ReturnType<typeof setInterval> | undefined
+let sceneTicks = 0
 let intersectionObserver: IntersectionObserver | undefined
 let motionQuery: MediaQueryList | undefined
 
@@ -70,14 +81,29 @@ function syncSceneTimer() {
   stopSceneTimer()
   if (motion.value !== 'running') return
   sceneTimer = setInterval(() => {
+    if (scene.value === 0) {
+      const requestLength = Array.from(showcase.value?.request ?? '').length
+      if (typedCharacters.value < requestLength) {
+        typedCharacters.value = Math.min(requestLength, typedCharacters.value + 2)
+        return
+      }
+      sceneTicks += 1
+      if (sceneTicks < 5) return
+    } else {
+      sceneTicks += 1
+      if (sceneTicks < 18) return
+    }
+    sceneTicks = 0
     if (scene.value < finalScene) scene.value += 1
     if (scene.value === finalScene) stopSceneTimer()
-  }, 1200)
+  }, 60)
 }
 
 function resetScene() {
   stopSceneTimer()
+  sceneTicks = 0
   scene.value = reducedMotion.value ? finalScene : 0
+  typedCharacters.value = reducedMotion.value ? Array.from(showcase.value?.request ?? '').length : 1
 }
 
 function onVisibilityChange() {
@@ -130,6 +156,7 @@ onUnmounted(() => {
     :class="`scene-${scene}`"
     :data-motion="motion"
     :data-scene="scene"
+    :data-typed-request="typedRequest"
     aria-labelledby="homepage-showcase-title"
   >
     <div class="homepage-showcase-heading">
@@ -140,6 +167,10 @@ onUnmounted(() => {
 
     <div class="showcase-demo">
       <div class="showcase-conversation">
+        <div class="showcase-composer" aria-hidden="true">
+          <span>{{ typedRequest }}</span><i class="showcase-caret" />
+          <i class="showcase-send-indicator">↑</i>
+        </div>
         <div class="showcase-message showcase-message-user">
           <span>{{ showcase.requestLabel }}</span>
           <p>{{ showcase.request }}</p>
@@ -151,34 +182,75 @@ onUnmounted(() => {
       </div>
 
       <div class="showcase-dashboard">
-        <div class="showcase-dashboard-bar">
-          <div><strong>{{ showcase.dashboardLabel }}</strong><span>{{ showcase.environment }}</span></div>
-          <span v-if="scene === finalScene" class="showcase-dashboard-health">{{ showcase.healthy }}</span>
+        <div class="showcase-app-bar" aria-hidden="true">
+          <div class="showcase-brand">
+            <svg viewBox="0 0 96 96">
+              <path d="M75.6 36.3A30 30 0 0 1 38.2 76.4" />
+              <path d="M20.4 59.7A30 30 0 0 1 57.8 19.6" />
+              <circle class="showcase-logo-orbit" cx="27.5" cy="70" r="6.5" />
+              <circle class="showcase-logo-orbit" cx="68.5" cy="26" r="6.5" />
+              <circle class="showcase-logo-core" cx="48" cy="48" r="6" />
+            </svg>
+            <strong>Orbit</strong>
+          </div>
+          <span class="showcase-instance">local</span>
+          <span class="showcase-connected"><i />{{ showcase.connected }}</span>
+          <span class="showcase-nav-active">{{ showcase.services }}</span>
+          <span class="showcase-environment">{{ showcase.environment }}</span>
+        </div>
+        <div class="showcase-services-bar" aria-hidden="true">
+          <div><strong>{{ showcase.services }}</strong><span>6 resources</span></div>
+          <div>
+            <span v-if="scene === finalScene" class="showcase-dashboard-health">{{ showcase.healthy }}</span>
+            <div class="showcase-view-switch">
+              <span class="is-selected">{{ showcase.graph }}</span><span>{{ showcase.table }}</span>
+            </div>
+          </div>
         </div>
         <div class="showcase-graph">
-          <div class="showcase-edges" aria-hidden="true">
-            <span
+          <span class="showcase-live" aria-hidden="true"><i />{{ showcase.live }}</span>
+          <svg class="showcase-edges" viewBox="0 0 680 512" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs>
+              <marker id="showcase-edge-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+                <path d="M0 0 L8 4 L0 8 Z" />
+              </marker>
+            </defs>
+            <g
               v-for="edge in edges"
               :key="edge.id"
               class="showcase-edge"
               :class="[`edge-${edge.id}`, { 'is-active': scene >= edge.readyAt }]"
-            />
-          </div>
+            >
+              <path :d="edge.path" marker-end="url(#showcase-edge-arrow)" />
+              <circle
+                v-if="scene >= edge.readyAt"
+                class="showcase-flow-dot"
+                r="3"
+                :style="{ offsetPath: `path('${edge.path}')` }"
+              />
+            </g>
+          </svg>
           <article
             v-for="node in nodes"
             :key="node.id"
             class="showcase-node"
             :class="[`node-${node.id}`, `kind-${node.kind}`, { 'is-healthy': scene >= node.readyAt }]"
           >
-            <span class="showcase-node-kind">{{ node.kind }}</span>
-            <strong>{{ node.name }}</strong>
-            <span class="showcase-node-status">
-              <i aria-hidden="true" />{{ scene >= node.readyAt ? showcase.healthy : showcase.starting }}
-            </span>
+            <div class="showcase-node-row">
+              <span class="showcase-node-status"><i aria-hidden="true" />{{ scene >= node.readyAt ? showcase.healthy : showcase.starting }}</span>
+              <strong>{{ node.name }}</strong>
+              <span class="showcase-node-kind">{{ node.detail }}</span>
+            </div>
+            <div class="showcase-node-row showcase-node-meta">
+              <span aria-hidden="true">↻</span><span aria-hidden="true">■</span><span aria-hidden="true">▤</span>
+              <span class="showcase-node-port">{{ node.port }}</span>
+            </div>
           </article>
         </div>
         <ul class="showcase-relationships">
-          <li v-for="relationship in showcase.relationships" :key="relationship">{{ relationship }}</li>
+          <li v-for="relationship in showcase.relationships" :key="relationship">
+            <i v-if="scene === finalScene" class="showcase-relationship-marker" aria-hidden="true" />{{ relationship }}
+          </li>
         </ul>
       </div>
     </div>
