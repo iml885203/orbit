@@ -83,18 +83,44 @@ func TestRunOpenReportsContainerTarget(t *testing.T) {
 	if err := json.Unmarshal(encoded, &data); err != nil {
 		t.Fatal(err)
 	}
+	if strings.Contains(string(encoded), `"service"`) {
+		t.Fatalf("container open JSON = %s, must omit legacy service field", encoded)
+	}
 	if data.Target != "container" || data.Resource != "store-front" || data.Service != "" || data.URL != openedURL {
 		t.Fatalf("open data = %+v, opened URL = %q", data, openedURL)
 	}
 }
 
 func TestOpenJSONKeepsServiceCompatibilityAlias(t *testing.T) {
-	data := openJSONData{URL: "http://localhost:8080", Target: "service", Resource: "api", Service: "api", Opened: true}
-	encoded, err := json.Marshal(data)
+	previousJSON, previousOpenBrowser := cli.JSONOutput, openBrowser
+	cli.JSONOutput = true
+	openBrowser = func(string) error { return nil }
+	t.Cleanup(func() {
+		cli.JSONOutput = previousJSON
+		openBrowser = previousOpenBrowser
+	})
+	finishCapture := captureLifecycleProcessStreams(t)
+
+	if err := openURL("http://localhost:8080", "service", "api"); err != nil {
+		t.Fatal(err)
+	}
+	output, diagnostics := finishCapture()
+	if diagnostics != "" {
+		t.Fatalf("stderr = %q", diagnostics)
+	}
+	var envelope cli.JSONEnvelope
+	if err := json.Unmarshal(output, &envelope); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, output)
+	}
+	encoded, err := json.Marshal(envelope.Data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(encoded), `"resource":"api"`) || !strings.Contains(string(encoded), `"service":"api"`) {
-		t.Fatalf("service open JSON = %s, want resource and compatibility alias", encoded)
+	var data openJSONData
+	if err := json.Unmarshal(encoded, &data); err != nil {
+		t.Fatal(err)
+	}
+	if data.Target != "service" || data.Resource != "api" || data.Service != "api" {
+		t.Fatalf("service open data = %+v, want resource and compatibility alias", data)
 	}
 }
