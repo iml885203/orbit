@@ -183,10 +183,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 	for i := range services {
 		svc := &services[i]
 		ports := getServicePorts(cfg, svc.Name, svc.Kind)
-		url := ""
-		if svcCfg, ok := cfg.Services[svc.Name]; ok {
-			url = svcCfg.ResolveURL()
-		}
+		url := getResourceURL(cfg, svc.Name, svc.Kind)
 		startupTime := ""
 		uptime := ""
 		if !svc.StartedAt.IsZero() && !svc.HealthyAt.IsZero() {
@@ -241,7 +238,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		sidecars := getSidecarInfos(cfg, name, "container")
 		resp.Resources = append(resp.Resources, ResourceStatus{
 			Name: name, Kind: ResourceKindContainer, State: engine.StateStopped.String(),
-			Role: c.ResolveKind(), Ports: ports, Image: c.Image, Sidecars: sidecars,
+			Role: c.ResolveKind(), Ports: ports, URL: c.ResolveURL(), Image: c.Image, Sidecars: sidecars,
 		})
 	}
 	for name, svc := range cfg.Services {

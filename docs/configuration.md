@@ -258,9 +258,10 @@ containers:
 |---|---|---|---|
 | `image` | string | yes | Full image reference, supports `${VAR}` substitution |
 | `icon` | string | no | Iconify icon slug for graph dashboard infra logo, e.g. `devicon:postgresql` |
+| `url` | string | no | Canonical application URL used by `orbit open`, status, and dependency injection. Local URLs follow named-instance port resolution; omit when an `http` or `https` port identifies the endpoint |
 | `platform` | string | no | Platform override (`linux/amd64` for forced emulation) |
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port` |
+| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port`; `http`/`https` supplies the default application URL |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings. Relative bind sources resolve from the selected `orbit.yaml` directory, including values inherited from a parent; they do not use the shell's current directory |
 | `command` | list | no | Override the image's default command |
@@ -504,7 +505,7 @@ services:
 | `path` | string | no | Path to `.csproj` (dotnet) or the working directory for `command`; defaults to the directory containing `orbit.yaml` |
 | `command` | string | no | The process to run for non-dotnet types. Quotes group arguments and `$VAR` expands from the service environment; Orbit executes the result directly without an implicit shell |
 | `watch` | bool | no | dotnet only: run `dotnet watch` instead of compile-and-run (default `false`) |
-| `url` | string | no | Canonical URL; `orbit open <service>` uses this. Omit it when an `http` or `https` port already identifies the endpoint |
+| `url` | string | no | Canonical URL; `orbit open <service>` uses this. Local URLs follow named-instance port resolution; omit when an `http` or `https` port identifies the endpoint |
 | `ports` | map | no | Fixed numbers. A single port supplies an omitted health-check port; `http`/`https` also supplies the default open URL |
 | `env` | map | no | Process env. `${VAR}` substituted at load time |
 | `build_env` | map | no | dotnet only: env passed to `dotnet build`, not to the running process |

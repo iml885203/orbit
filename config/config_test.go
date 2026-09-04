@@ -62,6 +62,9 @@ services:
 	if cfg.Containers["redis"].Icon != "simple-icons:redis" {
 		t.Errorf("container icon = %q, want simple-icons:redis", cfg.Containers["redis"].Icon)
 	}
+	if got := cfg.Containers["redis"].ResolveURL(); got != "" {
+		t.Errorf("container URL = %q, want no application endpoint", got)
+	}
 	if got := cfg.Containers["redis"].HealthCheck.FailureThreshold; got != DefaultHealthFailureThreshold {
 		t.Errorf("failure threshold = %d, want %d", got, DefaultHealthFailureThreshold)
 	}
@@ -79,6 +82,97 @@ services:
 	}
 	if got := cfg.Services["api"].ResolveURL(); got != "http://localhost:5000" {
 		t.Errorf("service URL = %q, want inferred HTTP endpoint", got)
+	}
+}
+
+func TestContainerResolveURLUsesNamedApplicationEndpoint(t *testing.T) {
+	tests := []struct {
+		name  string
+		url   string
+		ports map[string]PortDef
+		want  string
+	}{
+		{
+			name: "http preferred",
+			ports: map[string]PortDef{
+				"https": {Host: 8443, Target: 443},
+				"http":  {Host: 8080, Target: 80},
+			},
+			want: "http://localhost:8080",
+		},
+		{
+			name:  "https fallback",
+			ports: map[string]PortDef{"https": {Host: 8443, Target: 443}},
+			want:  "https://localhost:8443",
+		},
+		{
+			name:  "whitespace explicit URL falls back",
+			url:   "   ",
+			ports: map[string]PortDef{"http": {Host: 8080, Target: 80}},
+			want:  "http://localhost:8080",
+		},
+		{
+			name:  "non-application alias",
+			ports: map[string]PortDef{"metrics": {Host: 9090, Target: 9090}},
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			container := &Container{URL: tt.url, Ports: tt.ports}
+			if got := container.ResolveURL(); got != tt.want {
+				t.Fatalf("container URL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestContainerResolveURLPrefersExplicitCanonicalURL(t *testing.T) {
+	container := &Container{
+		URL:   "http://localhost:8080/admin?tab=jobs#active",
+		Ports: map[string]PortDef{"http": {Host: 8080, Target: 80}},
+	}
+
+	if got := container.ResolveURL(); got != container.URL {
+		t.Fatalf("container URL = %q, want explicit %q", got, container.URL)
+	}
+}
+
+func TestLoadValidatesContainerURL(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  store-front:
+    image: nginx:alpine
+    url: http://localhost:8081/admin
+    ports:
+      http: "8080:80"
+`)
+
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), `container "store-front" url uses port 8081 but ports.http declares 8080`) {
+		t.Fatalf("Load error = %v, want container URL/port mismatch", err)
+	}
+}
+
+func TestLoadAssociatesContainerURLWithCustomPortAlias(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  store-front:
+    image: nginx:alpine
+    url: http://LOCALHOST:8080/admin
+    ports:
+      web: "8080:80"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Containers["store-front"].ResolveURL(); got != "http://LOCALHOST:8080/admin" {
+		t.Fatalf("container URL = %q, want custom-alias endpoint", got)
 	}
 }
 

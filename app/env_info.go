@@ -174,7 +174,7 @@ func buildEnvInfoJSONData(
 	}
 	for name, container := range cfg.Containers {
 		data.Containers[name] = buildEnvInfoResource(
-			container.Ports, container.Environment, "", observed[name], showSecrets,
+			container.Ports, container.Environment, container.URL, observed[name], showSecrets,
 		)
 	}
 	for name, service := range cfg.Services {

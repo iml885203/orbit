@@ -129,6 +129,7 @@ type Container struct {
 	Name        string             `yaml:"-"` // populated after load
 	Image       string             `yaml:"image"`
 	Icon        string             `yaml:"icon"`
+	URL         string             `yaml:"url"`         // entry point URL for orbit open
 	PullPolicy  string             `yaml:"pull_policy"` // always, if_not_present, never
 	Platform    string             `yaml:"platform"`    // e.g. linux/amd64
 	Ports       map[string]PortDef `yaml:"ports"`
@@ -376,24 +377,6 @@ func (s *Service) ResolveKind() string {
 		return s.Kind
 	}
 	return "backend"
-}
-
-// ResolveURL keeps one declared endpoint authoritative across open, status,
-// the dashboard, and dependency injection.
-func (s *Service) ResolveURL() string {
-	if s == nil {
-		return ""
-	}
-	if s.URL != "" {
-		return s.URL
-	}
-	if port, ok := s.Ports["http"]; ok {
-		return fmt.Sprintf("http://localhost:%d", port.Host)
-	}
-	if port, ok := s.Ports["https"]; ok {
-		return fmt.Sprintf("https://localhost:%d", port.Host)
-	}
-	return ""
 }
 
 // ResolveKind returns the explicit kind or the fallback for a container ("infra").

@@ -27,11 +27,13 @@ type openJSONData struct {
 	Opened  bool   `json:"opened"`
 }
 
+var openBrowser = platform.OpenBrowser
+
 func openURL(url, target, service string) error {
 	if !cli.JSONOutput {
 		fmt.Printf("Opening %s\n", url)
 	}
-	if err := platform.OpenBrowser(url); err != nil {
+	if err := openBrowser(url); err != nil {
 		return err
 	}
 	if cli.JSONOutput {

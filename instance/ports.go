@@ -102,7 +102,7 @@ type portRequest struct {
 
 func configPortRequests(cfg *config.Config) []portRequest {
 	requests := make([]portRequest, 0)
-	add := func(name string, ports map[string]config.PortDef, health *config.HealthCheckConfig) {
+	add := func(name string, ports map[string]config.PortDef, health *config.HealthCheckConfig, applicationURL *string) {
 		labels := make([]string, 0, len(ports))
 		for label := range ports {
 			labels = append(labels, label)
@@ -116,6 +116,9 @@ func configPortRequests(cfg *config.Config) []portRequest {
 				apply: func(assigned int) {
 					updated := ports[label]
 					ports[label] = config.PortDef{Host: assigned, Target: updated.Target}
+					if applicationURL != nil {
+						*applicationURL = config.RemapApplicationURL(*applicationURL, original.Host, assigned)
+					}
 					if health != nil && health.Port == original.Host {
 						health.Port = assigned
 					}
@@ -130,10 +133,10 @@ func configPortRequests(cfg *config.Config) []portRequest {
 	sort.Strings(containerNames)
 	for _, name := range containerNames {
 		container := cfg.Containers[name]
-		add(name, container.Ports, container.HealthCheck)
+		add(name, container.Ports, container.HealthCheck, &container.URL)
 		for i := range container.Sidecars {
 			sidecar := &container.Sidecars[i]
-			add(name+"/sidecar/"+sidecar.Name, sidecar.Ports, nil)
+			add(name+"/sidecar/"+sidecar.Name, sidecar.Ports, nil, nil)
 		}
 	}
 	serviceNames := make([]string, 0, len(cfg.Services))
@@ -143,7 +146,7 @@ func configPortRequests(cfg *config.Config) []portRequest {
 	sort.Strings(serviceNames)
 	for _, name := range serviceNames {
 		service := cfg.Services[name]
-		add(name, service.Ports, service.HealthCheck)
+		add(name, service.Ports, service.HealthCheck, &service.URL)
 	}
 	return requests
 }

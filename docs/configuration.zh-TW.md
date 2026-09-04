@@ -247,9 +247,10 @@ containers:
 |---|---|---|---|
 | `image` | string | yes | 完整 image reference，支援 `${VAR}` 變數替換 |
 | `icon` | string | no | graph dashboard infra logo 用的 Iconify icon slug，例如 `devicon:postgresql` |
+| `url` | string | no | `orbit open`、status 與 dependency injection 使用的標準 application URL。本機 URL 會套用 named instance 解析後的 port；已有 `http` 或 `https` port 時可省略 |
 | `platform` | string | no | Platform 覆寫（`linux/amd64` 用於強制 emulation） |
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用 |
+| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用；`http`/`https` 也會成為預設 application URL |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串。相對 bind source 會以選定的 `orbit.yaml` 目錄解析，包含從 parent 繼承的值；不使用 shell 的目前目錄 |
 | `command` | list | no | 覆寫 image 預設的 command |
@@ -479,7 +480,7 @@ services:
 | `path` | string | no | `.csproj` 路徑（dotnet）或 `command` 的工作目錄；預設為 `orbit.yaml` 所在目錄 |
 | `command` | string | no | 非 dotnet type 要執行的 process。引號可組成單一 argument，`$VAR` 會從 service environment 展開；Orbit 不會隱含啟動 shell |
 | `watch` | bool | no | 僅 dotnet：用 `dotnet watch` 取代編譯後執行（預設 `false`） |
-| `url` | string | no | 標準 URL；`orbit open <service>` 會用它。已有 `http` 或 `https` port 時可省略 |
+| `url` | string | no | 標準 URL；`orbit open <service>` 會用它。本機 URL 會套用 named instance 解析後的 port；已有 `http` 或 `https` port 時可省略 |
 | `ports` | map | no | 固定數字。單一 port 可供省略的 health check 使用；`http`/`https` 也會成為預設 open URL |
 | `env` | map | no | Process env。`${VAR}` 在載入時替換 |
 | `build_env` | map | no | 僅 dotnet：傳給 `dotnet build` 的 env，不進執行中的 process |
