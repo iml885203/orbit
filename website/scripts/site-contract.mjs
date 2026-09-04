@@ -77,6 +77,13 @@ for (const relationship of ['Web depends on API', 'API depends on PostgreSQL and
 assert.ok((showcaseHtml.match(/>Healthy</g) ?? []).length >= 6, 'every SSR graph node must expose its healthy state')
 assert.doesNotMatch(showcaseHtml, /<(?:input|button|img|video|canvas|iframe)\b/)
 assert.doesNotMatch(showcaseHtml, /homepage-showcase-stage|data-stage=/)
+for (const className of ['showcase-composer', 'showcase-message-user', 'showcase-message-agent', 'showcase-app-bar', 'showcase-connected', 'showcase-nav-active', 'showcase-services-bar', 'showcase-graph', 'showcase-edges']) {
+  assert.match(showcaseHtml, new RegExp(`class="[^"]*${className}`), `English showcase structure is missing: ${className}`)
+}
+assert.match(showcaseHtml, /class="showcase-composer" aria-hidden="true"/)
+assert.match(showcaseHtml, /class="showcase-app-bar" aria-hidden="true"/)
+assert.match(showcaseHtml, /class="showcase-edges"[^>]+aria-hidden="true"/)
+assert.ok((showcaseHtml.match(/<a\b/g) ?? []).length === 1, 'showcase must expose only its documentation link')
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
 assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
@@ -108,6 +115,11 @@ for (const relationship of ['Web 依賴 API', 'API 依賴 PostgreSQL 與 Redis',
   assert.ok(chineseShowcaseHtml.includes(relationship), `Traditional Chinese showcase relationship is missing: ${relationship}`)
 }
 assert.ok((chineseShowcaseHtml.match(/>健康</g) ?? []).length >= 6, 'every Traditional Chinese SSR graph node must expose its healthy state')
+for (const className of ['showcase-composer', 'showcase-message-user', 'showcase-message-agent', 'showcase-app-bar', 'showcase-connected', 'showcase-nav-active', 'showcase-services-bar', 'showcase-graph', 'showcase-edges']) {
+  assert.match(chineseShowcaseHtml, new RegExp(`class="[^"]*${className}`), `Traditional Chinese showcase structure is missing: ${className}`)
+}
+assert.doesNotMatch(chineseShowcaseHtml, /<(?:input|button|img|video|canvas|iframe)\b/)
+assert.ok((chineseShowcaseHtml.match(/<a\b/g) ?? []).length === 1, 'Traditional Chinese showcase must expose only its documentation link')
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
 assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
