@@ -83,7 +83,18 @@ func TestRunOpenReportsContainerTarget(t *testing.T) {
 	if err := json.Unmarshal(encoded, &data); err != nil {
 		t.Fatal(err)
 	}
-	if data.Target != "container" || data.Service != "store-front" || data.URL != openedURL {
+	if data.Target != "container" || data.Resource != "store-front" || data.Service != "" || data.URL != openedURL {
 		t.Fatalf("open data = %+v, opened URL = %q", data, openedURL)
+	}
+}
+
+func TestOpenJSONKeepsServiceCompatibilityAlias(t *testing.T) {
+	data := openJSONData{URL: "http://localhost:8080", Target: "service", Resource: "api", Service: "api", Opened: true}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"resource":"api"`) || !strings.Contains(string(encoded), `"service":"api"`) {
+		t.Fatalf("service open JSON = %s, want resource and compatibility alias", encoded)
 	}
 }

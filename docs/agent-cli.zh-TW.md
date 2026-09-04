@@ -253,13 +253,20 @@ Host service path 尚未解析或不存在時，會使用穩定的
 | `orbit history gaps --json` | 保持既有的 history gaps payload。 |
 | `orbit tunnel claim --json` | 串流 Tunlease 形狀的 NDJSON 事件（`schema_version: 1`、每事件一個 `type`）——它是即時串流，不是請求-回應。`list`/`release` 的上游事件形狀仍可用 `-o json` 取得。 |
 
+## Open
+
+`orbit open [resource] --json` 會開啟目標並回傳一個成功 envelope。Payload
+包含 `url`、`opened`，以及值為 `dashboard`、`service` 或 `container` 的
+`target`。指定資源時，`resource` 會包含其名稱。為了向後相容，service target
+也會在 `service` 保留相同名稱；container target 不使用這個 legacy 欄位。
+
 ## Passthrough Commands
 
 以下指令包裝互動式或外部程式，所以（全域的）`--json` 會被接受但沒有效果——
 輸出就是被包裝工具的原始串流：
 
 `orbit exec`、`orbit query redis|mongo|postgres`、`orbit topics *`、
-`orbit sqlserver query`、`orbit open`。`orbit seed` 成功時印人類可讀進度；
+`orbit sqlserver query`。`orbit seed` 成功時印人類可讀進度；
 只有失敗會用錯誤 envelope。
 
 不要預設每一個 `--json` 指令都有 envelope。解析前請先確認該指令各自的 contract。
