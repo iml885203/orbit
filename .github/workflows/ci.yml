@@ -92,7 +92,7 @@ jobs:
         run: make test-journeys
       - name: Upload installed-user journey diagnostics
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: installed-user-journey-diagnostics-${{ github.run_attempt }}
           path: artifacts/installed-user-journeys
