@@ -121,6 +121,12 @@
   border-color: var(--vp-c-brand-1);
 }
 
+@media (min-width: 641px) and (max-width: 1050px) {
+  .hero-orbit {
+    width: min(340px, 34vw);
+  }
+}
+
 @media (max-width: 640px) {
   .VPHomeHero {
     padding-top: 40px !important;

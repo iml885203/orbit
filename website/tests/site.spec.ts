@@ -197,6 +197,15 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   await expect(showcase).toHaveAttribute('data-typed-request', 'Read orbit.dotw.me and get this project running.')
   await expect(showcase.locator('.showcase-message-user')).toHaveCSS('opacity', '0')
   await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '0')
+  const initialConversationBox = await showcase.locator('.showcase-conversation').boundingBox()
+  const initialDemoBox = await showcase.locator('.showcase-demo').boundingBox()
+  const initialDashboardBox = await showcase.locator('.showcase-dashboard').boundingBox()
+  expect(initialConversationBox && initialDemoBox && initialConversationBox.width >= initialDemoBox.width - 2).toBe(true)
+  expect(initialConversationBox && initialDemoBox && initialConversationBox.height >= initialDemoBox.height - 4).toBe(true)
+  expect(initialDemoBox?.height).toBeGreaterThanOrEqual(458)
+  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('max-height', '0px')
+  expect(initialDashboardBox?.height).toBeLessThanOrEqual(1)
+  await expect(showcase.locator('.showcase-resource-count')).toBeHidden()
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true })
     document.dispatchEvent(new Event('visibilitychange'))
@@ -224,7 +233,9 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   expect(userBox && agentBox && agentBox.x < userBox.x).toBe(true)
   await expect(showcase).toHaveAttribute('data-scene', '4', { timeout: 2500 })
   await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('opacity', '1')
-  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('animation-name', 'showcase-reveal')
+  await expect(showcase.locator('.showcase-dashboard')).toHaveCSS('animation-name', 'none')
+  const expandedDashboardBox = await showcase.locator('.showcase-dashboard').boundingBox()
+  expect(expandedDashboardBox?.height).toBeGreaterThan(500)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   const showcaseBox = await showcase.boundingBox()
   expect(showcaseBox && showcaseBox.x >= 0 && showcaseBox.x + showcaseBox.width <= 320).toBe(true)
@@ -260,7 +271,7 @@ test('plays the dashboard sequence once and keeps the phone layout accessible', 
   for (const node of await showcase.locator('.showcase-node').all()) {
     await expect(node.locator('strong')).toBeVisible()
     await expect(node.locator('.showcase-node-status')).toBeVisible()
-    await expect(node.locator('.showcase-node-kind')).toBeVisible()
+    if (await node.locator('.showcase-node-kind').count()) await expect(node.locator('.showcase-node-kind')).toBeVisible()
     const nodeBox = await node.boundingBox()
     for (const content of [node.locator('strong'), node.locator('.showcase-node-status')]) {
       const contentBox = await content.boundingBox()
@@ -359,7 +370,10 @@ test('matches Orbit dashboard tokens and node geometry in both website themes', 
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
       }
       const background = luminance(rgb(getComputedStyle(element).backgroundColor))
-      return ['.showcase-node-status', '.showcase-node-kind', '.showcase-node-meta'].map((selector) => {
+      const selectors = ['.showcase-node-status', '.showcase-node-meta']
+      if (element.querySelector('.showcase-node-kind')) selectors.push('.showcase-node-kind')
+      if (element.querySelector('.showcase-node-infra-icon')) selectors.push('.showcase-node-infra-icon')
+      return selectors.map((selector) => {
         const foreground = luminance(rgb(getComputedStyle(element.querySelector(selector)!).color))
         return (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05)
       })
@@ -373,6 +387,8 @@ test('matches Orbit dashboard tokens and node geometry in both website themes', 
   await expect(showcase.locator('.showcase-flow-dot')).toHaveCount(5)
   await expect(showcase.locator('.showcase-flow-dot').first()).toHaveCSS('animation-name', 'none')
   await expect(showcase.locator('.showcase-node-meta > span').first()).toHaveAttribute('aria-hidden', 'true')
+  await expect(showcase.locator('.showcase-node-actions svg').first()).toHaveCSS('width', '15px')
+  await expect(showcase.locator('.showcase-node-infra-icon')).toHaveCount(3)
   const lightBackground = await dashboard.evaluate((element) => getComputedStyle(element).backgroundColor)
   await page.getByRole('switch', { name: 'Switch to light theme' }).click()
   await expect(dashboard).toHaveCSS('background-color', lightBackground)
@@ -407,6 +423,14 @@ test('reflows the dashboard without clipping at an intermediate viewport', async
     expect(box && graphBox && box.x >= graphBox.x && box.x + box.width <= graphBox.x + graphBox.width).toBe(true)
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(768)
+
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const dashboardWidths = await page.locator('.showcase-dashboard').evaluate((element) => ({
+    client: element.clientWidth,
+    scroll: element.scrollWidth,
+  }))
+  expect(dashboardWidths.scroll).toBeLessThanOrEqual(dashboardWidths.client)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1024)
 })
 
 test('opens search on the first click and uses the active locale index', async ({ page }) => {

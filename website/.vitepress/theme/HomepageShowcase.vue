@@ -25,12 +25,12 @@ type ShowcaseContent = {
 }
 
 const nodes = [
-  { id: 'web', name: 'web', kind: 'frontend', detail: 'process', port: ':5173', readyAt: 7 },
-  { id: 'api', name: 'api', kind: 'backend', detail: 'process', port: ':8080', readyAt: 6 },
-  { id: 'worker', name: 'worker', kind: 'backend', detail: 'process', port: '', readyAt: 6 },
-  { id: 'postgres', name: 'postgresql', kind: 'infra', detail: 'container', port: ':5432', readyAt: 5 },
-  { id: 'redis', name: 'redis', kind: 'infra', detail: 'container', port: ':6379', readyAt: 5 },
-  { id: 'kafka', name: 'kafka', kind: 'infra', detail: 'container', port: ':9092', readyAt: 5 },
+  { id: 'web', name: 'web', kind: 'frontend', detail: 'dev', port: ':5173', readyAt: 7 },
+  { id: 'api', name: 'api', kind: 'backend', detail: 'dev', port: ':8080', readyAt: 6 },
+  { id: 'worker', name: 'worker', kind: 'backend', detail: 'dev', port: '', readyAt: 6 },
+  { id: 'postgres', name: 'postgresql', kind: 'infra', detail: '', port: ':5432', readyAt: 5 },
+  { id: 'redis', name: 'redis', kind: 'infra', detail: '', port: ':6379', readyAt: 5 },
+  { id: 'kafka', name: 'kafka', kind: 'infra', detail: '', port: ':9092', readyAt: 5 },
 ]
 const edges = [
   { id: 'web-api', path: 'M140 108 C140 120 140 120 140 136', readyAt: 7 },
@@ -199,7 +199,7 @@ onUnmounted(() => {
           <span class="showcase-environment">{{ showcase.environment }}</span>
         </div>
         <div class="showcase-services-bar" aria-hidden="true">
-          <div><strong>{{ showcase.services }}</strong><span>6 resources</span></div>
+          <div><strong>{{ showcase.services }}</strong><span class="showcase-resource-count">6 resources</span></div>
           <div>
             <span v-if="scene === finalScene" class="showcase-dashboard-health">{{ showcase.healthy }}</span>
             <div class="showcase-view-switch">
@@ -238,11 +238,19 @@ onUnmounted(() => {
           >
             <div class="showcase-node-row">
               <span class="showcase-node-status"><i aria-hidden="true" />{{ scene >= node.readyAt ? showcase.healthy : showcase.starting }}</span>
+              <svg v-if="node.kind === 'infra'" class="showcase-node-infra-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2.8v2.1m0 14.2v2.1M4.1 7.4l1.8 1m12.2 7.2 1.8 1M4.1 16.6l1.8-1m12.2-7.2 1.8-1M7.4 4.1l1 1.8m7.2 12.2 1 1.8M7.4 19.9l1-1.8m7.2-12.2 1-1.8" />
+                <circle cx="12" cy="12" r="4.2" />
+              </svg>
               <strong>{{ node.name }}</strong>
-              <span class="showcase-node-kind">{{ node.detail }}</span>
+              <span v-if="node.detail" class="showcase-node-kind">{{ node.detail }}</span>
             </div>
             <div class="showcase-node-row showcase-node-meta">
-              <span aria-hidden="true">↻</span><span aria-hidden="true">■</span><span aria-hidden="true">▤</span>
+              <span class="showcase-node-actions" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></svg>
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
+                <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4" /></svg>
+              </span>
               <span class="showcase-node-port">{{ node.port }}</span>
             </div>
           </article>
