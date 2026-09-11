@@ -8,9 +8,11 @@ Orbit 讓 coding agents 能可靠地跑起專案需要的本機環境、理解�
 [官方網站](https://orbit.dotw.me/) · [文件](#文件) ·
 [English](https://orbit.dotw.me/)
 
-[![Orbit — 專心打造產品，讓 agent 啟動開發環境。](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/media/orbit-launch.mp4)
+<!-- orbit-readme-demo:start -->
+[![Orbit — 專心打造產品，讓 agent 啟動開發環境。](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/zh-TW/#demo)
 
-[觀看完整展示 · 34 秒](https://orbit.dotw.me/media/orbit-launch.mp4)
+[觀看完整展示 · 34 秒](https://orbit.dotw.me/zh-TW/#demo)
+<!-- orbit-readme-demo:end -->
 
 ## 開始使用
 

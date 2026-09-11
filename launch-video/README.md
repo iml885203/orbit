@@ -18,11 +18,18 @@ npm run render
 
 Output: `out/orbit-launch.mp4`. `npm run poster` creates a closing poster.
 Both README languages use the static `../docs/assets/orbit-showcase.png`
-cover, linking to the full film at `https://orbit.dotw.me/media/orbit-launch.mp4`.
-After rendering, copy `out/poster.png` to that cover path and
+cover, linking to the localized homepage’s `#demo` section.
+To refresh the product cover, copy `public/dashboard.png` to that cover path and
 `out/orbit-launch.mp4` to `../docs/assets/orbit-launch.mp4`.
 The website build publishes the film at its stable media URL. There is no
 looping GIF or mid-film excerpt in the README.
+
+The inline player prefers WebM, with MP4 as a fallback. Refresh its web copy:
+
+```sh
+ffmpeg -i ../docs/assets/orbit-launch.mp4 -c:v libvpx-vp9 -crf 33 -b:v 0 -cpu-used 6 -row-mt 1 -r 30 -c:a libopus -b:a 96k ../docs/assets/orbit-launch.webm
+```
+
 All motion and synthesized audio are deterministic. This is an illustrated
 workflow, not a recording or a startup-time benchmark. Orbit reports state
 and diagnostics; the coding agent owns configuration fixes. The example uses

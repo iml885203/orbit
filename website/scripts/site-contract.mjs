@@ -23,6 +23,8 @@ const requiredPages = [
   '.well-known/ai-catalog.json',
   'orbit-social-card.png',
   'media/orbit-launch.mp4',
+  'media/orbit-launch.webm',
+  'media/orbit-showcase.png',
 ]
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -64,27 +66,12 @@ assert.match(home, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbi
 assert.match(home, /property="og:image:width" content="1200"/)
 assert.match(home, /property="og:image:height" content="630"/)
 assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
-assert.match(home, /<section class="homepage-showcase /)
-assert.match(home, /Ask once\. See the whole environment come alive\./)
-assert.match(home, /Read orbit\.dotw\.me and get this project running\./)
-assert.match(home, /Orbit found the project environment\. Starting its dependencies now\./)
-assert.match(home, /Environment ready · 6 nodes healthy/)
-assert.match(home, /href="\/docs\/tracing"/)
-const showcaseHtml = home.match(/<section class="homepage-showcase [\s\S]*?<\/section>/)?.[0] ?? ''
-for (const node of ['web', 'api', 'worker', 'postgresql', 'redis', 'kafka']) assert.match(showcaseHtml, new RegExp(`>${node}<`))
-for (const relationship of ['Web depends on API', 'API depends on PostgreSQL and Redis', 'Worker depends on PostgreSQL and Kafka']) {
-  assert.ok(showcaseHtml.includes(relationship), `English showcase relationship is missing: ${relationship}`)
-}
-assert.ok((showcaseHtml.match(/>Healthy</g) ?? []).length >= 6, 'every SSR graph node must expose its healthy state')
-assert.doesNotMatch(showcaseHtml, /<(?:input|button|img|video|canvas|iframe)\b/)
-assert.doesNotMatch(showcaseHtml, /homepage-showcase-stage|data-stage=/)
-for (const className of ['showcase-composer', 'showcase-message-user', 'showcase-message-agent', 'showcase-app-bar', 'showcase-connected', 'showcase-nav-active', 'showcase-services-bar', 'showcase-graph', 'showcase-edges']) {
-  assert.match(showcaseHtml, new RegExp(`class="[^"]*${className}`), `English showcase structure is missing: ${className}`)
-}
-assert.match(showcaseHtml, /class="showcase-composer" aria-hidden="true"/)
-assert.match(showcaseHtml, /class="showcase-app-bar" aria-hidden="true"/)
-assert.match(showcaseHtml, /class="showcase-edges"[^>]+aria-hidden="true"/)
-assert.ok((showcaseHtml.match(/<a\b/g) ?? []).length === 1, 'showcase must expose only its documentation link')
+assert.match(home, /id="demo"/)
+assert.match(home, /src="\/media\/orbit-launch.webm"/)
+assert.doesNotMatch(home, /showcase-node|showcase-composer/)
+assert.equal((home.match(/<video\b/g) ?? []).length, 1)
+assert.doesNotMatch(home, /href="[^"]*\.mp4"/)
+assert.doesNotMatch(home, /orbit-readme-demo|Watch the full demo/)
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
 assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
@@ -105,22 +92,11 @@ const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
 assert.ok(chineseHome.includes('閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來'), 'Traditional Chinese URL-first project onboarding prompt is missing')
-assert.match(chineseHome, /<section class="homepage-showcase /)
+assert.match(chineseHome, /id="demo"/)
 assert.match(chineseHome, /問一次，看見整個環境依序啟動。/)
-assert.match(chineseHome, /閱讀 orbit\.dotw\.me，幫我把這個專案跑起來。/)
-assert.match(chineseHome, /環境已就緒 · 6 個 nodes 健康/)
-assert.match(chineseHome, /href="\/zh-TW\/docs\/tracing"/)
-const chineseShowcaseHtml = chineseHome.match(/<section class="homepage-showcase [\s\S]*?<\/section>/)?.[0] ?? ''
-for (const node of ['web', 'api', 'worker', 'postgresql', 'redis', 'kafka']) assert.match(chineseShowcaseHtml, new RegExp(`>${node}<`))
-for (const relationship of ['Web 依賴 API', 'API 依賴 PostgreSQL 與 Redis', 'Worker 依賴 PostgreSQL 與 Kafka']) {
-  assert.ok(chineseShowcaseHtml.includes(relationship), `Traditional Chinese showcase relationship is missing: ${relationship}`)
-}
-assert.ok((chineseShowcaseHtml.match(/>健康</g) ?? []).length >= 6, 'every Traditional Chinese SSR graph node must expose its healthy state')
-for (const className of ['showcase-composer', 'showcase-message-user', 'showcase-message-agent', 'showcase-app-bar', 'showcase-connected', 'showcase-nav-active', 'showcase-services-bar', 'showcase-graph', 'showcase-edges']) {
-  assert.match(chineseShowcaseHtml, new RegExp(`class="[^"]*${className}`), `Traditional Chinese showcase structure is missing: ${className}`)
-}
-assert.doesNotMatch(chineseShowcaseHtml, /<(?:input|button|img|video|canvas|iframe)\b/)
-assert.ok((chineseShowcaseHtml.match(/<a\b/g) ?? []).length === 1, 'Traditional Chinese showcase must expose only its documentation link')
+assert.equal((chineseHome.match(/<video\b/g) ?? []).length, 1)
+assert.doesNotMatch(chineseHome, /showcase-node|showcase-composer|觀看完整展示|orbit-readme-demo/)
+assert.doesNotMatch(chineseHome, /href="[^"]*\.mp4"/)
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
 assert.deepEqual(readFileSync(join(outputPath, 'agent/SKILL.md')), skillSource, 'published agent skill must exactly mirror its source')
@@ -185,7 +161,7 @@ function outputFileFor(url) {
   const relativePath = decodeURIComponent(url.pathname.slice(baseURL.pathname.length))
   if (!relativePath) return join(outputPath, 'index.html')
   if (relativePath.endsWith('/')) return join(outputPath, relativePath, 'index.html')
-  return /\.(?:css|gif|gz|ico|jpe?g|js|json|md|mp4|png|svg|txt|webp|woff2?|xml)$/.test(relativePath)
+  return /\.(?:css|gif|gz|ico|jpe?g|js|json|md|mp4|png|svg|txt|webm|webp|woff2?|xml)$/.test(relativePath)
     ? join(outputPath, relativePath)
     : join(outputPath, `${relativePath}.html`)
 }

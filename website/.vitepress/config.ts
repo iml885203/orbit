@@ -6,74 +6,6 @@ const siteBase = '/'
 const homepageTitle = 'Orbit — Local Dev Environments for Coding Agents'
 const homepageDescription = 'Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.'
 const traditionalChineseHomepageDescription = 'Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。'
-const englishShowcase = {
-  label: 'Illustrative product demo',
-  title: 'Ask once. See the whole environment come alive.',
-  description: 'A simulated agent conversation opens into Orbit’s dashboard as each dependency becomes ready.',
-  requestLabel: 'You',
-  request: 'Read orbit.dotw.me and get this project running.',
-  agentLabel: 'Agent',
-  agentResponse: 'Orbit found the project environment. Starting its dependencies now.',
-  connected: 'Connected',
-  services: 'Services',
-  graph: 'Graph',
-  table: 'Table',
-  live: 'Live',
-  environment: 'storefront · local',
-  starting: 'Starting',
-  healthy: 'Healthy',
-  scenes: [
-    'Composing request',
-    'Request ready to send',
-    'Request sent',
-    'Agent is preparing Orbit',
-    'Dashboard opened · dependencies discovered',
-    'Infrastructure dependencies are healthy',
-    'Application services are healthy',
-    'Environment ready · 6 nodes healthy',
-  ],
-  relationships: [
-    'Web depends on API',
-    'API depends on PostgreSQL and Redis',
-    'Worker depends on PostgreSQL and Kafka',
-  ],
-  link: '/docs/tracing',
-  linkText: 'Explore the dashboard workflow',
-}
-const traditionalChineseShowcase = {
-  label: '產品操作示意',
-  title: '問一次，看見整個環境依序啟動。',
-  description: '模擬 Agent 對話會展開成 Orbit dashboard，呈現每個 dependency 進入 ready 狀態。',
-  requestLabel: '你',
-  request: '閱讀 orbit.dotw.me，幫我把這個專案跑起來。',
-  agentLabel: 'Agent',
-  agentResponse: 'Orbit 已找到專案環境，正在啟動所需的 dependencies。',
-  connected: '已連線',
-  services: 'Services',
-  graph: 'Graph',
-  table: 'Table',
-  live: 'Live',
-  environment: 'storefront · local',
-  starting: '啟動中',
-  healthy: '健康',
-  scenes: [
-    '正在輸入需求',
-    '需求已準備送出',
-    '需求已送出',
-    'Agent 正在準備 Orbit',
-    '已開啟 Dashboard · 找到 dependencies',
-    'Infrastructure dependencies 已健康',
-    'Application services 已健康',
-    '環境已就緒 · 6 個 nodes 健康',
-  ],
-  relationships: [
-    'Web 依賴 API',
-    'API 依賴 PostgreSQL 與 Redis',
-    'Worker 依賴 PostgreSQL 與 Kafka',
-  ],
-  link: '/zh-TW/docs/tracing',
-  linkText: '探索 dashboard workflow',
-}
 const untranslatedRoutes = new Set([
   'CODE_OF_CONDUCT',
   'CONTRIBUTING',
@@ -166,6 +98,9 @@ export default defineConfig({
   markdown: {
     html: false,
     config(markdown) {
+      markdown.core.ruler.before('block', 'readme-demo', (state) => {
+        state.src = state.src.replace(/<!-- orbit-readme-demo:start -->[\s\S]*?<!-- orbit-readme-demo:end -->/g, '')
+      })
       const renderCode = markdown.renderer.rules.code_inline
       markdown.renderer.rules.code_inline = (tokens, index, options, env, self) => {
         const rendered = renderCode
@@ -201,9 +136,6 @@ export default defineConfig({
         const src = srcIndex >= 0 ? tokens[index].attrs?.[srcIndex]?.[1] : undefined
         if (env.relativePath === 'zh-TW/index.md' && src === 'ui/public/orbit-logo-badge.svg') {
           tokens[index].attrs![srcIndex][1] = '/orbit-logo-badge.svg'
-        }
-        if (env.relativePath === 'zh-TW/index.md' && src === 'docs/assets/orbit-showcase.png') {
-          tokens[index].attrs![srcIndex][1] = '../docs/assets/orbit-showcase.png'
         }
         if (env.relativePath === 'zh-TW/index.md' && src === 'docs/assets/orbit-demo-dashboard.jpg') {
           tokens[index].attrs![srcIndex][1] = 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg'
@@ -305,7 +237,6 @@ export default defineConfig({
         { title: '留下可重現的設定', details: '成功的方法會保存在程式碼旁的 orbit.yaml，不再只存在某個人的腦中。' },
         { title: '證明應用真的可用', details: 'Orbit 回報預期環境的狀態，Agent 再驗證適合該 application 的代表性行為。' },
       ]
-      pageData.frontmatter.showcase = traditionalChineseShowcase
       return
     }
     if (pageData.relativePath !== 'index.md') return
@@ -330,7 +261,6 @@ export default defineConfig({
       { title: 'One repeatable setup', details: 'The working environment stays beside the code in orbit.yaml instead of one person’s head.' },
       { title: 'Proof that the app works', details: 'Orbit reports the intended environment; the agent verifies representative application behavior.' },
     ]
-    pageData.frontmatter.showcase = englishShowcase
   },
   transformHead({ pageData }) {
     const pagePath = publicPath(pageData.relativePath)

@@ -1,271 +1,96 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useData, useRoute } from 'vitepress'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { useRoute } from 'vitepress'
 
-type ShowcaseContent = {
-  label: string
-  title: string
-  description: string
-  requestLabel: string
-  request: string
-  agentLabel: string
-  agentResponse: string
-  connected: string
-  services: string
-  graph: string
-  table: string
-  live: string
-  environment: string
-  starting: string
-  healthy: string
-  scenes: string[]
-  relationships: string[]
-  link: string
-  linkText: string
-}
-
-const nodes = [
-  { id: 'web', name: 'web', kind: 'frontend', detail: 'dev', port: ':5173', readyAt: 7 },
-  { id: 'api', name: 'api', kind: 'backend', detail: 'dev', port: ':8080', readyAt: 6 },
-  { id: 'worker', name: 'worker', kind: 'backend', detail: 'dev', port: '', readyAt: 6 },
-  { id: 'postgres', name: 'postgresql', kind: 'infra', detail: '', port: ':5432', readyAt: 5 },
-  { id: 'redis', name: 'redis', kind: 'infra', detail: '', port: ':6379', readyAt: 5 },
-  { id: 'kafka', name: 'kafka', kind: 'infra', detail: '', port: ':9092', readyAt: 5 },
-]
-const edges = [
-  { id: 'web-api', path: 'M140 108 C140 120 140 120 140 136', readyAt: 7 },
-  { id: 'api-postgres', path: 'M140 228 C140 248 140 248 140 272', readyAt: 6 },
-  { id: 'api-redis', path: 'M140 228 C140 252 420 248 420 272', readyAt: 6 },
-  { id: 'worker-postgres', path: 'M480 228 C480 252 140 248 140 272', readyAt: 6 },
-  { id: 'worker-kafka', path: 'M480 228 C480 288 480 350 480 400', readyAt: 6 },
-]
-const finalScene = 7
-
-const { frontmatter } = useData()
 const route = useRoute()
+const isHome = computed(() => route.path === '/' || route.path === '/zh-TW/')
+const chinese = computed(() => route.path.startsWith('/zh-TW/'))
 const root = ref<HTMLElement>()
-const scene = ref(finalScene)
-const visible = ref(false)
-const pageVisible = ref(true)
-const reducedMotion = ref(false)
-const typedCharacters = ref(1)
-
-const showcase = computed(() => {
-  if (route.path !== '/' && route.path !== '/zh-TW/') return undefined
-  return frontmatter.value.showcase as ShowcaseContent | undefined
-})
-const motion = computed(() => {
-  if (reducedMotion.value) return 'reduced'
-  if (!visible.value || !pageVisible.value || !showcase.value) return 'paused'
-  return scene.value === finalScene ? 'complete' : 'running'
-})
-const status = computed(() => showcase.value?.scenes[scene.value] ?? '')
-const typedRequest = computed(() => {
-  const request = showcase.value?.request ?? ''
-  if (scene.value > 0 || reducedMotion.value) return request
-  return Array.from(request).slice(0, typedCharacters.value).join('')
-})
-
-let sceneTimer: ReturnType<typeof setInterval> | undefined
-let sceneTicks = 0
-let intersectionObserver: IntersectionObserver | undefined
+const video = ref<HTMLVideoElement>()
+const failed = ref(false)
+const format = ref('webm')
+let observer: IntersectionObserver | undefined
 let motionQuery: MediaQueryList | undefined
+let visible = false
+let userPaused = false
 
-function stopSceneTimer() {
-  if (!sceneTimer) return
-  clearInterval(sceneTimer)
-  sceneTimer = undefined
-}
-
-function syncSceneTimer() {
-  stopSceneTimer()
-  if (motion.value !== 'running') return
-  sceneTimer = setInterval(() => {
-    if (scene.value === 0) {
-      const requestLength = Array.from(showcase.value?.request ?? '').length
-      if (typedCharacters.value < requestLength) {
-        typedCharacters.value = Math.min(requestLength, typedCharacters.value + 2)
-        return
-      }
-      sceneTicks += 1
-      if (sceneTicks < 5) return
-    } else {
-      sceneTicks += 1
-      if (sceneTicks < 18) return
+async function play() {
+  if (!video.value || failed.value) return
+  const requestedFormat = format.value
+  try { await video.value.play() } catch (error) {
+    if (requestedFormat !== format.value) return
+    if (error instanceof DOMException && ['NotAllowedError', 'AbortError'].includes(error.name)) return
+    if (error instanceof DOMException && error.name === 'NotSupportedError') {
+      await onMediaError()
+      return
     }
-    sceneTicks = 0
-    if (scene.value < finalScene) scene.value += 1
-    if (scene.value === finalScene) stopSceneTimer()
-  }, 60)
+    failed.value = true
+  }
 }
-
-function resetScene() {
-  stopSceneTimer()
-  sceneTicks = 0
-  scene.value = reducedMotion.value ? finalScene : 0
-  typedCharacters.value = reducedMotion.value ? Array.from(showcase.value?.request ?? '').length : 1
+function syncPlayback() {
+  if (!video.value) return
+  if (!visible || document.hidden || motionQuery?.matches) video.value.pause()
+  else if (!userPaused && !video.value.ended) void play()
 }
-
-function onVisibilityChange() {
-  pageVisible.value = !document.hidden
+function onPause() {
+  if (visible && !document.hidden && !motionQuery?.matches && !video.value?.ended) userPaused = true
 }
-
-function onMotionChange(event: MediaQueryListEvent | MediaQueryList) {
-  reducedMotion.value = event.matches
-  resetScene()
+function replay() {
+  if (!video.value) return
+  userPaused = false
+  if (failed.value) { failed.value = false; video.value.load() }
+  video.value.currentTime = 0
+  void play()
 }
-
-watch(motion, syncSceneTimer)
-watch(() => route.path, (current, previous) => {
-  const homepage = (path: string) => path === '/' || path === '/zh-TW/'
-  if (current !== previous && (homepage(current) || homepage(previous))) resetScene()
-})
-watch(root, (current, previous) => {
-  visible.value = false
-  if (previous) intersectionObserver?.unobserve(previous)
-  if (current) intersectionObserver?.observe(current)
-})
-
+async function onMediaError() {
+  if (format.value === 'webm' && video.value?.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"')) {
+    format.value = 'mp4'
+    await nextTick()
+    video.value?.load()
+    syncPlayback()
+  } else failed.value = true
+}
+async function observeDemo() {
+  observer?.disconnect()
+  visible = false
+  userPaused = false
+  failed.value = false
+  await nextTick()
+  if (root.value) observer?.observe(root.value)
+}
+watch(() => route.path, observeDemo)
 onMounted(() => {
-  pageVisible.value = !document.hidden
   motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-  reducedMotion.value = motionQuery.matches
-  resetScene()
-  motionQuery.addEventListener('change', onMotionChange)
-  intersectionObserver = new IntersectionObserver(([entry]) => {
-    if (entry.target === root.value) visible.value = entry.isIntersecting
-  }, { threshold: 0.05 })
-  if (root.value) intersectionObserver.observe(root.value)
-  document.addEventListener('visibilitychange', onVisibilityChange)
-  syncSceneTimer()
+  motionQuery.addEventListener('change', syncPlayback)
+  document.addEventListener('visibilitychange', syncPlayback)
+  observer = new IntersectionObserver(([entry]) => {
+    visible = entry.isIntersecting
+    syncPlayback()
+  }, { threshold: 0.35 })
+  void observeDemo()
 })
-
 onUnmounted(() => {
-  stopSceneTimer()
-  intersectionObserver?.disconnect()
-  motionQuery?.removeEventListener('change', onMotionChange)
-  document.removeEventListener('visibilitychange', onVisibilityChange)
+  observer?.disconnect()
+  motionQuery?.removeEventListener('change', syncPlayback)
+  document.removeEventListener('visibilitychange', syncPlayback)
 })
 </script>
 
 <template>
-  <section
-    v-if="showcase"
-    ref="root"
-    class="homepage-showcase"
-    :class="`scene-${scene}`"
-    :data-motion="motion"
-    :data-scene="scene"
-    :data-typed-request="typedRequest"
-    aria-labelledby="homepage-showcase-title"
-  >
-    <div class="homepage-showcase-heading">
-      <p class="homepage-showcase-label">{{ showcase.label }}</p>
-      <h2 id="homepage-showcase-title">{{ showcase.title }}</h2>
-      <p>{{ showcase.description }}</p>
+  <section v-if="isHome" id="demo" ref="root" class="homepage-showcase" aria-labelledby="demo-title">
+    <header>
+      <h2 id="demo-title">{{ chinese ? '問一次，看見整個環境依序啟動。' : 'Ask once. See the whole environment come alive.' }}</h2>
+      <p>{{ chinese ? '從 Agent 對話、執行指令，到依序啟動服務與檢查問題。' : 'From an agent conversation to commands, ordered startup, and diagnosing a failing dependency.' }}</p>
+    </header>
+    <video ref="video" controls muted playsinline preload="metadata" width="1920" height="1080"
+      :poster="'/media/orbit-showcase.png'" :src="`/media/orbit-launch.${format}`"
+      :aria-label="chinese ? 'Orbit 產品展示影片（英文），34 秒' : 'Orbit product demo, 34 seconds'"
+      aria-describedby="demo-description" @pause="onPause" @play="userPaused = false" @error="onMediaError">
+    </video>
+    <div class="demo-footer">
+      <p id="demo-description">{{ chinese ? '34 秒操作示意 · 英文畫面，無旁白。Agent 檢查並啟動環境、修正設定，再由 Orbit dashboard 呈現狀態。' : '34-second illustrative workflow · Music only. The agent inspects and starts the environment, fixes configuration, and checks state in the Orbit dashboard.' }}</p>
+      <button type="button" @click="replay">{{ failed ? (chinese ? '重新載入影片' : 'Retry video') : (chinese ? '從頭播放' : 'Play from start') }}</button>
     </div>
-
-    <div class="showcase-demo">
-      <div class="showcase-conversation">
-        <div class="showcase-composer" aria-hidden="true">
-          <span>{{ typedRequest }}</span><i class="showcase-caret" />
-          <i class="showcase-send-indicator">↑</i>
-        </div>
-        <div class="showcase-message showcase-message-user">
-          <span>{{ showcase.requestLabel }}</span>
-          <p>{{ showcase.request }}</p>
-        </div>
-        <div class="showcase-message showcase-message-agent">
-          <span>{{ showcase.agentLabel }}</span>
-          <p>{{ showcase.agentResponse }}</p>
-        </div>
-      </div>
-
-      <div class="showcase-dashboard">
-        <div class="showcase-app-bar" aria-hidden="true">
-          <div class="showcase-brand">
-            <svg viewBox="0 0 96 96">
-              <path d="M75.6 36.3A30 30 0 0 1 38.2 76.4" />
-              <path d="M20.4 59.7A30 30 0 0 1 57.8 19.6" />
-              <circle class="showcase-logo-orbit" cx="27.5" cy="70" r="6.5" />
-              <circle class="showcase-logo-orbit" cx="68.5" cy="26" r="6.5" />
-              <circle class="showcase-logo-core" cx="48" cy="48" r="6" />
-            </svg>
-            <strong>Orbit</strong>
-          </div>
-          <span class="showcase-instance">local</span>
-          <span class="showcase-connected"><i />{{ showcase.connected }}</span>
-          <span class="showcase-nav-active">{{ showcase.services }}</span>
-          <span class="showcase-environment">{{ showcase.environment }}</span>
-        </div>
-        <div class="showcase-services-bar" aria-hidden="true">
-          <div><strong>{{ showcase.services }}</strong><span class="showcase-resource-count">6 resources</span></div>
-          <div>
-            <span v-if="scene === finalScene" class="showcase-dashboard-health">{{ showcase.healthy }}</span>
-            <div class="showcase-view-switch">
-              <span class="is-selected">{{ showcase.graph }}</span><span>{{ showcase.table }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="showcase-graph">
-          <span class="showcase-live" aria-hidden="true"><i />{{ showcase.live }}</span>
-          <svg class="showcase-edges" viewBox="0 0 680 512" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-            <defs>
-              <marker id="showcase-edge-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
-                <path d="M0 0 L8 4 L0 8 Z" />
-              </marker>
-            </defs>
-            <g
-              v-for="edge in edges"
-              :key="edge.id"
-              class="showcase-edge"
-              :class="[`edge-${edge.id}`, { 'is-active': scene >= edge.readyAt }]"
-            >
-              <path :d="edge.path" marker-end="url(#showcase-edge-arrow)" />
-              <circle
-                v-if="scene >= edge.readyAt"
-                class="showcase-flow-dot"
-                r="3"
-                :style="{ offsetPath: `path('${edge.path}')` }"
-              />
-            </g>
-          </svg>
-          <article
-            v-for="node in nodes"
-            :key="node.id"
-            class="showcase-node"
-            :class="[`node-${node.id}`, `kind-${node.kind}`, { 'is-healthy': scene >= node.readyAt }]"
-          >
-            <div class="showcase-node-row">
-              <span class="showcase-node-status"><i aria-hidden="true" />{{ scene >= node.readyAt ? showcase.healthy : showcase.starting }}</span>
-              <svg v-if="node.kind === 'infra'" class="showcase-node-infra-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2.8v2.1m0 14.2v2.1M4.1 7.4l1.8 1m12.2 7.2 1.8 1M4.1 16.6l1.8-1m12.2-7.2 1.8-1M7.4 4.1l1 1.8m7.2 12.2 1 1.8M7.4 19.9l1-1.8m7.2-12.2 1-1.8" />
-                <circle cx="12" cy="12" r="4.2" />
-              </svg>
-              <strong>{{ node.name }}</strong>
-              <span v-if="node.detail" class="showcase-node-kind">{{ node.detail }}</span>
-            </div>
-            <div class="showcase-node-row showcase-node-meta">
-              <span class="showcase-node-actions" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></svg>
-                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>
-                <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4" /></svg>
-              </span>
-              <span class="showcase-node-port">{{ node.port }}</span>
-            </div>
-          </article>
-        </div>
-        <ul class="showcase-relationships">
-          <li v-for="relationship in showcase.relationships" :key="relationship">
-            <i v-if="scene === finalScene" class="showcase-relationship-marker" aria-hidden="true" />{{ relationship }}
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="showcase-outcome">
-      <p role="status" aria-live="polite">{{ status }}</p>
-      <a :href="showcase.link">{{ showcase.linkText }} <span aria-hidden="true">→</span></a>
-    </div>
+    <p v-if="failed" role="alert">{{ chinese ? '影片無法載入，請重試。你也可以先閱讀操作說明。' : 'The video could not load. Please retry, or read the workflow guide.' }} <a :href="chinese ? '/zh-TW/docs/local-first' : '/docs/local-first'">{{ chinese ? '操作說明' : 'Workflow guide' }}</a></p>
   </section>
 </template>

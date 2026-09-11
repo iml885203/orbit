@@ -41,6 +41,6 @@ to the preceding edit; scene timing is now documented in README.md.
 
 The output is a standalone film, published by the website build at
 `/media/orbit-launch.mp4` and linked from static covers in both READMEs.
-It does not replace the homepage's inline animation.
+The homepage embeds this film in place of the former inline animation.
 Audience reaction remains a creative judgment; this review
 verifies the implemented choreography, product claims and artifact integrity.
