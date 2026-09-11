@@ -9,6 +9,10 @@ actually works.
 [Official website](https://orbit.dotw.me/) · [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
 
+[![Orbit — Build the product. Let your agent run the project.](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/media/orbit-launch.mp4)
+
+[Watch the full demo · 34 seconds](https://orbit.dotw.me/media/orbit-launch.mp4)
+
 ## Get started
 
 ### Give your agent one request

@@ -202,6 +202,9 @@ export default defineConfig({
         if (env.relativePath === 'zh-TW/index.md' && src === 'ui/public/orbit-logo-badge.svg') {
           tokens[index].attrs![srcIndex][1] = '/orbit-logo-badge.svg'
         }
+        if (env.relativePath === 'zh-TW/index.md' && src === 'docs/assets/orbit-showcase.png') {
+          tokens[index].attrs![srcIndex][1] = '../docs/assets/orbit-showcase.png'
+        }
         if (env.relativePath === 'zh-TW/index.md' && src === 'docs/assets/orbit-demo-dashboard.jpg') {
           tokens[index].attrs![srcIndex][1] = 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg'
         }
@@ -214,6 +217,7 @@ export default defineConfig({
   },
   rewrites: { 'README.md': 'index.md' },
   srcExclude: [
+    'launch-video/**',
     'AGENTS.md',
     'AGENTS.zh-TW.md',
     'CLAUDE.md',

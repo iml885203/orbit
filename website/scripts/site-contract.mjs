@@ -22,6 +22,7 @@ const requiredPages = [
   '.well-known/agent-skills/index.json',
   '.well-known/ai-catalog.json',
   'orbit-social-card.png',
+  'media/orbit-launch.mp4',
 ]
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -184,7 +185,7 @@ function outputFileFor(url) {
   const relativePath = decodeURIComponent(url.pathname.slice(baseURL.pathname.length))
   if (!relativePath) return join(outputPath, 'index.html')
   if (relativePath.endsWith('/')) return join(outputPath, relativePath, 'index.html')
-  return /\.(?:css|gif|gz|ico|jpe?g|js|json|md|png|svg|txt|webp|woff2?|xml)$/.test(relativePath)
+  return /\.(?:css|gif|gz|ico|jpe?g|js|json|md|mp4|png|svg|txt|webp|woff2?|xml)$/.test(relativePath)
     ? join(outputPath, relativePath)
     : join(outputPath, `${relativePath}.html`)
 }

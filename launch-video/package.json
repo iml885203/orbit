@@ -1,0 +1,26 @@
+{
+  "name": "orbit-product-film",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "check": "tsc --noEmit",
+    "render": "remotion render src/index.ts Orbit out/orbit-launch.mp4 --codec=h264 --crf=18 --concurrency=2",
+    "poster": "remotion still src/index.ts Orbit out/poster.png --frame=1950",
+    "preview": "node scripts/serve-preview.mjs",
+    "capture": "node scripts/capture-dashboard.mjs",
+    "audio": "node scripts/score.mjs"
+  },
+  "dependencies": {
+    "@fontsource/geist": "5.3.0",
+    "@fontsource/geist-mono": "5.3.0",
+    "@remotion/cli": "4.0.523",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.523"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "playwright": "^1.58.2",
+    "typescript": "5.9.3"
+  }
+}
