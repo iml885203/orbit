@@ -61,7 +61,7 @@
       {/if}
     </div>
 
-    {#each attentionChecks as c (c.name)}
+    {#each attentionChecks as c, i (i)}
       <div class="doctor-check">
         <span
           class="doctor-icon {c.status}"
@@ -127,7 +127,7 @@
     {/if}
 
     {#if showOtherChecks}
-      {#each otherChecks as c (c.name)}
+      {#each otherChecks as c, i (i)}
         <div class="doctor-check doctor-check-secondary">
           <span
             class="doctor-icon {c.status}"
