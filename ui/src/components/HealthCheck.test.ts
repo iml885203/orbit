@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
+import { flushSync } from 'svelte'
 import HealthCheck from './HealthCheck.svelte'
 import { store } from '../lib/stores.svelte'
 
@@ -49,6 +50,28 @@ describe('HealthCheck', () => {
     expect(getByText('/workspace/orbit.yaml')).toBeTruthy()
     expect(getByText('Docker is available')).toBeTruthy()
     expect(getByRole('button', { name: 'Hide 2 other checks' })).toBeTruthy()
+  })
+
+  it('lists every check that shares a name once a run finishes', async () => {
+    store.daemon.doctorRunning = true
+    const { getByRole, getByText } = render(HealthCheck)
+
+    store.daemon.doctorChecks = [
+      { name: 'SQL Project', status: 'warn', message: 'db/Orders.sqlproj (file not found)' },
+      { name: 'SQL Project', status: 'warn', message: 'db/Billing.sqlproj (file not found)' },
+      { name: 'SQL Project', status: 'pass', message: 'db/Users.sqlproj (found)' },
+      { name: 'SQL Project', status: 'pass', message: 'db/Audit.sqlproj (found)' },
+    ]
+    store.daemon.doctorRunning = false
+    flushSync()
+
+    expect(getByRole('button', { name: 'Run Checks' })).toBeTruthy()
+    expect(getByText('2 issues need attention')).toBeTruthy()
+    expect(getByText('db/Orders.sqlproj (file not found)')).toBeTruthy()
+    expect(getByText('db/Billing.sqlproj (file not found)')).toBeTruthy()
+    await fireEvent.click(getByRole('button', { name: 'Show 2 other checks' }))
+    expect(getByText('db/Users.sqlproj (found)')).toBeTruthy()
+    expect(getByText('db/Audit.sqlproj (found)')).toBeTruthy()
   })
 
   it('copies an executable remedy instead of the hint prefix', async () => {
