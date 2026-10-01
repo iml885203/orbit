@@ -14,8 +14,8 @@
 
   const version = $derived(store.ui.version)
 	const release = $derived(version?.release_update)
-	const packageManaged = $derived(release?.owner === 'homebrew' || release?.owner === 'scoop')
-	const cmd = $derived(release?.owner === 'homebrew' ? 'brew upgrade orbit' : release?.owner === 'scoop' ? 'scoop update orbit' : release?.target_version ? 'orbit update' : 'orbit daemon restart')
+	const packageManaged = $derived(Boolean(release?.upgrade_command))
+	const cmd = $derived(release?.upgrade_command || (release?.target_version ? 'orbit update' : 'orbit daemon restart'))
   const targetToken = $derived(version?.on_disk?.split(/\s+/)[0] ?? '')
   const runningToken = $derived(version?.running?.split(/\s+/)[0] ?? '')
 

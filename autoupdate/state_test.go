@@ -183,3 +183,15 @@ func TestFinishTransactionEvidenceLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestSummaryNamesTheUpgradeCommandOfThePackageManagerThatOwnsTheInstall(t *testing.T) {
+	for owner, want := range map[string]string{
+		OwnerHomebrew: "brew upgrade iml885203/tap/orbit",
+		OwnerScoop:    "scoop update orbit",
+		OwnerDirect:   "",
+	} {
+		if got := (State{Owner: owner}).Summary().UpgradeCommand; got != want {
+			t.Errorf("owner %q: upgrade command = %q, want %q", owner, got, want)
+		}
+	}
+}

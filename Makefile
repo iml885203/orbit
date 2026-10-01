@@ -176,9 +176,11 @@ release-check:
 
 # Called-symbol scan: an unreachable CVE in a transitive module is reported by
 # govulncheck but does not fail the build, so a release is never blocked by a
-# vulnerability this binary cannot reach.
+# vulnerability this binary cannot reach. Pinned rather than @latest: CI runs
+# the go.mod toolchain with GOTOOLCHAIN=local, and a govulncheck release that
+# requires a newer Go fails the scan before it starts (v1.8.0 needs Go 1.26).
 vulncheck:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 notice:
 	@./scripts/gen-notice.sh

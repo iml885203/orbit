@@ -23,9 +23,9 @@ func TestPackageManagerForBinary(t *testing.T) {
 		manager string
 		command string
 	}{
-		{name: "Apple Silicon Homebrew", path: "/opt/homebrew/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade orbit"},
-		{name: "Intel Homebrew", path: "/usr/local/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade orbit"},
-		{name: "Linuxbrew", path: "/home/linuxbrew/.linuxbrew/Cellar/orbit/0.8.0/bin/orbit", goos: "linux", manager: "Homebrew", command: "brew upgrade orbit"},
+		{name: "Apple Silicon Homebrew", path: "/opt/homebrew/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade iml885203/tap/orbit"},
+		{name: "Intel Homebrew", path: "/usr/local/Cellar/orbit/0.8.0/bin/orbit", goos: "darwin", manager: "Homebrew", command: "brew upgrade iml885203/tap/orbit"},
+		{name: "Linuxbrew", path: "/home/linuxbrew/.linuxbrew/Cellar/orbit/0.8.0/bin/orbit", goos: "linux", manager: "Homebrew", command: "brew upgrade iml885203/tap/orbit"},
 		{name: "Scoop user install", path: `C:\Users\dev\scoop\apps\orbit\current\orbit-windows-amd64.exe`, goos: "windows", manager: "Scoop", command: "scoop update orbit"},
 		{name: "Scoop custom root", path: `D:\tools\apps\orbit\0.8.0\orbit-windows-arm64.exe`, goos: "windows", manager: "Scoop", command: "scoop update orbit"},
 		{name: "direct Unix install", path: "/Users/dev/.local/bin/orbit", goos: "darwin"},
@@ -49,7 +49,7 @@ func TestPackageManagerForBinary(t *testing.T) {
 
 func TestManagedInstallErrorJSONAction(t *testing.T) {
 	var output bytes.Buffer
-	err := managedInstallError{manager: "Homebrew", command: "brew upgrade orbit"}
+	err := managedInstallError{manager: "Homebrew", command: "brew upgrade iml885203/tap/orbit"}
 	if writeErr := cli.WriteJSONError(&output, "orbit update --json", err); writeErr != nil {
 		t.Fatal(writeErr)
 	}
@@ -60,7 +60,7 @@ func TestManagedInstallErrorJSONAction(t *testing.T) {
 	if envelope.Error == nil || envelope.Error.Code != "package_managed_install" {
 		t.Fatalf("error = %+v", envelope.Error)
 	}
-	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "brew upgrade orbit" {
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "brew upgrade iml885203/tap/orbit" {
 		t.Fatalf("actions = %+v", envelope.RecommendedActions)
 	}
 }
