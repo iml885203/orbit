@@ -699,11 +699,8 @@ func updateNeedsUserAction(update *autoupdate.Summary) bool {
 
 func releaseUpdateCommand(update *autoupdate.Summary, jsonOutput bool) string {
 	if update != nil {
-		switch update.Owner {
-		case autoupdate.OwnerHomebrew:
-			return "brew upgrade orbit"
-		case autoupdate.OwnerScoop:
-			return "scoop update orbit"
+		if command := autoupdate.UpgradeCommand(update.Owner); command != "" {
+			return command
 		}
 	}
 	command := "orbit update"

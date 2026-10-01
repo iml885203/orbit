@@ -53,7 +53,7 @@ func TestPackageManagedUpdateHasOneOwnerAction(t *testing.T) {
 	if !updateNeedsUserAction(update) {
 		t.Fatal("package-managed release must require its owner action")
 	}
-	if command := releaseUpdateCommand(update, true); command != "brew upgrade orbit" {
+	if command := releaseUpdateCommand(update, true); command != "brew upgrade iml885203/tap/orbit" {
 		t.Fatalf("command = %q", command)
 	}
 }
@@ -78,7 +78,7 @@ func TestPackageManagerDetectionFollowsHomebrewSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	managed := packageManagerForBinary(launcher, runtime.GOOS)
-	if managed == nil || managed.command != "brew upgrade orbit" {
+	if managed == nil || managed.command != "brew upgrade iml885203/tap/orbit" {
 		t.Fatalf("managed = %+v", managed)
 	}
 }

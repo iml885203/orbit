@@ -335,10 +335,10 @@ func packageManagerForBinary(executable, goos string) *managedInstallError {
 	}
 	normalized := strings.ToLower(strings.ReplaceAll(filepath.ToSlash(executable), `\`, "/"))
 	if goos == "windows" && strings.Contains(normalized, "/apps/orbit/") {
-		return &managedInstallError{manager: "Scoop", command: "scoop update orbit"}
+		return &managedInstallError{manager: "Scoop", command: autoupdate.UpgradeCommand(autoupdate.OwnerScoop)}
 	}
 	if goos != "windows" && strings.Contains(normalized, "/cellar/orbit/") {
-		return &managedInstallError{manager: "Homebrew", command: "brew upgrade orbit"}
+		return &managedInstallError{manager: "Homebrew", command: autoupdate.UpgradeCommand(autoupdate.OwnerHomebrew)}
 	}
 	return nil
 }

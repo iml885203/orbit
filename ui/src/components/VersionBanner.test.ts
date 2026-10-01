@@ -61,6 +61,24 @@ describe('VersionBanner', () => {
 		expect(apiPost).toHaveBeenCalledWith('/api/update/apply')
 	})
 
+	it('copies the upgrade command the daemon names for a package-managed install', async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined)
+		Object.assign(navigator, { clipboard: { writeText } })
+		store.ui.version = {
+			running: 'v0.16.0',
+			update_available: false,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'homebrew', policy: 'automatic',
+				disclosure_shown: true, target_version: 'v0.17.0', phase: 'available',
+				apply_eligible: false, upgrade_command: 'brew upgrade iml885203/tap/orbit',
+			},
+		}
+		render(VersionBanner)
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Copy upgrade command' }))
+		expect(writeText).toHaveBeenCalledWith('brew upgrade iml885203/tap/orbit')
+	})
+
   it('dismisses only the current installed version', async () => {
     render(VersionBanner)
     await fireEvent.click(screen.getByRole('button', { name: 'Later' }))

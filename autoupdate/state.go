@@ -25,6 +25,19 @@ const (
 	OwnerScoop      = "scoop"
 )
 
+// UpgradeCommand returns the command that upgrades an installation the owner's
+// package manager manages, or "" when Orbit replaces its own binary. Homebrew
+// needs the tap-qualified name: a bare "orbit" resolves to an unrelated cask.
+func UpgradeCommand(owner string) string {
+	switch owner {
+	case OwnerHomebrew:
+		return "brew upgrade iml885203/tap/orbit"
+	case OwnerScoop:
+		return "scoop update orbit"
+	}
+	return ""
+}
+
 func LaunchPath() (string, error) {
 	if value := strings.TrimSpace(os.Getenv(EnvLaunchPath)); value != "" {
 		return filepath.Abs(value)
@@ -133,6 +146,7 @@ type Summary struct {
 	LastError       string                    `json:"last_error,omitempty"`
 	Transaction     *Transaction              `json:"transaction,omitempty"`
 	RuntimeOutcomes map[string]RuntimeOutcome `json:"runtime_outcomes,omitempty"`
+	UpgradeCommand  string                    `json:"upgrade_command,omitempty"`
 }
 
 func (s State) Summary() Summary {
@@ -146,6 +160,7 @@ func (s State) Summary() Summary {
 		TargetVersion: s.TargetVersion, Phase: s.Phase, ApplyEligible: s.ApplyEligible,
 		DeferReason: s.DeferReason, LastError: s.LastError,
 		Transaction: s.Transaction, RuntimeOutcomes: outcomes,
+		UpgradeCommand: UpgradeCommand(s.Owner),
 	}
 }
 
