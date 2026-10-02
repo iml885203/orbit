@@ -18,7 +18,6 @@ type daemonHost interface {
 	Restarter() daemon.ServiceRestarter
 	BaseContext() context.Context
 	ConfigPath() string
-	ResolveWorkspaceRoot() (string, daemon.DoctorCheck, bool)
 }
 
 // dbFeature owns the DB workflow's daemon state: the db-state store,

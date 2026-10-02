@@ -22,14 +22,13 @@ import (
 // which the offline CLI does not have. The two lists differing on that one
 // entry is correct, not drift — worth stating, because "the CLI twin is
 // missing a check" reads like a defect to anyone who compares them.
-func CLIDoctorChecks(cfg *config.Config) []daemon.DoctorCheck {
+func CLIDoctorChecks(cfg *config.Config, configPath string) []daemon.DoctorCheck {
 	if !DBWorkflowConfigured(cfg) {
 		return nil
 	}
-	root := daemon.WorkspaceRootFromEnv()
-	rootCheck, _ := daemon.WorkspaceRootCheck(root)
+	root, _ := workspaceRootFor(configPath)
 	checks := make([]daemon.DoctorCheck, 0, 4)
-	checks = append(checks, rootCheck)
+	checks = append(checks, workspaceRootCheck(configPath))
 	checks = append(checks, sqlProjectChecks(cfg, root)...)
 	checks = append(checks, sqlServerReadinessChecks(cfg)...)
 	checks = append(checks, publishToolchainChecks()...)
