@@ -103,11 +103,11 @@ type Distribution struct {
 }
 
 // CLIDoctor is the offline-doctor contribution. cfg is the loaded and
-// validated config; callers never invoke these with a nil cfg (a failed
-// config load is reported by the core Config check instead).
+// validated config, read from configPath; callers never invoke these with a
+// nil cfg (a failed config load is reported by the core Config check instead).
 type CLIDoctor struct {
 	// Checks returns structured checks for the --json local response.
-	Checks func(cfg *config.Config) []daemon.DoctorCheck
+	Checks func(cfg *config.Config, configPath string) []daemon.DoctorCheck
 	// PrintHuman renders the feature's section of the human doctor
 	// output to stdout.
 	PrintHuman func(cfg *config.Config)

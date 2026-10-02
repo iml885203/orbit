@@ -23,9 +23,8 @@ func (f *dbFeature) dbWorkflowChecks() []daemon.DoctorCheck {
 		return nil
 	}
 
-	_, rootCheck, _ := f.host.ResolveWorkspaceRoot()
 	checks := make([]daemon.DoctorCheck, 0, 4)
-	checks = append(checks, rootCheck)
+	checks = append(checks, workspaceRootCheck(f.host.ConfigPath()))
 	checks = append(checks, f.sqlProjectChecks()...)
 	checks = append(checks, sqlServerReadinessChecks(f.host.Config())...)
 	checks = append(checks, f.sqlImageChecks()...)

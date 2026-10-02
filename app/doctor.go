@@ -331,7 +331,7 @@ func localDoctorResponseWithContext(
 	if cfg != nil {
 		for _, ext := range extensions {
 			if ext.CLIDoctor != nil {
-				checks = append(checks, ext.CLIDoctor.Checks(cfg)...)
+				checks = append(checks, ext.CLIDoctor.Checks(cfg, configFile)...)
 			}
 		}
 	}

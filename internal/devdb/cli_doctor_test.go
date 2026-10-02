@@ -35,7 +35,7 @@ func TestCLIDoctorChecks_UnconfiguredEnvIsSilent(t *testing.T) {
 			"redis": {Name: "redis", Image: "redis:7.4"},
 		},
 	}
-	checks := CLIDoctorChecks(cfg)
+	checks := CLIDoctorChecks(cfg, "")
 	if len(checks) != 0 {
 		t.Errorf("unconfigured env reported DB checks: %+v", checks)
 	}
@@ -91,7 +91,7 @@ func TestSQLServerReadinessChecks(t *testing.T) {
 // An explicitly configured env reports the workspace and publishing tools.
 func TestCLIDoctorChecks_ConfiguredEnvChecksRoot(t *testing.T) {
 	t.Setenv("WORKSPACE_ROOT", t.TempDir())
-	checks := CLIDoctorChecks(sqlServerConfig())
+	checks := CLIDoctorChecks(sqlServerConfig(), "")
 	if len(checks) < 1 {
 		t.Fatal("configured env returned no checks")
 	}
@@ -106,5 +106,33 @@ func TestCLIDoctorChecks_ConfiguredEnvChecksRoot(t *testing.T) {
 	}
 	if !foundReadiness {
 		t.Errorf("configured CLI doctor checks omit SQL Server readiness warning: %+v", checks)
+	}
+}
+
+// With WORKSPACE_ROOT unset, the root check reports the root the SQL project
+// checks join paths to, not "Not set" beside checks that used a derived one.
+func TestCLIDoctorChecks_UnsetWorkspaceRootReportsTheDerivedRoot(t *testing.T) {
+	t.Setenv("WORKSPACE_ROOT", "")
+	root := t.TempDir()
+	configPath := filepath.Join(root, "harness", "envs", "e2e.yaml")
+
+	checks := CLIDoctorChecks(sqlServerConfig(), configPath)
+
+	if checks[0].Name != "Workspace Root" || checks[0].Status != daemon.CheckPass {
+		t.Fatalf("workspace root check = %+v, want a pass", checks[0])
+	}
+	if !strings.HasPrefix(checks[0].Message, root+" ") || !strings.Contains(checks[0].Message, "derived") {
+		t.Errorf("workspace root message = %q, want %s marked as derived", checks[0].Message, root)
+	}
+}
+
+func TestCLIDoctorChecks_WorkspaceRootEnvWinsOverTheConfigLocation(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WORKSPACE_ROOT", root)
+
+	checks := CLIDoctorChecks(sqlServerConfig(), filepath.Join(t.TempDir(), "a", "envs", "e2e.yaml"))
+
+	if checks[0].Status != daemon.CheckPass || checks[0].Message != root {
+		t.Errorf("workspace root check = %+v, want a pass naming %s", checks[0], root)
 	}
 }

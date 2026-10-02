@@ -348,9 +348,12 @@ func TestLocalDoctorResponse_ExtensionChecks(t *testing.T) {
 	extensions = []extension.Extension{{
 		Name: "test",
 		CLIDoctor: &extension.CLIDoctor{
-			Checks: func(cfg *config.Config) []daemon.DoctorCheck {
+			Checks: func(cfg *config.Config, configPath string) []daemon.DoctorCheck {
 				if cfg == nil {
 					t.Error("CLIDoctor.Checks invoked with nil cfg")
+				}
+				if configPath != envPath {
+					t.Errorf("CLIDoctor.Checks configPath = %q, want %q", configPath, envPath)
 				}
 				return []daemon.DoctorCheck{{Name: "Ext Check", Status: daemon.CheckInfo, Message: "hello"}}
 			},
@@ -374,7 +377,7 @@ func TestLocalDoctorResponse_ExtensionChecks(t *testing.T) {
 	extensions = []extension.Extension{{
 		Name: "test",
 		CLIDoctor: &extension.CLIDoctor{
-			Checks: func(cfg *config.Config) []daemon.DoctorCheck {
+			Checks: func(cfg *config.Config, _ string) []daemon.DoctorCheck {
 				t.Error("CLIDoctor.Checks invoked despite config load failure")
 				return nil
 			},

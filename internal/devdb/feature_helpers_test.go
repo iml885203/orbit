@@ -44,10 +44,6 @@ func (h *fakeDaemonHost) Restarter() daemon.ServiceRestarter {
 func (h *fakeDaemonHost) BaseContext() context.Context { return context.Background() }
 func (h *fakeDaemonHost) ConfigPath() string           { return h.configPath }
 
-func (h *fakeDaemonHost) ResolveWorkspaceRoot() (string, daemon.DoctorCheck, bool) {
-	panic("not used in DB feature tests")
-}
-
 // newTestDBFeature builds a dbFeature over a fake daemonHost carrying a
 // real Settings and config holder — the moved handler tests keep
 // exercising the same host surface they consumed as Server methods.

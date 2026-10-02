@@ -887,21 +887,6 @@ func liveServiceHealthChecks(services []engine.ServiceInfo) []DoctorCheck {
 	return append(checks, health)
 }
 
-// ResolveWorkspaceRoot is the exported form for feature-owned doctor
-// groups that gate on the workspace root.
-func (s *Server) ResolveWorkspaceRoot() (string, DoctorCheck, bool) {
-	return s.resolveWorkspaceRoot()
-}
-
-// resolveWorkspaceRoot returns the configured workspace root, a DoctorCheck
-// describing its state, and whether downstream source-workspace-dependent
-// checks should run. ok=false when the root is unset or missing on disk.
-func (s *Server) resolveWorkspaceRoot() (string, DoctorCheck, bool) {
-	root := WorkspaceRootFromEnv()
-	check, ok := WorkspaceRootCheck(root)
-	return root, check, ok
-}
-
 func serviceHealthCheck(services []engine.ServiceInfo) DoctorCheck {
 	var healthy, stopped int
 	var degraded, degradedNames, changing []string
