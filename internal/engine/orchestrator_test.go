@@ -13,7 +13,7 @@ import (
 // testOrchestrator creates an orchestrator with noop callbacks for testing.
 func testOrchestrator(cfg *config.Config) *Orchestrator {
 	o := NewOrchestrator(config.NewHolder(cfg), nil, nil)
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) error { return nil }
+	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) (string, error) { return "", nil }
 	o.OnStopContainer = func(_ context.Context, _ string) error { return nil }
 	o.OnStartProcess = func(_ context.Context, _ string, _ int, _ *config.Config, _ *config.Service) error { return nil }
 	o.OnStopProcess = func(_ string) error { return nil }

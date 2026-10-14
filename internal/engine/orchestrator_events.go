@@ -28,6 +28,12 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 			o.mu.Unlock()
 			break
 		}
+		// A success probed just before Docker reported the exit is stale;
+		// only a new runtime (an external start the poller observes) heals.
+		if info.ContainerExit != nil {
+			o.mu.Unlock()
+			break
+		}
 		info.Transition(StateHealthy)
 		kind := info.Kind
 		o.mu.Unlock()
@@ -62,7 +68,9 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 					info.StateReason = conflict.Error()
 				}
 			case StateDegraded:
-				if info.StateReason == DockerObservationUnavailableReason {
+				// A probe result racing the exit can't be better evidence
+				// than Docker reporting the runtime ended.
+				if info.StateReason == DockerObservationUnavailableReason || info.ContainerExit != nil {
 					break
 				}
 				// Recovery probing can produce a sharper diagnosis than

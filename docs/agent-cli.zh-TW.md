@@ -134,9 +134,15 @@ generation 保存的最後一行有效 application log。它是 lifecycle reason
 佐證，不是取代 reason。
 
 失敗的 `orbit up --json` 會把證據放在 `data.failed_resources`：每個沒有達到
-healthy 的 requested resource 一筆，含 `name`、`state`、`state_reason` 與
-`log_tail`（最多 20 行最近的 log）。直接從這裡讀失敗原因，不必再補一次
-`orbit logs`。
+healthy 的 requested resource 一筆，含 `name`、`kind`（`container` 或
+`service`）、`role`、`state`、`state_reason`、`failure_kind` 與 `log_tail`
+（最多 20 行最近的 log）。直接從這裡讀失敗原因，不必再補一次 `orbit logs`。
+
+Orbit 還在等 container 變 healthy 時，若 container 停止，等待會立刻結束，
+並帶 `failure_kind: runtime` 與 Docker 的 `exit_code`（被 kernel 殺掉時另有
+`oom_killed: true`）。`orbit status --json` 也會回報同樣的欄位。請在
+`failed_resources` 找這筆，不要只看 `error.code`：相依的 resource 可能先被
+回報成 `dependency_blocked`。
 
 需要明確授權的破壞性步驟使用穩定的 `confirmation_required` 錯誤碼。被拒絕
 時什麼都不會改變；第一個 recommended action 就是加上 `--yes` 的同一個指令。

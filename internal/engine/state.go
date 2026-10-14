@@ -127,6 +127,30 @@ type ExternalContainerRestart struct {
 	ObservedAt time.Time
 }
 
+// StoppedContainer is Docker's view of a managed container that is not
+// running.
+type StoppedContainer struct {
+	ID string
+	// StartedAt is zero when the container never started or Docker could not
+	// inspect it; Exit is only Docker's account when StartedAt is set.
+	StartedAt time.Time
+	Exit      ContainerExit
+}
+
+func (s StoppedContainer) ran() bool {
+	return !s.StartedAt.IsZero()
+}
+
+func (s StoppedContainer) endedRuntime(containerID string) bool {
+	return containerID != "" && s.ID == containerID && s.ran()
+}
+
+// ContainerExit is Docker's account of how a container runtime ended.
+type ContainerExit struct {
+	Code      int
+	OOMKilled bool
+}
+
 // ServiceInfo holds runtime state for a single service/container.
 type ServiceInfo struct {
 	Name         string
@@ -149,6 +173,14 @@ type ServiceInfo struct {
 	// ExpectingContainerStart prevents an Orbit-managed start from being
 	// misclassified when Docker reports the replacement runtime.
 	ExpectingContainerStart bool
+	// ContainerID is the Docker runtime Orbit started or adopted for the
+	// current generation; empty until that start returns. Mutation requires
+	// the owning Orchestrator's mu.
+	ContainerID string
+	// ContainerExit records how the container ended while it is Degraded
+	// because it exited; cleared with StateReason. Mutation requires the
+	// owning Orchestrator's mu.
+	ContainerExit *ContainerExit
 	// Generation counts how many times the service has entered Starting.
 	// Health events are stamped with it so a stale probe goroutine from a
 	// previous start can't affect the current one. Mutation requires the
@@ -198,6 +230,12 @@ func (i *ServiceInfo) cancelLifecycle() {
 	i.cancel = nil
 }
 
+// Recovery probing after the startup budget ran out is still waiting for
+// the first readiness pass.
+func (i *ServiceInfo) awaitingReadiness() bool {
+	return i.State == StateStarting || (i.State == StateDegraded && i.FailureKind == FailureKindHealth)
+}
+
 // MarkRestart bumps the restart counter. Called by RestartService;
 // kept separate from Transition because restarting is a property of
 // the action, not the state being entered. Caller must hold the
@@ -239,6 +277,7 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		i.FailureKind = ""
 		i.FailureEvidence = ""
 		i.PortConflict = nil
+		i.ContainerExit = nil
 		i.AwaitingContainerRemoval = false
 	}
 	switch to {

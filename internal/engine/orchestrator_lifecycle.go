@@ -8,6 +8,8 @@ import (
 
 const DockerObservationUnavailableReason = "Docker is unavailable; Orbit will reconnect automatically"
 
+const containerExitedReason = "container exited unexpectedly"
+
 func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	o.mu.Lock()
 	info := o.services[name]
@@ -26,6 +28,7 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	info.cancel = cancel
 	info.Generation++
 	gen := info.Generation
+	info.ContainerID = ""
 	if info.Kind == "container" && !info.ContainerStartedAt.IsZero() {
 		info.ExpectingContainerStart = true
 	}
@@ -41,7 +44,11 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 		var err error
 		if info.Kind == "container" {
 			if o.OnStartContainer != nil {
-				err = o.OnStartContainer(svcCtx, name, cfg.Containers[name])
+				var containerID string
+				containerID, err = o.OnStartContainer(svcCtx, name, cfg.Containers[name])
+				if err == nil {
+					o.recordStartedContainer(name, gen, containerID)
+				}
 			}
 		} else {
 			if o.OnStartProcess != nil {
@@ -105,7 +112,8 @@ func (o *Orchestrator) Start(names []string) {
 //   - stopped + running        → healthy (adoption)
 //   - healthy + not running    → degraded (drift)
 //   - other transitions are ignored; starting → healthy is driven by
-//     the normal health-check path, not the poller.
+//     the normal health-check path, not the poller, and a starting
+//     container that exits is settled by OnContainerStopped.
 //
 // Unknown service names are silently ignored.
 func (o *Orchestrator) OnContainerSeen(name string, running bool) {
@@ -171,21 +179,21 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 	observationWasUnavailable := info.StateReason == DockerObservationUnavailableReason
 	switch {
 	case restart != nil && running && prev == StateDegraded &&
-		info.StateReason == "container exited unexpectedly":
+		info.StateReason == containerExitedReason:
 		info.Transition(StateHealthy)
 	case running && prev == StateDegraded && observationWasUnavailable:
 		info.Transition(StateHealthy)
 	case running && prev == StateStopped:
 		info.Transition(StateHealthy)
 	case !running && prev == StateDegraded && observationWasUnavailable:
-		info.StateReason = "container exited unexpectedly"
+		info.StateReason = containerExitedReason
 		info.FailureKind = FailureKindRuntime
 	case !running && prev == StateHealthy:
 		// Docker reports the container as existing but not running while we
 		// believe it healthy — it died outside orbit's control (crash, OOM
 		// kill, manual docker stop).
 		info.Transition(StateDegraded)
-		info.StateReason = "container exited unexpectedly"
+		info.StateReason = containerExitedReason
 		info.FailureKind = FailureKindRuntime
 	}
 	newState := info.State
@@ -195,6 +203,47 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		o.notifyDependents(name)
 	}
 	return restart
+}
+
+func (o *Orchestrator) recordStartedContainer(name string, generation int, containerID string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if info, exists := o.services[name]; exists && info.Generation == generation {
+		info.ContainerID = containerID
+	}
+}
+
+// OnContainerStopped settles a container Docker reports as not running.
+// Once the runtime Orbit started for the current generation has run and
+// ended, waiting on its readiness probe is pointless — Orbit sets no restart
+// policy, so it will not come back by itself. Observations from before that
+// runtime started (a stale container awaiting removal, a created container
+// not yet started) carry a different ID or no start time and are ignored.
+func (o *Orchestrator) OnContainerStopped(name string, stopped StoppedContainer) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	info, exists := o.services[name]
+	if !exists || info.Kind != "container" {
+		return
+	}
+	switch {
+	case info.State == StateDegraded && info.StateReason == containerExitedReason:
+		if info.ContainerExit == nil && stopped.ran() {
+			exit := stopped.Exit
+			info.ContainerExit = &exit
+		}
+	case info.awaitingReadiness() && stopped.endedRuntime(info.ContainerID):
+		info.Transition(StateDegraded)
+		info.StateReason = containerExitedReason
+		info.FailureKind = FailureKindRuntime
+		exit := stopped.Exit
+		info.ContainerExit = &exit
+		info.cancelLifecycle()
+		// The exit may be the first poll that saw this runtime. Recording it
+		// lets a later external start register as a restart that heals.
+		info.ContainerStartedAt = stopped.StartedAt
+		info.ExpectingContainerStart = false
+	}
 }
 
 // A single empty snapshot immediately after Docker reconnects is not enough

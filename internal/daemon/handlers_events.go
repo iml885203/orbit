@@ -208,6 +208,8 @@ func (s *Server) buildStatusResponse() StatusResponse {
 			FailureKind:          string(svc.FailureKind),
 			FailureEvidence:      svc.FailureEvidence,
 			PortConflict:         resourcePortConflict(svc),
+			ExitCode:             resourceExitCode(svc),
+			OOMKilled:            svc.ContainerExit != nil && svc.ContainerExit.OOMKilled,
 			LogsAvailable:        resourceLogsAvailable(s.app.Logs, svc.Name),
 			RestartCount:         svc.RestartCount,
 			ExternalRestartCount: svc.ExternalRestartCount,

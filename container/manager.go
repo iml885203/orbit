@@ -106,31 +106,32 @@ func (m *Manager) EnsureNetwork(ctx context.Context) error {
 	return err
 }
 
-// Start creates and starts a container based on config.
-func (m *Manager) Start(ctx context.Context, name string, cfg *config.Container) error {
+// Start creates and starts a container based on config, returning the
+// Docker ID of the runtime it started or adopted.
+func (m *Manager) Start(ctx context.Context, name string, cfg *config.Container) (string, error) {
 	return m.start(ctx, name, cfg, "")
 }
 
 // start is the internal implementation. parentName, when non-empty, marks the
 // container as a sidecar of the named parent so it can be cleaned up alongside
 // the parent.
-func (m *Manager) start(ctx context.Context, name string, cfg *config.Container, parentName string) error {
+func (m *Manager) start(ctx context.Context, name string, cfg *config.Container, parentName string) (string, error) {
 	m.narrate(name, fmt.Sprintf("start requested (image=%s)", cfg.Image))
-	adopted, err := m.reconcileExisting(ctx, name, cfg, parentName)
+	adoptedID, err := m.reconcileExisting(ctx, name, cfg, parentName)
 	if err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
-		return err
+		return "", err
 	}
-	if adopted {
-		return nil
+	if adoptedID != "" {
+		return adoptedID, nil
 	}
 	if err := m.ensureImageAvailable(ctx, name, cfg); err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
-		return err
+		return "", err
 	}
 	if conflict := containerPortConflict(name, cfg); conflict != nil {
 		m.narrate(name, "ERROR: "+conflict.Error())
-		return conflict
+		return "", conflict
 	}
 
 	// Build port bindings
@@ -165,7 +166,7 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	containerName := m.ContainerName(name)
 	if err := ensureNamespaceVolumes(ctx, m.cli, m.namespace, cfg.Volumes); err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
-		return err
+		return "", err
 	}
 
 	// Container config
@@ -216,24 +217,24 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 	})
 	if err != nil {
 		m.narrate(name, "ERROR: "+err.Error())
-		return fmt.Errorf("creating container %s: %w", name, err)
+		return "", fmt.Errorf("creating container %s: %w", name, err)
 	}
 
 	// Start container
 	if _, err := m.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
 		if conflict := containerPortConflict(name, cfg); conflict != nil {
 			m.narrate(name, "ERROR: "+conflict.Error())
-			return conflict
+			return "", conflict
 		}
 		m.narrate(name, "ERROR: "+err.Error())
-		return fmt.Errorf("starting container %s: %w", name, err)
+		return "", fmt.Errorf("starting container %s: %w", name, err)
 	}
 	m.narrate(name, "started")
 
 	// Stream logs in background
 	go m.streamLogs(ctx, name, resp.ID)
 
-	return nil
+	return resp.ID, nil
 }
 
 func (m *Manager) reconcileExisting(
@@ -241,20 +242,20 @@ func (m *Manager) reconcileExisting(
 	name string,
 	cfg *config.Container,
 	parentName string,
-) (bool, error) {
+) (adoptedID string, err error) {
 	containerName := m.ContainerName(name)
 	inspect, err := m.cli.ContainerInspect(ctx, containerName, client.ContainerInspectOptions{})
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
-			return false, nil
+			return "", nil
 		}
-		return false, fmt.Errorf("inspecting existing container %s: %w", containerName, err)
+		return "", fmt.Errorf("inspecting existing container %s: %w", containerName, err)
 	}
 	labels := inspect.Container.Config.Labels
 	if labels[labelManaged] != "true" ||
 		labels[labelService] != name ||
 		!m.matchesNamespace(labels) {
-		return false, fmt.Errorf(
+		return "", fmt.Errorf(
 			"container %s already exists but is not owned by this Orbit environment",
 			containerName,
 		)
@@ -264,7 +265,7 @@ func (m *Manager) reconcileExisting(
 	if inspect.Container.State.Running && labels[labelConfig] == fingerprint {
 		m.narrate(name, "adopted existing managed container "+containerName)
 		go m.streamLogs(ctx, name, inspect.Container.ID)
-		return true, nil
+		return inspect.Container.ID, nil
 	}
 
 	// The container is ours, but it is stopped, from an older Orbit version,
@@ -274,9 +275,9 @@ func (m *Manager) reconcileExisting(
 	m.narrate(name, "replacing stale managed container "+containerName)
 	if err := m.removeContainer(ctx, containerName); err != nil &&
 		!cerrdefs.IsNotFound(err) {
-		return false, fmt.Errorf("removing stale managed container %s: %w", containerName, err)
+		return "", fmt.Errorf("removing stale managed container %s: %w", containerName, err)
 	}
-	return false, nil
+	return "", nil
 }
 
 func containerConfigFingerprint(cfg *config.Container, parentName string) string {
@@ -558,7 +559,8 @@ func (m *Manager) StartSidecar(ctx context.Context, parentName string, parent *c
 		Environment: sidecar.Environment,
 		Volumes:     sidecar.Volumes,
 	}
-	return m.start(ctx, parentName+"-"+sidecar.Name, sc, parentName)
+	_, err := m.start(ctx, parentName+"-"+sidecar.Name, sc, parentName)
+	return err
 }
 
 // InspectState returns the current Docker state of a container.

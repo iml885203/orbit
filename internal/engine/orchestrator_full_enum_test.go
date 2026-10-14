@@ -30,7 +30,7 @@ func twoContainerCfg() *config.Config {
 
 func newTestOrchestrator(cfg *config.Config) *Orchestrator {
 	o := NewOrchestrator(config.NewHolder(cfg), nil, nil)
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) error { return nil }
+	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) (string, error) { return "", nil }
 	o.OnStopContainer = func(_ context.Context, _ string) error { return nil }
 	o.OnStartProcess = func(_ context.Context, _ string, _ int, _ *config.Config, _ *config.Service) error { return nil }
 	o.OnStopProcess = func(_ string) error { return nil }
@@ -73,9 +73,9 @@ func TestStart_TransitionsFromStoppedToStarting(t *testing.T) {
 	o := newTestOrchestrator(cfg)
 
 	startedCh := make(chan string, 4)
-	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) error {
+	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) (string, error) {
 		startedCh <- name
-		return nil
+		return "", nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -99,9 +99,9 @@ func TestStart_WaitsForPendingDeps(t *testing.T) {
 	o := newTestOrchestrator(cfg)
 
 	started := make(chan string, 4)
-	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) error {
+	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) (string, error) {
 		started <- name
-		return nil
+		return "", nil
 	}
 	o.OnStartProcess = func(_ context.Context, name string, _ int, _ *config.Config, _ *config.Service) error {
 		started <- name

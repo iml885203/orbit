@@ -103,22 +103,26 @@ type ResourceStatus struct {
 	BlockedBy string `json:"blocked_by,omitempty"`
 	// StateReason says why the resource is degraded (crash message, health
 	// failure, build failure); empty in every other state.
-	StateReason          string                `json:"state_reason,omitempty"`
-	FailureKind          string                `json:"failure_kind,omitempty"`
-	FailureEvidence      string                `json:"failure_evidence,omitempty"`
-	PortConflict         *ResourcePortConflict `json:"port_conflict,omitempty"`
-	LogsAvailable        bool                  `json:"logs_available,omitempty"`
-	RestartCount         int                   `json:"restart_count"`
-	ExternalRestartCount int                   `json:"external_restart_count"`
-	LastRestart          *ResourceRestart      `json:"last_restart,omitempty"`
-	Ports                map[string]int        `json:"ports,omitempty"`
-	URL                  string                `json:"url,omitempty"`
-	Image                string                `json:"image,omitempty"` // resolved container image; containers only
-	StartupTime          string                `json:"startup_time,omitempty"`
-	Uptime               string                `json:"uptime,omitempty"`
-	Sidecars             []SidecarInfo         `json:"sidecars,omitempty"`
-	Mode                 string                `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
-	HealthProgress       *HealthProgressInfo   `json:"health_progress,omitempty"`
+	StateReason     string                `json:"state_reason,omitempty"`
+	FailureKind     string                `json:"failure_kind,omitempty"`
+	FailureEvidence string                `json:"failure_evidence,omitempty"`
+	PortConflict    *ResourcePortConflict `json:"port_conflict,omitempty"`
+	// ExitCode and OOMKilled report how a container that exited unexpectedly
+	// ended, as Docker recorded it; absent in every other state.
+	ExitCode             *int                `json:"exit_code,omitempty"`
+	OOMKilled            bool                `json:"oom_killed,omitempty"`
+	LogsAvailable        bool                `json:"logs_available,omitempty"`
+	RestartCount         int                 `json:"restart_count"`
+	ExternalRestartCount int                 `json:"external_restart_count"`
+	LastRestart          *ResourceRestart    `json:"last_restart,omitempty"`
+	Ports                map[string]int      `json:"ports,omitempty"`
+	URL                  string              `json:"url,omitempty"`
+	Image                string              `json:"image,omitempty"` // resolved container image; containers only
+	StartupTime          string              `json:"startup_time,omitempty"`
+	Uptime               string              `json:"uptime,omitempty"`
+	Sidecars             []SidecarInfo       `json:"sidecars,omitempty"`
+	Mode                 string              `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
+	HealthProgress       *HealthProgressInfo `json:"health_progress,omitempty"`
 }
 
 // ResourceRestart describes the most recent restart Orbit observed but did

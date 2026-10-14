@@ -100,6 +100,8 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 			FailureKind:          string(svc.FailureKind),
 			FailureEvidence:      svc.FailureEvidence,
 			PortConflict:         resourcePortConflict(svc),
+			ExitCode:             resourceExitCode(svc),
+			OOMKilled:            svc.ContainerExit != nil && svc.ContainerExit.OOMKilled,
 			LogsAvailable:        resourceLogsAvailable(s.app.Logs, svc.Name),
 			RestartCount:         svc.RestartCount,
 			ExternalRestartCount: svc.ExternalRestartCount,
@@ -184,6 +186,14 @@ func resourceLastRestart(svc *engine.ServiceInfo) *ResourceRestart {
 func resourceLogsAvailable(logs *logging.Multiplexer, name string) bool {
 	buffer := logs.GetBuffer(name)
 	return buffer != nil && buffer.Count() > 0
+}
+
+func resourceExitCode(svc *engine.ServiceInfo) *int {
+	if svc.ContainerExit == nil {
+		return nil
+	}
+	code := svc.ContainerExit.Code
+	return &code
 }
 
 func resourcePortConflict(svc *engine.ServiceInfo) *ResourcePortConflict {
