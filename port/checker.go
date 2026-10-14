@@ -72,6 +72,19 @@ func CheckPorts(portMap map[string][]int) []Conflict {
 }
 
 func isPortInUse(port int) (pid string, process string, inUse bool) {
+	if Available(port) {
+		return "", "", false
+	}
+	pid, process = findPortOwner(port)
+	return pid, process, true
+}
+
+// Available reports whether the port is free on IPv4 loopback and wildcard,
+// plus IPv6 loopback and wildcard when the host has IPv6. It is the one probe both port allocation and the start-time
+// conflict check use, so a port handed out is never rejected at start for a
+// listener allocation could not see. It never looks up the owner, keeping a
+// linear scan over busy ports cheap.
+func Available(port int) bool {
 	addresses := []struct {
 		network string
 		address string
@@ -95,12 +108,11 @@ func isPortInUse(port int) (pid string, process string, inUse bool) {
 	for _, address := range addresses {
 		listener, err := net.Listen(address.network, address.address)
 		if err != nil {
-			pid, process = findPortOwner(port)
-			return pid, process, true
+			return false
 		}
 		_ = listener.Close()
 	}
-	return "", "", false
+	return true
 }
 
 func findPortOwner(port int) (pid string, process string) {

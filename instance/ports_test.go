@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/config"
+	orbitport "github.com/iml885203/orbit/port"
 )
 
 func TestResolvePortsSeparatesInstancesAndPersistsAssignments(t *testing.T) {
@@ -127,4 +128,53 @@ func testPortConfig(port int) *config.Config {
 			HealthCheck: &config.HealthCheckConfig{Type: "http", Port: port},
 		},
 	}}
+}
+
+// A listener the loopback-only probe misses — here IPv6 loopback — still
+// makes the start-time conflict check reject the port, so allocation must
+// skip it rather than hand out a port the instance cannot start on.
+func TestResolvePortsSkipsPortTheStartCheckWouldReject(t *testing.T) {
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback unavailable: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	held := listener.Addr().(*net.TCPAddr).Port
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+
+	got := resolveTestInstancePort(t, "test-a", held)
+
+	if got == held {
+		t.Fatalf("allocated port %d, which is held on [::1]", held)
+	}
+	if !orbitport.Available(got) {
+		t.Fatalf("allocated port %d is not available to the start-time check", got)
+	}
+}
+
+// The dashboard only binds loopback, so a listener the start-time check
+// would object to elsewhere must not move it off its preferred port.
+func TestResolveDashboardPortIgnoresListenerOutsideIPv4Loopback(t *testing.T) {
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback unavailable: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	preferred := listener.Addr().(*net.TCPAddr).Port
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-a"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ResolveDashboardPort(preferred)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != preferred {
+		t.Fatalf("dashboard port = %d, want preferred %d", got, preferred)
+	}
 }
