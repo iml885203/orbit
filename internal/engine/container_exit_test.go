@@ -12,8 +12,9 @@ import (
 // lifecycle ctx its readiness probe runs under.
 func startContainerForExit(t *testing.T, o *Orchestrator) context.Context {
 	t.Helper()
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) (string, error) {
-		return "runtime-1", nil
+	o.OnStartContainer = func(_ context.Context, name string, generation int, _ *config.Container) error {
+		o.RecordContainerStarted(name, generation, "runtime-1")
+		return nil
 	}
 	probeCtx := make(chan context.Context, 1)
 	o.OnHealthCheck = func(ctx context.Context, _ string, _ int) error {
@@ -37,7 +38,7 @@ func TestContainerExitDuringStartupEndsTheWait(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	probeCtx := startContainerForExit(t, o)
 
-	o.OnContainerStopped("redis", StoppedContainer{
+	o.OnContainerObserved("redis", ContainerObservation{
 		ID:        "runtime-1",
 		StartedAt: time.Now(),
 		Exit:      ContainerExit{Code: 137, OOMKilled: true},
@@ -56,16 +57,16 @@ func TestContainerExitDuringStartupEndsTheWait(t *testing.T) {
 }
 
 func TestContainerNotYetRunningDuringStartupIsNotAnExit(t *testing.T) {
-	cases := map[string]StoppedContainer{
+	cases := map[string]ContainerObservation{
 		"stale container awaiting removal": {ID: "stale", StartedAt: time.Now().Add(-time.Hour)},
 		"created but not started":          {ID: "runtime-1"},
 	}
-	for name, stopped := range cases {
+	for name, obs := range cases {
 		t.Run(name, func(t *testing.T) {
 			o := newTestOrchestrator(twoContainerCfg())
 			probeCtx := startContainerForExit(t, o)
 
-			o.OnContainerStopped("redis", stopped)
+			o.OnContainerObserved("redis", obs)
 
 			if info, _ := o.GetServiceInfo("redis"); info.State != StateStarting {
 				t.Fatalf("state = %s, want starting", info.State)
@@ -77,12 +78,35 @@ func TestContainerNotYetRunningDuringStartupIsNotAnExit(t *testing.T) {
 	}
 }
 
+func TestContainerExitWhileSidecarsStartEndsTheWait(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	sidecarsStarting := make(chan struct{})
+	o.OnStartContainer = func(ctx context.Context, name string, generation int, _ *config.Container) error {
+		o.RecordContainerStarted(name, generation, "runtime-1")
+		close(sidecarsStarting)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = o.Run(ctx) }()
+	o.Start([]string{"redis"})
+	<-sidecarsStarting
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
+
+	if info, _ := o.GetServiceInfo("redis"); info.State != StateDegraded || info.FailureKind != FailureKindRuntime {
+		t.Fatalf("state=%s kind=%q, want degraded/runtime while sidecars were still starting", info.State, info.FailureKind)
+	}
+}
+
 func TestContainerNotRunningBeforeItsStartReturnsIsNotAnExit(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	release := make(chan struct{})
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) (string, error) {
+	o.OnStartContainer = func(_ context.Context, name string, generation int, _ *config.Container) error {
 		<-release
-		return "runtime-1", nil
+		o.RecordContainerStarted(name, generation, "runtime-1")
+		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -90,7 +114,7 @@ func TestContainerNotRunningBeforeItsStartReturnsIsNotAnExit(t *testing.T) {
 	o.Start([]string{"redis"})
 	waitForState(t, o, "redis", StateStarting)
 
-	o.OnContainerStopped("redis", StoppedContainer{ID: "runtime-1", StartedAt: time.Now()})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now()})
 	close(release)
 
 	if info, _ := o.GetServiceInfo("redis"); info.State != StateStarting {
@@ -104,7 +128,7 @@ func TestContainerExitAfterHealthBudgetEndsRecovery(t *testing.T) {
 	gen := currentGeneration(t, o, "redis")
 	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "redis", Message: "health check for redis failed after 60 retries", FailureKind: FailureKindHealth, Generation: gen})
 
-	o.OnContainerStopped("redis", StoppedContainer{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
 
 	info, _ := o.GetServiceInfo("redis")
 	if info.FailureKind != FailureKindRuntime || info.ContainerExit == nil || info.ContainerExit.Code != 1 {
@@ -119,7 +143,7 @@ func TestLateProbeFailureKeepsTheContainerExit(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	startContainerForExit(t, o)
 	gen := currentGeneration(t, o, "redis")
-	o.OnContainerStopped("redis", StoppedContainer{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 2}})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 2}})
 
 	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "redis", Message: "health check for redis failed after 60 retries", FailureKind: FailureKindHealth, Generation: gen})
 
@@ -133,7 +157,7 @@ func TestProbeSuccessQueuedBeforeTheExitDoesNotHeal(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	startContainerForExit(t, o)
 	gen := currentGeneration(t, o, "redis")
-	o.OnContainerStopped("redis", StoppedContainer{ID: "runtime-1", StartedAt: time.Now()})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now()})
 
 	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
 
@@ -142,26 +166,67 @@ func TestProbeSuccessQueuedBeforeTheExitDoesNotHeal(t *testing.T) {
 	}
 }
 
-func TestExternalStartAfterStartupExitHeals(t *testing.T) {
+func TestExternalStartAfterStartupExitWaitsForReadiness(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	startContainerForExit(t, o)
-	exitedRun := time.Now().Add(-time.Minute)
-	o.OnContainerStopped("redis", StoppedContainer{ID: "runtime-1", StartedAt: exitedRun, Exit: ContainerExit{Code: 1}})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", Running: true, StartedAt: time.Now().Add(-time.Minute)})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now().Add(-time.Minute), Exit: ContainerExit{Code: 1}})
 
-	o.OnContainerObserved("redis", true, time.Now())
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", Running: true, StartedAt: time.Now()})
+
+	if info, _ := o.GetServiceInfo("redis"); info.State != StateDegraded {
+		t.Fatalf("state = %s, want degraded until readiness runs again", info.State)
+	}
+	o.Start([]string{"redis"})
+	waitForState(t, o, "redis", StateStarting)
+}
+
+func TestStaleExitOfAReplacedRuntimeIsNotRecorded(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	startContainerForExit(t, o)
+	gen := currentGeneration(t, o, "redis")
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "replaced", StartedAt: time.Now().Add(-time.Hour), Exit: ContainerExit{Code: 1}})
+
+	if info, _ := o.GetServiceInfo("redis"); info.ContainerExit != nil {
+		t.Fatalf("ContainerExit = %+v, want none for another runtime", info.ContainerExit)
+	}
+}
+
+func TestAdoptedContainerExitStillHealsOnExternalStart(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	firstRun := time.Now().Add(-time.Hour)
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted", Running: true, StartedAt: firstRun})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted", StartedAt: firstRun, Exit: ContainerExit{Code: 1}})
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted", Running: true, StartedAt: time.Now()})
+
+	if info, _ := o.GetServiceInfo("redis"); info.State != StateHealthy {
+		t.Fatalf("state = %s, want healthy after the external start", info.State)
+	}
+}
+
+func TestProbeSuccessBeforeThePollStillRecordsTheExit(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	startContainerForExit(t, o)
+	gen := currentGeneration(t, o, "redis")
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 137}})
 
 	info, _ := o.GetServiceInfo("redis")
-	if info.State != StateHealthy || info.ContainerExit != nil {
-		t.Fatalf("state=%s exit=%+v, want healthy with the exit cleared", info.State, info.ContainerExit)
+	if info.State != StateDegraded || info.ContainerExit == nil || info.ContainerExit.Code != 137 {
+		t.Fatalf("state=%s exit=%+v, want degraded with exit code 137 from one observation", info.State, info.ContainerExit)
 	}
 }
 
 func TestHealthyContainerExitRecordsExitDetails(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	o.OnContainerSeen("redis", true)
-	o.OnContainerObserved("redis", false, time.Time{})
+	o.OnContainerObserved("redis", ContainerObservation{})
 
-	o.OnContainerStopped("redis", StoppedContainer{ID: "adopted", StartedAt: time.Now(), Exit: ContainerExit{Code: 139}})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted", StartedAt: time.Now(), Exit: ContainerExit{Code: 139}})
 
 	info, _ := o.GetServiceInfo("redis")
 	if info.ContainerExit == nil || info.ContainerExit.Code != 139 {
@@ -172,10 +237,10 @@ func TestHealthyContainerExitRecordsExitDetails(t *testing.T) {
 func TestUninspectedExitLeavesExitDetailsUnknown(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	o.OnContainerSeen("redis", true)
-	o.OnContainerObserved("redis", false, time.Time{})
+	o.OnContainerObserved("redis", ContainerObservation{})
 
-	o.OnContainerStopped("redis", StoppedContainer{ID: "adopted"})
-	o.OnContainerStopped("redis", StoppedContainer{ID: "adopted", StartedAt: time.Now(), Exit: ContainerExit{Code: 3}})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted"})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "adopted", StartedAt: time.Now(), Exit: ContainerExit{Code: 3}})
 
 	info, _ := o.GetServiceInfo("redis")
 	if info.ContainerExit == nil || info.ContainerExit.Code != 3 {

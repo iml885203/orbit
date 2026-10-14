@@ -148,12 +148,13 @@ func processFailureEvidence(exitErr error, stderr []string) string {
 }
 
 func (a *App) wireContainerCallbacks(mgr *container.Manager) {
-	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, c *config.Container) (string, error) {
+	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, generation int, c *config.Container) error {
 		slog.Info("starting container", "component", "orbit", "name", name)
 		containerID, err := mgr.Start(ctx, name, c)
 		if err != nil {
-			return "", err
+			return err
 		}
+		a.Orchestrator.RecordContainerStarted(name, generation, containerID)
 		for i := range c.Sidecars {
 			if err := mgr.StartSidecar(ctx, name, c, &c.Sidecars[i]); err != nil {
 				slog.Warn("sidecar failed", "component", "orbit", "name", c.Sidecars[i].Name, "err", err)
@@ -161,7 +162,7 @@ func (a *App) wireContainerCallbacks(mgr *container.Manager) {
 		}
 		// Auto-configure sidecars that need initial setup
 		go container.SetupSidecars(name, c)
-		return containerID, nil
+		return nil
 	}
 	a.Orchestrator.OnStopContainer = func(ctx context.Context, name string) error {
 		return mgr.Stop(ctx, name)
@@ -399,16 +400,14 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 	}
 	poller.OnStateUpdate = func(states map[string]container.ContainerState) {
 		for name, state := range states {
-			restart := orch.OnContainerObserved(name, state.Running, state.StartedAt)
+			restart := orch.OnContainerObserved(name, ContainerObservation{
+				ID:        state.ID,
+				Running:   state.Running,
+				StartedAt: state.StartedAt,
+				Exit:      ContainerExit{Code: state.ExitCode, OOMKilled: state.OOMKilled},
+			})
 			if restart != nil && a.OnExternalContainerRestart != nil {
 				a.OnExternalContainerRestart(*restart)
-			}
-			if !state.Running {
-				orch.OnContainerStopped(name, StoppedContainer{
-					ID:        state.ID,
-					StartedAt: state.StartedAt,
-					Exit:      ContainerExit{Code: state.ExitCode, OOMKilled: state.OOMKilled},
-				})
 			}
 		}
 		// Containers absent from the poll no longer exist in Docker at

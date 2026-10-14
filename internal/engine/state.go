@@ -127,22 +127,22 @@ type ExternalContainerRestart struct {
 	ObservedAt time.Time
 }
 
-// StoppedContainer is Docker's view of a managed container that is not
-// running.
-type StoppedContainer struct {
-	ID string
+// ContainerObservation is one poll's view of a managed container.
+type ContainerObservation struct {
+	ID      string
+	Running bool
 	// StartedAt is zero when the container never started or Docker could not
 	// inspect it; Exit is only Docker's account when StartedAt is set.
 	StartedAt time.Time
 	Exit      ContainerExit
 }
 
-func (s StoppedContainer) ran() bool {
-	return !s.StartedAt.IsZero()
+func (obs ContainerObservation) ran() bool {
+	return !obs.StartedAt.IsZero()
 }
 
-func (s StoppedContainer) endedRuntime(containerID string) bool {
-	return containerID != "" && s.ID == containerID && s.ran()
+func (obs ContainerObservation) endedRuntime(containerID string) bool {
+	return !obs.Running && containerID != "" && obs.ID == containerID && obs.ran()
 }
 
 // ContainerExit is Docker's account of how a container runtime ended.
@@ -181,6 +181,9 @@ type ServiceInfo struct {
 	// because it exited; cleared with StateReason. Mutation requires the
 	// owning Orchestrator's mu.
 	ContainerExit *ContainerExit
+	// exitedBeforeReady marks a ContainerExit that ended readiness probing;
+	// cleared with it. Mutation requires the owning Orchestrator's mu.
+	exitedBeforeReady bool
 	// Generation counts how many times the service has entered Starting.
 	// Health events are stamped with it so a stale probe goroutine from a
 	// previous start can't affect the current one. Mutation requires the
@@ -236,6 +239,35 @@ func (i *ServiceInfo) awaitingReadiness() bool {
 	return i.State == StateStarting || (i.State == StateDegraded && i.FailureKind == FailureKindHealth)
 }
 
+// settleEndedRuntime handles a container Docker reports as not running.
+// Once the runtime Orbit started for this generation has run and ended,
+// waiting on its readiness probe is pointless — Orbit sets no restart policy,
+// so it will not come back by itself. Observations from before that runtime
+// started (a stale container awaiting removal, a created container not yet
+// started) carry a different ID or no start time and are ignored. Caller
+// must hold the owning Orchestrator's mutex.
+func (i *ServiceInfo) settleEndedRuntime(obs ContainerObservation) {
+	if i.Kind != "container" {
+		return
+	}
+	switch {
+	case i.State == StateDegraded && i.StateReason == containerExitedReason:
+		attributable := i.ContainerID == "" || obs.ID == i.ContainerID
+		if i.ContainerExit == nil && obs.ran() && attributable {
+			exit := obs.Exit
+			i.ContainerExit = &exit
+		}
+	case i.awaitingReadiness() && obs.endedRuntime(i.ContainerID):
+		i.Transition(StateDegraded)
+		i.StateReason = containerExitedReason
+		i.FailureKind = FailureKindRuntime
+		exit := obs.Exit
+		i.ContainerExit = &exit
+		i.exitedBeforeReady = true
+		i.cancelLifecycle()
+	}
+}
+
 // MarkRestart bumps the restart counter. Called by RestartService;
 // kept separate from Transition because restarting is a property of
 // the action, not the state being entered. Caller must hold the
@@ -278,6 +310,7 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		i.FailureEvidence = ""
 		i.PortConflict = nil
 		i.ContainerExit = nil
+		i.exitedBeforeReady = false
 		i.AwaitingContainerRemoval = false
 	}
 	switch to {

@@ -21,9 +21,10 @@ type Orchestrator struct {
 	mu         sync.RWMutex
 
 	// Callbacks set by the application
-	// OnStartContainer returns the Docker ID of the runtime it started or
-	// adopted, so an exit can be attributed to this start.
-	OnStartContainer func(ctx context.Context, name string, cfg *config.Container) (string, error)
+	// OnStartContainer reports the runtime it starts or adopts through
+	// RecordContainerStarted as soon as it exists, so an exit during the
+	// rest of the start (sidecars) is attributed to this generation.
+	OnStartContainer func(ctx context.Context, name string, generation int, cfg *config.Container) error
 	OnStopContainer  func(ctx context.Context, name string) error
 	// OnStartProcess receives the per-start config snapshot alongside the
 	// service definition drawn from it, so the callback never Loads a
