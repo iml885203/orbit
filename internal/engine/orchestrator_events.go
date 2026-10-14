@@ -28,13 +28,14 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 			o.mu.Unlock()
 			break
 		}
-		// A success probed just before Docker reported the exit is stale;
-		// only a new runtime (an external start the poller observes) heals.
-		if info.ContainerExit != nil {
+		// The exit ended this generation's probing, so a success still in
+		// flight is stale; readiness must run again (orbit up) to heal.
+		if info.exitedBeforeReady {
 			o.mu.Unlock()
 			break
 		}
 		info.Transition(StateHealthy)
+		info.passedReadiness = true
 		kind := info.Kind
 		o.mu.Unlock()
 

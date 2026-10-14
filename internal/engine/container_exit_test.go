@@ -225,6 +225,35 @@ func TestExitAfterMonitorFailureKeepsRuntimeRecovery(t *testing.T) {
 	}
 }
 
+func TestExternalRestartDuringStartupDoesNotCountAsReady(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	probeCtx := startContainerForExit(t, o)
+	gen := currentGeneration(t, o, "redis")
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", Running: true, StartedAt: time.Now().Add(-time.Minute)})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", Running: true, StartedAt: time.Now()})
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "redis", Message: "budget spent", FailureKind: FailureKindHealth, Generation: gen})
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
+
+	if probeCtx.Err() == nil {
+		t.Fatal("recovery probing still running; readiness never passed")
+	}
+}
+
+func TestHealthyExitBeforeFirstRunningPollRecoversThroughMonitoring(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	startContainerForExit(t, o)
+	gen := currentGeneration(t, o, "redis")
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
+
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+
+	if info, _ := o.GetServiceInfo("redis"); info.State != StateHealthy {
+		t.Fatalf("state = %s, want healthy once monitoring succeeds", info.State)
+	}
+}
+
 func TestProbeSuccessBeforeThePollStillRecordsTheExit(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	startContainerForExit(t, o)

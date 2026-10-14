@@ -184,6 +184,10 @@ type ServiceInfo struct {
 	// exitedBeforeReady marks a ContainerExit that ended readiness probing;
 	// cleared with it. Mutation requires the owning Orchestrator's mu.
 	exitedBeforeReady bool
+	// passedReadiness records that the current generation's readiness check
+	// succeeded; reset on every start. Mutation requires the owning
+	// Orchestrator's mu.
+	passedReadiness bool
 	// Generation counts how many times the service has entered Starting.
 	// Health events are stamped with it so a stale probe goroutine from a
 	// previous start can't affect the current one. Mutation requires the
@@ -240,7 +244,7 @@ func (i *ServiceInfo) awaitingReadiness() bool {
 	if i.State == StateStarting {
 		return true
 	}
-	return i.State == StateDegraded && i.FailureKind == FailureKindHealth && i.HealthyAt.IsZero()
+	return i.State == StateDegraded && i.FailureKind == FailureKindHealth && !i.passedReadiness
 }
 
 // settleEndedRuntime handles a container Docker reports as not running.
@@ -321,6 +325,7 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 	case StateStarting:
 		i.StartedAt = time.Now()
 		i.HealthyAt = time.Time{}
+		i.passedReadiness = false
 	case StateHealthy:
 		if i.HealthyAt.IsZero() {
 			i.HealthyAt = time.Now()
