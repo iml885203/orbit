@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -455,9 +456,13 @@ func TestManagerStartsReadyContainerWithoutWaitingForQueuedPull(t *testing.T) {
 
 	firstDone := make(chan error, 1)
 	go func() {
-		firstDone <- manager.Start(ctx, "first", &config.Container{
+		runtime, err := manager.Start(ctx, "first", &config.Container{
 			Image: "first:latest", PullPolicy: "always",
 		})
+		if err == nil && !strings.HasSuffix(runtime.ID, "-id") {
+			err = fmt.Errorf("Start returned runtime ID %q, want the created container's ID", runtime.ID)
+		}
+		firstDone <- err
 	}()
 	if image := <-api.pullStarted; image != "first:latest" {
 		t.Fatalf("first pull = %q", image)
@@ -465,9 +470,10 @@ func TestManagerStartsReadyContainerWithoutWaitingForQueuedPull(t *testing.T) {
 
 	secondDone := make(chan error, 1)
 	go func() {
-		secondDone <- manager.Start(ctx, "second", &config.Container{
+		_, err := manager.Start(ctx, "second", &config.Container{
 			Image: "second:latest", PullPolicy: "always",
 		})
+		secondDone <- err
 	}()
 	select {
 	case image := <-api.pullStarted:

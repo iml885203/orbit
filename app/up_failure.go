@@ -17,10 +17,15 @@ type upFailureJSONData struct {
 }
 
 type upFailedResource struct {
-	Name        string   `json:"name"`
-	State       string   `json:"state"`
-	StateReason string   `json:"state_reason,omitempty"`
-	LogTail     []string `json:"log_tail,omitempty"`
+	Name        string              `json:"name"`
+	Kind        daemon.ResourceKind `json:"kind"`
+	Role        string              `json:"role,omitempty"`
+	State       string              `json:"state"`
+	StateReason string              `json:"state_reason,omitempty"`
+	FailureKind string              `json:"failure_kind,omitempty"`
+	ExitCode    *int                `json:"exit_code,omitempty"`
+	OOMKilled   bool                `json:"oom_killed,omitempty"`
+	LogTail     []string            `json:"log_tail,omitempty"`
 }
 
 // buildUpFailureJSONData packs the evidence for every watched resource that
@@ -53,8 +58,13 @@ func buildUpFailureJSONData(names []string, status *daemon.StatusResponse, logTa
 		}
 		data.FailedResources = append(data.FailedResources, upFailedResource{
 			Name:        svc.Name,
+			Kind:        svc.Kind,
+			Role:        svc.Role,
 			State:       svc.State,
 			StateReason: reason,
+			FailureKind: svc.FailureKind,
+			ExitCode:    svc.ExitCode,
+			OOMKilled:   svc.OOMKilled,
 			LogTail:     logTail(svc.Name),
 		})
 	}

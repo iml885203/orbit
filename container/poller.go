@@ -13,9 +13,14 @@ import (
 // ContainerState represents a snapshot of a container's Docker state.
 type ContainerState struct {
 	Name      string
+	ID        string
 	Status    string // running, exited, etc.
 	Running   bool
 	StartedAt time.Time
+	// ExitCode and OOMKilled describe the last runtime once it has ended;
+	// Docker leaves both zero for a container that never started.
+	ExitCode  int
+	OOMKilled bool
 }
 
 // Poller periodically polls Docker for the state of orbit-managed containers
@@ -102,6 +107,7 @@ func (p *Poller) poll(ctx context.Context) {
 		}
 		state := ContainerState{
 			Name:    name,
+			ID:      containers.Items[i].ID,
 			Status:  string(containers.Items[i].State),
 			Running: containers.Items[i].State == "running",
 		}
@@ -118,6 +124,8 @@ func (p *Poller) poll(ctx context.Context) {
 			// later inspect result is the authoritative runtime snapshot.
 			state.Status = string(inspect.Container.State.Status)
 			state.Running = inspect.Container.State.Running
+			state.ExitCode = inspect.Container.State.ExitCode
+			state.OOMKilled = inspect.Container.State.OOMKilled
 			startedAt, parseErr := time.Parse(time.RFC3339Nano, inspect.Container.State.StartedAt)
 			if parseErr == nil {
 				state.StartedAt = startedAt

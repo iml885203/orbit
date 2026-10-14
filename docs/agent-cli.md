@@ -155,9 +155,17 @@ application log line captured for that failed generation. Treat the evidence
 as supporting detail, not a replacement for the lifecycle reason.
 
 A failed `orbit up --json` keeps its evidence in `data.failed_resources`: one
-entry per requested resource that did not reach healthy, with `name`, `state`,
-`state_reason`, and `log_tail` (at most 20 recent log lines). Read the failure
-from there instead of issuing a follow-up `orbit logs` call.
+entry per requested resource that did not reach healthy, with `name`, `kind`
+(`container` or `service`), `role`, `state`, `state_reason`, `failure_kind`,
+and `log_tail` (at most 20 recent log lines). Read the failure from there
+instead of issuing a follow-up `orbit logs` call.
+
+A container that stops while Orbit is still waiting for it to become healthy
+ends the wait at once, with `failure_kind: runtime` and Docker's `exit_code`
+(plus `oom_killed: true` when the kernel killed it). `orbit status --json`
+reports the same fields. Look for that entry in `failed_resources` rather than
+relying on `error.code` alone: a dependent resource can be reported first as
+`dependency_blocked`.
 
 Destructive steps that need an explicit go-ahead use the stable
 `confirmation_required` error code. The refusal changes nothing; the first

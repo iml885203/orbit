@@ -252,6 +252,20 @@ func TestLifecycleTerminalErrorIncludesObservedReason(t *testing.T) {
 	}
 }
 
+func TestLifecycleTerminalErrorReportsContainerExit(t *testing.T) {
+	exitCode := 137
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "db", State: "degraded", StateReason: "container exited unexpectedly", FailureKind: "runtime", ExitCode: &exitCode, OOMKilled: true},
+	}}
+	err := lifecycleTerminalError(nil, status, []string{"db"}, true)
+	if err == nil || err.Error() != "db failed to become healthy: container exited unexpectedly (exit code 137, OOM killed)" {
+		t.Fatalf("lifecycleTerminalError = %v", err)
+	}
+	if !errors.Is(err, cli.ErrServiceStartFailed) {
+		t.Fatalf("error = %v, want service-start-failed classification", err)
+	}
+}
+
 func TestLifecycleTerminalErrorPreservesPortConflict(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
 		Name:        "redis",

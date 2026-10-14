@@ -646,6 +646,13 @@ func lifecycleTerminalErrorWithProgress(client *daemon.Client, status *daemon.St
 			if reason == "" && svc.HealthProgress != nil {
 				reason = svc.HealthProgress.LastErr
 			}
+			if svc.ExitCode != nil {
+				reason += fmt.Sprintf(" (exit code %d", *svc.ExitCode)
+				if svc.OOMKilled {
+					reason += ", OOM killed"
+				}
+				reason += ")"
+			}
 			message := svc.Name + " failed to become healthy"
 			if reason != "" {
 				message += ": " + reason

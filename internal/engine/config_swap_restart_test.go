@@ -20,7 +20,7 @@ func TestRestartService_UsesFreshlyPublishedImage(t *testing.T) {
 	})
 	o := NewOrchestrator(holder, nil, nil)
 	started := make(chan string, 2)
-	o.OnStartContainer = func(_ context.Context, _ string, c *config.Container) error {
+	o.OnStartContainer = func(_ context.Context, _ string, _ int, c *config.Container) error {
 		started <- c.Image
 		return nil
 	}

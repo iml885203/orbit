@@ -71,7 +71,7 @@ stateDiagram-v2
     Building --> Starting: BuildComplete
     Building --> Degraded: BuildFailed
     Starting --> Healthy: HealthOK
-    Starting --> Degraded: HealthFail / ProcessExited
+    Starting --> Degraded: HealthFail / ProcessExited / ContainerDrift
     Healthy --> Degraded: HealthFail / ProcessExited / ContainerDrift
     Healthy --> Pending: user restart (從 Pending 重新進入 DAG)
     Healthy --> Stopping: Shutdown / user stop

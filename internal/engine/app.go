@@ -148,11 +148,13 @@ func processFailureEvidence(exitErr error, stderr []string) string {
 }
 
 func (a *App) wireContainerCallbacks(mgr *container.Manager) {
-	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, c *config.Container) error {
+	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, generation int, c *config.Container) error {
 		slog.Info("starting container", "component", "orbit", "name", name)
-		if err := mgr.Start(ctx, name, c); err != nil {
+		runtime, err := mgr.Start(ctx, name, c)
+		if err != nil {
 			return err
 		}
+		a.Orchestrator.RecordContainerStarted(name, generation, runtime.ID, runtime.StartedAt)
 		for i := range c.Sidecars {
 			if err := mgr.StartSidecar(ctx, name, c, &c.Sidecars[i]); err != nil {
 				slog.Warn("sidecar failed", "component", "orbit", "name", c.Sidecars[i].Name, "err", err)
@@ -398,7 +400,12 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 	}
 	poller.OnStateUpdate = func(states map[string]container.ContainerState) {
 		for name, state := range states {
-			restart := orch.OnContainerObserved(name, state.Running, state.StartedAt)
+			restart := orch.OnContainerObserved(name, ContainerObservation{
+				ID:        state.ID,
+				Running:   state.Running,
+				StartedAt: state.StartedAt,
+				Exit:      ContainerExit{Code: state.ExitCode, OOMKilled: state.OOMKilled},
+			})
 			if restart != nil && a.OnExternalContainerRestart != nil {
 				a.OnExternalContainerRestart(*restart)
 			}

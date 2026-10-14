@@ -8,6 +8,8 @@ import (
 
 const DockerObservationUnavailableReason = "Docker is unavailable; Orbit will reconnect automatically"
 
+const containerExitedReason = "container exited unexpectedly"
+
 func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	o.mu.Lock()
 	info := o.services[name]
@@ -26,6 +28,8 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	info.cancel = cancel
 	info.Generation++
 	gen := info.Generation
+	info.ContainerID = ""
+	info.containerRunStartedAt = time.Time{}
 	if info.Kind == "container" && !info.ContainerStartedAt.IsZero() {
 		info.ExpectingContainerStart = true
 	}
@@ -41,7 +45,7 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 		var err error
 		if info.Kind == "container" {
 			if o.OnStartContainer != nil {
-				err = o.OnStartContainer(svcCtx, name, cfg.Containers[name])
+				err = o.OnStartContainer(svcCtx, name, gen, cfg.Containers[name])
 			}
 		} else {
 			if o.OnStartProcess != nil {
@@ -105,11 +109,13 @@ func (o *Orchestrator) Start(names []string) {
 //   - stopped + running        → healthy (adoption)
 //   - healthy + not running    → degraded (drift)
 //   - other transitions are ignored; starting → healthy is driven by
-//     the normal health-check path, not the poller.
+//     the normal health-check path, not the poller; a container whose
+//     runtime ended before it became healthy is settled by
+//     OnContainerObserved.
 //
 // Unknown service names are silently ignored.
 func (o *Orchestrator) OnContainerSeen(name string, running bool) {
-	o.OnContainerObserved(name, running, time.Time{})
+	o.OnContainerObserved(name, ContainerObservation{Running: running})
 }
 
 // RestoreContainerRuntime restores persisted Docker timing metadata before
@@ -134,8 +140,11 @@ func (o *Orchestrator) RestoreContainerRuntime(
 	info.LastExternalStartedAt = lastExternalStartedAt
 }
 
-// OnContainerObserved also reconciles Docker's authoritative start time.
-func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt time.Time) *ExternalContainerRestart {
+// OnContainerObserved also reconciles Docker's authoritative start time and,
+// in the same critical section, settles a runtime that ended: a health event
+// handled between two separate calls could otherwise hide the exit.
+func (o *Orchestrator) OnContainerObserved(name string, obs ContainerObservation) *ExternalContainerRestart {
+	running, startedAt := obs.Running, obs.StartedAt
 	o.mu.Lock()
 	info, exists := o.services[name]
 	if !exists {
@@ -170,23 +179,28 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 	prev := info.State
 	observationWasUnavailable := info.StateReason == DockerObservationUnavailableReason
 	switch {
+	// An exit before readiness cancelled probing, so an external start there
+	// must go back through readiness (orbit up) rather than be trusted.
 	case restart != nil && running && prev == StateDegraded &&
-		info.StateReason == "container exited unexpectedly":
+		info.StateReason == containerExitedReason && !info.exitedBeforeReady:
 		info.Transition(StateHealthy)
 	case running && prev == StateDegraded && observationWasUnavailable:
 		info.Transition(StateHealthy)
 	case running && prev == StateStopped:
 		info.Transition(StateHealthy)
 	case !running && prev == StateDegraded && observationWasUnavailable:
-		info.StateReason = "container exited unexpectedly"
+		info.StateReason = containerExitedReason
 		info.FailureKind = FailureKindRuntime
 	case !running && prev == StateHealthy:
 		// Docker reports the container as existing but not running while we
 		// believe it healthy — it died outside orbit's control (crash, OOM
 		// kill, manual docker stop).
 		info.Transition(StateDegraded)
-		info.StateReason = "container exited unexpectedly"
+		info.StateReason = containerExitedReason
 		info.FailureKind = FailureKindRuntime
+	}
+	if !running {
+		info.settleEndedRuntime(obs)
 	}
 	newState := info.State
 	o.mu.Unlock()
@@ -195,6 +209,19 @@ func (o *Orchestrator) OnContainerObserved(name string, running bool, startedAt 
 		o.notifyDependents(name)
 	}
 	return restart
+}
+
+// RecordContainerStarted attributes the Docker runtime that a start or
+// adoption produced to that generation, so only its exit ends the wait.
+// startedAt is known only for an adopted runtime, whose ID an earlier run
+// shared.
+func (o *Orchestrator) RecordContainerStarted(name string, generation int, containerID string, startedAt time.Time) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if info, exists := o.services[name]; exists && info.Generation == generation {
+		info.ContainerID = containerID
+		info.containerRunStartedAt = startedAt
+	}
 }
 
 // A single empty snapshot immediately after Docker reconnects is not enough

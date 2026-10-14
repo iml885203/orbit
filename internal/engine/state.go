@@ -127,6 +127,33 @@ type ExternalContainerRestart struct {
 	ObservedAt time.Time
 }
 
+// ContainerObservation is one poll's view of a managed container.
+type ContainerObservation struct {
+	ID      string
+	Running bool
+	// StartedAt is zero when the container never started or Docker could not
+	// inspect it; Exit is only Docker's account when StartedAt is set.
+	StartedAt time.Time
+	Exit      ContainerExit
+}
+
+func (obs ContainerObservation) ran() bool {
+	return !obs.StartedAt.IsZero()
+}
+
+func (obs ContainerObservation) endedRuntime(containerID string, runStartedAt time.Time) bool {
+	if obs.Running || containerID == "" || obs.ID != containerID || !obs.ran() {
+		return false
+	}
+	return !obs.StartedAt.Before(runStartedAt)
+}
+
+// ContainerExit is Docker's account of how a container runtime ended.
+type ContainerExit struct {
+	Code      int
+	OOMKilled bool
+}
+
 // ServiceInfo holds runtime state for a single service/container.
 type ServiceInfo struct {
 	Name         string
@@ -149,6 +176,25 @@ type ServiceInfo struct {
 	// ExpectingContainerStart prevents an Orbit-managed start from being
 	// misclassified when Docker reports the replacement runtime.
 	ExpectingContainerStart bool
+	// ContainerID is the Docker runtime Orbit started or adopted for the
+	// current generation; empty until that start returns. Mutation requires
+	// the owning Orchestrator's mu.
+	ContainerID string
+	// containerRunStartedAt is the adopted runtime's Docker start time, so
+	// exits of earlier runs sharing its ID are ignored; zero for a runtime
+	// Orbit created. Mutation requires the owning Orchestrator's mu.
+	containerRunStartedAt time.Time
+	// ContainerExit records how the container ended while it is Degraded
+	// because it exited; cleared with StateReason. Mutation requires the
+	// owning Orchestrator's mu.
+	ContainerExit *ContainerExit
+	// exitedBeforeReady marks a ContainerExit that ended readiness probing;
+	// cleared with it. Mutation requires the owning Orchestrator's mu.
+	exitedBeforeReady bool
+	// passedReadiness records that the current generation's readiness check
+	// succeeded; reset on every start. Mutation requires the owning
+	// Orchestrator's mu.
+	passedReadiness bool
 	// Generation counts how many times the service has entered Starting.
 	// Health events are stamped with it so a stale probe goroutine from a
 	// previous start can't affect the current one. Mutation requires the
@@ -198,6 +244,45 @@ func (i *ServiceInfo) cancelLifecycle() {
 	i.cancel = nil
 }
 
+// Recovery probing after the startup budget ran out is still waiting for
+// the first readiness pass; a health failure after the generation was
+// healthy is runtime monitoring, which recovers on its own.
+func (i *ServiceInfo) awaitingReadiness() bool {
+	if i.State == StateStarting {
+		return true
+	}
+	return i.State == StateDegraded && i.FailureKind == FailureKindHealth && !i.passedReadiness
+}
+
+// settleEndedRuntime handles a container Docker reports as not running.
+// Once the runtime Orbit started for this generation has run and ended,
+// waiting on its readiness probe is pointless — Orbit sets no restart policy,
+// so it will not come back by itself. Observations from before that runtime
+// started (a stale container awaiting removal, a created container not yet
+// started) carry a different ID or no start time and are ignored. Caller
+// must hold the owning Orchestrator's mutex.
+func (i *ServiceInfo) settleEndedRuntime(obs ContainerObservation) {
+	if i.Kind != "container" {
+		return
+	}
+	switch {
+	case i.State == StateDegraded && i.StateReason == containerExitedReason:
+		attributable := i.ContainerID == "" || obs.ID == i.ContainerID
+		if i.ContainerExit == nil && obs.ran() && attributable {
+			exit := obs.Exit
+			i.ContainerExit = &exit
+		}
+	case i.awaitingReadiness() && obs.endedRuntime(i.ContainerID, i.containerRunStartedAt):
+		i.Transition(StateDegraded)
+		i.StateReason = containerExitedReason
+		i.FailureKind = FailureKindRuntime
+		exit := obs.Exit
+		i.ContainerExit = &exit
+		i.exitedBeforeReady = true
+		i.cancelLifecycle()
+	}
+}
+
 // MarkRestart bumps the restart counter. Called by RestartService;
 // kept separate from Transition because restarting is a property of
 // the action, not the state being entered. Caller must hold the
@@ -239,12 +324,15 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		i.FailureKind = ""
 		i.FailureEvidence = ""
 		i.PortConflict = nil
+		i.ContainerExit = nil
+		i.exitedBeforeReady = false
 		i.AwaitingContainerRemoval = false
 	}
 	switch to {
 	case StateStarting:
 		i.StartedAt = time.Now()
 		i.HealthyAt = time.Time{}
+		i.passedReadiness = false
 	case StateHealthy:
 		if i.HealthyAt.IsZero() {
 			i.HealthyAt = time.Now()

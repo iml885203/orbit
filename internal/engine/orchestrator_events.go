@@ -28,7 +28,14 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 			o.mu.Unlock()
 			break
 		}
+		// The exit ended this generation's probing, so a success still in
+		// flight is stale; readiness must run again (orbit up) to heal.
+		if info.exitedBeforeReady {
+			o.mu.Unlock()
+			break
+		}
 		info.Transition(StateHealthy)
+		info.passedReadiness = true
 		kind := info.Kind
 		o.mu.Unlock()
 
@@ -62,7 +69,9 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 					info.StateReason = conflict.Error()
 				}
 			case StateDegraded:
-				if info.StateReason == DockerObservationUnavailableReason {
+				// A probe result racing the exit can't be better evidence
+				// than Docker reporting the runtime ended.
+				if info.StateReason == DockerObservationUnavailableReason || info.ContainerExit != nil {
 					break
 				}
 				// Recovery probing can produce a sharper diagnosis than

@@ -164,6 +164,12 @@ export interface ResourceStatus {
   failure_kind?: string;
   failure_evidence?: string;
   port_conflict?: ResourcePortConflict;
+  /**
+   * ExitCode and OOMKilled report how a container that exited unexpectedly
+   * ended, as Docker recorded it; absent in every other state.
+   */
+  exit_code?: number /* int */;
+  oom_killed?: boolean;
   logs_available?: boolean;
   restart_count: number /* int */;
   external_restart_count: number /* int */;

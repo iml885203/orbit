@@ -30,7 +30,7 @@ func twoContainerCfg() *config.Config {
 
 func newTestOrchestrator(cfg *config.Config) *Orchestrator {
 	o := NewOrchestrator(config.NewHolder(cfg), nil, nil)
-	o.OnStartContainer = func(_ context.Context, _ string, _ *config.Container) error { return nil }
+	o.OnStartContainer = func(_ context.Context, _ string, _ int, _ *config.Container) error { return nil }
 	o.OnStopContainer = func(_ context.Context, _ string) error { return nil }
 	o.OnStartProcess = func(_ context.Context, _ string, _ int, _ *config.Config, _ *config.Service) error { return nil }
 	o.OnStopProcess = func(_ string) error { return nil }
@@ -73,7 +73,7 @@ func TestStart_TransitionsFromStoppedToStarting(t *testing.T) {
 	o := newTestOrchestrator(cfg)
 
 	startedCh := make(chan string, 4)
-	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) error {
+	o.OnStartContainer = func(_ context.Context, name string, _ int, _ *config.Container) error {
 		startedCh <- name
 		return nil
 	}
@@ -99,7 +99,7 @@ func TestStart_WaitsForPendingDeps(t *testing.T) {
 	o := newTestOrchestrator(cfg)
 
 	started := make(chan string, 4)
-	o.OnStartContainer = func(_ context.Context, name string, _ *config.Container) error {
+	o.OnStartContainer = func(_ context.Context, name string, _ int, _ *config.Container) error {
 		started <- name
 		return nil
 	}
@@ -329,17 +329,17 @@ func TestOnContainerObserved_ExternalRestartResetsRuntimeTruthOnce(t *testing.T)
 	firstStart := time.Now().Add(-time.Minute)
 	secondStart := time.Now().Add(-time.Second)
 
-	if restart := o.OnContainerObserved("redis", true, firstStart); restart != nil {
+	if restart := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: firstStart}); restart != nil {
 		t.Fatal("initial observation classified as a restart")
 	}
-	if restart := o.OnContainerObserved("redis", true, firstStart); restart != nil {
+	if restart := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: firstStart}); restart != nil {
 		t.Fatal("unchanged runtime classified as a restart")
 	}
-	restart := o.OnContainerObserved("redis", true, secondStart)
+	restart := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: secondStart})
 	if restart == nil || restart.Name != "redis" || !restart.StartedAt.Equal(secondStart) {
 		t.Fatalf("restart = %#v, want redis at second Docker start", restart)
 	}
-	if duplicate := o.OnContainerObserved("redis", true, secondStart); duplicate != nil {
+	if duplicate := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: secondStart}); duplicate != nil {
 		t.Fatal("ordinary poll incremented external restart twice")
 	}
 
@@ -357,12 +357,12 @@ func TestOnContainerObserved_ManagedStartIsNotExternal(t *testing.T) {
 	o := newTestOrchestrator(cfg)
 	firstStart := time.Now().Add(-time.Minute)
 	secondStart := time.Now()
-	o.OnContainerObserved("redis", true, firstStart)
+	o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: firstStart})
 
 	o.mu.Lock()
 	o.services["redis"].ExpectingContainerStart = true
 	o.mu.Unlock()
-	if restart := o.OnContainerObserved("redis", true, secondStart); restart != nil {
+	if restart := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: secondStart}); restart != nil {
 		t.Fatalf("managed replacement classified as external: %#v", restart)
 	}
 	info, _ := o.GetServiceInfo("redis")
@@ -379,7 +379,7 @@ func TestRestoreContainerRuntimeDetectsRestartWhileDaemonWasDown(t *testing.T) {
 	lastRestart := time.Now().Add(-time.Hour)
 	o.RestoreContainerRuntime("redis", firstStart, 2, lastRestart, firstStart)
 
-	restart := o.OnContainerObserved("redis", true, secondStart)
+	restart := o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: secondStart})
 	if restart == nil {
 		t.Fatal("container restart while daemon was down was not detected")
 	}
@@ -395,13 +395,13 @@ func TestOnContainerObserved_ManagedStartDoesNotRewriteLastExternalEvent(t *test
 	initialStart := time.Now().Add(-time.Minute)
 	externalStart := time.Now().Add(-time.Second)
 	managedStart := time.Now()
-	o.OnContainerObserved("redis", true, initialStart)
-	o.OnContainerObserved("redis", true, externalStart)
+	o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: initialStart})
+	o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: externalStart})
 
 	o.mu.Lock()
 	o.services["redis"].ExpectingContainerStart = true
 	o.mu.Unlock()
-	o.OnContainerObserved("redis", true, managedStart)
+	o.OnContainerObserved("redis", ContainerObservation{Running: true, StartedAt: managedStart})
 
 	info, _ := o.GetServiceInfo("redis")
 	if info.ExternalRestartCount != 1 {

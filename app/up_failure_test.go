@@ -73,6 +73,42 @@ func TestBuildUpFailureJSONDataCollectsEvidencePerUnhealthyResource(t *testing.T
 	}
 }
 
+func TestUpJSONFailureIdentifiesAnExitedInfraContainer(t *testing.T) {
+	exitCode := 137
+	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{
+			Name: "db", Kind: daemon.ResourceKindContainer, Role: "infra", State: "degraded",
+			StateReason: "container exited unexpectedly", FailureKind: "runtime",
+			ExitCode: &exitCode, OOMKilled: true,
+		},
+		{Name: "api", Kind: daemon.ResourceKindService, Role: "backend", State: "pending", PendingDependencies: []string{"db"}},
+	}}
+	data := buildUpFailureJSONData([]string{"db", "api"}, status, func(string) []string { return nil })
+	var output bytes.Buffer
+	if err := cli.WriteJSONFailure(&output, "orbit up --json", data, errors.New("up failed"), nil); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		Data struct {
+			FailedResources []map[string]any `json:"failed_resources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	want := []map[string]any{
+		{
+			"name": "db", "kind": "container", "role": "infra", "state": "degraded",
+			"state_reason": "container exited unexpectedly", "failure_kind": "runtime",
+			"exit_code": float64(137), "oom_killed": true,
+		},
+		{"name": "api", "kind": "service", "role": "backend", "state": "pending", "state_reason": "waiting for db"},
+	}
+	if !reflect.DeepEqual(envelope.Data.FailedResources, want) {
+		t.Fatalf("failed_resources = %+v, want %+v", envelope.Data.FailedResources, want)
+	}
+}
+
 func TestBuildUpFailureJSONDataFallsBackToHealthProbeError(t *testing.T) {
 	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{
