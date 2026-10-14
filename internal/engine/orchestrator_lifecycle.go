@@ -29,6 +29,7 @@ func (o *Orchestrator) startService(ctx context.Context, name string) error {
 	info.Generation++
 	gen := info.Generation
 	info.ContainerID = ""
+	info.containerRunStartedAt = time.Time{}
 	if info.Kind == "container" && !info.ContainerStartedAt.IsZero() {
 		info.ExpectingContainerStart = true
 	}
@@ -212,11 +213,14 @@ func (o *Orchestrator) OnContainerObserved(name string, obs ContainerObservation
 
 // RecordContainerStarted attributes the Docker runtime that a start or
 // adoption produced to that generation, so only its exit ends the wait.
-func (o *Orchestrator) RecordContainerStarted(name string, generation int, containerID string) {
+// startedAt is known only for an adopted runtime, whose ID an earlier run
+// shared.
+func (o *Orchestrator) RecordContainerStarted(name string, generation int, containerID string, startedAt time.Time) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if info, exists := o.services[name]; exists && info.Generation == generation {
 		info.ContainerID = containerID
+		info.containerRunStartedAt = startedAt
 	}
 }
 

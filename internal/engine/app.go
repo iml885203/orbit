@@ -150,11 +150,11 @@ func processFailureEvidence(exitErr error, stderr []string) string {
 func (a *App) wireContainerCallbacks(mgr *container.Manager) {
 	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, generation int, c *config.Container) error {
 		slog.Info("starting container", "component", "orbit", "name", name)
-		containerID, err := mgr.Start(ctx, name, c)
+		runtime, err := mgr.Start(ctx, name, c)
 		if err != nil {
 			return err
 		}
-		a.Orchestrator.RecordContainerStarted(name, generation, containerID)
+		a.Orchestrator.RecordContainerStarted(name, generation, runtime.ID, runtime.StartedAt)
 		for i := range c.Sidecars {
 			if err := mgr.StartSidecar(ctx, name, c, &c.Sidecars[i]); err != nil {
 				slog.Warn("sidecar failed", "component", "orbit", "name", c.Sidecars[i].Name, "err", err)

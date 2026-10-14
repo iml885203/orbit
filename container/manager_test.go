@@ -456,11 +456,11 @@ func TestManagerStartsReadyContainerWithoutWaitingForQueuedPull(t *testing.T) {
 
 	firstDone := make(chan error, 1)
 	go func() {
-		id, err := manager.Start(ctx, "first", &config.Container{
+		runtime, err := manager.Start(ctx, "first", &config.Container{
 			Image: "first:latest", PullPolicy: "always",
 		})
-		if err == nil && !strings.HasSuffix(id, "-id") {
-			err = fmt.Errorf("Start returned runtime ID %q, want the created container's ID", id)
+		if err == nil && !strings.HasSuffix(runtime.ID, "-id") {
+			err = fmt.Errorf("Start returned runtime ID %q, want the created container's ID", runtime.ID)
 		}
 		firstDone <- err
 	}()

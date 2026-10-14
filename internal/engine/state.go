@@ -141,8 +141,11 @@ func (obs ContainerObservation) ran() bool {
 	return !obs.StartedAt.IsZero()
 }
 
-func (obs ContainerObservation) endedRuntime(containerID string) bool {
-	return !obs.Running && containerID != "" && obs.ID == containerID && obs.ran()
+func (obs ContainerObservation) endedRuntime(containerID string, runStartedAt time.Time) bool {
+	if obs.Running || containerID == "" || obs.ID != containerID || !obs.ran() {
+		return false
+	}
+	return runStartedAt.IsZero() || obs.StartedAt.Equal(runStartedAt)
 }
 
 // ContainerExit is Docker's account of how a container runtime ended.
@@ -177,6 +180,10 @@ type ServiceInfo struct {
 	// current generation; empty until that start returns. Mutation requires
 	// the owning Orchestrator's mu.
 	ContainerID string
+	// containerRunStartedAt is the adopted runtime's Docker start time;
+	// zero for a runtime Orbit created. Mutation requires the owning
+	// Orchestrator's mu.
+	containerRunStartedAt time.Time
 	// ContainerExit records how the container ended while it is Degraded
 	// because it exited; cleared with StateReason. Mutation requires the
 	// owning Orchestrator's mu.
@@ -265,7 +272,7 @@ func (i *ServiceInfo) settleEndedRuntime(obs ContainerObservation) {
 			exit := obs.Exit
 			i.ContainerExit = &exit
 		}
-	case i.awaitingReadiness() && obs.endedRuntime(i.ContainerID):
+	case i.awaitingReadiness() && obs.endedRuntime(i.ContainerID, i.containerRunStartedAt):
 		i.Transition(StateDegraded)
 		i.StateReason = containerExitedReason
 		i.FailureKind = FailureKindRuntime

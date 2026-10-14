@@ -13,7 +13,7 @@ import (
 func startContainerForExit(t *testing.T, o *Orchestrator) context.Context {
 	t.Helper()
 	o.OnStartContainer = func(_ context.Context, name string, generation int, _ *config.Container) error {
-		o.RecordContainerStarted(name, generation, "runtime-1")
+		o.RecordContainerStarted(name, generation, "runtime-1", time.Time{})
 		return nil
 	}
 	probeCtx := make(chan context.Context, 1)
@@ -78,11 +78,37 @@ func TestContainerNotYetRunningDuringStartupIsNotAnExit(t *testing.T) {
 	}
 }
 
+func TestExitSnapshotOfAnEarlierRunIsNotTheAdoptedRuntimeExiting(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	adoptedRun := time.Now()
+	o.OnStartContainer = func(_ context.Context, name string, generation int, _ *config.Container) error {
+		o.RecordContainerStarted(name, generation, "runtime-1", adoptedRun)
+		return nil
+	}
+	probeCtx := make(chan context.Context, 1)
+	o.OnHealthCheck = func(ctx context.Context, _ string, _ int) error { probeCtx <- ctx; return nil }
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = o.Run(ctx) }()
+	o.Start([]string{"redis"})
+	hctx := <-probeCtx
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: adoptedRun.Add(-time.Hour), Exit: ContainerExit{Code: 1}})
+	if hctx.Err() != nil {
+		t.Fatal("an earlier run's exit cancelled the adopted runtime's readiness")
+	}
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: adoptedRun, Exit: ContainerExit{Code: 1}})
+	if hctx.Err() == nil {
+		t.Fatal("the adopted runtime's own exit did not end readiness")
+	}
+}
+
 func TestContainerExitWhileSidecarsStartEndsTheWait(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	sidecarsStarting := make(chan struct{})
 	o.OnStartContainer = func(ctx context.Context, name string, generation int, _ *config.Container) error {
-		o.RecordContainerStarted(name, generation, "runtime-1")
+		o.RecordContainerStarted(name, generation, "runtime-1", time.Time{})
 		close(sidecarsStarting)
 		<-ctx.Done()
 		return ctx.Err()
@@ -105,7 +131,7 @@ func TestContainerNotRunningBeforeItsStartReturnsIsNotAnExit(t *testing.T) {
 	release := make(chan struct{})
 	o.OnStartContainer = func(_ context.Context, name string, generation int, _ *config.Container) error {
 		<-release
-		o.RecordContainerStarted(name, generation, "runtime-1")
+		o.RecordContainerStarted(name, generation, "runtime-1", time.Time{})
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
