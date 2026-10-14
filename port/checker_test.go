@@ -34,3 +34,19 @@ func TestCheckPortsDetectsIPv4LoopbackListener(t *testing.T) {
 		t.Fatalf("conflicts = %+v", conflicts)
 	}
 }
+
+func TestAvailableRejectsIPv6LoopbackListener(t *testing.T) {
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback unavailable: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	portNumber := listener.Addr().(*net.TCPAddr).Port
+
+	if Available(portNumber) {
+		t.Fatalf("Available(%d) = true while [::1]:%d is held", portNumber, portNumber)
+	}
+	if conflicts := CheckPorts(map[string][]int{"api": {portNumber}}); len(conflicts) != 1 {
+		t.Fatalf("CheckPorts disagrees with Available: %+v", conflicts)
+	}
+}
