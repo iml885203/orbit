@@ -33,7 +33,7 @@ func ResolvePorts(cfg *config.Config) error {
 				reserved[assigned] = true
 				continue
 			}
-			assigned, err := choosePort(request.preferred, reserved)
+			assigned, err := choosePort(request.preferred, reserved, orbitport.Available)
 			if err != nil {
 				return fmt.Errorf("allocating port for %s: %w", request.key, err)
 			}
@@ -57,7 +57,7 @@ func ResolveDashboardPort(preferred int) (int, error) {
 			return nil
 		}
 		var err error
-		assigned, err = choosePort(preferred, reserved)
+		assigned, err = choosePort(preferred, reserved, loopbackAvailable)
 		if err != nil {
 			return fmt.Errorf("allocating dashboard port: %w", err)
 		}
@@ -181,9 +181,9 @@ func reservedInstancePorts(baseHome, currentName string) map[int]bool {
 	return reserved
 }
 
-func choosePort(preferred int, reserved map[int]bool) (int, error) {
+func choosePort(preferred int, reserved map[int]bool, available func(int) bool) (int, error) {
 	for candidate := preferred; candidate <= 65535; candidate++ {
-		if reserved[candidate] || !portAvailable(candidate) {
+		if reserved[candidate] || !available(candidate) {
 			continue
 		}
 		return candidate, nil
@@ -193,14 +193,17 @@ func choosePort(preferred int, reserved map[int]bool) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		if !reserved[portNumber] {
+		if !reserved[portNumber] && available(portNumber) {
 			return portNumber, nil
 		}
 	}
 	return 0, errors.New("no unreserved port available")
 }
 
-func portAvailable(port int) bool {
+// loopbackAvailable is the dashboard's probe: the dashboard only binds
+// loopback, so a listener elsewhere must not move it the way port.Available
+// would move a resource port.
+func loopbackAvailable(port int) bool {
 	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		return false
