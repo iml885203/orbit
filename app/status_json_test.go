@@ -294,6 +294,23 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 	}
 }
 
+func TestStatusJSONReportsHowAnExitedContainerEnded(t *testing.T) {
+	cfg := &config.Config{Containers: map[string]*config.Container{"db": {}}}
+	exitCode := 137
+	running := map[string]daemon.ResourceStatus{
+		"db": {
+			Name: "db", Kind: daemon.ResourceKindContainer, State: "degraded",
+			StateReason: "container exited unexpectedly", FailureKind: "runtime",
+			ExitCode: &exitCode, OOMKilled: true,
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	db := envelope.Data.Resources[0]
+	if db.FailureKind != "runtime" || db.ExitCode == nil || *db.ExitCode != 137 || !db.OOMKilled {
+		t.Fatalf("db = %+v, want runtime exit 137 OOM killed", db)
+	}
+}
+
 func TestStatusDetailKeepsExitAndApplicationEvidence(t *testing.T) {
 	service := daemon.ResourceStatus{
 		Name:            "worker",
