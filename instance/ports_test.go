@@ -157,12 +157,7 @@ func TestResolvePortsSkipsPortTheStartCheckWouldReject(t *testing.T) {
 // The dashboard only binds loopback, so a listener the start-time check
 // would object to elsewhere must not move it off its preferred port.
 func TestResolveDashboardPortIgnoresListenerOutsideIPv4Loopback(t *testing.T) {
-	listener, err := net.Listen("tcp6", "[::1]:0")
-	if err != nil {
-		t.Skipf("IPv6 loopback unavailable: %v", err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	preferred := listener.Addr().(*net.TCPAddr).Port
+	preferred := ipv6OnlyHeldPort(t)
 	base := t.TempDir()
 	t.Setenv("ORBIT_HOME", base)
 	t.Setenv(EnvBaseHome, base)
@@ -177,4 +172,27 @@ func TestResolveDashboardPortIgnoresListenerOutsideIPv4Loopback(t *testing.T) {
 	if got != preferred {
 		t.Fatalf("dashboard port = %d, want preferred %d", got, preferred)
 	}
+}
+
+// ipv6OnlyHeldPort holds a port on [::1] that is still free on 127.0.0.1, so
+// only a probe that covers IPv6 sees it as taken.
+func ipv6OnlyHeldPort(t *testing.T) int {
+	t.Helper()
+	for attempt := 0; attempt < 20; attempt++ {
+		listener, err := net.Listen("tcp6", "[::1]:0")
+		if err != nil {
+			t.Skipf("IPv6 loopback unavailable: %v", err)
+		}
+		held := listener.Addr().(*net.TCPAddr).Port
+		probe, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(held)))
+		if err != nil {
+			_ = listener.Close()
+			continue
+		}
+		_ = probe.Close()
+		t.Cleanup(func() { _ = listener.Close() })
+		return held
+	}
+	t.Fatal("no port free on 127.0.0.1 while held on [::1]")
+	return 0
 }

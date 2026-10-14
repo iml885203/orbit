@@ -181,11 +181,6 @@ func reservedInstancePorts(baseHome, currentName string) map[int]bool {
 	return reserved
 }
 
-// choosePort returns the first port from preferred upward that available
-// accepts and no other instance holds, falling back to an OS-assigned port.
-// Resource ports pass port.Available, the same probe the start-time conflict
-// check uses; the dashboard passes loopbackAvailable because it only ever
-// binds loopback, so a listener elsewhere must not move it.
 func choosePort(preferred int, reserved map[int]bool, available func(int) bool) (int, error) {
 	for candidate := preferred; candidate <= 65535; candidate++ {
 		if reserved[candidate] || !available(candidate) {
@@ -205,6 +200,9 @@ func choosePort(preferred int, reserved map[int]bool, available func(int) bool) 
 	return 0, errors.New("no unreserved port available")
 }
 
+// loopbackAvailable is the dashboard's probe: the dashboard only binds
+// loopback, so a listener elsewhere must not move it the way port.Available
+// would move a resource port.
 func loopbackAvailable(port int) bool {
 	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
