@@ -145,7 +145,7 @@ func (obs ContainerObservation) endedRuntime(containerID string, runStartedAt ti
 	if obs.Running || containerID == "" || obs.ID != containerID || !obs.ran() {
 		return false
 	}
-	return runStartedAt.IsZero() || obs.StartedAt.Equal(runStartedAt)
+	return !obs.StartedAt.Before(runStartedAt)
 }
 
 // ContainerExit is Docker's account of how a container runtime ended.
@@ -180,9 +180,9 @@ type ServiceInfo struct {
 	// current generation; empty until that start returns. Mutation requires
 	// the owning Orchestrator's mu.
 	ContainerID string
-	// containerRunStartedAt is the adopted runtime's Docker start time;
-	// zero for a runtime Orbit created. Mutation requires the owning
-	// Orchestrator's mu.
+	// containerRunStartedAt is the adopted runtime's Docker start time, so
+	// exits of earlier runs sharing its ID are ignored; zero for a runtime
+	// Orbit created. Mutation requires the owning Orchestrator's mu.
 	containerRunStartedAt time.Time
 	// ContainerExit records how the container ended while it is Degraded
 	// because it exited; cleared with StateReason. Mutation requires the

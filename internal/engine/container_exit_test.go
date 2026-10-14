@@ -98,9 +98,10 @@ func TestExitSnapshotOfAnEarlierRunIsNotTheAdoptedRuntimeExiting(t *testing.T) {
 		t.Fatal("an earlier run's exit cancelled the adopted runtime's readiness")
 	}
 
-	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: adoptedRun, Exit: ContainerExit{Code: 1}})
+	restartedRun := adoptedRun.Add(time.Minute)
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: restartedRun, Exit: ContainerExit{Code: 1}})
 	if hctx.Err() == nil {
-		t.Fatal("the adopted runtime's own exit did not end readiness")
+		t.Fatal("an exit of the adopted runtime, restarted during readiness, did not end readiness")
 	}
 }
 
