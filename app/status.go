@@ -513,6 +513,8 @@ type jsonService struct {
 	FailureKind          string                       `json:"failure_kind,omitempty"`
 	FailureEvidence      string                       `json:"failure_evidence,omitempty"`
 	PortConflict         *daemon.ResourcePortConflict `json:"port_conflict,omitempty"`
+	ExitCode             *int                         `json:"exit_code,omitempty"`
+	OOMKilled            bool                         `json:"oom_killed,omitempty"`
 	LogsAvailable        bool                         `json:"logs_available,omitempty"`
 	PendingDependencies  []string                     `json:"pending_dependencies,omitempty"`
 	BlockedBy            string                       `json:"blocked_by,omitempty"`
@@ -794,6 +796,8 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 		target.FailureKind = source.FailureKind
 		target.FailureEvidence = source.FailureEvidence
 		target.PortConflict = source.PortConflict
+		target.ExitCode = source.ExitCode
+		target.OOMKilled = source.OOMKilled
 	}
 	target.PendingDependencies = append([]string{}, source.PendingDependencies...)
 	target.BlockedBy = source.BlockedBy
