@@ -207,6 +207,24 @@ func TestAdoptedContainerExitStillHealsOnExternalStart(t *testing.T) {
 	}
 }
 
+func TestExitAfterMonitorFailureKeepsRuntimeRecovery(t *testing.T) {
+	o := newTestOrchestrator(twoContainerCfg())
+	probeCtx := startContainerForExit(t, o)
+	gen := currentGeneration(t, o, "redis")
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthFail, Service: "redis", Message: "connection refused", FailureKind: FailureKindHealth, Generation: gen})
+
+	o.OnContainerObserved("redis", ContainerObservation{ID: "runtime-1", StartedAt: time.Now(), Exit: ContainerExit{Code: 1}})
+
+	if probeCtx.Err() != nil {
+		t.Fatal("runtime monitoring cancelled; it recovers the resource on its own")
+	}
+	_ = o.handleEvent(context.Background(), Event{Type: EventHealthOK, Service: "redis", Generation: gen})
+	if info, _ := o.GetServiceInfo("redis"); info.State != StateHealthy {
+		t.Fatalf("state = %s, want healthy after monitoring recovers", info.State)
+	}
+}
+
 func TestProbeSuccessBeforeThePollStillRecordsTheExit(t *testing.T) {
 	o := newTestOrchestrator(twoContainerCfg())
 	startContainerForExit(t, o)

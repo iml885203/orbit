@@ -234,9 +234,13 @@ func (i *ServiceInfo) cancelLifecycle() {
 }
 
 // Recovery probing after the startup budget ran out is still waiting for
-// the first readiness pass.
+// the first readiness pass; a health failure after the generation was
+// healthy is runtime monitoring, which recovers on its own.
 func (i *ServiceInfo) awaitingReadiness() bool {
-	return i.State == StateStarting || (i.State == StateDegraded && i.FailureKind == FailureKindHealth)
+	if i.State == StateStarting {
+		return true
+	}
+	return i.State == StateDegraded && i.FailureKind == FailureKindHealth && i.HealthyAt.IsZero()
 }
 
 // settleEndedRuntime handles a container Docker reports as not running.
