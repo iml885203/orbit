@@ -1,0 +1,25 @@
+# Orbit
+
+> Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.
+
+A coding agent asked to run a project with Orbit should read the skill first. It is the canonical, machine-readable playbook: setup, the core loop, and what counts as proof that the application works.
+
+## Agent instructions
+
+- [Orbit skill](https://orbit.dotw.me/agent/SKILL.md): setup, core loop, verification rules
+- [Workflows reference](https://orbit.dotw.me/agent/references/workflows.md): longer workflows the skill points to
+- [Aspire migration](https://orbit.dotw.me/agent/references/aspire-migration.md): migrating an Aspire AppHost
+- [Skill discovery index](https://orbit.dotw.me/.well-known/agent-skills/index.json)
+
+## Docs
+
+- [Use Orbit with your project](https://orbit.dotw.me/docs/local-first): the one request to give your agent
+- [Configuration](https://orbit.dotw.me/docs/configuration): the orbit.yaml schema
+- [Agent CLI contract](https://orbit.dotw.me/docs/agent-cli): the --json envelope every command returns
+- [Troubleshooting](https://orbit.dotw.me/docs/troubleshooting): runtime and workflow errors
+
+## Optional
+
+- [Why Orbit](https://orbit.dotw.me/docs/why-orbit): design trade-offs and tool comparisons
+- [Architecture](https://orbit.dotw.me/docs/architecture): state machine and event model
+- [Source](https://github.com/iml885203/orbit): MIT-licensed repository
