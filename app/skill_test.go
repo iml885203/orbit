@@ -469,11 +469,11 @@ func TestAgentSkillDoctorCheck(t *testing.T) {
 		t.Fatalf("no agent present: %+v", check)
 	}
 
-	// Claude Code without the plugin is the one-time nudge; the universal
-	// copy is only context until some agent reads that directory.
+	// Never having installed the plugin is information with the remedy,
+	// not a warning that turns a healthy doctor yellow.
 	f.withClaudeCode(t)
 	check := agentSkillDoctorCheck()
-	if check.Status != daemon.CheckWarn || !strings.HasPrefix(check.Message, "Claude Code plugin not installed") || check.Hint != "run: orbit skill install --yes" {
+	if check.Status != daemon.CheckInfo || !strings.Contains(check.Message, "plugin not installed ('claude' is not on PATH") || check.Hint != "run: orbit skill install --yes" {
 		t.Fatalf("plugin never installed: %+v", check)
 	}
 
@@ -483,16 +483,23 @@ func TestAgentSkillDoctorCheck(t *testing.T) {
 		t.Fatalf("plugin installed, no universal agent: %+v", check)
 	}
 
-	// An unreadable record is context, not a warning: the remedy could never
-	// clear it.
+	// An unreadable record is context: the remedy could never clear it.
 	f.writePluginRecord(t, "{not json")
 	check = agentSkillDoctorCheck()
 	if check.Status != daemon.CheckPass || !strings.Contains(check.Message, "plugin state unknown") {
 		t.Fatalf("record unreadable: %+v", check)
 	}
 
-	// Once the universal directory exists, its copy must be current.
+	// Once some agent reads the universal directory, Orbit's copy there
+	// must be current: missing or edited is drift, and drift warns.
 	f.recordPlugin(t, true)
+	if err := os.MkdirAll(filepath.Join(f.home, ".agents", "skills", "other"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	check = agentSkillDoctorCheck()
+	if check.Status != daemon.CheckWarn || !strings.Contains(check.Message, "is missing") {
+		t.Fatalf("universal directory without Orbit's copy: %+v", check)
+	}
 	f.install(t, true)
 	if check = agentSkillDoctorCheck(); check.Status != daemon.CheckPass {
 		t.Fatalf("installed everywhere: %+v", check)
@@ -503,6 +510,44 @@ func TestAgentSkillDoctorCheck(t *testing.T) {
 	check = agentSkillDoctorCheck()
 	if check.Status != daemon.CheckWarn || !strings.Contains(check.Message, "is modified") {
 		t.Fatalf("edited copy: %+v", check)
+	}
+}
+
+func TestSkillHonorsClaudeConfigDir(t *testing.T) {
+	f := newSkillFixture(t)
+	configDir := filepath.Join(t.TempDir(), "claude-config")
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	if err := os.MkdirAll(filepath.Join(configDir, "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	record := `{"version":2,"plugins":{"orbit@orbit":[{"scope":"user"}]}}`
+	if err := os.WriteFile(filepath.Join(configDir, "plugins", "installed_plugins.json"), []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	data := f.install(t, false)
+
+	if !data.ClaudePlugin.ClaudeCodeDetected || !data.ClaudePlugin.Installed {
+		t.Fatalf("CLAUDE_CONFIG_DIR ignored: %+v", data.ClaudePlugin)
+	}
+}
+
+func TestSkillUninstallPreviewChangesNothing(t *testing.T) {
+	f := newSkillFixture(t)
+	f.withClaudeCLI(t)
+	f.install(t, true)
+	f.recordPlugin(t, true)
+	f.commands = nil
+
+	preview := captureSkillJSON(t, func() error {
+		return runSkill(skillOptions{}, (*skillRoutes).uninstallPlan, (*skillRoutes).applyUninstall, "orbit skill uninstall --yes")
+	})
+
+	if preview.Applied || preview.ClaudePlugin.Action != skillActionUninstall || preview.AgentsDirectory.Action != skillActionRemove {
+		t.Fatalf("preview = %+v", preview)
+	}
+	if len(f.commands) != 0 || !pathExists(filepath.Join(f.skillDir(), "SKILL.md")) {
+		t.Fatalf("uninstall preview acted: commands=%v", f.commands)
 	}
 }
 

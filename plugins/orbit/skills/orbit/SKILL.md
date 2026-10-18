@@ -47,9 +47,11 @@ authorizes this, so do not stop to ask:
 orbit skill install --yes --json
 ```
 
-A second run changes nothing. If the installed CLI predates `orbit skill` (the
-command is unknown), install the plugin for the current agent directly
-instead:
+A second run changes nothing. When the result hands the plugin route back
+(`claude_plugin.action` is `none` with `commands` listed, as when `claude` is
+not on this shell's PATH), run those commands where `claude` works or name
+them at handoff. If the installed CLI predates `orbit skill` (the command is
+unknown), install the plugin for the current agent directly instead:
 
 Claude Code:
 

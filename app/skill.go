@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/daemon"
 	"github.com/spf13/cobra"
 )
 
@@ -146,8 +145,8 @@ func runSkill(
 				}
 				return errCLIJSONAlreadyRendered{err: err}
 			}
-			if done := skillActionDone[data.AgentsDirectory.Action]; done != "" && data.AgentsDirectory.State == skillDirCurrent {
-				fmt.Fprintf(os.Stderr, "%s: %s\n", data.AgentsDirectory.Path, done)
+			if directoryRouteDone(data.AgentsDirectory) {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", data.AgentsDirectory.Path, skillActionDone[data.AgentsDirectory.Action])
 			}
 			return err
 		}
@@ -511,6 +510,18 @@ var skillActionDone = map[string]string{
 	skillActionRemove:  "removed",
 }
 
+// directoryRouteDone reports whether apply already carried out the
+// directory action, which the state reflects before the plugin route runs.
+func directoryRouteDone(directory skillDirData) bool {
+	switch directory.Action {
+	case skillActionWrite, skillActionReplace:
+		return directory.State == skillDirCurrent
+	case skillActionRemove:
+		return directory.State == skillDirMissing
+	}
+	return false
+}
+
 // agentPluginError names the failed agent command and the steps from it on,
 // so the JSON error's replacement actions are exactly the commands still to
 // run by hand rather than Orbit's own diagnostics.
@@ -529,9 +540,6 @@ func (e agentPluginError) Unwrap() error { return e.err }
 func (e agentPluginError) ErrorCode() string { return "agent_plugin_failed" }
 
 func (e agentPluginError) CLIJSONHint() string {
-	if errors.Is(e.err, exec.ErrNotFound) {
-		return "Run the remaining Claude Code plugin commands in a shell where 'claude' works, then start a new agent session."
-	}
 	return "The plugin command ran and failed; see its output above, then run the remaining commands by hand and start a new agent session."
 }
 
@@ -541,53 +549,6 @@ func (e agentPluginError) CLIJSONReplacementActions() []cli.JSONAction {
 		actions = append(actions, cli.JSONAction{Command: command, Reason: "Run the plugin step Orbit could not complete."})
 	}
 	return actions
-}
-
-// agentSkillDoctorCheck warns only about what the machine's agents would
-// notice: a Claude Code without the plugin, or a universal copy that is not
-// current where some agent reads that directory. It never fails doctor.
-func agentSkillDoctorCheck() daemon.DoctorCheck {
-	check := daemon.DoctorCheck{Name: agentSkillCheckName}
-	routes, err := newSkillRoutes()
-	if err != nil {
-		check.Status, check.Message = daemon.CheckInfo, err.Error()
-		return check
-	}
-	claudeCode, _ := routes.claudeCode()
-	universal := pathExists(filepath.Join(routes.home, ".agents", "skills"))
-	if !claudeCode && !universal {
-		check.Status, check.Message = daemon.CheckInfo, "no coding agent detected"
-		return check
-	}
-	var attention, context []string
-	state, err := routes.dirState()
-	switch {
-	case err != nil:
-		attention = append(attention, err.Error())
-	case state == skillDirCurrent:
-		context = append(context, routes.dir()+" is current")
-	case universal:
-		attention = append(attention, routes.dir()+" is "+state)
-	default:
-		context = append(context, routes.dir()+" is "+state)
-	}
-	if claudeCode && routes.pluginRouteAvailable() {
-		switch installed, known := claudePluginRecorded(routes.claudeConfigDir(), routes.pluginID); {
-		case !known:
-			context = append(context, "Claude Code plugin state unknown")
-		case !installed:
-			attention = append(attention, "Claude Code plugin not installed")
-		default:
-			context = append(context, "Claude Code plugin installed")
-		}
-	}
-	if len(attention) > 0 {
-		check.Status, check.Message = daemon.CheckWarn, strings.Join(append(attention, context...), "; ")
-		check.Hint = "run: orbit skill install --yes"
-		return check
-	}
-	check.Status, check.Message = daemon.CheckPass, strings.Join(context, "; ")
-	return check
 }
 
 // claudePluginRecorded reads Claude Code's installed-plugin record. A record
