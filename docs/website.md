@@ -68,9 +68,10 @@ to fill a navigation slot.
 ## Deployment
 
 `.github/workflows/docs.yml` builds the same checked artifact and deploys it to
-GitHub Pages after documentation changes reach `main`. The custom domain serves
-the site from `/`, with English pages at the root and Traditional Chinese pages
-below `/zh-TW/`.
+GitHub Pages after documentation changes reach `main`, and again after the
+Release workflow succeeds, so the version the homepage names never lags a
+release. The custom domain serves the site from `/`, with English pages at the
+root and Traditional Chinese pages below `/zh-TW/`.
 
 VitePress was selected after evaluating Docusaurus first. Both support
 Markdown documentation and stable routes, but Docusaurus needs an external

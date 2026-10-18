@@ -81,7 +81,8 @@ function latestReleaseTag() {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
     return tags.split('\n').find((tag) => /^v\d+\.\d+\.\d+$/.test(tag))
-  } catch {
+  } catch (error) {
+    console.warn('homepage release version omitted: git tag listing failed:', error)
     return undefined
   }
 }

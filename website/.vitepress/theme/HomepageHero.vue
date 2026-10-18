@@ -54,13 +54,13 @@ onUnmounted(() => window.clearTimeout(resetTimer))
         <div class="prompt-card__bar">
           <span>{{ copy.promptLabel }}</span>
           <button type="button" :data-state="copyState" @click="copyPrompt">{{ copy.copyButton[copyState] }}</button>
+          <span class="visually-hidden" role="status">{{ copyState === 'idle' ? '' : copy.copyButton[copyState] }}</span>
         </div>
         <p ref="promptElement" class="prompt-card__text">{{ copy.prompt }}</p>
       </div>
       <p class="homepage-hero__install">
         {{ copy.install.prefix }} <code>brew install iml885203/tap/orbit</code> ·
-        <a :href="copy.install.href">{{ copy.install.windows }}</a> ·
-        <a :href="copy.install.href">{{ copy.install.everything }}</a>
+        <a :href="copy.install.href">{{ copy.install.others }}</a>
       </p>
       <p class="homepage-hero__trust">
         <b>{{ platforms }}</b> <i aria-hidden="true">·</i> {{ license }}

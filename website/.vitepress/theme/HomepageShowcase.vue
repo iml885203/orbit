@@ -79,7 +79,7 @@ watch(() => route.path, () => {
 <template>
   <section id="demo" class="homepage-showcase" aria-labelledby="demo-title">
     <h2 id="demo-title">{{ copy.film.heading }}</h2>
-    <div class="film-frame" :data-started="started">
+    <div class="film-frame">
       <video ref="video" playsinline preload="metadata" width="1920" height="1080" :controls="started"
         :poster="'/media/orbit-showcase.png'" :src="`/media/orbit-launch.${format}`"
         :aria-label="copy.film.label" aria-describedby="demo-description" @error="onMediaError">

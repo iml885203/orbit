@@ -11,7 +11,7 @@ export type HomepageCopy = {
   promptLabel: string
   copyButton: { idle: string; copied: string; failed: string }
   getStartedId: string
-  install: { prefix: string; windows: string; everything: string; href: string }
+  install: { prefix: string; others: string; href: string }
   columnsLabel: string
   columns: Array<{ eyebrow: string; title: string; body: string }>
   film: { heading: string; play: string; caption: string; label: string; retry: string; failed: string; guide: string; guideHref: string }
@@ -30,7 +30,7 @@ export const homepageCopy: Record<HomepageLocale, HomepageCopy> = {
     promptLabel: 'paste into your coding agent',
     copyButton: { idle: 'Copy', copied: 'Copied', failed: 'Copy failed, select the text' },
     getStartedId: 'get-started',
-    install: { prefix: 'Or', windows: 'Windows (Scoop)', everything: 'all installers', href: '/docs/development#install-orbit' },
+    install: { prefix: 'Or', others: 'Windows (Scoop) and other installers', href: '/docs/development#install-orbit' },
     columnsLabel: 'How Orbit works',
     columns: [
       { eyebrow: '01 · MAP', title: 'One contract for every repo', body: 'Services, containers, dependencies and health in one orbit.yaml. Agents read it as JSON, you read it as a graph.' },
@@ -55,7 +55,7 @@ export const homepageCopy: Record<HomepageLocale, HomepageCopy> = {
     promptLabel: '貼給你的 coding agent',
     copyButton: { idle: '複製', copied: '已複製', failed: '複製失敗，請直接選取文字' },
     getStartedId: '開始使用',
-    install: { prefix: '或', windows: 'Windows (Scoop)', everything: '所有安裝方式', href: '/zh-TW/docs/development#安裝-orbit' },
+    install: { prefix: '或', others: 'Windows (Scoop) 與其他安裝方式', href: '/zh-TW/docs/development#安裝-orbit' },
     columnsLabel: 'Orbit 怎麼運作',
     columns: [
       { eyebrow: '01 · MAP', title: '每個 repo 共用一份契約', body: '服務、容器、依賴和健康檢查都在一份 orbit.yaml。agent 讀到的是 JSON，你看到的是一張圖。' },

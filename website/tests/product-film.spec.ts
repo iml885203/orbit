@@ -25,8 +25,12 @@ for (const [path, playLabel] of [['/', 'Play the 34-second demo'], ['/zh-TW/', '
     await expect(film).toBeVisible()
     await expect(page.locator('video')).toHaveCount(1)
     await expect(page.locator('a[href$=".mp4"]')).toHaveCount(0)
-    await expect.poll(() => film.evaluate(v => v.readyState)).toBeGreaterThanOrEqual(1)
-    expect(await film.evaluate(v => ({ paused: v.paused, time: v.currentTime, controls: v.controls }))).toEqual({ paused: true, time: 0, controls: false })
+    // Enough data to play must be present and a moment must pass before
+    // "never autoplayed" means anything; an observer-driven autoplay would
+    // show up as played time within that window.
+    await expect.poll(() => film.evaluate(v => v.readyState)).toBeGreaterThanOrEqual(2)
+    await page.waitForTimeout(600)
+    expect(await film.evaluate(v => ({ paused: v.paused, time: v.currentTime, played: v.played.length, controls: v.controls }))).toEqual({ paused: true, time: 0, played: 0, controls: false })
 
     await page.getByRole('button', { name: playLabel, exact: true }).click()
     await expect.poll(() => film.evaluate(v => v.currentTime)).toBeGreaterThan(0)

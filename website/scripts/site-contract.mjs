@@ -65,8 +65,13 @@ assert.match(home, /id="get-started"/)
 assert.doesNotMatch(home, /class="vp-doc/, 'the homepage renders no Markdown body')
 const releaseSegment = home.match(/data-release[^>]*>([^<]*)</)
 if (releaseSegment) assert.match(releaseSegment[1], /^v\d+\.\d+\.\d+$/, 'the trust line names a release tag or nothing')
+// The Pages workflow fetches tags on purpose, so there the segment is
+// mandatory; elsewhere (ci.yml's tagless checkout, a local clone) it is
+// required only when tags are present.
 const localReleaseTags = execFileSync('git', ['tag', '--list', 'v*'], { cwd: sourceRoot, encoding: 'utf8' }).trim()
-if (localReleaseTags) assert.ok(releaseSegment, 'the trust line must name the release when the checkout has tags')
+if (localReleaseTags || process.env.GITHUB_WORKFLOW === 'Documentation') {
+  assert.ok(releaseSegment, 'the trust line must name the release when the checkout has tags')
+}
 assert.match(home, /<title>Local Dev Environments for Coding Agents \| Orbit<\/title>/)
 assert.match(home, /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
 assert.match(home, /property="og:title" content="Orbit — Local Dev Environments for Coding Agents"/)
