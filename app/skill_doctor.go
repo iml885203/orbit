@@ -8,10 +8,10 @@ import (
 )
 
 // agentSkillDoctorCheck reports the skill's state without turning doctor
-// yellow for people who never opted in: a Claude Code that simply has no
-// plugin yet is information with the remedy attached, which agents read from
-// the JSON check. Only drift warns — a universal skills directory exists, so
-// some agent reads it, and Orbit's copy there is not current. The check never
+// yellow for people who never opted in: a Claude Code with no plugin yet, or
+// a universal skills directory other tools populated, is information with
+// the remedy attached, which agents read from the JSON check. Only drift
+// warns — a copy Orbit wrote is outdated, or was edited. The check never
 // fails doctor.
 func agentSkillDoctorCheck() daemon.DoctorCheck {
 	check := daemon.DoctorCheck{Name: agentSkillCheckName}
@@ -33,11 +33,13 @@ func agentSkillDoctorCheck() daemon.DoctorCheck {
 		attention = append(attention, err.Error())
 	case state == skillDirCurrent:
 		context = append(context, routes.dir()+" is current")
-	case universal:
-		attention = append(attention, routes.dir()+" is "+state)
-	default:
+	case state == skillDirMissing && universal:
+		pending = append(pending, routes.dir()+" is missing")
+	case state == skillDirMissing:
 		// Nothing on this machine reads the universal directory yet.
-		context = append(context, routes.dir()+" is "+state)
+		context = append(context, routes.dir()+" is missing")
+	default:
+		attention = append(attention, routes.dir()+" is "+state)
 	}
 	if claudeCode && routes.pluginRouteAvailable() {
 		switch installed, known := claudePluginRecorded(routes.claudeConfigDir(), routes.pluginID); {

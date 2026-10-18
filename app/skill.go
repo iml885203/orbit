@@ -20,8 +20,9 @@ import (
 
 // Claude Code gets its marketplace plugin because the marketplace is also
 // its update channel; every other agent reads one copy in the universal
-// ~/.agents/skills directory, which refreshes with the CLI. Both routes are
-// idempotent so the skill can name this command as a setup step.
+// ~/.agents/skills directory, which a later run of this command brings up to
+// the installed CLI. Both routes are idempotent so the skill can name this
+// command as a setup step.
 
 const agentSkillCheckName = "Agent skill"
 
@@ -226,44 +227,68 @@ func commandLines(steps [][]string) []string {
 	return lines
 }
 
-// pluginPlan decides the plugin route for either direction. It reads Claude
-// Code's installed-plugin record rather than spawning its CLI, so planning
-// works wherever the record does; an unreadable record is reported as
-// unknown and handed over with the commands instead of guessed at.
-func (r *skillRoutes) pluginPlan(steps func() [][]string, actionWhenDue string, dueWhenInstalled bool) skillPluginData {
+// pluginState is the part of the plugin route both directions share. It reads
+// Claude Code's installed-plugin record rather than spawning its CLI, so
+// planning works wherever the record does; known is false when the record
+// is unreadable, settled is false when the route cannot apply at all.
+func (r *skillRoutes) pluginState() (plugin skillPluginData, known, runnable, settled bool) {
 	present, runnable := r.claudeCode()
-	plugin := skillPluginData{ClaudeCodeDetected: present, Action: skillActionNone}
+	plugin = skillPluginData{ClaudeCodeDetected: present, Action: skillActionNone}
 	switch {
 	case !present:
 		plugin.Reason = "Claude Code not detected"
-		return plugin
+		return plugin, true, runnable, true
 	case !r.pluginRouteAvailable():
 		plugin.Reason = "this build names no plugin marketplace"
-		return plugin
+		return plugin, true, runnable, true
 	}
-	installed, known := claudePluginRecorded(r.claudeConfigDir(), r.pluginID)
-	plugin.Installed = installed
-	due := installed == dueWhenInstalled
+	plugin.Installed, known = claudePluginRecorded(r.claudeConfigDir(), r.pluginID)
+	return plugin, known, runnable, false
+}
+
+// handOver reports a plugin step the agent or person must run themselves:
+// an unreadable record is never guessed at, and a `claude` that is not on
+// this shell's PATH would fail every step.
+func handOver(plugin *skillPluginData, reason string, steps [][]string) {
+	plugin.Reason = reason
+	plugin.Commands = commandLines(steps)
+}
+
+func (r *skillRoutes) pluginInstallPlan() skillPluginData {
+	plugin, known, runnable, settled := r.pluginState()
 	switch {
+	case settled:
 	case !known:
-		plugin.Reason = "Claude Code plugin state unknown; run the commands yourself if needed"
-		plugin.Commands = commandLines(steps())
-	case !due && dueWhenInstalled:
-		plugin.Reason = "not installed"
-	case !due:
+		handOver(&plugin, "Claude Code plugin state unknown; run the commands yourself if needed", r.pluginInstallSteps())
+	case plugin.Installed:
 		plugin.Reason = "already installed"
 	case !runnable:
-		plugin.Reason = "'claude' is not on PATH in this shell; run the commands where it is"
-		plugin.Commands = commandLines(steps())
+		handOver(&plugin, "'claude' is not on PATH in this shell; run the commands where it is", r.pluginInstallSteps())
 	default:
-		plugin.Action, plugin.Commands = actionWhenDue, commandLines(steps())
+		plugin.Action, plugin.Commands = skillActionInstall, commandLines(r.pluginInstallSteps())
+	}
+	return plugin
+}
+
+func (r *skillRoutes) pluginUninstallPlan() skillPluginData {
+	plugin, known, runnable, settled := r.pluginState()
+	switch {
+	case settled:
+	case !known:
+		handOver(&plugin, "Claude Code plugin state unknown; run the commands yourself if needed", r.pluginUninstallSteps())
+	case !plugin.Installed:
+		plugin.Reason = "not installed"
+	case !runnable:
+		handOver(&plugin, "'claude' is not on PATH in this shell; run the commands where it is", r.pluginUninstallSteps())
+	default:
+		plugin.Action, plugin.Commands = skillActionUninstall, commandLines(r.pluginUninstallSteps())
 	}
 	return plugin
 }
 
 func (r *skillRoutes) installPlan() (skillData, error) {
 	data := skillData{Operation: "skill_install"}
-	data.ClaudePlugin = r.pluginPlan(r.pluginInstallSteps, skillActionInstall, false)
+	data.ClaudePlugin = r.pluginInstallPlan()
 	state, err := r.dirState()
 	if err != nil {
 		return data, err
@@ -283,7 +308,7 @@ func (r *skillRoutes) installPlan() (skillData, error) {
 
 func (r *skillRoutes) uninstallPlan() (skillData, error) {
 	data := skillData{Operation: "skill_uninstall"}
-	data.ClaudePlugin = r.pluginPlan(r.pluginUninstallSteps, skillActionUninstall, true)
+	data.ClaudePlugin = r.pluginUninstallPlan()
 	state, err := r.dirState()
 	if err != nil {
 		return data, err
@@ -376,13 +401,22 @@ func (r *skillRoutes) dirState() (string, error) {
 	return skillDirModified, nil
 }
 
-// readSkillTree skips dotfiles: the marker is Orbit's own, and anything else
-// a desktop drops in (.DS_Store) is not part of the skill.
+// readSkillTree skips dot entries: the marker is Orbit's own, and anything
+// else a desktop or VCS drops in (.DS_Store, .git) is not part of the skill.
 func readSkillTree(tree fs.FS) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	err := fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if err != nil {
 			return err
+		}
+		if path != "." && strings.HasPrefix(entry.Name(), ".") {
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
 		}
 		data, readErr := fs.ReadFile(tree, path)
 		if readErr != nil {
@@ -510,8 +544,8 @@ var skillActionDone = map[string]string{
 	skillActionRemove:  "removed",
 }
 
-// directoryRouteDone reports whether apply already carried out the
-// directory action, which the state reflects before the plugin route runs.
+// The directory route runs before the plugin route, so its post-state is the
+// only evidence of what a failed apply already did.
 func directoryRouteDone(directory skillDirData) bool {
 	switch directory.Action {
 	case skillActionWrite, skillActionReplace:

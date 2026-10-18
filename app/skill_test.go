@@ -490,14 +490,14 @@ func TestAgentSkillDoctorCheck(t *testing.T) {
 		t.Fatalf("record unreadable: %+v", check)
 	}
 
-	// Once some agent reads the universal directory, Orbit's copy there
-	// must be current: missing or edited is drift, and drift warns.
+	// A universal directory other tools populated is a nudge, not drift:
+	// nothing of Orbit's is there to be stale.
 	f.recordPlugin(t, true)
 	if err := os.MkdirAll(filepath.Join(f.home, ".agents", "skills", "other"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	check = agentSkillDoctorCheck()
-	if check.Status != daemon.CheckWarn || !strings.Contains(check.Message, "is missing") {
+	if check.Status != daemon.CheckInfo || !strings.Contains(check.Message, "is missing") || check.Hint != "run: orbit skill install --yes" {
 		t.Fatalf("universal directory without Orbit's copy: %+v", check)
 	}
 	f.install(t, true)

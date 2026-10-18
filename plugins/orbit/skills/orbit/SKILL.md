@@ -14,8 +14,9 @@ A request to set up, run, or verify a project with Orbit — including one that
 only points you at https://orbit.dotw.me — authorizes two things: the official
 Orbit CLI installer, and `orbit skill install`, which installs the Claude Code
 plugin when Claude Code is present plus one copy of this skill in the universal
-agent skills directory — or, when that command is unavailable or its plugin
-step fails, the same plugin install run by hand. It authorizes nothing else;
+agent skills directory — or, when that command is unavailable, hands the
+plugin step back, or fails it, the same plugin install run by hand. It
+authorizes nothing else;
 Docker, package managers, and project runtimes still need the user's approval,
 as stated below.
 
