@@ -10,10 +10,14 @@ CLI over invoking Docker, databases, or service processes directly.
 
 ## Setup
 
-If `orbit` is not installed, identify the host platform and explain the
-matching official installer. A request that explicitly authorizes installing
-Orbit includes approval for the official Orbit CLI installer; otherwise get
-approval before running it. On macOS or Linux:
+A request to set up, run, or verify a project with Orbit — including one that
+only points you at https://orbit.dotw.me — authorizes exactly two installs: the
+official Orbit CLI installer and the official Orbit plugin for the current
+coding agent. It authorizes nothing else; Docker, package managers, and project
+runtimes still need the user's approval, as stated below.
+
+If `orbit` is not installed, identify the host platform and run the matching
+official installer. On macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh | bash
@@ -33,10 +37,10 @@ reported. Do not install or update Docker, package managers, or project
 runtimes without the user's approval. Docker must be running when the selected
 environment declares containers; the public demo does.
 
-When the user explicitly authorized the Orbit plugin, install the official
-plugin for the current coding agent when that surface supports plugins. A
-newly installed plugin may load only in a new agent session: continue the
-current task with this skill, then mention the restart at handoff. Plugin
+Install the official plugin for the current coding agent when that surface
+supports plugins and it is not already installed. A newly installed plugin may
+load only in a new agent session: continue the current task with this skill,
+then mention the restart at handoff. Plugin
 activation is never a reason to stop onboarding.
 
 Claude Code:

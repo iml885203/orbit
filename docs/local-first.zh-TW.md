@@ -13,8 +13,9 @@ Agent 會理解現有 setup、啟動預期的本機環境、驗證代表性的 a
 ## Agent 會讀什麼
 
 Agent 依照公開的 Orbit skill 行動：<https://orbit.dotw.me/agent/SKILL.md>，
-網站導覽列的「給 Agent」也連到同一份。簡單說：你的需求沒允許的東西它會先問再裝；
-它會把專案現有的 setup 寫成專案內的 `orbit.yaml`，而不是跑公開 demo；接著啟動環境，
+網站導覽列的「給 Agent」也連到同一份。簡單說：它會安裝官方 Orbit CLI 與 plugin，
+其他東西都先問再裝；它會把專案現有的 setup 寫成專案內的 `orbit.yaml`，而不是跑公開
+demo；接著啟動環境，
 並證明代表性的 application 流程真的有回應，才回報結果。那份 skill 才是這個流程的
 權威描述，本頁只負責指過去。
 
