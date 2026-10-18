@@ -10,6 +10,14 @@
 Agent 會理解現有 setup、啟動預期的本機環境、驗證代表性的 application 行為，
 並回報仍需要你處理的事項。你不必先選安裝方式或學習 Orbit。
 
+## Agent 會讀什麼
+
+Agent 依照公開的 Orbit skill 行動：<https://orbit.dotw.me/agent/SKILL.md>，
+網站導覽列的「給 Agent」也連到同一份。簡單說：你的需求沒允許的東西它會先問再裝；
+它會把專案現有的 setup 寫成專案內的 `orbit.yaml`，而不是跑公開 demo；接著啟動環境，
+並證明代表性的 application 流程真的有回應，才回報結果。那份 skill 才是這個流程的
+權威描述，本頁只負責指過去。
+
 想手動操作，請見[安裝](development.zh-TW.md)、
 [設定參考](configuration.zh-TW.md)與
 [可執行範例](https://github.com/iml885203/orbit/tree/main/docs/examples/local-first)。

@@ -181,6 +181,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
+          { text: '給 Agent', link: 'https://orbit.dotw.me/agent/SKILL.md' },
           { text: '設定參考', link: '/zh-TW/docs/configuration' },
           { text: '疑難排解', link: '/zh-TW/docs/troubleshooting' },
           { text: '為什麼選擇 Orbit', link: '/zh-TW/docs/why-orbit' },
@@ -333,6 +334,7 @@ export default defineConfig({
     siteTitle: 'Orbit',
     nav: [
       { text: 'Get started', link: '/docs/local-first' },
+      { text: 'For agents', link: 'https://orbit.dotw.me/agent/SKILL.md' },
       { text: 'Configuration', link: '/docs/configuration' },
       { text: 'Troubleshooting', link: '/docs/troubleshooting' },
       { text: 'Why Orbit', link: '/docs/why-orbit' },

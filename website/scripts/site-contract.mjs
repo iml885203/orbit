@@ -21,6 +21,7 @@ const requiredPages = [
   'agent/references/aspire-migration.md',
   '.well-known/agent-skills/index.json',
   '.well-known/ai-catalog.json',
+  'llms.txt',
   'orbit-social-card.png',
   'media/orbit-launch.mp4',
   'media/orbit-launch.webm',
