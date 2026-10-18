@@ -33,12 +33,17 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	return runDoctorWithOptions(doctorOptions{
 		showDaemon:     true,
 		explicitConfig: cmd.Root().PersistentFlags().Changed("config"),
+		agentSkill:     true,
 	})
 }
 
 type doctorOptions struct {
 	showDaemon     bool
 	explicitConfig bool
+	// agentSkill adds the agent-skill check. Only `orbit doctor` sets it:
+	// the init wizard's health step reports environment readiness, and its
+	// JSON result would otherwise disagree with its human output.
+	agentSkill bool
 }
 
 func runDoctorWithOptions(options doctorOptions) error {
@@ -59,6 +64,9 @@ func runDoctorWithOptions(options doctorOptions) error {
 		resp = localDoctorResponseWithContext(true, detachedStatus)
 	} else {
 		resp = doctorResponse(client)
+	}
+	if options.agentSkill {
+		resp.Checks = append(resp.Checks, agentSkillDoctorCheck())
 	}
 	failure := doctorFailure(resp, options.showDaemon)
 	var schemaMismatch *config.SchemaVersionMismatchError
@@ -431,6 +439,12 @@ func doctorRecommendedActions(resp *daemon.DoctorResponse) []cli.JSONAction {
 	added := make(map[string]bool)
 	workingDirectoryFailed := false
 	for _, check := range resp.Checks {
+		// The agent-skill remedy is never the environment's next step:
+		// promoted, it would be a failed doctor's only action and a healthy
+		// doctor's spurious one on every machine with Claude Code.
+		if check.Name == agentSkillCheckName {
+			continue
+		}
 		if check.Status == daemon.CheckFail || check.Status == daemon.CheckWarn {
 			if check.Status == daemon.CheckFail && strings.HasPrefix(check.Name, "Working directory (") {
 				workingDirectoryFailed = true

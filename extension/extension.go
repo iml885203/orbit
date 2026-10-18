@@ -12,6 +12,7 @@
 package extension
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/iml885203/orbit/config"
@@ -100,6 +101,17 @@ type Distribution struct {
 	// wizard's pick when several envs are available. Empty means no
 	// preference (first available wins; no fallback path).
 	DefaultEnv string
+	// AgentSkill is the agent skill bundled with this distribution, rooted
+	// at the directory holding its SKILL.md. `orbit skill install` copies it
+	// into the universal agent skills directory. Nil when the build bundles
+	// none; the command then reports that and does nothing.
+	AgentSkill fs.FS
+	// PluginMarketplace is the GitHub repository (owner/name) Claude Code
+	// adds as a plugin marketplace before installing the Orbit plugin, and
+	// PluginID is the plugin's `name@marketplace` identity there. Either
+	// empty disables the plugin route.
+	PluginMarketplace string
+	PluginID          string
 }
 
 // CLIDoctor is the offline-doctor contribution. cfg is the loaded and

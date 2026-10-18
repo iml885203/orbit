@@ -231,6 +231,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.AddCommand(automaticUpdateWorkerCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(uninstallCmd())
+	rootCmd.AddCommand(skillCmd())
 	rootCmd.AddCommand(historyCmd())
 	rootCmd.AddCommand(edgeCmd())
 	rootCmd.AddCommand(serviceCmd())
@@ -484,7 +485,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 	}
 	switch top.Name() {
 	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
-		"version", "update", "uninstall", "history", "settings", "trace", "tracing", "instance", "source":
+		"version", "update", "uninstall", "skill", "history", "settings", "trace", "tracing", "instance", "source":
 		return false
 	case "env":
 		return cmd.Name() == "toggle" || cmd.Name() == "apply"
@@ -502,7 +503,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
-		if c.Name() == "history" || c.Name() == "uninstall" {
+		if c.Name() == "history" || c.Name() == "uninstall" || c.Name() == "skill" {
 			return false
 		}
 	}

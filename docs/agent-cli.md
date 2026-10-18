@@ -178,6 +178,7 @@ caller (or its operator) intends the destruction.
 
 | Code | Meaning |
 |---|---|
+| `agent_plugin_failed` | a coding agent's plugin command failed; the replacement actions are the commands to run by hand |
 | `checks_failed` | doctor checks failed; resolve them, then run doctor again |
 | `canceled` | the caller or a supported catchable signal canceled the operation |
 | `command_failed` | unclassified failure; act on the hint |
@@ -239,6 +240,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit daemon stop --json` | Returns stopped state, previous PID, and whether service shutdown was requested. |
 | `orbit daemon restart --json` | Returns previous/new daemon state, PID, config path, dashboard URL, and service shutdown effect. |
 | `orbit uninstall --json` | Previews binary artifacts and whether user data is preserved; `--yes` is required before removal. |
+| `orbit skill install --json` | Previews or, with `--yes`, applies the two agent-skill routes: `data.claude_plugin` (`claude_code_detected`, `installed`, `action`, the plugin `commands`) and `data.agents_directory` (`path`, `state` of `current`/`outdated`/`modified`/`missing`, `action`). `data.applied` is true when every planned action completed: false for the preview, and false in an `agent_plugin_failed` envelope, whose `data` still reports the directory route's result. An `action` of `none` carries a `reason`; a plugin route handed back (for example because `claude` is not on the shell's `PATH`) is `none` with the `commands` to run listed. A second run reports both actions as `none`. |
+| `orbit skill uninstall --json` | Same shape; removes the plugin and any copy Orbit wrote (`current` or `outdated`), reports a `modified` copy as left in place, and leaves the marketplace registration alone. |
 | `orbit sqlserver publish <database|project> --json` | Runs the ordinary data-preserving publish and returns `databases`, `published`, and `data_loss_allowed: false`. `--all` and `--parallel` use the same envelope. `--allow-data-loss --json` never publishes; it returns one manual `destructive: true` action that preserves the scope and `--allow-data-loss` but removes `--yes` so a person still confirms. |
 | `orbit sqlserver list --json` | Returns the configured SQL projects and their databases in `data`. |
 | `orbit sqlserver diff --json` | Returns per-database drift in the envelope; `--script` adds the change script to `data`. |
@@ -350,6 +353,8 @@ Stable `data.operation` values for converted control commands:
 | `orbit settings set-env <name> <value> --json` | `settings_set_env` |
 | `orbit settings list --json` | `settings_list` |
 | `orbit uninstall --json` | `uninstall` |
+| `orbit skill install --json` | `skill_install` |
+| `orbit skill uninstall --json` | `skill_uninstall` |
 
 ### Settings map fields
 
