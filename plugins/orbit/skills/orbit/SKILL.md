@@ -11,10 +11,13 @@ CLI over invoking Docker, databases, or service processes directly.
 ## Setup
 
 A request to set up, run, or verify a project with Orbit — including one that
-only points you at https://orbit.dotw.me — authorizes exactly two installs: the
-official Orbit CLI installer and the official Orbit plugin for the current
-coding agent. It authorizes nothing else; Docker, package managers, and project
-runtimes still need the user's approval, as stated below.
+only points you at https://orbit.dotw.me — authorizes two things: the official
+Orbit CLI installer, and `orbit skill install`, which installs the Claude Code
+plugin when Claude Code is present plus one copy of this skill in the universal
+agent skills directory — or, when that command is unavailable or its plugin
+step fails, the same plugin install run by hand. It authorizes nothing else;
+Docker, package managers, and project runtimes still need the user's approval,
+as stated below.
 
 If `orbit` is not installed, identify the host platform and run the matching
 official installer. On macOS or Linux:
@@ -37,11 +40,16 @@ reported. Do not install or update Docker, package managers, or project
 runtimes without the user's approval. Docker must be running when the selected
 environment declares containers; the public demo does.
 
-Install the official plugin for the current coding agent when that surface
-supports plugins and it is not already installed. A newly installed plugin may
-load only in a new agent session: continue the current task with this skill,
-then mention the restart at handoff. Plugin
-activation is never a reason to stop onboarding.
+Then put this skill where the current agent loads it. The request already
+authorizes this, so do not stop to ask:
+
+```bash
+orbit skill install --yes --json
+```
+
+A second run changes nothing. If the installed CLI predates `orbit skill` (the
+command is unknown), install the plugin for the current agent directly
+instead:
 
 Claude Code:
 
@@ -56,6 +64,10 @@ Codex CLI:
 codex plugin marketplace add iml885203/orbit
 codex plugin add orbit@orbit
 ```
+
+A newly installed plugin may load only in a new agent session: continue the
+current task with this skill, then mention the restart at handoff. Plugin
+activation is never a reason to stop onboarding.
 
 Then pick the path that matches the user:
 

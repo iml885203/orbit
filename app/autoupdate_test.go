@@ -21,12 +21,18 @@ func TestUpdateMutationCommandKeepsObservationAvailable(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
 	status := &cobra.Command{Use: "status"}
 	up := &cobra.Command{Use: "up"}
-	root.AddCommand(status, up)
+	skill := &cobra.Command{Use: "skill"}
+	skillInstall := &cobra.Command{Use: "install"}
+	root.AddCommand(status, up, skill)
+	skill.AddCommand(skillInstall)
 	if updateMutationCommand(status) {
 		t.Fatal("status must observe a pending update without waiting")
 	}
 	if !updateMutationCommand(up) {
 		t.Fatal("up must wait for a pending update transaction")
+	}
+	if updateMutationCommand(skillInstall) {
+		t.Fatal("skill install touches agent directories, not the daemon; it must not wait on an update transaction")
 	}
 }
 

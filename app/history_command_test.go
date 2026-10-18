@@ -48,3 +48,11 @@ func TestShouldNotRecordUninstall(t *testing.T) {
 		t.Fatal("uninstall must not recreate user data through command history")
 	}
 }
+
+func TestShouldNotRecordSkillInstall(t *testing.T) {
+	for _, cmd := range skillCmd().Commands() {
+		if shouldRecordCLI(cmd) {
+			t.Fatalf("skill %s changes agent setup, not the environment; history must not replay it", cmd.Name())
+		}
+	}
+}

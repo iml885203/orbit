@@ -185,8 +185,18 @@ SHA-256 checksum 後，再把 binary 放到 `PATH`。
 
 ### Orbit plugin
 
+已安裝 CLI 時，一個指令就能把 Orbit skill 放到這台機器上的 coding agent
+會載入的位置；不加 `--yes` 只預覽計畫，`orbit skill uninstall --yes` 會還原，
+`orbit doctor` 會回報它的狀態。它安裝的內容由
+[公開的 skill](https://orbit.dotw.me/agent/SKILL.md) 說明。
+
+```bash
+orbit skill install --yes
+```
+
+沒有 CLI、或 CLI 還沒有 `orbit skill` 時，直接為你的 agent 安裝 plugin。
 如果希望 Agent 從第一次 setup 就開始引導，而不只是操作既有 environment，
-請先安裝 Orbit plugin，再讓它協助安裝 CLI。
+請先這樣安裝，再讓它協助安裝 CLI：
 
 Claude Code：
 
@@ -202,10 +212,10 @@ codex plugin marketplace add iml885203/orbit
 codex plugin add orbit@orbit
 ```
 
-安裝後請開啟新的 Agent session。Bundled skill 會偵測缺少的 Orbit CLI、說明
-符合平台的 installer，並在執行前詢問。每個 source release 也包含
-`plugins/orbit`，供 local plugin 開發使用。Codex 與 Claude manifest 共用一個
-獨立發布的日曆版本，因此只更新 skill 時不需要發布新的 CLI。
+安裝後請開啟新的 Agent session。Bundled skill 在需求已授權時會直接安裝缺少的
+Orbit CLI，否則先詢問。每個 source release 也包含 `plugins/orbit`，供 local
+plugin 開發使用。Codex 與 Claude manifest 共用一個獨立發布的日曆版本，因此只
+更新 skill 時不需要發布新的 CLI。
 
 ## 貢獻 Orbit
 

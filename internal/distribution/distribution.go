@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/plugins"
 )
 
 const Schema = "orbit.distribution.v1"
@@ -17,6 +18,9 @@ var official = extension.Distribution{
 	ReleaseAPIURL:     "https://api.github.com/repos/iml885203/orbit/releases/latest",
 	ReleaseRepository: "iml885203/orbit",
 	DefaultEnv:        "quickstart.yaml",
+	AgentSkill:        plugins.OrbitSkill(),
+	PluginMarketplace: "iml885203/orbit",
+	PluginID:          "orbit@orbit",
 }
 
 type Metadata struct {

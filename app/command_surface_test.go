@@ -147,16 +147,20 @@ func TestUnavailableEnvironmentBlocksMutationsButKeepsRecoveryAvailable(t *testi
 	daemonCmd := &cobra.Command{Use: "daemon"}
 	daemonStart := &cobra.Command{Use: "start"}
 	daemonStop := &cobra.Command{Use: "stop"}
-	root.AddCommand(up, status, down, switchEnv, env, daemonCmd)
+	skill := &cobra.Command{Use: "skill"}
+	skillInstall := &cobra.Command{Use: "install"}
+	root.AddCommand(up, status, down, switchEnv, env, daemonCmd, skill)
 	env.AddCommand(list, toggle, apply)
 	daemonCmd.AddCommand(daemonStart, daemonStop)
+	skill.AddCommand(skillInstall)
 
 	for _, cmd := range []*cobra.Command{up, toggle, apply, daemonStart} {
 		if !commandRequiresAvailableEnvironment(cmd) {
 			t.Errorf("%s did not require an available environment", cmd.CommandPath())
 		}
 	}
-	for _, cmd := range []*cobra.Command{status, down, switchEnv, list, daemonStop} {
+	// skill install is the fresh machine's first command; setup cannot gate it.
+	for _, cmd := range []*cobra.Command{status, down, switchEnv, list, daemonStop, skillInstall} {
 		if commandRequiresAvailableEnvironment(cmd) {
 			t.Errorf("%s should remain available for recovery", cmd.CommandPath())
 		}

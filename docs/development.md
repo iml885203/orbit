@@ -203,8 +203,19 @@ Verify the SHA-256 checksum before moving the binary onto your `PATH`.
 
 ### Orbit plugin
 
-Install the Orbit plugin before the CLI when you want the
-agent to guide first-time setup as well as operate an existing environment.
+With the CLI installed, one command puts the Orbit skill where the coding
+agents on this machine load it; without `--yes` it previews the plan, `orbit
+skill uninstall --yes` reverses it, and `orbit doctor` reports its state. The
+[published skill](https://orbit.dotw.me/agent/SKILL.md) describes what it
+installs.
+
+```bash
+orbit skill install --yes
+```
+
+Without the CLI, or on a CLI that predates `orbit skill`, install the plugin
+for your agent directly. Do this before the CLI when you want the agent to
+guide first-time setup as well as operate an existing environment:
 
 Claude Code:
 
@@ -220,11 +231,11 @@ codex plugin marketplace add iml885203/orbit
 codex plugin add orbit@orbit
 ```
 
-Start a new agent session after installation. The bundled skill detects a
-missing Orbit CLI, explains the platform-specific installer, and asks before
-running it. Each source release also includes `plugins/orbit` for local
-plugin development. The Codex and Claude manifests share one independently
-released calendar version, so skill-only updates do not require a CLI release.
+Start a new agent session after installation. The bundled skill installs a
+missing Orbit CLI when the request authorizes it and asks otherwise. Each
+source release also includes `plugins/orbit` for local plugin development. The
+Codex and Claude manifests share one independently released calendar version,
+so skill-only updates do not require a CLI release.
 
 ## Contributing to Orbit
 
