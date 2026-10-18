@@ -1,9 +1,11 @@
 import { defineComponent, h, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
-import HeroOrbit from './HeroOrbit.vue'
+import HomepageHero from './HomepageHero.vue'
+import HomepageColumns from './HomepageColumns.vue'
 import HomepageShowcase from './HomepageShowcase.vue'
 import './orbit.css'
+import './homepage.css'
 import './homepage-showcase.css'
 
 function addMobileNavigationEscape() {
@@ -42,9 +44,11 @@ export default {
       })
       onUnmounted(() => cleanup?.())
       onUnmounted(() => stopWatching?.())
+      // The homepages declare no hero or features, so VitePress renders only
+      // these slots around an empty page while the navigation bar stays its own.
       return () => h(DefaultTheme.Layout, null, {
-        'home-hero-image': () => h(HeroOrbit),
-        'home-features-after': () => h(HomepageShowcase),
+        'home-hero-before': () => h(HomepageHero),
+        'home-features-after': () => [h(HomepageColumns), h(HomepageShowcase)],
       })
     },
   }),

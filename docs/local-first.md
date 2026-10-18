@@ -4,9 +4,9 @@
 
 From the project you want to run, give your coding agent one request:
 
-> Read https://orbit.dotw.me and help me get this project running with Orbit.
-> You may install the official Orbit CLI and plugin. Ask before installing
-> other software or making destructive changes.
+> Read https://orbit.dotw.me and set up a local environment I can verify my
+> changes in. You may install the Orbit CLI and plugin; ask before installing
+> anything else.
 
 The agent inspects the existing setup, starts the intended environment,
 verifies representative application behavior, and reports anything that still

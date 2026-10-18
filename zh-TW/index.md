@@ -1,1 +1,4 @@
-<!--@include: ../README.zh-TW.md-->
+---
+layout: home
+markdownStyles: false
+---

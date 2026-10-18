@@ -1,18 +1,16 @@
 # ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
-**專心打造產品，讓 Agent 把專案跑起來。**
+**專心打造產品。讓 agent 懂整個專案。**
 
 Orbit 讓 coding agents 能可靠地跑起專案需要的本機環境、理解失敗原因，
 並確認應用程式真的可以使用。
 
 [官方網站](https://orbit.dotw.me/) · [文件](#文件) ·
-[English](https://orbit.dotw.me/)
+[English](README.md)
 
-<!-- orbit-readme-demo:start -->
-[![Orbit — 專心打造產品，讓 agent 啟動開發環境。](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/zh-TW/#demo)
+[![Orbit — 專心打造產品。讓 agent 懂整個專案。](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/zh-TW/#demo)
 
 [觀看完整展示 · 34 秒](https://orbit.dotw.me/zh-TW/#demo)
-<!-- orbit-readme-demo:end -->
 
 ## 開始使用
 
@@ -21,8 +19,8 @@ Orbit 讓 coding agents 能可靠地跑起專案需要的本機環境、理解�
 在你想跑起來的專案中，把這段貼給 coding agent：
 
 ```text
-閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來。
-你可以安裝官方 Orbit CLI 與 plugin；安裝其他軟體或進行破壞性變更前先問我。
+閱讀 https://orbit.dotw.me，幫我建立一個可以在本機驗證我的修改的環境。
+你可以安裝 Orbit CLI 和 plugin；要安裝其他東西先問我。
 ```
 
 Agent 會理解現有 setup、啟動預期的本機環境、驗證一段實際應用流程，並回報

@@ -1,8 +1,12 @@
 # Documentation website
 
 Orbit's official website is [orbit.dotw.me](https://orbit.dotw.me/).
-The repository README is its landing-page source, and files in `docs/` remain
-the source for documentation pages. Do not copy documentation into `website/`.
+The two homepages are the frontmatter-only pages `index.md` and
+`zh-TW/index.md` at the repository root; their copy lives in
+`website/.vitepress/homepage-copy.ts`, and the prompt they show is owned by
+`docs/local-first.md` (the READMEs repeat the same sentences). The READMEs are
+GitHub-facing and are not rendered on the site. Files in `docs/` remain the
+source for documentation pages. Do not copy documentation into `website/`.
 
 ## Local workflow
 
@@ -27,9 +31,9 @@ make docs-site-check
 The check fails for broken internal links or assets. It also verifies the
 landing page, stable core-document routes, locale metadata, heading anchors,
 and the local search index. A headless browser also verifies search, keyboard
-navigation, landmarks, the short-phone layout, and the homepage product demo's
-locale, one-shot scene progression, final graph, and visibility behavior.
-Preview the generated production site with:
+navigation, landmarks, the short-phone layout, the prompt's Copy button, the
+hero band's motion and reduced-motion behavior, and that the homepage film
+plays only when the visitor asks. Preview the generated production site with:
 
 ```bash
 make docs-site-preview
@@ -41,9 +45,16 @@ Edit the existing Markdown owner for a product contract. The website reads
 those files directly and adds navigation, responsive presentation, code
 highlighting, stable heading links, and local full-site search. Update
 `website/.vitepress/config.ts` when a document needs to enter or leave the
-top-level navigation. Localized homepage presentation copy, including the hero,
-features, and product demo, also lives there; keep it concise and link the demo
-to its authoritative Markdown owner.
+top-level navigation. Homepage presentation copy for both locales (headline,
+subhead, the three columns, the film caption) lives in
+`website/.vitepress/homepage-copy.ts`; keep it concise. The prompt in that file
+must match `docs/local-first.md` word for word: the site contract reads the
+prompt from that owner and asserts that the READMEs and both homepages carry
+it. The version in the hero's trust line is the newest `v*` tag at build time,
+which is why the Pages workflow fetches tags; a tagless checkout omits the
+segment. After changing the headline, run `pnpm --dir website run social-card`
+(Node.js 22.18 or newer, which strips the copy module's types) to regenerate
+the social preview image.
 
 Links to Markdown pages should stay relative so they work on GitHub and on the
 website. Links to repository files that are not website pages should use their

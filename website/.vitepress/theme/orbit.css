@@ -20,10 +20,7 @@
   --vp-button-brand-bg: #0969da;
   --vp-button-brand-hover-border: #0550ae;
   --vp-button-brand-hover-bg: #0550ae;
-  --vp-home-hero-name-color: #0969da;
   --orbit-nav-bg: rgb(255 255 255 / 92%);
-  --vp-home-hero-image-background-image: none;
-  --vp-home-hero-image-filter: none;
   --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --vp-font-family-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -50,7 +47,6 @@
   --vp-button-brand-bg: #58a6ff;
   --vp-button-brand-hover-border: #79c0ff;
   --vp-button-brand-hover-bg: #79c0ff;
-  --vp-home-hero-name-color: #58a6ff;
   --orbit-nav-bg: rgb(13 17 23 / 92%);
 }
 
@@ -61,127 +57,39 @@
   backdrop-filter: blur(12px);
 }
 
-.VPHomeHero .image-bg {
-  display: none;
+/* The element selector is only there to outrank VitePress's scoped
+   `.container[data-v-…]` rule without `!important`. */
+footer.VPFooter .container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  max-width: 1100px;
+  text-align: left;
 }
 
-.VPHomeHero .image-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: none;
+footer.VPFooter .copyright a {
+  margin-left: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+footer.VPFooter .copyright a:first-child {
+  margin-left: 0;
 }
 
 .hero-orbit {
   position: relative;
-  width: min(500px, 42vw);
-  aspect-ratio: 500 / 430;
-  margin-inline: auto;
-  overflow: hidden;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 46%, rgb(56 90 190 / 18%), transparent 38%),
-    radial-gradient(circle at 52% 54%, rgb(117 70 180 / 12%), transparent 62%);
-  isolation: isolate;
-}
-
-.hero-orbit::after {
-  position: absolute;
-  inset: 11%;
-  border: 1px solid rgb(88 166 255 / 8%);
-  border-radius: 50%;
-  content: '';
-  pointer-events: none;
-}
-
-.hero-orbit canvas {
-  display: block;
   width: 100%;
   height: 100%;
 }
 
-.VPHome .vp-doc h1:first-child {
-  display: none;
-}
-
-.vp-doc h1 img {
-  display: inline-block;
-  width: 32px;
-  height: 32px;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-
-.VPFeature {
-  border-color: var(--vp-c-border);
-  border-radius: 8px;
-}
-
-.VPFeature:hover {
-  border-color: var(--vp-c-brand-1);
-}
-
-@media (min-width: 641px) and (max-width: 1050px) {
-  .hero-orbit {
-    width: min(340px, 34vw);
-  }
-}
-
-@media (max-width: 640px) {
-  .VPHomeHero {
-    padding-top: 40px !important;
-    padding-bottom: 32px !important;
-  }
-
-  .VPHomeHero .image {
-    margin: 0 0 20px;
-  }
-
-  .hero-orbit {
-    width: min(280px, 78vw);
-    aspect-ratio: 280 / 250;
-  }
-
-  .VPHomeHero .name,
-  .VPHomeHero .text {
-    font-size: 34px;
-    line-height: 1.08;
-  }
-
-  .VPHomeHero .tagline {
-    padding-top: 14px;
-    font-size: 16px;
-    line-height: 1.45;
-  }
-
-  .VPHomeHero .actions {
-    padding-top: 18px;
-  }
-}
-
-@media (max-width: 360px) and (max-height: 620px) {
-  .VPHomeHero {
-    padding-top: 12px !important;
-  }
-
-  .VPHomeHero .image {
-    margin: -52px 0 0;
-  }
-
-  .VPHomeHero .image-container {
-    width: 120px;
-    height: 107px;
-  }
-
-  .hero-orbit {
-    width: min(120px, 38vw);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-orbit {
-    background:
-      radial-gradient(circle at 50% 46%, rgb(56 90 190 / 14%), transparent 38%),
-      radial-gradient(circle at 52% 54%, rgb(117 70 180 / 9%), transparent 62%);
-  }
+/* The mask reaches zero at every edge of the band, so the star field dissolves
+   into the page instead of ending on a line, in either theme. */
+.hero-orbit canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 46%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 46%, transparent 100%);
 }

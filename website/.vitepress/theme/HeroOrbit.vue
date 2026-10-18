@@ -37,6 +37,14 @@ const orbitSpecs: OrbitSpec[] = [
   { rx: 205, ry: 98, rotation: -0.08, speed: 0.12, phase: 4.1, color: '#39c5cf' },
 ]
 
+// The artwork's size never follows the band height: a taller band adds sky
+// around the orbits instead of growing the sphere.
+const artworkScale = 1.17
+
+// The parallax follows the pointer across the whole hero, not only the band,
+// so the host that owns that area passes it in.
+const props = defineProps<{ parallaxArea?: HTMLElement }>()
+
 const root = ref<HTMLDivElement>()
 const canvas = ref<HTMLCanvasElement>()
 const { isDark } = useData()
@@ -53,6 +61,9 @@ let pageVisible = true
 let reducedMotion = false
 let pointerX = 0
 let pointerY = 0
+let pointerTargetX = 0
+let pointerTargetY = 0
+let parallaxArea: HTMLElement | undefined
 let resizeObserver: ResizeObserver | undefined
 let intersectionObserver: IntersectionObserver | undefined
 let motionQuery: MediaQueryList | undefined
@@ -105,8 +116,8 @@ function drawOrbit(frame: HeroFrame, orbit: OrbitSpec) {
   frame.ctx.rotate(orbit.rotation)
   frame.ctx.beginPath()
   frame.ctx.ellipse(0, 0, orbit.rx * frame.scale, orbit.ry * frame.scale, 0, 0, Math.PI * 2)
-  frame.ctx.strokeStyle = `rgba(121, 192, 255, ${frame.dark ? 0.27 : 0.34})`
-  frame.ctx.lineWidth = 1
+  frame.ctx.strokeStyle = `rgba(121, 192, 255, ${frame.dark ? 0.34 : 0.4})`
+  frame.ctx.lineWidth = Math.max(1, 1.25 * frame.scale)
   frame.ctx.stroke()
   frame.ctx.restore()
 }
@@ -143,18 +154,20 @@ function frameFor(time: number): HeroFrame | undefined {
     dark,
     seconds,
     compact,
-    centerX: width * 0.51 + pointerX * (compact ? 0 : 8),
-    centerY: height * 0.49 + pointerY * (compact ? 0 : 6),
-    scale: Math.min(width / 500, height / 430),
+    centerX: width * 0.5 + pointerX * (compact ? 0 : 8),
+    centerY: height * 0.5 + pointerY * (compact ? 0 : 6),
+    scale: Math.min(width / 500, artworkScale),
     pulse: reducedMotion ? 0.5 : (Math.sin(seconds * 1.45) + 1) / 2,
   }
 }
 
 function drawField(frame: HeroFrame) {
-  const field = frame.ctx.createRadialGradient(frame.centerX, frame.centerY, 12, frame.centerX, frame.centerY, Math.max(width, height) * 0.66)
+  const field = frame.ctx.createRadialGradient(frame.centerX, frame.centerY, 12, frame.centerX, frame.centerY, Math.max(width, height) * 0.5)
   field.addColorStop(0, frame.dark ? 'rgba(48, 70, 160, 0.28)' : 'rgba(84, 174, 255, 0.22)')
   field.addColorStop(0.42, frame.dark ? 'rgba(73, 43, 128, 0.13)' : 'rgba(137, 87, 229, 0.10)')
-  field.addColorStop(1, 'rgba(13, 17, 23, 0)')
+  // The last stop fades toward the page's own color; fading toward a dark
+  // transparent on the light theme leaves a grey halo on the white band.
+  field.addColorStop(1, frame.dark ? 'rgba(13, 17, 23, 0)' : 'rgba(255, 255, 255, 0)')
   frame.ctx.fillStyle = field
   frame.ctx.fillRect(0, 0, width, height)
 }
@@ -268,6 +281,7 @@ function animate(time: number) {
   frame = 0
   if (!visible || !pageVisible || reducedMotion) return
   if (time - previousFrame >= 1000 / 30) {
+    easePointerTowardTarget()
     draw(time)
     previousFrame = time
   }
@@ -296,16 +310,30 @@ function onMotionChange(event: MediaQueryListEvent | MediaQueryList) {
   restartAnimation()
 }
 
+// Leaving the hero eases the field back to center instead of snapping it.
+function easePointerTowardTarget() {
+  pointerX += (pointerTargetX - pointerX) * 0.08
+  pointerY += (pointerTargetY - pointerY) * 0.08
+}
+
 function onPointerMove(event: PointerEvent) {
-  if (!root.value || width < 640) return
-  const bounds = root.value.getBoundingClientRect()
-  pointerX = (event.clientX - bounds.left) / bounds.width - 0.5
-  pointerY = (event.clientY - bounds.top) / bounds.height - 0.5
+  if (!parallaxArea || width < 640) return
+  const bounds = parallaxArea.getBoundingClientRect()
+  pointerTargetX = (event.clientX - bounds.left) / bounds.width - 0.5
+  pointerTargetY = (event.clientY - bounds.top) / bounds.height - 0.5
 }
 
 function onPointerLeave() {
-  pointerX = 0
-  pointerY = 0
+  pointerTargetX = 0
+  pointerTargetY = 0
+}
+
+function listenForParallax(area: HTMLElement | undefined) {
+  parallaxArea?.removeEventListener('pointermove', onPointerMove)
+  parallaxArea?.removeEventListener('pointerleave', onPointerLeave)
+  parallaxArea = area ?? root.value
+  parallaxArea?.addEventListener('pointermove', onPointerMove)
+  parallaxArea?.addEventListener('pointerleave', onPointerLeave)
 }
 
 onMounted(async () => {
@@ -321,12 +349,13 @@ onMounted(async () => {
     restartAnimation()
   }, { threshold: 0.05 })
   intersectionObserver.observe(root.value)
-  root.value.addEventListener('pointermove', onPointerMove)
-  root.value.addEventListener('pointerleave', onPointerLeave)
+  listenForParallax(props.parallaxArea)
   document.addEventListener('visibilitychange', onVisibilityChange)
   syncCanvasSize()
   restartAnimation()
 })
+
+watch(() => props.parallaxArea, listenForParallax)
 
 watch(isDark, async () => {
   await nextTick()
@@ -338,14 +367,16 @@ onUnmounted(() => {
   resizeObserver?.disconnect()
   intersectionObserver?.disconnect()
   motionQuery?.removeEventListener('change', onMotionChange)
-  root.value?.removeEventListener('pointermove', onPointerMove)
-  root.value?.removeEventListener('pointerleave', onPointerLeave)
+  parallaxArea?.removeEventListener('pointermove', onPointerMove)
+  parallaxArea?.removeEventListener('pointerleave', onPointerLeave)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
 <template>
-  <div ref="root" class="hero-orbit" data-motion="paused" data-theme="dark">
+  <!-- data-motion is set only on the client, so its presence doubles as the
+       hydration signal the browser tests wait for. -->
+  <div ref="root" class="hero-orbit">
     <canvas ref="canvas" aria-hidden="true" />
     <span class="visually-hidden">An animated orbital field centered on Orbit.</span>
   </div>
