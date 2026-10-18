@@ -16,10 +16,11 @@ needs you. You do not need to choose an install method or learn Orbit first.
 
 The agent follows the published Orbit skill at
 <https://orbit.dotw.me/agent/SKILL.md>, also linked as **For agents** in the
-site navigation. In short: it asks before installing anything your request did
-not already allow, describes the project's existing setup in a project-local
-`orbit.yaml` instead of running the public demo, starts the environment, and
-proves a representative application flow responds before reporting back. The
+site navigation. In short: it installs the official Orbit CLI and plugin and
+asks before installing anything else, describes the project's existing setup in
+a project-local `orbit.yaml` instead of running the public demo, starts the
+environment, and proves a representative application flow responds before
+reporting back. The
 skill is the authoritative description of that loop; this page only points to
 it.
 
