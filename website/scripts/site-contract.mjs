@@ -72,10 +72,10 @@ const localReleaseTags = execFileSync('git', ['tag', '--list', 'v*'], { cwd: sou
 if (localReleaseTags || process.env.GITHUB_WORKFLOW === 'Documentation') {
   assert.ok(releaseSegment, 'the trust line must name the release when the checkout has tags')
 }
-assert.match(home, /<title>Local Dev Environments for Coding Agents \| Orbit<\/title>/)
-assert.match(home, /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
-assert.match(home, /property="og:title" content="Orbit — Local Dev Environments for Coding Agents"/)
-assert.match(home, /property="og:description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
+assert.match(home, /<title>Local dev environments your agent understands \| Orbit<\/title>/)
+assert.match(home, /<meta name="description" content="One contract for all your microservices\. Your agent reads it, and runs only the slice it needs\.">/)
+assert.match(home, /property="og:title" content="Orbit — Local dev environments your agent understands"/)
+assert.match(home, /property="og:description" content="One contract for all your microservices\. Your agent reads it, and runs only the slice it needs\.">/)
 assert.ok(home.includes(englishPrompt), 'the homepage must carry the prompt owned by docs/local-first.md')
 assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
 assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.me\/"/)
@@ -141,8 +141,8 @@ for (const [page, language, counterpart] of [
   assert.doesNotMatch(html, /homepage-showcase/, 'showcase must render on homepages only')
   assert.match(html, new RegExp(`<html lang="${language}"`))
   assert.match(html, language === 'zh-TW'
-    ? /<meta name="description" content="Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。">/
-    : /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.">/)
+    ? /<meta name="description" content="一份契約描述你所有的微服務。agent 讀它，只跑需要的那一片。">/
+    : /<meta name="description" content="One contract for all your microservices\. Your agent reads it, and runs only the slice it needs\.">/)
   assert.match(html, /rel="canonical"/)
   assert.match(html, /property="og:title"/)
   assert.match(html, /property="og:site_name" content="Orbit"/)

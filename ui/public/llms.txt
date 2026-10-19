@@ -1,6 +1,6 @@
 # Orbit
 
-> Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.
+> Orbit gives coding agents one environment contract for all of a project's microservices: they read it as JSON, start only the slice a change needs, wait for real readiness, and verify the application before reporting back.
 
 A coding agent asked to run a project with Orbit should read the skill first. It is the canonical, machine-readable playbook: setup, the core loop, and what counts as proof that the application works.
 

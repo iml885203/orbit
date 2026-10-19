@@ -1,12 +1,15 @@
 import { defineConfig } from 'vitepress'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { homepageCopy } from './homepage-copy'
 
 const siteOrigin = 'https://orbit.dotw.me'
 const siteBase = '/'
-const homepageTitle = 'Orbit — Local Dev Environments for Coding Agents'
-const homepageDescription = 'Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard.'
-const traditionalChineseHomepageDescription = 'Orbit 讓 coding agents 透過一致的 CLI 與視覺化 dashboard，啟動、檢查並驗證完整的本機開發環境。'
+const homepageTitle = 'Orbit — Local dev environments your agent understands'
+// The page description is the homepage subhead, so search results and share
+// cards say what the page says.
+const homepageDescription = homepageCopy['en-US'].subhead
+const traditionalChineseHomepageDescription = homepageCopy['zh-TW'].subhead
 const untranslatedRoutes = new Set([
   'CODE_OF_CONDUCT',
   'CONTRIBUTING',
@@ -244,14 +247,14 @@ export default defineConfig({
   transformPageData(pageData) {
     if (pageData.relativePath.startsWith('zh-TW/')) pageData.lastUpdated = undefined
     if (pageData.relativePath === 'zh-TW/index.md') {
-      pageData.title = 'Orbit（繁體中文）'
+      pageData.title = '讓 coding agent 懂你的本機開發環境'
       pageData.frontmatter.description = traditionalChineseHomepageDescription
       pageData.frontmatter.latestRelease = latestRelease
       return
     }
     if (pageData.relativePath !== 'index.md') return
 
-    pageData.title = 'Local Dev Environments for Coding Agents'
+    pageData.title = 'Local dev environments your agent understands'
     pageData.frontmatter.description = homepageDescription
     pageData.frontmatter.latestRelease = latestRelease
   },
