@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,15 +50,33 @@ assert.equal(adapters.length, translatedSources.length, 'every locale adapter mu
 
 for (const page of requiredPages) assert.ok(existsSync(join(outputPath, page)), `missing required page: ${page}`)
 
+// docs/local-first.md owns the onboarding prompt; the READMEs and both
+// homepages must repeat it exactly, so the expected text is read from there.
+const englishPrompt = promptOwnedBy('docs/local-first.md')
+const chinesePrompt = promptOwnedBy('docs/local-first.zh-TW.md')
+assert.equal(promptInReadme('README.md'), englishPrompt, 'README.md must carry the prompt owned by docs/local-first.md')
+assert.equal(promptInReadme('README.zh-TW.md'), chinesePrompt, 'README.zh-TW.md must carry the prompt owned by docs/local-first.zh-TW.md')
+
 const home = readFileSync(join(outputPath, 'index.html'), 'utf8')
-assert.match(home, /Build the product\. Let your agent run the project\./)
+assert.equal((home.match(/<h1\b/g) ?? []).length, 1, 'the homepage headline is its only h1')
 assert.match(home, /aria-label="Search"/)
-assert.match(home, /href="\/#get-started"/)
+assert.match(home, /href="\/docs\/local-first"/)
+assert.match(home, /id="get-started"/)
+assert.doesNotMatch(home, /class="vp-doc/, 'the homepage renders no Markdown body')
+const releaseSegment = home.match(/data-release[^>]*>([^<]*)</)
+if (releaseSegment) assert.match(releaseSegment[1], /^v\d+\.\d+\.\d+$/, 'the trust line names a release tag or nothing')
+// The Pages workflow fetches tags on purpose, so there the segment is
+// mandatory; elsewhere (ci.yml's tagless checkout, a local clone) it is
+// required only when tags are present.
+const localReleaseTags = execFileSync('git', ['tag', '--list', 'v*'], { cwd: sourceRoot, encoding: 'utf8' }).trim()
+if (localReleaseTags || process.env.GITHUB_WORKFLOW === 'Documentation') {
+  assert.ok(releaseSegment, 'the trust line must name the release when the checkout has tags')
+}
 assert.match(home, /<title>Local Dev Environments for Coding Agents \| Orbit<\/title>/)
 assert.match(home, /<meta name="description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
 assert.match(home, /property="og:title" content="Orbit — Local Dev Environments for Coding Agents"/)
 assert.match(home, /property="og:description" content="Orbit gives coding agents one consistent way to start, inspect, and verify complete local development environments through a CLI and visual dashboard\.">/)
-assert.ok(home.includes('Read https://orbit.dotw.me and help me get this project running with Orbit'), 'URL-first project onboarding prompt is missing')
+assert.ok(home.includes(englishPrompt), 'the homepage must carry the prompt owned by docs/local-first.md')
 assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
 assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.me\/"/)
 assert.match(home, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
@@ -69,10 +88,9 @@ assert.match(home, /property="og:image:height" content="630"/)
 assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
 assert.match(home, /id="demo"/)
 assert.match(home, /src="\/media\/orbit-launch.webm"/)
-assert.doesNotMatch(home, /showcase-node|showcase-composer/)
 assert.equal((home.match(/<video\b/g) ?? []).length, 1)
+assert.doesNotMatch(home, /<video\b[^>]*\bautoplay\b/, 'the film plays only on request')
 assert.doesNotMatch(home, /href="[^"]*\.mp4"/)
-assert.doesNotMatch(home, /orbit-readme-demo|Watch the full demo/)
 
 const robots = readFileSync(join(outputPath, 'robots.txt'), 'utf8')
 assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
@@ -92,11 +110,11 @@ assert.match(notFound, /<meta name="robots" content="noindex, nofollow">/)
 const chineseHome = readFileSync(join(outputPath, 'zh-TW/index.html'), 'utf8')
 assert.match(chineseHome, /<html lang="zh-TW"/)
 assert.match(chineseHome, /href="\/zh-TW\/docs\/local-first"/)
-assert.ok(chineseHome.includes('閱讀 https://orbit.dotw.me，幫我用 Orbit 把這個專案跑起來'), 'Traditional Chinese URL-first project onboarding prompt is missing')
+assert.ok(chineseHome.includes(chinesePrompt), 'the Chinese homepage must carry the prompt owned by docs/local-first.zh-TW.md')
+assert.equal((chineseHome.match(/<h1\b/g) ?? []).length, 1)
+assert.match(chineseHome, /id="開始使用"/)
 assert.match(chineseHome, /id="demo"/)
-assert.match(chineseHome, /問一次，看見整個環境依序啟動。/)
 assert.equal((chineseHome.match(/<video\b/g) ?? []).length, 1)
-assert.doesNotMatch(chineseHome, /showcase-node|showcase-composer|觀看完整展示|orbit-readme-demo/)
 assert.doesNotMatch(chineseHome, /href="[^"]*\.mp4"/)
 
 const skillSource = readFileSync(join(sourceRoot, 'plugins/orbit/skills/orbit/SKILL.md'))
@@ -144,6 +162,30 @@ for (const term of ['low-level-runtime-overrides', 'Component map', 'data loss m
 }
 assert.ok(!indexedContent.includes('Orbit 1.0 test matrix'), 'release audit must not appear in local search')
 assert.ok(!indexedContent.includes('Documentation website'), 'website maintenance must not appear in local search')
+
+// Wrapped prompt lines join with a space in English and with nothing after
+// Chinese punctuation, which is how the single-line homepage text is formed.
+function joinPromptLines(lines) {
+  return lines.reduce((text, line) => text + (!text || /[。；，]$/.test(text) ? '' : ' ') + line, '')
+}
+
+function promptOwnedBy(markdownPath) {
+  const lines = readFileSync(join(sourceRoot, markdownPath), 'utf8').split('\n')
+  const start = lines.findIndex((line) => line.startsWith('> '))
+  assert.ok(start >= 0, `${markdownPath} has no onboarding prompt blockquote`)
+  const quote = []
+  for (const line of lines.slice(start)) {
+    if (!line.startsWith('> ')) break
+    quote.push(line.slice(2).trim())
+  }
+  return joinPromptLines(quote)
+}
+
+function promptInReadme(markdownPath) {
+  const block = readFileSync(join(sourceRoot, markdownPath), 'utf8').match(/```text\n([\s\S]*?)\n```/)
+  assert.ok(block, `${markdownPath} has no onboarding prompt block`)
+  return joinPromptLines(block[1].split('\n').map((line) => line.trim()))
+}
 
 function filesBelow(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

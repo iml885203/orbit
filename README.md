@@ -1,6 +1,6 @@
 # ![Orbit](ui/public/orbit-logo-badge.svg) Orbit
 
-**Build the product. Let your agent run the project.**
+**Build the product. Let your agent know the whole project.**
 
 Orbit gives coding agents a reliable way to get the local environment a
 project needs running, understand failures, and verify that the application
@@ -9,11 +9,9 @@ actually works.
 [Official website](https://orbit.dotw.me/) · [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
 
-<!-- orbit-readme-demo:start -->
-[![Orbit — Build the product. Let your agent run the project.](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/#demo)
+[![Orbit — Build the product. Let your agent know the whole project.](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/#demo)
 
 [Watch the full demo · 34 seconds](https://orbit.dotw.me/#demo)
-<!-- orbit-readme-demo:end -->
 
 ## Get started
 
@@ -22,9 +20,9 @@ actually works.
 Paste this into your coding agent from the project you want to run:
 
 ```text
-Read https://orbit.dotw.me and help me get this project running with Orbit.
-You may install the official Orbit CLI and plugin. Ask before installing other
-software or making destructive changes.
+Read https://orbit.dotw.me and set up a local environment I can verify my
+changes in. You may install the Orbit CLI and plugin; ask before installing
+anything else.
 ```
 
 The agent inspects the existing setup, starts the intended environment,

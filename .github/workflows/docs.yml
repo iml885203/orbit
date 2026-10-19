@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/docs.yml'
       - 'Makefile'
+      - 'index.md'
+      - 'zh-TW/**'
       - 'docs/**'
       - 'plugins/orbit/skills/orbit/**'
       - 'ui/public/**'
@@ -17,6 +19,12 @@ on:
       - 'DESIGN.md'
       - 'CODE_OF_CONDUCT.md'
       - 'SECURITY.md'
+  # The homepage names the newest release, so a finished release republishes
+  # the site. A workflow_run fires on main, which the Pages environment allows;
+  # the release event itself would run on the tag ref and be refused.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -28,10 +36,15 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The homepage names the newest release tag; a tagless checkout
+          # would silently drop that line.
+          fetch-tags: true
       - uses: pnpm/action-setup@v6
         with:
           version: 11.8.0

@@ -1,16 +1,43 @@
 import { expect, test } from '@playwright/test'
+import { homepageCopy } from '../.vitepress/homepage-copy'
+
+const prompt = homepageCopy['en-US'].prompt
 
 test('keeps the primary action visible on a short phone', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
 
-  const primaryAction = page.getByRole('link', { name: 'Get started with your agent', exact: true }).first()
-  const actionBox = await primaryAction.boundingBox()
+  const copyButton = page.getByRole('button', { name: 'Copy', exact: true })
+  const actionBox = await copyButton.boundingBox()
   const orbitBox = await page.locator('.hero-orbit canvas').boundingBox()
   expect(actionBox && actionBox.y + actionBox.height).toBeLessThanOrEqual(568)
   expect(orbitBox && orbitBox.width > 0 && orbitBox.height > 0).toBe(true)
   expect(orbitBox && Math.abs(orbitBox.x + orbitBox.width / 2 - 160)).toBeLessThanOrEqual(1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
+test('copies the onboarding prompt from the hero', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('./')
+  await expect(page.locator('.hero-orbit')).toHaveAttribute('data-motion', /running|reduced|paused/)
+
+  await expect(page.locator('h1')).toHaveCount(1)
+  await expect(page.locator('#get-started .prompt-card__text')).toHaveText(prompt)
+  await page.getByRole('button', { name: 'Copy', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(prompt)
+})
+
+test('selects the prompt and says so when the clipboard is unavailable', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) } })
+  })
+  await page.goto('./')
+  await expect(page.locator('.hero-orbit')).toHaveAttribute('data-motion', /running|reduced|paused/)
+
+  await page.getByRole('button', { name: 'Copy', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Copy failed, select the text', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(prompt)
 })
 
 test('maintains one main landmark through client-side navigation', async ({ page }) => {
@@ -21,8 +48,8 @@ test('maintains one main landmark through client-side navigation', async ({ page
   await expect(skipLink).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('#VPContent')).toBeFocused()
-  await page.getByRole('link', { name: 'Get started with your agent', exact: true }).first().click()
-  await expect(page).toHaveURL(/\/#get-started$/)
+  await page.getByRole('navigation', { name: 'Main Navigation' }).getByRole('link', { name: 'Get started', exact: true }).click()
+  await expect(page).toHaveURL(/\/docs\/local-first$/)
   await expect(page.locator('main, [role="main"]')).toHaveCount(1)
   await page.getByRole('link', { name: 'Orbit', exact: true }).click()
   await expect(page).toHaveURL(/:\d+\/$/)
@@ -47,19 +74,19 @@ test('switches between distinct light and dark themes', async ({ page }) => {
   await page.goto('./')
 
   const appearance = page.locator('.VPSwitchAppearance').first()
-  const showcaseFlow = page.locator('.demo-footer button')
+  const promptCard = page.locator('.prompt-card')
   await expect(page.locator('html')).not.toHaveClass(/dark/)
   const lightBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
-  const lightShowcaseBackground = await showcaseFlow.evaluate((flow) => getComputedStyle(flow).backgroundColor)
+  const lightCardBackground = await promptCard.evaluate((card) => getComputedStyle(card).backgroundColor)
 
   await appearance.click()
   await expect(page.locator('html')).toHaveClass(/dark/)
   const darkBackground = await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--vp-c-bg'))
-  const darkShowcaseBackground = await showcaseFlow.evaluate((flow) => getComputedStyle(flow).backgroundColor)
+  const darkCardBackground = await promptCard.evaluate((card) => getComputedStyle(card).backgroundColor)
 
   expect(lightBackground.trim()).toBe('#ffffff')
   expect(darkBackground.trim()).toBe('#0d1117')
-  expect(lightShowcaseBackground).not.toBe(darkShowcaseBackground)
+  expect(lightCardBackground).not.toBe(darkCardBackground)
 })
 
 test('uses dark mode on the first visit', async ({ page }) => {
@@ -70,16 +97,19 @@ test('uses dark mode on the first visit', async ({ page }) => {
   expect(background.trim()).toBe('#0d1117')
 })
 
-test('renders a bounded animated hero and respects reduced motion', async ({ page }) => {
+test('renders the hero band between the headline and the prompt and respects reduced motion', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('./')
   const hero = page.locator('.hero-orbit')
   const canvas = hero.locator('canvas')
   await expect(hero).toHaveAttribute('data-motion', 'running')
-  const containerBox = await page.locator('.VPHomeHero .image-container').boundingBox()
+  const headlineBox = await page.locator('h1').boundingBox()
   const heroBox = await hero.boundingBox()
-  expect(containerBox && heroBox && Math.abs(heroBox.x + heroBox.width / 2 - containerBox.x - containerBox.width / 2)).toBeLessThanOrEqual(1)
-  expect(containerBox && heroBox && Math.abs(heroBox.y + heroBox.height / 2 - containerBox.y - containerBox.height / 2)).toBeLessThanOrEqual(1)
+  const cardBox = await page.locator('.prompt-card').boundingBox()
+  expect(heroBox && heroBox.x).toBe(0)
+  expect(heroBox && heroBox.width).toBe(390)
+  expect(headlineBox && heroBox && heroBox.y).toBeGreaterThan(headlineBox!.y + headlineBox!.height)
+  expect(cardBox && heroBox && cardBox.y).toBeGreaterThan(heroBox!.y + heroBox!.height * 0.8)
   const dimensions = await canvas.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
     return { cssWidth: bounds.width, cssHeight: bounds.height, width: element.width, height: element.height }

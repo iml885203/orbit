@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const siteOrigin = 'https://orbit.dotw.me'
@@ -64,9 +65,34 @@ const traditionalChineseReference = [
 ]
 
 function localizedRoute(relativePath: string) {
-  if (relativePath === 'README.zh-TW.md') return 'zh-TW/index.md'
   const match = relativePath.match(/^docs\/(.+)\.zh-TW\.md$/)
   return match ? `zh-TW/docs/${match[1]}.md` : relativePath
+}
+
+// The installers only deliver published GitHub Releases, so the homepage names
+// the newest release tag rather than VERSION, which is the unreleased candidate
+// between the prepare PR and the release. A checkout without tags yields
+// nothing and the homepage omits the version segment.
+function latestReleaseTag() {
+  try {
+    const tags = execFileSync('git', ['tag', '--list', 'v*', '--sort=-v:refname'], {
+      cwd: fileURLToPath(new URL('../../', import.meta.url)),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return tags.split('\n').find((tag) => /^v\d+\.\d+\.\d+$/.test(tag))
+  } catch (error) {
+    console.warn('homepage release version omitted: git tag listing failed:', error)
+    return undefined
+  }
+}
+
+const latestRelease = latestReleaseTag()
+
+// VitePress renders footer strings as HTML, which is the only way the default
+// footer can carry links without a custom layout.
+function footerLinks(links: Array<[string, string]>) {
+  return links.map(([text, href]) => `<a href="${href}">${text}</a>`).join('')
 }
 
 function publicPath(relativePath: string) {
@@ -98,9 +124,6 @@ export default defineConfig({
   markdown: {
     html: false,
     config(markdown) {
-      markdown.core.ruler.before('block', 'readme-demo', (state) => {
-        state.src = state.src.replace(/<!-- orbit-readme-demo:start -->[\s\S]*?<!-- orbit-readme-demo:end -->/g, '')
-      })
       const renderCode = markdown.renderer.rules.code_inline
       markdown.renderer.rules.code_inline = (tokens, index, options, env, self) => {
         const rendered = renderCode
@@ -130,24 +153,11 @@ export default defineConfig({
         }
         return renderLink ? renderLink(tokens, index, options, env, self) : self.renderToken(tokens, index, options)
       }
-      const renderImage = markdown.renderer.rules.image
-      markdown.renderer.rules.image = (tokens, index, options, env, self) => {
-        const srcIndex = tokens[index].attrIndex('src')
-        const src = srcIndex >= 0 ? tokens[index].attrs?.[srcIndex]?.[1] : undefined
-        if (env.relativePath === 'zh-TW/index.md' && src === 'ui/public/orbit-logo-badge.svg') {
-          tokens[index].attrs![srcIndex][1] = '/orbit-logo-badge.svg'
-        }
-        if (env.relativePath === 'zh-TW/index.md' && src === 'docs/assets/orbit-demo-dashboard.jpg') {
-          tokens[index].attrs![srcIndex][1] = 'https://raw.githubusercontent.com/iml885203/orbit/main/docs/assets/orbit-demo-dashboard.jpg'
-        }
-        return renderImage ? renderImage(tokens, index, options, env, self) : self.renderToken(tokens, index, options)
-      }
     },
   },
   sitemap: {
     hostname: 'https://orbit.dotw.me/',
   },
-  rewrites: { 'README.md': 'index.md' },
   srcExclude: [
     'launch-video/**',
     'AGENTS.md',
@@ -158,6 +168,7 @@ export default defineConfig({
     'plugins/**',
     'ui/**',
     'website/**',
+    'README.md',
     'README.zh-TW.md',
     'docs/*.zh-TW.md',
   ],
@@ -182,9 +193,14 @@ export default defineConfig({
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
           { text: '給 Agent', link: 'https://orbit.dotw.me/agent/SKILL.md' },
-          { text: '設定參考', link: '/zh-TW/docs/configuration' },
-          { text: '疑難排解', link: '/zh-TW/docs/troubleshooting' },
-          { text: '為什麼選擇 Orbit', link: '/zh-TW/docs/why-orbit' },
+          {
+            text: '文件',
+            items: [
+              { text: '設定參考', link: '/zh-TW/docs/configuration' },
+              { text: '疑難排解', link: '/zh-TW/docs/troubleshooting' },
+              { text: '為什麼選擇 Orbit', link: '/zh-TW/docs/why-orbit' },
+            ],
+          },
         ],
         sidebar: { '/zh-TW/docs/': [
           { text: '指南', items: traditionalChineseGuide },
@@ -193,14 +209,21 @@ export default defineConfig({
         ] },
         editLink: {
           pattern: ({ filePath }) => {
-            const sourcePath = filePath === 'zh-TW/index.md'
-              ? 'README.zh-TW.md'
-              : filePath.replace(/^zh-TW\/docs\/(.+)\.md$/, 'docs/$1.zh-TW.md')
+            const sourcePath = filePath.replace(/^zh-TW\/docs\/(.+)\.md$/, 'docs/$1.zh-TW.md')
             return `https://github.com/iml885203/orbit/edit/main/${sourcePath}`
           },
           text: '在 GitHub 編輯此頁',
         },
-        footer: { message: '採用 MIT License 發布。', copyright: 'Orbit 以開放方式打造。' },
+        footer: {
+          message: '採用 MIT License 發布。',
+          copyright: footerLinks([
+            ['為什麼選擇 Orbit', '/zh-TW/docs/why-orbit'],
+            ['文件', '/zh-TW/docs/local-first'],
+            ['給 Agent', 'https://orbit.dotw.me/agent/SKILL.md'],
+            ['GitHub', 'https://github.com/iml885203/orbit'],
+            ['English', '/'],
+          ]),
+        },
       },
     },
   },
@@ -222,46 +245,15 @@ export default defineConfig({
     if (pageData.relativePath.startsWith('zh-TW/')) pageData.lastUpdated = undefined
     if (pageData.relativePath === 'zh-TW/index.md') {
       pageData.title = 'Orbit（繁體中文）'
-      pageData.frontmatter.layout = 'home'
       pageData.frontmatter.description = traditionalChineseHomepageDescription
-      pageData.frontmatter.hero = {
-        name: 'Orbit',
-        text: '專心打造產品，讓 Agent 把專案跑起來。',
-        tagline: '把一個網址交給 coding agent。Orbit 會協助它取得工具、啟動專案需要的本機環境，並驗證應用程式真的可以使用。',
-        image: { src: '/orbit-logo-badge.svg', alt: 'Orbit' },
-        actions: [
-          { theme: 'brand', text: '與 Agent 開始使用', link: '/zh-TW/#開始使用' },
-        ],
-      }
-      pageData.frontmatter.features = [
-        { title: '只要一個需求', details: '把 Orbit 網址交給 coding agent；它會取得工具並理解現有專案。' },
-        { title: '留下可重現的設定', details: '成功的方法會保存在程式碼旁的 orbit.yaml，不再只存在某個人的腦中。' },
-        { title: '證明應用真的可用', details: 'Orbit 回報預期環境的狀態，Agent 再驗證適合該 application 的代表性行為。' },
-      ]
+      pageData.frontmatter.latestRelease = latestRelease
       return
     }
     if (pageData.relativePath !== 'index.md') return
 
     pageData.title = 'Local Dev Environments for Coding Agents'
-    pageData.frontmatter.layout = 'home'
     pageData.frontmatter.description = homepageDescription
-    pageData.frontmatter.hero = {
-      name: 'Orbit',
-      text: 'Build the product. Let your agent run the project.',
-      tagline: 'Give your coding agent one URL. Orbit helps it get the tools, start the local environment this project needs, and verify that the application actually works.',
-      image: {
-        src: '/orbit-logo-badge.svg',
-        alt: 'Orbit',
-      },
-      actions: [
-        { theme: 'brand', text: 'Get started with your agent', link: '/#get-started' },
-      ],
-    }
-    pageData.frontmatter.features = [
-      { title: 'One request to your agent', details: 'Give it the Orbit URL; it gets the tools and understands the existing project.' },
-      { title: 'One repeatable setup', details: 'The working environment stays beside the code in orbit.yaml instead of one person’s head.' },
-      { title: 'Proof that the app works', details: 'Orbit reports the intended environment; the agent verifies representative application behavior.' },
-    ]
+    pageData.frontmatter.latestRelease = latestRelease
   },
   transformHead({ pageData }) {
     const pagePath = publicPath(pageData.relativePath)
@@ -335,9 +327,14 @@ export default defineConfig({
     nav: [
       { text: 'Get started', link: '/docs/local-first' },
       { text: 'For agents', link: 'https://orbit.dotw.me/agent/SKILL.md' },
-      { text: 'Configuration', link: '/docs/configuration' },
-      { text: 'Troubleshooting', link: '/docs/troubleshooting' },
-      { text: 'Why Orbit', link: '/docs/why-orbit' },
+      {
+        text: 'Docs',
+        items: [
+          { text: 'Configuration', link: '/docs/configuration' },
+          { text: 'Troubleshooting', link: '/docs/troubleshooting' },
+          { text: 'Why Orbit', link: '/docs/why-orbit' },
+        ],
+      },
     ],
     sidebar: {
       '/docs/': [
@@ -378,7 +375,13 @@ export default defineConfig({
     ],
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Orbit is built in the open.',
+      copyright: footerLinks([
+        ['Why Orbit', '/docs/why-orbit'],
+        ['Docs', '/docs/local-first'],
+        ['For agents', 'https://orbit.dotw.me/agent/SKILL.md'],
+        ['GitHub', 'https://github.com/iml885203/orbit'],
+        ['繁體中文', '/zh-TW/'],
+      ]),
     },
   },
 })
