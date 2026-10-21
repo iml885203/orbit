@@ -9,7 +9,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/iml885203/tunlease v1.3.1
 	github.com/in-toto/attestation v1.2.0
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.18.7
 	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-shellwords v1.0.14
 	github.com/microsoft/go-mssqldb v1.10.0
