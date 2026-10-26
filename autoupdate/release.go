@@ -216,8 +216,8 @@ func (s *State) settleAt(installed string) {
 // already satisfies: a package manager or hand-run installer replaces the
 // binary without passing through Orbit's apply transaction. It writes only
 // when the entry is stale, which is what makes it safe on read paths. A failed
-// write only delays settling — the settled view is still right for this read
-// and the next read retries — so it is not reported.
+// write only delays settling, so it is not reported: this read still gets the
+// settled view and the next read retries the write.
 func ReconcileInstalled(launchPath, installed string) (State, error) {
 	state, err := Load(launchPath)
 	if err != nil || !state.announcesSatisfiedTarget(installed) {
@@ -251,15 +251,22 @@ func (s State) announcesSatisfiedTarget(installed string) bool {
 	return !newerRelease(s.TargetVersion, installed)
 }
 
-// RecordsTransactionOutcome tells Orbit's own apply or rollback result apart
-// from a release check's: both can leave the phase "failed", but only a
-// transaction's carries that transaction's error.
+// RecordsTransactionOutcome tells Orbit's own failed or partial apply or
+// rollback apart from what a release check wrote afterwards: every check
+// stamps LastCheckedAt, so a transaction that finished after the last check
+// still owns the phase.
 func (s State) RecordsTransactionOutcome() bool {
 	tx := s.Transaction
 	if tx == nil {
 		return false
 	}
-	return tx.FinishedAt == nil || (tx.Phase == s.Phase && tx.Error == s.LastError)
+	if tx.FinishedAt == nil {
+		return true
+	}
+	if tx.Phase != "failed" && tx.Phase != "partial" {
+		return false
+	}
+	return s.LastCheckedAt == nil || tx.FinishedAt.After(*s.LastCheckedAt)
 }
 
 func (c Checker) recordCheckFailure(launchPath string, checkErr error) (State, error) {
