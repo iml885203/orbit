@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"os"
 	"path/filepath"
 	"strings"
@@ -640,7 +641,7 @@ func TestEnvSwitchCommandNamesAnExplicitConfigByItsResolvedPath(t *testing.T) {
 	if err := os.WriteFile(explicit, []byte("version: \"3\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := envSwitchCommand(explicit); got != "orbit up -c "+explicit+" --json" {
+	if got := envSwitchCommand(explicit); got != "orbit up -c "+shellquote.Quote(explicit)+" --json" {
 		t.Fatalf("explicit config switch = %q", got)
 	}
 	quoted := filepath.Join(dir, "it's mine.yaml")
@@ -668,7 +669,7 @@ func TestEnvSwitchCommandNamesAManagedConfigToo(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A bare up does not switch for a managed env, so the switch must name it.
-	if got := envSwitchCommand(managed); got != "orbit up -c "+managed+" --json" {
+	if got := envSwitchCommand(managed); got != "orbit up -c "+shellquote.Quote(managed)+" --json" {
 		t.Fatalf("managed config switch = %q", got)
 	}
 }

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -125,8 +126,12 @@ func TestCheckDaemonCurrentRejectsInstalledUpdate(t *testing.T) {
 
 func TestConfigMismatchSwitchCommandTargetsTheCurrentInstance(t *testing.T) {
 	t.Setenv("ORBIT_INSTANCE", "e2e")
-	got := (&ConfigMismatchError{Requested: "/nonexistent/b.yaml"}).SwitchCommand()
-	if got != "orbit --instance e2e up -c /nonexistent/b.yaml" {
+	requested, err := filepath.Abs(filepath.Join("nonexistent", "b.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := (&ConfigMismatchError{Requested: requested}).SwitchCommand()
+	if got != "orbit --instance e2e up -c "+shellquote.Quote(requested) {
 		t.Fatalf("switch command = %q", got)
 	}
 }

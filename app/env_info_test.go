@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/iml885203/orbit/internal/shellquote"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -149,7 +150,7 @@ func TestEnvInfoActionsStartTheInspectedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	actions := envInfoActions(envInfoDaemon{Running: true}, staging)
-	if len(actions) != 1 || actions[0].Command != "orbit up -c "+staging+" --json" {
+	if len(actions) != 1 || actions[0].Command != "orbit up -c "+shellquote.Quote(staging)+" --json" {
 		t.Fatalf("actions = %+v, want the inspected env named", actions)
 	}
 }
