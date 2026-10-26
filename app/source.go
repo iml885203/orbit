@@ -167,12 +167,7 @@ environments from this source.`,
 			}
 			source, result, err := envsource.Refresh(registry, source, daemon.OrbitDir(), false, false)
 			if err != nil {
-				// Nothing was registered, so `orbit source sync` has no source
-				// to retry; the add itself is the step to repeat.
-				return cli.WithJSONReplacementActions(sourceSyncError(source, err), []cli.JSONAction{{
-					Command: commandString(),
-					Reason:  "Retry adding the source once its repository is reachable.",
-				}})
+				return sourceSyncError(source, err)
 			}
 			if err := registry.Add(source); err != nil {
 				_ = os.RemoveAll(envsource.SourceDir(daemon.OrbitDir(), source.Name))

@@ -27,16 +27,31 @@ func ResolvePorts(cfg *config.Config) error {
 		return nil
 	}
 	return updatePortAssignments(name, func(assignments *portAssignments, reserved map[int]bool) error {
-		// The dashboard port is assigned before the daemon resolves service
-		// ports and is not a config request, so a relocated service could pick
-		// the very port the daemon is about to bind.
-		for _, assigned := range assignments.Ports {
-			reserved[assigned] = true
+		requests := configPortRequests(cfg)
+		// The dashboard is assigned before the daemon resolves service ports
+		// and is not a config request, so a relocated service could take the
+		// very port the daemon is about to bind. Ports kept by keys no longer
+		// in the config are not reserved: they would pin a renamed service off
+		// its declared port forever.
+		if dashboard := assignments.Ports["dashboard"]; dashboard > 0 {
+			reserved[dashboard] = true
 		}
-		for _, request := range configPortRequests(cfg) {
-			if assigned := assignments.Ports[request.key]; assigned > 0 {
+		owner := map[int]string{}
+		for _, request := range requests {
+			assigned := assignments.Ports[request.key]
+			if assigned <= 0 || reserved[assigned] || owner[assigned] != "" {
+				continue
+			}
+			owner[assigned] = request.key
+		}
+		for port := range owner {
+			reserved[port] = true
+		}
+		for _, request := range requests {
+			// Reuse keeps restarts stable, unless an earlier run handed this key
+			// a port it now shares with the dashboard or another key.
+			if assigned := assignments.Ports[request.key]; assigned > 0 && owner[assigned] == request.key {
 				request.apply(assigned)
-				reserved[assigned] = true
 				continue
 			}
 			assigned, err := choosePort(request.preferred, reserved, orbitport.Available)
@@ -61,6 +76,13 @@ func ResolveDashboardPort(preferred int) (int, error) {
 		if current := assignments.Ports["dashboard"]; current > 0 {
 			assigned = current
 			return nil
+		}
+		// Service ports already assigned to this instance are free while it is
+		// stopped, but they are spoken for.
+		for key, port := range assignments.Ports {
+			if key != "dashboard" {
+				reserved[port] = true
+			}
 		}
 		var err error
 		assigned, err = choosePort(preferred, reserved, loopbackAvailable)
