@@ -56,20 +56,20 @@ func TestStartupProbeNoticesAServiceReadyBeforeTheFirstInterval(t *testing.T) {
 
 func TestStartupRampKeepsTheRetryBudget(t *testing.T) {
 	c := NewChecker(nil, nil)
-	c.startupRampFloor = 5 * time.Millisecond
+	c.startupRampFloor = 20 * time.Millisecond
 	calls := 0
 	probe := func(context.Context) Result {
 		calls++
 		return Result{Service: "svc", Message: "connection refused"}
 	}
 
-	hc := &config.HealthCheckConfig{Type: "http", Interval: 60 * time.Millisecond, Retries: 3}
+	hc := &config.HealthCheckConfig{Type: "http", Interval: 200 * time.Millisecond, Retries: 3}
 	start := time.Now()
 	if err := c.pollWithProbe(context.Background(), "svc", hc, nil, probe); err == nil {
 		t.Fatal("a never-ready service must fail once the budget is spent")
 	}
 
-	if took := time.Since(start); took < 120*time.Millisecond {
+	if took := time.Since(start); took < 400*time.Millisecond {
 		t.Fatalf("gave up after %v, before the retries×interval budget", took)
 	}
 	if calls <= 3 {

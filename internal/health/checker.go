@@ -271,8 +271,8 @@ func (s *ProbeSession) WaitForHealthy(onResult func(Result)) error {
 // until it returns Healthy, the schedule's last interval tick has been
 // probed, or ctx is cancelled. Ramp probes a slow probe overran are dropped,
 // but interval ticks never are, so a timed-out probe still costs its timeout
-// against a budget of retries probes. Attempts are reported in interval terms so a ramped schedule never shows
-// the counter racing past its budget.
+// against a budget of retries probes. Attempts are reported in interval terms
+// so a ramped schedule never shows the counter racing past its budget.
 func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.HealthCheckConfig, onResult func(Result), probe func(context.Context) Result) error {
 	interval, retries := intervalRetries(hc)
 	schedule := c.startupSchedule(hc, interval, retries)
