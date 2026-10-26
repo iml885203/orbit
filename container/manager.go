@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -42,6 +43,9 @@ type Manager struct {
 	namespace  string
 	network    string
 	imagePulls *imagePullCoordinator
+	// networkMu serializes EnsureNetwork: container starts run concurrently,
+	// and a daemon older than API 1.44 accepts a duplicate network name.
+	networkMu sync.Mutex
 
 	// OnOutput is called for container log lines.
 	OnOutput func(name string, line string)
@@ -92,18 +96,28 @@ func NetworkName(namespace string) string {
 
 // EnsureNetwork creates the orbit Docker network if it doesn't exist.
 func (m *Manager) EnsureNetwork(ctx context.Context) error {
+	m.networkMu.Lock()
+	defer m.networkMu.Unlock()
+	// Docker's name filter matches substrings, so "orbit" would also match
+	// every "orbit-*" network; only an exact name proves this one exists.
 	networks, err := m.cli.NetworkList(ctx, client.NetworkListOptions{
-		Filters: make(client.Filters).Add("name", m.network),
+		Filters: make(client.Filters).Add("name", "^"+m.network+"$"),
 	})
 	if err != nil {
 		return err
 	}
-	if len(networks.Items) > 0 {
-		return nil
+	for _, network := range networks.Items {
+		if network.Name == m.network {
+			return nil
+		}
 	}
 	_, err = m.cli.NetworkCreate(ctx, m.network, client.NetworkCreateOptions{
 		Driver: "bridge",
 	})
+	// Containers start concurrently; another start may have just created it.
+	if cerrdefs.IsConflict(err) {
+		return nil
+	}
 	return err
 }
 
@@ -173,6 +187,14 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 
 	containerName := m.ContainerName(name)
 	if err := ensureNamespaceVolumes(ctx, m.cli, m.namespace, cfg.Volumes); err != nil {
+		m.narrate(name, "ERROR: "+err.Error())
+		return Runtime{}, err
+	}
+	// The daemon only warns when it cannot create the network at startup, so
+	// it can run without Docker; without this, Docker later reports just
+	// "network not found" and hides why the network is missing.
+	if err := m.EnsureNetwork(ctx); err != nil {
+		err = fmt.Errorf("creating Docker network %s: %w", m.network, err)
 		m.narrate(name, "ERROR: "+err.Error())
 		return Runtime{}, err
 	}

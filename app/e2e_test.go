@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -61,6 +62,7 @@ func registerE2ENamespace(t *testing.T, namespace string) {
 	t.Helper()
 	registry := os.Getenv("ORBIT_JOURNEY_NAMESPACE_REGISTRY")
 	if registry == "" {
+		cleanE2ENamespaceOnExit(t, namespace)
 		return
 	}
 	file, err := os.OpenFile(registry, os.O_APPEND|os.O_WRONLY, 0)
@@ -136,6 +138,31 @@ func setupE2E(t *testing.T) *e2eEnv {
 		_, _ = env.runNoFail(t, "daemon", "stop")
 	})
 	return env
+}
+
+// cleanE2ENamespaceOnExit removes a namespace's containers and network when
+// the test ends. down and daemon stop keep the network on purpose, so without
+// a journey registry each random namespace leaks one until Docker runs out of
+// address pools.
+func cleanE2ENamespaceOnExit(t *testing.T, namespace string) {
+	t.Helper()
+	script := findRepoFile(t, "scripts/clean-journey-docker-resources.sh")
+	registry := filepath.Join(t.TempDir(), "namespaces")
+	if err := os.WriteFile(registry, []byte(namespace+"\n"), 0o600); err != nil {
+		t.Fatalf("write namespace registry: %v", err)
+	}
+	t.Cleanup(func() {
+		if out, err := exec.Command(script, registry).CombinedOutput(); err != nil {
+			// The script exits 1 only when Docker is unreachable; anything
+			// else means the namespace still owns resources it should not.
+			var exit *exec.ExitError
+			if errors.As(err, &exit) && exit.ExitCode() == 1 && strings.Contains(string(out), "Docker is unavailable") {
+				t.Logf("cleaning Docker resources of %s: %s", namespace, out)
+				return
+			}
+			t.Errorf("cleaning Docker resources of %s: %v\n%s", namespace, err, out)
+		}
+	})
 }
 
 // findRepoFile walks up from cwd looking for a file path. Lets the test run
@@ -522,6 +549,7 @@ services:
 	}
 
 	namespace := "e2e-restart-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(binary, fullArgs...)
@@ -932,6 +960,7 @@ services:
 	}
 
 	namespace := "e2e-service-url-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(binary, fullArgs...)
@@ -1473,6 +1502,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	}
 
 	namespace := "e2e-empty-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	port := 19900 + int(randByte())
 	command := func(ctx context.Context, args ...string) *exec.Cmd {
 		cmd := exec.CommandContext(ctx, binary, args...)
@@ -1969,6 +1999,8 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 }
 
 func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
+	portConflictNamespace := "e2e-port-conflict-" + randHex(4)
+	registerE2ENamespace(t, portConflictNamespace)
 	binary := findOrbitBinary(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -2013,7 +2045,7 @@ services:
 		cmd := exec.Command(binary, fullArgs...)
 		cmd.Env = append(os.Environ(),
 			"ORBIT_HOME="+home,
-			"ORBIT_NAMESPACE=e2e-port-conflict",
+			"ORBIT_NAMESPACE="+portConflictNamespace,
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 		)
 		return cmd
@@ -2082,8 +2114,10 @@ services:
 		t.Fatalf("doctor kept stale conflict after release: %v\n%s", err, recoveredDoctorOut)
 	}
 	recoveredDoctor := parseE2EEnvelope(t, string(recoveredDoctorOut))
+	// The command was run with -c, so the retry names that config (#196).
 	if !recoveredDoctor.OK || len(recoveredDoctor.RecommendedActions) != 1 ||
-		recoveredDoctor.RecommendedActions[0].Command != "orbit up occupied-service --json" {
+		!strings.HasPrefix(recoveredDoctor.RecommendedActions[0].Command, "orbit up -c ") ||
+		!strings.HasSuffix(recoveredDoctor.RecommendedActions[0].Command, " occupied-service --json") {
 		t.Fatalf("released doctor recovery = %+v\n%s", recoveredDoctor, recoveredDoctorOut)
 	}
 
@@ -2525,6 +2559,7 @@ services:
 	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
 	_ = dashboardListener.Close()
 	namespace := "e2e-recovery-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
