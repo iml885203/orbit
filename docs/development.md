@@ -241,7 +241,7 @@ so skill-only updates do not require a CLI release.
 
 ### Testing unreleased main
 
-Requires Go 1.25+, Node.js 22+, and pnpm 10+:
+Requires the Go version in `go.mod`, Node.js 22+, and pnpm 10+:
 
 ```bash
 git clone https://github.com/iml885203/orbit.git

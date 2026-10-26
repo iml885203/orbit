@@ -221,7 +221,7 @@ plugin 開發使用。Codex 與 Claude manifest 共用一個獨立發布的日�
 
 ### 測試尚未發布的 main
 
-需要 Go 1.25+、Node.js 22+ 與 pnpm 10+：
+需要 `go.mod` 指定的 Go 版本、Node.js 22+ 與 pnpm 10+：
 
 ```bash
 git clone https://github.com/iml885203/orbit.git
