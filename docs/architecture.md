@@ -187,8 +187,8 @@ it owns.
 
 | Type | Use case | Cadence |
 |---|---|---|
-| `http` | HTTP endpoint returns 2xx; cleartext probes discover h2c or HTTP/1.1 per service generation and origin | Polled every `health_check_interval` |
-| `tcp` | TCP port accepts connection | Polled |
+| `http` | HTTP endpoint returns 2xx; cleartext probes discover h2c or HTTP/1.1 per service generation and origin | Polled every `health_check_interval`, ramping up to it at startup ([configuration](configuration.md#settings)) |
+| `tcp` | TCP port accepts connection | Polled, ramping up at startup like `http` |
 | `exec` | Run a command inside the container; exit 0 = healthy | Polled |
 | `log` | Regex match against container logs | Triggered by log tail |
 | `healthcheck` | Defer to Docker's own `HEALTHCHECK` result | Polled via inspect |

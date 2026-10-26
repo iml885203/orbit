@@ -10,7 +10,7 @@ import (
 // configured, so callers should hide retry counters in their UI.
 type Progress struct {
 	Configured bool   // false if service has no health_check stanza
-	Attempts   int    // total checks performed since last reset
+	Attempts   int    // interval ticks probed since last reset; startup ramp probes count as their tick
 	MaxRetries int    // configured retry budget (0 if unbounded)
 	LastErr    string // empty when last attempt succeeded
 	// Recovering means the startup retry budget is spent but recovery

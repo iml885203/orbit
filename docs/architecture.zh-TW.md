@@ -170,8 +170,8 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 
 | Type | 用途 | 節奏 |
 |---|---|---|
-| `http` | HTTP endpoint 回傳 2xx；明文 probe 依 service generation 與 origin 探測 h2c 或 HTTP/1.1 | 每 `health_check_interval` poll 一次 |
-| `tcp` | TCP port 接受連線 | Polled |
+| `http` | HTTP endpoint 回傳 2xx；明文 probe 依 service generation 與 origin 探測 h2c 或 HTTP/1.1 | 每 `health_check_interval` poll 一次，啟動期間漸增到此值（[configuration](configuration.zh-TW.md#settings)） |
+| `tcp` | TCP port 接受連線 | Polled，啟動期間與 `http` 一樣漸增 |
 | `exec` | 在 container 裡跑一個 command;exit 0 視為 healthy | Polled |
 | `log` | 對 container log 做 regex 比對 | 由 log tail 觸發 |
 | `healthcheck` | 直接用 Docker 自己的 `HEALTHCHECK` 結果 | 透過 inspect polling |

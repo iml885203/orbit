@@ -37,6 +37,9 @@ type Checker struct {
 	// that needs more warm-up than the retry budget allowed, not one
 	// flapping per-second. Overridden only in tests.
 	recoveryInterval time.Duration
+	// startupRampFloor is the first gap after a missed http/tcp startup
+	// probe; see startupSchedule. Overridden only in tests.
+	startupRampFloor time.Duration
 }
 
 // ProbeSession keeps protocol choices inside one engine-owned service
@@ -68,6 +71,7 @@ func NewChecker(mux *logging.Multiplexer, inspector ContainerInspector) *Checker
 		inspector:          inspector,
 		progress:           newProgressTracker(),
 		recoveryInterval:   10 * time.Second,
+		startupRampFloor:   250 * time.Millisecond,
 	}
 }
 
@@ -263,42 +267,89 @@ func (s *ProbeSession) WaitForHealthy(onResult func(Result)) error {
 }
 
 // pollWithProbe is the shared retry skeleton used by every interval-based
-// wait strategy. probe is called immediately and then every hc.Interval until
-// it returns Healthy, the retry budget is exhausted, or ctx is cancelled.
+// wait strategy. probe is called immediately, then on the startup schedule
+// until it returns Healthy, the schedule's last interval tick has been
+// probed, or ctx is cancelled. Ramp probes a slow probe overran are dropped,
+// but interval ticks never are, so a timed-out probe still costs its timeout
+// against a budget of retries probes. Attempts are reported in interval terms
+// so a ramped schedule never shows the counter racing past its budget.
 func (c *Checker) pollWithProbe(ctx context.Context, name string, hc *config.HealthCheckConfig, onResult func(Result), probe func(context.Context) Result) error {
 	interval, retries := intervalRetries(hc)
+	schedule := c.startupSchedule(hc, interval, retries)
 
 	c.resetProgress(name)
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	// Probe once immediately — don't make a service that's already ready
-	// wait for the first tick.
-	first := true
+	start := time.Now()
 	var last Result
-	for i := 0; i < retries; i++ {
-		if !first {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-ticker.C:
-			}
-		}
-		first = false
-
+	for {
+		attempt := schedule.attempt()
 		result := probe(ctx)
 		last = result
 		if onResult != nil {
 			onResult(result)
 		}
 		if result.Healthy {
-			c.recordProgress(name, true, i+1, retries, nil)
+			c.recordProgress(name, true, attempt, retries, nil)
 			return nil
 		}
-		c.recordProgress(name, true, i+1, retries, errResult(result))
+		c.recordProgress(name, true, attempt, retries, errResult(result))
+		if !schedule.advanceFrom(time.Since(start)) {
+			break
+		}
+		timer := time.NewTimer(time.Until(start.Add(schedule.offset)))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 	return fmt.Errorf("health check for %s failed after %d retries: %s", name, retries, last.Message)
+}
+
+// startupSchedule ramps http and tcp probes because they are cheap localhost
+// dials and a service is usually ready a second or two after launch, well
+// before the first interval tick. exec runs docker exec (often a login) with
+// no per-probe deadline, and healthcheck only re-reads Docker's cached
+// status, so both keep the plain interval.
+func (c *Checker) startupSchedule(hc *config.HealthCheckConfig, interval time.Duration, retries int) *probeSchedule {
+	gap := interval
+	if hc.Type == "http" || hc.Type == "tcp" {
+		gap = min(c.startupRampFloor, interval)
+	}
+	return &probeSchedule{gap: gap, interval: interval, deadline: time.Duration(retries-1) * interval}
+}
+
+// probeSchedule holds probe offsets from launch: gaps double from the ramp
+// floor and snap onto the interval grid, so the budget's last probe lands
+// exactly where the unramped schedule would put it.
+type probeSchedule struct {
+	offset, gap, interval, deadline time.Duration
+}
+
+func (s *probeSchedule) attempt() int { return int(s.offset/s.interval) + 1 }
+
+// advanceFrom moves to the next probe after elapsed time since launch,
+// skipping ramp offsets already in the past.
+func (s *probeSchedule) advanceFrom(elapsed time.Duration) bool {
+	for {
+		if !s.advance() {
+			return false
+		}
+		if s.offset%s.interval == 0 || s.offset >= elapsed {
+			return true
+		}
+	}
+}
+
+func (s *probeSchedule) advance() bool {
+	if s.offset >= s.deadline {
+		return false
+	}
+	nextTick := (s.offset/s.interval + 1) * s.interval
+	s.offset = min(s.offset+s.gap, nextTick)
+	s.gap = min(s.gap*2, s.interval)
+	return true
 }
 
 // ErrRecoveryUnsupported reports that a health-check strategy has no

@@ -12,7 +12,9 @@ func TestProgress_WaitForHealthyRecordsAttemptsAndClearsOnSuccess(t *testing.T) 
 	c := NewChecker(nil, nil)
 
 	// Force probe to fail twice then succeed, so we observe attempt
-	// counter incrementing and LastErr clearing on the final attempt.
+	// counter incrementing and LastErr clearing on the final attempt. The
+	// 10ms interval sits below the startup ramp floor, so every probe is its
+	// own interval tick.
 	calls := 0
 	probe := func(ctx context.Context) Result {
 		calls++
