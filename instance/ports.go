@@ -28,11 +28,20 @@ func ResolvePorts(cfg *config.Config) error {
 	}
 	return updatePortAssignments(name, func(assignments *portAssignments, reserved map[int]bool) error {
 		requests := configPortRequests(cfg)
+		current := map[string]bool{"dashboard": true}
+		for _, request := range requests {
+			current[request.key] = true
+		}
+		// A key the config no longer has would otherwise keep its port from
+		// this instance's dashboard and from every other instance.
+		for key := range assignments.Ports {
+			if !current[key] {
+				delete(assignments.Ports, key)
+			}
+		}
 		// The dashboard is assigned before the daemon resolves service ports
 		// and is not a config request, so a relocated service could take the
-		// very port the daemon is about to bind. Ports kept by keys no longer
-		// in the config are not reserved: they would pin a renamed service off
-		// its declared port forever.
+		// very port the daemon is about to bind.
 		if dashboard := assignments.Ports["dashboard"]; dashboard > 0 {
 			reserved[dashboard] = true
 		}

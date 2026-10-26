@@ -2693,9 +2693,10 @@ func TestE2E_SourceAddClassifiesRepositoryAccessFailure(t *testing.T) {
 	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
 		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
 	}
-	// The recovery for a source that was never added is tracked in #204.
-	if len(envelope.RecommendedActions) == 0 {
-		t.Fatalf("recommended_actions = %+v, want the access recovery", envelope.RecommendedActions)
+	// #204 replaces this recovery: nothing was registered, so source sync
+	// has no source to retry. Pinned so that change updates the test.
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit source sync --json" {
+		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }
 
@@ -2720,7 +2721,8 @@ func TestE2E_SourceAddExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
 			t.Fatalf("message = %q, want %q", envelope.Error.Message, wanted)
 		}
 	}
-	if len(envelope.RecommendedActions) == 0 {
+	if len(envelope.RecommendedActions) != 1 ||
+		envelope.RecommendedActions[0].Command != "orbit source sync --json" { // #204 replaces this recovery
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }

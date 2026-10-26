@@ -268,7 +268,7 @@ func TestResolvePortsDoesNotPinARemovedServicePort(t *testing.T) {
 		t.Fatal(err)
 	}
 	declared := availableTestPort(t)
-	writeTestPortAssignments(t, "test-rename", map[string]int{"services/old-name/http": declared})
+	writeTestPortAssignments(t, "test-rename", map[string]int{"old-name/http": declared})
 
 	cfg := testPortConfig(declared)
 	if err := ResolvePorts(cfg); err != nil {
@@ -287,7 +287,7 @@ func TestResolveDashboardPortAvoidsTheInstanceServicePorts(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := availableTestPort(t)
-	writeTestPortAssignments(t, "test-dash", map[string]int{"services/api/http": service})
+	writeTestPortAssignments(t, "test-dash", map[string]int{"api/http": service})
 
 	got, err := ResolveDashboardPort(service)
 	if err != nil {
@@ -295,5 +295,30 @@ func TestResolveDashboardPortAvoidsTheInstanceServicePorts(t *testing.T) {
 	}
 	if got == service {
 		t.Fatalf("dashboard took the stopped service's port %d", service)
+	}
+}
+
+func TestResolvePortsGivesASharedStoredPortToTheFirstKey(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-shared"); err != nil {
+		t.Fatal(err)
+	}
+	shared := availableTestPort(t)
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api": {Ports: map[string]config.PortDef{
+			"admin": {Host: availableTestPort(t), Target: 81},
+			"http":  {Host: availableTestPort(t), Target: 80},
+		}},
+	}}
+	writeTestPortAssignments(t, "test-shared", map[string]int{"api/admin": shared, "api/http": shared})
+
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	admin, http := cfg.Services["api"].Ports["admin"].Host, cfg.Services["api"].Ports["http"].Host
+	if admin != shared || http == shared {
+		t.Fatalf("admin = %d, http = %d: the first key keeps shared port %d, the other moves", admin, http, shared)
 	}
 }
