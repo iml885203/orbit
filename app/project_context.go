@@ -9,7 +9,9 @@ import (
 
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/instance"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/shellquote"
 )
 
 type projectContextSwitch struct {
@@ -242,10 +244,14 @@ func upCommandFor(configPath string) string {
 
 // startCommand starts the config this invocation used while nothing else
 // runs: a config named with -c has to be named again, while a resolved one is
-// what a bare up resolves too.
+// what a bare up resolves too. An --instance selection is per process, so a
+// command meant for another shell has to carry it.
 func startCommand() string {
 	if configFlagGiven && configFile != "" {
 		return (&daemon.ConfigMismatchError{Requested: configFile}).SwitchCommand()
+	}
+	if name := instance.CurrentName(); name != "" {
+		return "orbit --instance " + shellquote.Quote(name) + " up"
 	}
 	return "orbit up"
 }
