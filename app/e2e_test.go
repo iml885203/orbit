@@ -852,15 +852,24 @@ printf 'Installed: %s\n' "$target"
 	}
 }
 
-func TestE2E_ServiceDependencyReceivesUpstreamURL(t *testing.T) {
+func TestE2E_ServiceDependencyReceivesSelectedRuntimeURL(t *testing.T) {
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
 	}
 
-	upstreamPreference := reserveLocalPort(t)
+	// A named instance relocates a declared port that is taken, so holding
+	// the upstream's port proves the dependent gets the selected runtime URL,
+	// not the declared one.
+	upstreamHold, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = upstreamHold.Close() })
+	upstreamPreference := upstreamHold.Addr().(*net.TCPAddr).Port
 	downstreamPreference := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
+	instanceName := "svc-url-" + randHex(3)
 	home, err := os.MkdirTemp("/tmp", "orb-service-url-")
 	if err != nil {
 		t.Fatal(err)
@@ -953,21 +962,19 @@ services:
 		t.Fatal(err)
 	}
 
-	namespace := "e2e-service-url-" + randHex(4)
-	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
-		fullArgs := append([]string{"-c", configPath}, args...)
+		fullArgs := append([]string{"-c", configPath, "--instance", instanceName}, args...)
 		cmd := exec.Command(binary, fullArgs...)
 		cmd.Env = append(os.Environ(),
 			"ORBIT_HOME="+home,
-			"ORBIT_NAMESPACE="+namespace,
+			"ORBIT_INSTANCE_BASE_HOME="+home,
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 		)
 		return cmd
 	}
 	t.Cleanup(func() {
 		_ = command("down").Run()
-		_ = command("daemon", "stop").Run()
+		_ = command("instance", "clean", instanceName).Run()
 	})
 
 	upOutput, err := command("up", "--json").Output()
@@ -1000,8 +1007,8 @@ services:
 	}
 	upstream := resources["upstream"]
 	downstream := resources["downstream"]
-	if upstream.Port != upstreamPreference || downstream.Port != downstreamPreference {
-		t.Fatalf("resources = %+v, want the declared ports %d and %d", resources, upstreamPreference, downstreamPreference)
+	if upstream.Port == 0 || upstream.Port == upstreamPreference {
+		t.Fatalf("resources = %+v, want upstream moved off its taken port %d", resources, upstreamPreference)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -2686,7 +2693,8 @@ func TestE2E_SourceAddClassifiesRepositoryAccessFailure(t *testing.T) {
 	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
 		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
 	}
-	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit source sync --json" {
+	// Nothing was registered, so the add itself is what to retry.
+	if len(envelope.RecommendedActions) != 1 || !strings.HasPrefix(envelope.RecommendedActions[0].Command, "orbit source add team ") {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }
@@ -2713,7 +2721,7 @@ func TestE2E_SourceAddExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
 		}
 	}
 	if len(envelope.RecommendedActions) != 1 ||
-		envelope.RecommendedActions[0].Command != "orbit source sync --json" {
+		!strings.HasPrefix(envelope.RecommendedActions[0].Command, "orbit source add team ") {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }

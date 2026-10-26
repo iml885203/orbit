@@ -196,3 +196,25 @@ func ipv6OnlyHeldPort(t *testing.T) int {
 	t.Fatal("no port free on 127.0.0.1 while held on [::1]")
 	return 0
 }
+
+func TestResolvePortsNeverHandsOutTheInstanceDashboardPort(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-dashboard"); err != nil {
+		t.Fatal(err)
+	}
+	dashboard, err := ResolveDashboardPort(availableTestPort(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The daemon binds the dashboard only after resolving service ports, so
+	// the port is still free when a relocated service looks for one.
+	cfg := testPortConfig(dashboard)
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Services["api"].Ports["http"].Host; got == dashboard {
+		t.Fatalf("service received the dashboard port %d", dashboard)
+	}
+}

@@ -27,6 +27,12 @@ func ResolvePorts(cfg *config.Config) error {
 		return nil
 	}
 	return updatePortAssignments(name, func(assignments *portAssignments, reserved map[int]bool) error {
+		// The dashboard port is assigned before the daemon resolves service
+		// ports and is not a config request, so a relocated service could pick
+		// the very port the daemon is about to bind.
+		for _, assigned := range assignments.Ports {
+			reserved[assigned] = true
+		}
 		for _, request := range configPortRequests(cfg) {
 			if assigned := assignments.Ports[request.key]; assigned > 0 {
 				request.apply(assigned)

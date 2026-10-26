@@ -154,3 +154,27 @@ func TestResolveEnvArgFindsAFlatEnvByNameWithoutASource(t *testing.T) {
 		t.Fatal("an env that exists nowhere must not resolve")
 	}
 }
+
+func TestResolveEnvArgIgnoresFlatEnvsOnceASourceIsRegistered(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	envs := filepath.Join(home, "envs")
+	if err := os.MkdirAll(envs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envs, "leftover.yaml"), []byte("version: \"3\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := envsource.Load(envsource.RegistryPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Add(envsource.Source{Name: "company", Type: envsource.TypeGit, URL: "https://example.com/company.git"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+
+	if got, err := resolveEnvArg("leftover"); err == nil {
+		t.Fatalf("resolveEnvArg(leftover) = %q; env list hides flat envs once a source exists, so resolution must too", got)
+	}
+}

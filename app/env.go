@@ -160,7 +160,8 @@ func resolveEnvArg(arg string) (string, error) {
 	candidates := []string{arg}
 	// Without a registered source, envs dropped into ~/.orbit/envs are still
 	// listed and recommended by name, so the name has to resolve there too.
-	if !strings.ContainsAny(arg, `/\`) {
+	// With a source, env list hides those files, and so does resolution.
+	if !strings.ContainsAny(arg, `/\`) && !hasEnvironmentSources() {
 		candidates = append(candidates,
 			filepath.Join(envsDestDir(), arg),
 			filepath.Join(envsDestDir(), arg+".yaml"))
@@ -547,4 +548,9 @@ func switchRecommendedActions(checks []daemon.DoctorCheck, ready bool) []cli.JSO
 		}}
 	}
 	return doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
+}
+
+func hasEnvironmentSources() bool {
+	registry, err := sourceRegistry()
+	return err == nil && len(registry.List()) > 0
 }
