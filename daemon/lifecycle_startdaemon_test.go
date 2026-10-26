@@ -83,7 +83,7 @@ func TestCheckConfigMatchRejectsOlderDaemonWithoutPath(t *testing.T) {
 		t.Fatalf("mismatch = %+v, want requested config and unknown running config", mismatch)
 	}
 	if got := err.Error(); !strings.Contains(got, "older Orbit build") ||
-		!strings.Contains(got, "orbit daemon restart -c") {
+		!strings.Contains(got, "orbit up -c") {
 		t.Fatalf("error is not actionable: %q", got)
 	}
 }
@@ -120,5 +120,13 @@ func TestCheckDaemonCurrentRejectsInstalledUpdate(t *testing.T) {
 	}
 	if err := CheckDaemonCurrent(&VersionResponse{}); err != nil {
 		t.Fatalf("current daemon rejected: %v", err)
+	}
+}
+
+func TestConfigMismatchSwitchCommandTargetsTheCurrentInstance(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "e2e")
+	got := (&ConfigMismatchError{Requested: "/nonexistent/b.yaml"}).SwitchCommand()
+	if got != "orbit --instance e2e up -c /nonexistent/b.yaml" {
+		t.Fatalf("switch command = %q", got)
 	}
 }

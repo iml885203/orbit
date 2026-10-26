@@ -130,6 +130,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		s.ApplyToEnv()
 
 		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+		configFlagGiven = explicitConfig
 		configContextKind = ""
 		if daemonContextKind != "" {
 			configContextKind = daemonContextKind

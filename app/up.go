@@ -74,8 +74,10 @@ func runUp(cmd *cobra.Command, args []string) error {
 	if err := preflightOrAbort(configWithoutManagedEnvironment, args); err != nil {
 		return err
 	}
-	contextSwitch, err := switchDiscoveredProjectContext()
-	if err != nil {
+	if cli.JSONOutput {
+		return runUpJSON(operationContext, args)
+	}
+	if _, err := switchRunningContext(operationContext); err != nil {
 		if errors.Is(err, errProjectContextSwitchDeclined) {
 			fmt.Println("Aborted.")
 			return nil
@@ -83,10 +85,6 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	printProjectEnvironmentContext()
-
-	if cli.JSONOutput {
-		return runUpJSON(operationContext, args, contextSwitch)
-	}
 
 	client, err := daemon.EnsureDaemonWithContext(configFile, groups, environmentContextKind(configFile))
 	if err != nil {
@@ -148,14 +146,18 @@ func validateUpSelection(args []string) error {
 	return validateLifecycleSelection(args, groups, infraOnly)
 }
 
-func runUpJSON(ctx context.Context, args []string, contextSwitch *projectContextSwitch) error {
+func runUpJSON(ctx context.Context, args []string) error {
 	progress := newLifecycleProgress(ctx, os.Stderr, time.Now())
-	return runUpJSONWithProgress(ctx, args, contextSwitch, progress)
+	return runUpJSONWithProgress(ctx, args, progress)
 }
 
-func runUpJSONWithProgress(ctx context.Context, args []string, contextSwitch *projectContextSwitch, progress *lifecycleProgress) error {
+func runUpJSONWithProgress(ctx context.Context, args []string, progress *lifecycleProgress) error {
 	defer progress.Close()
 	progress.Phase(phaseEnsuringDaemon)
+	contextSwitch, err := switchRunningContext(ctx)
+	if err != nil {
+		return lifecycleOperationError(ctx, err, false)
+	}
 	client, err := daemon.EnsureDaemonWithOperationContext(ctx, configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return lifecycleOperationError(ctx, renderDaemonStartError(err), false)

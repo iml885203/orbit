@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -20,6 +21,11 @@ type projectContextSwitch struct {
 }
 
 var projectContextYes bool
+
+// configFlagGiven records that this invocation named its config with -c, as
+// opposed to resolving one; configContextKind cannot tell, because a resolved
+// fallback config is inferred as "explicit" too.
+var configFlagGiven bool
 var errProjectContextSwitchDeclined = errors.New("project context switch declined")
 
 func environmentContextKind(configPath string) string {
@@ -78,17 +84,32 @@ func projectContextInactive(configPath, runningPath string) error {
 	}})
 }
 
-func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
-	if environmentContextKind(configFile) != "project" {
+// switchRunningContext lets `up` move the daemon to a discovered project or a
+// config named with -c: starting that config is the whole point of the
+// command, so it confirms what it stops instead of failing closed like every
+// other command does on a mismatch. A bare `up` that merely resolved to a
+// managed or fallback config is not a request to replace what is running.
+func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
+	if !configFlagGiven && environmentContextKind(configFile) != "project" {
 		return nil, nil
 	}
 	previousPID, alive := daemon.IsDaemonRunning()
 	if !alive {
 		return nil, nil
 	}
-	client := daemon.NewClient(daemon.DefaultSocketPath())
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 	status, err := client.Status()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// A recorded PID that does not answer is EnsureDaemon's to judge: it
+		// retires a stale daemon without touching an unrelated process that
+		// reused the PID. A daemon that answers but cannot report status must
+		// not be mistaken for one serving the requested config.
+		if client.Health() != nil {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("checking running project: %w", err)
 	}
 	mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath)
@@ -148,6 +169,8 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 			)
 		}
 	}
+	// Background, not ctx: once confirmed, a stop that Ctrl-C abandoned
+	// halfway would leave neither environment running.
 	if _, err := stopDaemon(previousPID); err != nil {
 		return nil, fmt.Errorf("stopping %s before project switch: %w", switched.FromName, err)
 	}
@@ -205,4 +228,14 @@ func projectContextPorts(resources []daemon.ResourceStatus) map[int]bool {
 		}
 	}
 	return ports
+}
+
+// upCommandFor is the command that brings configPath up even while another
+// config runs: a discovered project switches with a bare up, every other
+// config is named with -c, the one form up switches for.
+func upCommandFor(configPath string) string {
+	if configPath == "" || environmentContextKind(configPath) == "project" {
+		return "orbit up"
+	}
+	return (&daemon.ConfigMismatchError{Requested: configPath}).SwitchCommand()
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
-	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -90,11 +89,14 @@ type inspectRisk struct {
 }
 
 type inspectBuildOptions struct {
-	Command             string
-	ConfigPath          string
-	ConfigErr           error
-	SetupRequired       bool
-	ConfigEnvName       string
+	Command       string
+	ConfigPath    string
+	ConfigErr     error
+	SetupRequired bool
+	ConfigEnvName string
+	// EnvSwitchCommand moves the daemon to the selected config when they
+	// differ; how depends on how that config was selected.
+	EnvSwitchCommand    string
 	ConfigMatchesDaemon bool
 	DaemonEnv           string
 	DaemonRunning       bool
@@ -181,15 +183,16 @@ func runInspect(cmd *cobra.Command, _ []string) error {
 	}
 
 	opts := inspectBuildOptions{
-		Command:       commandString(),
-		ConfigPath:    configFile,
-		ConfigErr:     cfgErr,
-		SetupRequired: setupRequired,
-		ConfigEnvName: projectContextName(configFile),
-		DaemonRunning: daemonRunning,
-		PID:           pid,
-		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
-		Selection:     activeEnvironmentSelection(selection, configFile),
+		Command:          commandString(),
+		ConfigPath:       configFile,
+		ConfigErr:        cfgErr,
+		SetupRequired:    setupRequired,
+		ConfigEnvName:    projectContextName(configFile),
+		EnvSwitchCommand: envSwitchCommand(configFile),
+		DaemonRunning:    daemonRunning,
+		PID:              pid,
+		Dashboard:        fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
+		Selection:        activeEnvironmentSelection(selection, configFile),
 	}
 	opts.ReleaseUpdate = invokedReleaseUpdate()
 	if cfg != nil {
@@ -308,7 +311,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	decorateInspectReleaseUpdate(opts.ReleaseUpdate, services)
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.ConfigEnvName, opts.Selection)
+	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.EnvSwitchCommand, opts.Selection)
 	// A restart onto the installed binary is the only next step; any newer
 	// release resurfaces once the daemon runs that build.
 	if !opts.UpdateAvailable && updateNeedsUserAction(opts.ReleaseUpdate) {
@@ -612,7 +615,7 @@ func inspectRecommendedActions(
 	risks []inspectRisk,
 	services inspectServiceSummary,
 	configErr error,
-	selectedEnv string,
+	envSwitch string,
 	selection environmentSelection,
 ) []cli.JSONAction {
 	actions := []cli.JSONAction{}
@@ -654,13 +657,9 @@ func inspectRecommendedActions(
 		}
 	case inspectReadinessNeedsDaemon:
 		if inspectHasRisk(risks, "env_mismatch") {
-			command := "orbit daemon restart --json"
-			if selectedEnv != "" {
-				command = "orbit switch " + shellquote.Quote(selectedEnv) + " --json"
-			}
 			actions = append(actions, cli.JSONAction{
-				Command:     command,
-				Reason:      "Apply the selected environment through Orbit's safe switch workflow.",
+				Command:     envSwitch,
+				Reason:      "Switch the daemon to the selected environment; Orbit confirms before stopping running resources.",
 				Destructive: false,
 			})
 		} else {
@@ -748,4 +747,10 @@ func printInspectHuman(data inspectJSONData) {
 		}
 		fmt.Printf("Next: %s\n", next)
 	}
+}
+
+// envSwitchCommand moves the daemon to the selected config through up, which
+// confirms before stopping what the daemon runs.
+func envSwitchCommand(configPath string) string {
+	return upCommandFor(configPath) + " --json"
 }

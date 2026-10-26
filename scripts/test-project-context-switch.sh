@@ -513,7 +513,81 @@ assert outside_matched["data"]["daemon"].get("detached_project") is not True
 assert "Using project environment" not in (root / "explicit-up.txt").read_text(encoding="utf-8")
 assert pathlib.Path(envs["context"]["config_path"]).resolve() == (root / "project-a" / "orbit.yaml").resolve()
 PY
-"$orbit_bin" --config "$test_root/project-a/orbit.yaml" down --json >/dev/null
+
+# Moving a running explicit config to another explicit config must be reachable
+# by following Orbit's own next commands, not by knowing to stop the daemon.
+run_next_command() {
+  # $1: JSON file, $2: jq-free python expression selecting the command
+  next="$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print($2)" "$1")"
+  eval "\"\$orbit_bin\" ${next#orbit }"
+}
+"$orbit_bin" --config "$test_root/project-b/orbit.yaml" inspect --json >"$test_root/explicit-switch-inspect.json"
+if "$orbit_bin" --config "$test_root/project-b/orbit.yaml" daemon restart --json >"$test_root/explicit-switch-restart.json"; then
+  echo "daemon restart unexpectedly moved the daemon to another explicit config." >&2
+  exit 1
+fi
+if "$orbit_bin" --config "$test_root/project-b/orbit.yaml" status --json >"$test_root/explicit-switch-mismatch.json"; then
+  echo "status unexpectedly addressed a daemon serving another explicit config." >&2
+  exit 1
+fi
+if run_next_command "$test_root/explicit-switch-mismatch.json" 'd["error"]["next_command"]' \
+  >"$test_root/explicit-switch-confirm.json"; then
+  echo "switching explicit configs unexpectedly skipped confirmation." >&2
+  exit 1
+fi
+run_next_command "$test_root/explicit-switch-confirm.json" 'd["recommended_actions"][0]["command"]' \
+  >"$test_root/explicit-switch-up.json"
+curl --fail --silent --show-error --retry 10 --retry-delay 1 \
+  "http://localhost:$service_port" >"$test_root/page-explicit-b.html"
+grep -F "project-b" "$test_root/page-explicit-b.html" >/dev/null
+# A bare up that merely resolves some other config is not a switch request.
+cd "$test_root"
+if "$orbit_bin" up --yes --json >"$test_root/explicit-bare-up.json"; then
+  echo "a bare orbit up unexpectedly replaced the explicitly started config." >&2
+  exit 1
+fi
+# Without a selection, a bare up falls back to the default env; that is not a
+# request to replace the running config either.
+mv "$ORBIT_HOME/current" "$ORBIT_HOME/current.kept"
+if "$orbit_bin" up --yes --json >"$test_root/explicit-fallback-up.json"; then
+  echo "a bare orbit up on the fallback env unexpectedly replaced the explicitly started config." >&2
+  exit 1
+fi
+mv "$ORBIT_HOME/current.kept" "$ORBIT_HOME/current"
+curl --fail --silent --show-error \
+  "http://localhost:$service_port" >"$test_root/page-explicit-b-kept.html"
+grep -F "project-b" "$test_root/page-explicit-b-kept.html" >/dev/null
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+mismatch = json.loads((root / "explicit-switch-mismatch.json").read_text(encoding="utf-8"))
+confirm = json.loads((root / "explicit-switch-confirm.json").read_text(encoding="utf-8"))
+up = json.loads((root / "explicit-switch-up.json").read_text(encoding="utf-8"))
+inspect = json.loads((root / "explicit-switch-inspect.json").read_text(encoding="utf-8"))
+restart = json.loads((root / "explicit-switch-restart.json").read_text(encoding="utf-8"))
+target = str(root / "project-b" / "orbit.yaml")
+assert mismatch["error"]["code"] == "env_mismatch"
+assert mismatch["error"]["next_command"].startswith("orbit up -c ")
+assert target in mismatch["error"]["next_command"]
+# Every surface that meets the mismatch names the same switch.
+assert inspect["recommended_actions"][0]["command"] == mismatch["error"]["next_command"], inspect["recommended_actions"]
+assert restart["error"]["code"] == "env_mismatch"
+assert restart["error"]["next_command"] == mismatch["error"]["next_command"]
+assert confirm["error"]["code"] == "confirmation_required"
+assert "--yes" in confirm["recommended_actions"][0]["command"]
+assert up["ok"] is True
+assert pathlib.Path(up["data"]["context"]["config_path"]).resolve() == pathlib.Path(target).resolve()
+assert up["data"]["context_switch"]["stopped_resources"] == ["app-a"]
+# The bare-up legs must fail on the mismatch itself, not on missing setup.
+for name in ("explicit-bare-up.json", "explicit-fallback-up.json"):
+    bare = json.loads((root / name).read_text(encoding="utf-8"))
+    assert bare["error"]["code"] == "env_mismatch", (name, bare["error"])
+    assert bare["error"]["next_command"].startswith("orbit up -c "), (name, bare["error"])
+PY
+"$orbit_bin" --config "$test_root/project-b/orbit.yaml" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null
 
 make_project "team-a/payments" "payments-a" "team-a"
