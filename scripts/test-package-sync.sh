@@ -13,7 +13,9 @@ cat >"$test_root/gh" <<'GH'
 set -euo pipefail
 echo "$*" >>"$FIXTURE_ROOT/calls"
 case "$1 $2" in
-  "workflow run") [ -z "$FIXTURE_DISPATCH_URL" ] || echo "$FIXTURE_DISPATCH_URL" ;;
+  "workflow run")
+    if [ -n "${FIXTURE_DISPATCH_ERROR:-}" ]; then echo "$FIXTURE_DISPATCH_ERROR" >&2; exit 1; fi
+    [ -z "$FIXTURE_DISPATCH_URL" ] || echo "$FIXTURE_DISPATCH_URL" ;;
   "run list")
     count=$(( $(cat "$FIXTURE_ROOT/lists" 2>/dev/null || echo 0) + 1 ))
     echo "$count" >"$FIXTURE_ROOT/lists"
@@ -47,5 +49,13 @@ if FIXTURE_DISPATCH_URL="" FIXTURE_LIST_VISIBLE_FROM=0 FIXTURE_EXPECT_WATCH=none
   exit 1
 fi
 grep -q "updater did not start" "$test_root/stderr"
+
+# A refused dispatch keeps gh's reason in the log.
+if FIXTURE_DISPATCH_ERROR="HTTP 403: Resource not accessible by integration" FIXTURE_DISPATCH_URL="" \
+  FIXTURE_LIST_VISIBLE_FROM=0 FIXTURE_EXPECT_WATCH=none run_sync; then
+  echo "sync succeeded although the dispatch was refused" >&2
+  exit 1
+fi
+grep -q "HTTP 403" "$test_root/stderr"
 
 echo "package sync watches the dispatched updater run, even while the run list lags"
