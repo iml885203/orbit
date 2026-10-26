@@ -486,3 +486,18 @@ func TestStartCommandCarriesAnInstanceWithoutAConfigFlag(t *testing.T) {
 		t.Fatalf("start command = %q", got)
 	}
 }
+
+func TestDownFollowUpStartsTheConfigGivenWithTheFlag(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "")
+	prevFile, prevGiven := configFile, configFlagGiven
+	t.Cleanup(func() { configFile, configFlagGiven = prevFile, prevGiven })
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile, configFlagGiven = filepath.Join(dir, "b.yaml"), true
+	actions := lifecycleDownSuccessActions()
+	if len(actions) != 1 || actions[0].Command != "orbit up -c "+shellquote.Quote(configFile)+" --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
