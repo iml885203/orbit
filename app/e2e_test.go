@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -152,7 +153,14 @@ func cleanE2ENamespaceOnExit(t *testing.T, namespace string) {
 	}
 	t.Cleanup(func() {
 		if out, err := exec.Command(script, registry).CombinedOutput(); err != nil {
-			t.Logf("cleaning Docker resources of %s: %v\n%s", namespace, err, out)
+			// The script exits 1 only when Docker is unreachable; anything
+			// else means the namespace still owns resources it should not.
+			var exit *exec.ExitError
+			if errors.As(err, &exit) && exit.ExitCode() == 1 && strings.Contains(string(out), "Docker is unavailable") {
+				t.Logf("cleaning Docker resources of %s: %s", namespace, out)
+				return
+			}
+			t.Errorf("cleaning Docker resources of %s: %v\n%s", namespace, err, out)
 		}
 	})
 }
@@ -952,6 +960,7 @@ services:
 	}
 
 	namespace := "e2e-service-url-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(binary, fullArgs...)
@@ -1493,6 +1502,7 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	}
 
 	namespace := "e2e-empty-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	port := 19900 + int(randByte())
 	command := func(ctx context.Context, args ...string) *exec.Cmd {
 		cmd := exec.CommandContext(ctx, binary, args...)
@@ -1989,6 +1999,7 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 }
 
 func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
+	registerE2ENamespace(t, "e2e-port-conflict")
 	binary := findOrbitBinary(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -2102,8 +2113,10 @@ services:
 		t.Fatalf("doctor kept stale conflict after release: %v\n%s", err, recoveredDoctorOut)
 	}
 	recoveredDoctor := parseE2EEnvelope(t, string(recoveredDoctorOut))
+	// The command was run with -c, so the retry names that config (#196).
 	if !recoveredDoctor.OK || len(recoveredDoctor.RecommendedActions) != 1 ||
-		recoveredDoctor.RecommendedActions[0].Command != "orbit up occupied-service --json" {
+		!strings.HasPrefix(recoveredDoctor.RecommendedActions[0].Command, "orbit up -c ") ||
+		!strings.HasSuffix(recoveredDoctor.RecommendedActions[0].Command, " occupied-service --json") {
 		t.Fatalf("released doctor recovery = %+v\n%s", recoveredDoctor, recoveredDoctorOut)
 	}
 
@@ -2545,6 +2558,7 @@ services:
 	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
 	_ = dashboardListener.Close()
 	namespace := "e2e-recovery-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)

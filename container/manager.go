@@ -92,18 +92,26 @@ func NetworkName(namespace string) string {
 
 // EnsureNetwork creates the orbit Docker network if it doesn't exist.
 func (m *Manager) EnsureNetwork(ctx context.Context) error {
+	// Docker's name filter matches substrings, so "orbit" would also match
+	// every "orbit-*" network; only an exact name proves this one exists.
 	networks, err := m.cli.NetworkList(ctx, client.NetworkListOptions{
-		Filters: make(client.Filters).Add("name", m.network),
+		Filters: make(client.Filters).Add("name", "^"+m.network+"$"),
 	})
 	if err != nil {
 		return err
 	}
-	if len(networks.Items) > 0 {
-		return nil
+	for _, network := range networks.Items {
+		if network.Name == m.network {
+			return nil
+		}
 	}
 	_, err = m.cli.NetworkCreate(ctx, m.network, client.NetworkCreateOptions{
 		Driver: "bridge",
 	})
+	// Containers start concurrently; another start may have just created it.
+	if cerrdefs.IsConflict(err) {
+		return nil
+	}
 	return err
 }
 

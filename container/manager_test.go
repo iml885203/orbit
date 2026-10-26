@@ -348,7 +348,10 @@ func (s *lifecycleAPIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/start"):
 		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/networks"):
-		_, _ = w.Write([]byte(`[{"Name":"orbit-test","Id":"net"}]`))
+		_, _ = w.Write([]byte(`[]`))
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/networks/create"):
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"Id":"net"}`))
 	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/logs"):
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusOK)
@@ -755,5 +758,48 @@ func TestStartReportsWhyItsNetworkCouldNotBeCreated(t *testing.T) {
 	}
 	if created {
 		t.Fatal("container created although its network could not be")
+	}
+}
+
+func TestEnsureNetworkMatchesOnlyItsExactName(t *testing.T) {
+	var created []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/networks"):
+			// Docker's name filter matches substrings: "orbit" lists orbit-*.
+			_, _ = w.Write([]byte(`[{"Name":"orbit-instance-a","Id":"a"},{"Name":"orbit-e2e-1","Id":"b"}]`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/networks/create"):
+			created = append(created, r.URL.Path)
+			if len(created) > 1 {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"message":"network with name orbit already exists"}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"Id":"orbit"}`))
+		default:
+			http.Error(w, `{"message":"unexpected Docker API request"}`, http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	endpoint, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli, err := client.New(client.WithHost("tcp://"+endpoint.Host), client.WithScheme("http"),
+		client.WithHTTPClient(server.Client()), client.WithAPIVersion("1.52"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+	manager := &Manager{cli: cli, network: "orbit"}
+
+	if err := manager.EnsureNetwork(context.Background()); err != nil || len(created) != 1 {
+		t.Fatalf("err = %v, creates = %d: a prefix-sharing network must not stand in for orbit", err, len(created))
+	}
+	// A concurrent start that lost the create race sees a conflict, not a failure.
+	if err := manager.EnsureNetwork(context.Background()); err != nil {
+		t.Fatalf("conflicting create = %v, want success", err)
 	}
 }
