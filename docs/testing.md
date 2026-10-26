@@ -83,7 +83,8 @@ remain slower because they prove installed binaries and real platform behavior.
 Use `make test-journeys` before a release candidate or after changing init,
 environment selection, lifecycle orchestration, dependency recovery, or other
 cross-process behavior. It builds once, then reuses that exact binary for the
-empty-directory, local-adoption, and project-switch journeys.
+empty-directory, local-adoption, and project-switch journeys and for the whole
+Go `^TestE2E_` suite, so no e2e test is left to run only by hand.
 
 When a shell journey fails, `make test-journeys` exports a curated diagnostic
 bundle under `artifacts/installed-user-journeys/<journey>/attempt-<n>`. The

@@ -110,7 +110,7 @@ test-journey-project-context-switch:
 
 # Runs the whole Go e2e suite: a curated subset let the rest rot unseen (#202).
 test-journey-recovery:
-	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 ./app -run '^TestE2E_'
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 12m ./app -run '^TestE2E_'
 
 test-journey-startup-readiness:
 	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh

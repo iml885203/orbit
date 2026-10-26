@@ -193,6 +193,9 @@ func (e *e2eEnv) cmd(args ...string) *exec.Cmd {
 	cmd := exec.Command(e.binary, args...)
 	cmd.Env = append(os.Environ(),
 		"ORBIT_HOME="+e.home,
+		// The journey harness exports one base home to journeys running in
+		// parallel; named instances must not see each other's registry.
+		"ORBIT_INSTANCE_BASE_HOME="+e.home,
 		"ORBIT_NAMESPACE="+e.namespace,
 		fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", e.port),
 	)
@@ -517,22 +520,22 @@ containers:
   redis:
     image: redis:7.4-alpine
     ports:
-      redis: "${ORBIT_AUTO_PORT_E2E_RESTART_REDIS:-%d}:6379"
+      redis: "%d:6379"
     health_check:
       type: tcp
-      port: ${ORBIT_AUTO_PORT_E2E_RESTART_REDIS:-%d}
+      port: %d
 services:
   api:
     type: python
     path: %q
     command: python3 app.py
     ports:
-      http: "${ORBIT_AUTO_PORT_E2E_RESTART_API:-%d}"
+      http: "%d"
     depends_on: [redis]
     health_check:
       type: http
       path: /
-      port: ${ORBIT_AUTO_PORT_E2E_RESTART_API:-%d}
+      port: %d
 `, redisPort, redisPort, workspace, servicePort, servicePort)
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
 		t.Fatal(err)
@@ -849,7 +852,7 @@ printf 'Installed: %s\n' "$target"
 	}
 }
 
-func TestE2E_ServiceDependencyReceivesSelectedRuntimeURL(t *testing.T) {
+func TestE2E_ServiceDependencyReceivesUpstreamURL(t *testing.T) {
 	binary := findOrbitBinary(t)
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
@@ -927,23 +930,23 @@ services:
     command: python3 upstream.py
     url: http://localhost:%d
     ports:
-      http: "${ORBIT_AUTO_PORT_E2E_UPSTREAM:-%d}"
+      http: "%d"
     health_check:
       type: http
       path: /health
-      port: ${ORBIT_AUTO_PORT_E2E_UPSTREAM:-%d}
+      port: %d
   downstream:
     type: python
     path: %q
     command: python3 downstream.py
     url: http://localhost:%d
     ports:
-      http: "${ORBIT_AUTO_PORT_E2E_DOWNSTREAM:-%d}"
+      http: "%d"
     depends_on: [upstream]
     health_check:
       type: http
       path: /health
-      port: ${ORBIT_AUTO_PORT_E2E_DOWNSTREAM:-%d}
+      port: %d
 `, workspace, upstreamPreference, upstreamPreference, upstreamPreference,
 		workspace, downstreamPreference, downstreamPreference, downstreamPreference)
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
