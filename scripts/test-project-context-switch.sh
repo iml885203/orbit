@@ -581,6 +581,11 @@ assert "--yes" in confirm["recommended_actions"][0]["command"]
 assert up["ok"] is True
 assert pathlib.Path(up["data"]["context"]["config_path"]).resolve() == pathlib.Path(target).resolve()
 assert up["data"]["context_switch"]["stopped_resources"] == ["app-a"]
+# The bare-up legs must fail on the mismatch itself, not on missing setup.
+for name in ("explicit-bare-up.json", "explicit-fallback-up.json"):
+    bare = json.loads((root / name).read_text(encoding="utf-8"))
+    assert bare["error"]["code"] == "env_mismatch", (name, bare["error"])
+    assert bare["error"]["next_command"].startswith("orbit up -c "), (name, bare["error"])
 PY
 "$orbit_bin" --config "$test_root/project-b/orbit.yaml" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null

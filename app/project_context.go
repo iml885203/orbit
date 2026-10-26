@@ -105,8 +105,12 @@ func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
 		}
 		// A recorded PID that does not answer is EnsureDaemon's to judge: it
 		// retires a stale daemon without touching an unrelated process that
-		// reused the PID. There is nothing here to switch away from.
-		return nil, nil
+		// reused the PID. A daemon that answers but cannot report status must
+		// not be mistaken for one serving the requested config.
+		if client.Health() != nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("checking running project: %w", err)
 	}
 	mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath)
 	if mismatch == nil {
