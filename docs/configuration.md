@@ -180,7 +180,7 @@ settings:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `shutdown_timeout` | duration | `30s` | Max time to wait for graceful stop before SIGKILL |
-| `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` / Docker `healthcheck` probes |
+| `health_check_interval` | duration | `5s` | How often to run `http` / `tcp` / `exec` / Docker `healthcheck` probes. During startup, `http` and `tcp` probes start 250ms apart and double up to this interval, so a service is noticed soon after it becomes ready (the wait after readiness is at most about as long as it had been starting, and never longer than the interval); the retry budget still counts intervals. A `tcp` check only proves the port is open: give a service whose dependents need it fully warmed an `http` or `log` check |
 | `docker_poll_interval` | duration | `2s` | How often the container poller calls `docker inspect` |
 | `image_pull_concurrency` | int | `0` | Maximum distinct Docker image pulls at once; `0` keeps unlimited parallel pulls. Concurrent requests for the same image and platform always share one pull |
 | `health_check.timeout` | duration | `5s` | Deadline for one `http` or `tcp` probe when a `health_check` omits `timeout`. `exec` probes are bounded by the surrounding operation, not this value |
@@ -353,7 +353,7 @@ health_check:
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
-  interval: 5s          # poll cadence (defaults to settings.health_check_interval)
+  interval: 5s          # probe cadence; startup ramps up to it (see settings.health_check_interval)
   timeout: 30s          # probe deadline — http/tcp (default 5s), log wait (default 60s)
   retries: 10
   failure_threshold: 3 # consecutive runtime failures before degraded

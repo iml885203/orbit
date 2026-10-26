@@ -173,7 +173,7 @@ settings:
 | Field | Type | Default | 說明 |
 |---|---|---|---|
 | `shutdown_timeout` | duration | `30s` | graceful stop 最多等多久，超過就 SIGKILL |
-| `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` / Docker `healthcheck` probe 多久跑一次 |
+| `health_check_interval` | duration | `5s` | `http` / `tcp` / `exec` / Docker `healthcheck` probe 多久跑一次。啟動期間 `http` 與 `tcp` probe 從間隔 250ms 開始倍增到這個 interval，服務就緒後很快就會被發現（就緒後的等待最多約等於它已經啟動的時間，且不會超過 interval）；重試預算仍以 interval 計。`tcp` check 只證明 port 已開：依賴方需要服務完全暖機時，請改用 `http` 或 `log` check |
 | `docker_poll_interval` | duration | `2s` | container poller 多久呼叫一次 `docker inspect` |
 | `image_pull_concurrency` | int | `0` | 同時拉取不同 Docker image 的上限；`0` 維持無上限平行拉取。同一 image 與 platform 的並行請求一律共用一次 pull |
 | `health_check.timeout` | duration | `5s` | 當 `health_check` 沒指定 `timeout` 時，單次 `http` 或 `tcp` probe 的期限。`exec` probe 由外層操作限制，不受此值影響 |
@@ -336,7 +336,7 @@ health_check:
   path: /health         # http
   command: [string]     # exec
   pattern: "ready"      # log — regex against container stdout
-  interval: 5s          # 輪詢頻率（預設用 settings.health_check_interval）
+  interval: 5s          # probe 頻率；啟動期間會漸增到此值（見 settings.health_check_interval）
   timeout: 30s          # probe 期限 — http/tcp（預設 5s）、log 等待（預設 60s）
   retries: 10
   failure_threshold: 3 # 連續幾次 runtime 失敗後轉為 degraded
