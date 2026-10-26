@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/iml885203/orbit/internal/shellquote"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,7 +13,10 @@ import (
 // three different answers for one environment — `status`, `daemon status` and
 // `instance list` — with no command that changed any of them.
 func TestRejectRestartAcrossEnvironments(t *testing.T) {
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	running := filepath.Join(dir, "backoffice.yaml")
 	requested := filepath.Join(dir, "e2e.yaml")
 
@@ -52,7 +56,7 @@ func TestRejectRestartAcrossEnvironments(t *testing.T) {
 			// The message has to carry the way out, not just the refusal:
 			// there is no restart flag that switches environments, and
 			// `orbit down` would leave the daemon on the running config.
-			for _, want := range []string{tc.running, "orbit up -c " + tc.requested} {
+			for _, want := range []string{filepath.Base(tc.running), "orbit up -c " + shellquote.Quote(tc.requested)} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("err = %q, want it to mention %q", err, want)
 				}
