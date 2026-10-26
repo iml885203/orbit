@@ -97,8 +97,19 @@ func WriteJSONFailure(w io.Writer, command string, data any, err error, actions 
 	})
 }
 
+// ConfigTarget is the shell-quoted config an invocation named with -c, or
+// empty. A bare `orbit up` resolves its own config, so a start action handed
+// to another shell has to name this one again.
+var ConfigTarget string
+
 func writeJSON(w io.Writer, payload JSONEnvelope) error {
 	payload.Notices = takeJSONNotices()
+	for i := range payload.RecommendedActions {
+		payload.RecommendedActions[i].Command = configTargetedCommand(payload.RecommendedActions[i].Command, ConfigTarget)
+	}
+	if payload.Error != nil {
+		payload.Error.NextCommand = configTargetedCommand(payload.Error.NextCommand, ConfigTarget)
+	}
 	payload.Instance = os.Getenv("ORBIT_INSTANCE")
 	if payload.Instance != "" {
 		for i := range payload.RecommendedActions {
@@ -111,6 +122,19 @@ func writeJSON(w io.Writer, payload JSONEnvelope) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(payload)
+}
+
+func configTargetedCommand(command, config string) string {
+	rest, ok := strings.CutPrefix(command, "orbit up")
+	if config == "" || !ok || (rest != "" && !strings.HasPrefix(rest, " ")) {
+		return command
+	}
+	for _, field := range strings.Fields(rest) {
+		if field == "-c" || field == "--config" || strings.HasPrefix(field, "--config=") {
+			return command
+		}
+	}
+	return "orbit up -c " + config + rest
 }
 
 func instanceTargetedCommand(command, name string) string {

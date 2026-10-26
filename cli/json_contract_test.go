@@ -622,3 +622,30 @@ func TestWriteJSONNotConfiguredRequiresAnEditInsteadOfDiagnosticLoop(t *testing.
 		t.Fatalf("not-configured edit invented diagnostic actions: error=%+v actions=%+v", got.Error, got.RecommendedActions)
 	}
 }
+
+func TestJSONStartActionsNameTheConfigTheInvocationGave(t *testing.T) {
+	previous := ConfigTarget
+	t.Cleanup(func() { ConfigTarget = previous })
+	ConfigTarget = "'/tmp/my env/b.yaml'"
+
+	for command, want := range map[string]string{
+		"orbit up --json":                      "orbit up -c '/tmp/my env/b.yaml' --json",
+		"orbit up api --json":                  "orbit up -c '/tmp/my env/b.yaml' api --json",
+		"orbit up -c /tmp/b.yaml --yes --json": "orbit up -c /tmp/b.yaml --yes --json",
+		"orbit update --json":                  "orbit update --json",
+		"orbit status --json":                  "orbit status --json",
+	} {
+		if got := configTargetedCommand(command, ConfigTarget); got != want {
+			t.Errorf("%q -> %q, want %q", command, got, want)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := WriteJSONError(&buf, "orbit -c b.yaml status --json", daemon.ErrDaemonUnreachable); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error.NextCommand != "orbit up -c '/tmp/my env/b.yaml' --json" {
+		t.Fatalf("daemon_unreachable next_command = %q", got.Error.NextCommand)
+	}
+}
