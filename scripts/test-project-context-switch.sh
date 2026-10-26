@@ -546,6 +546,14 @@ if "$orbit_bin" up --yes --json >"$test_root/explicit-bare-up.json"; then
   echo "a bare orbit up unexpectedly replaced the explicitly started config." >&2
   exit 1
 fi
+# Without a selection, a bare up falls back to the default env; that is not a
+# request to replace the running config either.
+mv "$ORBIT_HOME/current" "$ORBIT_HOME/current.kept"
+if "$orbit_bin" up --yes --json >"$test_root/explicit-fallback-up.json"; then
+  echo "a bare orbit up on the fallback env unexpectedly replaced the explicitly started config." >&2
+  exit 1
+fi
+mv "$ORBIT_HOME/current.kept" "$ORBIT_HOME/current"
 curl --fail --silent --show-error \
   "http://localhost:$service_port" >"$test_root/page-explicit-b-kept.html"
 grep -F "project-b" "$test_root/page-explicit-b-kept.html" >/dev/null

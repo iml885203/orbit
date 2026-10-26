@@ -21,6 +21,11 @@ type projectContextSwitch struct {
 }
 
 var projectContextYes bool
+
+// configFlagGiven records that this invocation named its config with -c, as
+// opposed to resolving one; configContextKind cannot tell, because a resolved
+// fallback config is inferred as "explicit" too.
+var configFlagGiven bool
 var errProjectContextSwitchDeclined = errors.New("project context switch declined")
 
 func environmentContextKind(configPath string) string {
@@ -85,7 +90,7 @@ func projectContextInactive(configPath, runningPath string) error {
 // other command does on a mismatch. A bare `up` that merely resolved to a
 // managed or fallback config is not a request to replace what is running.
 func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
-	if environmentContextKind(configFile) != "project" && configContextKind != "explicit" {
+	if !configFlagGiven && environmentContextKind(configFile) != "project" {
 		return nil, nil
 	}
 	previousPID, alive := daemon.IsDaemonRunning()

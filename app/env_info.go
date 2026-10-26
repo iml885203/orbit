@@ -103,9 +103,9 @@ func runEnvInfo(_ *cobra.Command, args []string) error {
 	daemonInfo, status := observedEnvironmentStatus(target)
 	data := buildEnvInfoJSONData(cfg, target, daemonInfo, status, envInfoShowSecrets)
 	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, envInfoActions(daemonInfo, configFile))
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, envInfoActions(daemonInfo, target))
 	}
-	printEnvInfoHuman(data)
+	printEnvInfoHuman(data, target)
 	return nil
 }
 
@@ -238,7 +238,7 @@ func envInfoActions(daemonInfo envInfoDaemon, configPath string) []cli.JSONActio
 	}}
 }
 
-func printEnvInfoHuman(data envInfoJSONData) {
+func printEnvInfoHuman(data envInfoJSONData, target string) {
 	fmt.Printf("Environment: %s\n", data.Env.Identity)
 	fmt.Printf("Source: %s\n", data.Env.Source)
 	if data.Env.SourceName != "" {
@@ -274,7 +274,7 @@ func printEnvInfoHuman(data envInfoJSONData) {
 	printEnvInfoSection("Services", data.Services)
 	if !data.Daemon.Running || !data.Daemon.ConfigMatch {
 		fmt.Println()
-		fmt.Println("  Next: " + upCommandFor(configFile))
+		fmt.Println("  Next: " + upCommandFor(target))
 	}
 }
 

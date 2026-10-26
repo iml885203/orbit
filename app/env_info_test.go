@@ -136,3 +136,20 @@ func TestEnvInfoActionsSuggestStartingOnlyWhenObservationIsMissing(t *testing.T)
 		t.Fatalf("actions = %+v", actions)
 	}
 }
+
+func TestEnvInfoActionsStartTheInspectedEnvironment(t *testing.T) {
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	t.Setenv("ORBIT_INSTANCE", "")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	staging := filepath.Join(dir, "staging.yaml")
+	if err := os.WriteFile(staging, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	actions := envInfoActions(envInfoDaemon{Running: true}, staging)
+	if len(actions) != 1 || actions[0].Command != "orbit up -c "+staging+" --json" {
+		t.Fatalf("actions = %+v, want the inspected env named", actions)
+	}
+}

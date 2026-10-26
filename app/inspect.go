@@ -659,7 +659,7 @@ func inspectRecommendedActions(
 		if inspectHasRisk(risks, "env_mismatch") {
 			actions = append(actions, cli.JSONAction{
 				Command:     envSwitch,
-				Reason:      "Apply the selected environment through Orbit's safe switch workflow.",
+				Reason:      "Switch the daemon to the selected environment; Orbit confirms before stopping running resources.",
 				Destructive: false,
 			})
 		} else {

@@ -300,7 +300,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit up -c /tmp/development.yaml --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions)
 	}
-	if got.RecommendedActions[0].Reason != "Apply the selected environment through Orbit's safe switch workflow." {
+	if got.RecommendedActions[0].Reason != "Switch the daemon to the selected environment; Orbit confirms before stopping running resources." {
 		t.Fatalf("first action reason = %q", got.RecommendedActions[0].Reason)
 	}
 	if got.RecommendedActions[0].Destructive {

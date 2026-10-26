@@ -92,7 +92,7 @@ func (e *ConfigMismatchError) Error() string {
 // stopping what is running.
 func (e *ConfigMismatchError) SwitchCommand() string {
 	command := "orbit "
-	if name := os.Getenv("ORBIT_INSTANCE"); name != "" {
+	if name := instance.CurrentName(); name != "" {
 		command += "--instance " + shellquote.Quote(name) + " "
 	}
 	return command + "up -c " + shellquote.Quote(normalizedConfigPath(e.Requested))
