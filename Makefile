@@ -167,6 +167,7 @@ test-release: test-distribution-metadata
 
 test-release-security:
 	@./scripts/test-release-security.sh
+	@./scripts/test-package-sync.sh
 
 test-distribution-metadata:
 	@./scripts/test-distribution-metadata.sh
