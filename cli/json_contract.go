@@ -97,6 +97,11 @@ func WriteJSONFailure(w io.Writer, command string, data any, err error, actions 
 	})
 }
 
+// StartCommand starts the config this invocation used. The app sets it once
+// flags are parsed: only it knows whether that config was named with -c,
+// which a bare `orbit up` in another shell would not resolve again.
+var StartCommand = func() string { return "orbit up" }
+
 func writeJSON(w io.Writer, payload JSONEnvelope) error {
 	payload.Notices = takeJSONNotices()
 	payload.Instance = os.Getenv("ORBIT_INSTANCE")
@@ -138,9 +143,9 @@ func classify(err error) JSONError {
 		return JSONError{
 			Code:        "daemon_unreachable",
 			Message:     "Orbit is not running.",
-			Hint:        "Run 'orbit up' to start the selected environment.",
+			Hint:        "Run '" + StartCommand() + "' to start the selected environment.",
 			Retryable:   true,
-			NextCommand: "orbit up --json",
+			NextCommand: StartCommand() + " --json",
 		}
 	}
 	var schemaVersion *config.SchemaVersionMismatchError
@@ -184,9 +189,9 @@ func classify(err error) JSONError {
 		nextCommand := ""
 		if portConflict.SuggestedPort > 0 {
 			if runtime.GOOS == "windows" {
-				nextCommand = "$env:ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + "; orbit up"
+				nextCommand = "$env:ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + "; " + StartCommand()
 			} else {
-				nextCommand = "ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + " orbit up"
+				nextCommand = "ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + " " + StartCommand()
 			}
 		}
 		return JSONError{
