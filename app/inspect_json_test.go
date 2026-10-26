@@ -673,3 +673,37 @@ func TestEnvSwitchCommandNamesAManagedConfigToo(t *testing.T) {
 		t.Fatalf("managed config switch = %q", got)
 	}
 }
+
+func TestBuildInspectDataStartsTheConfigTheInvocationNamed(t *testing.T) {
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:    "/tmp/b.yaml",
+		ConfigEnvName: "b",
+		StartCommand:  "orbit up -c /tmp/b.yaml --json",
+		Configured: []daemon.ResourceStatus{
+			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
+		},
+	})
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up -c /tmp/b.yaml --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}
+
+func TestStartCommandNamesOnlyAConfigGivenWithTheFlag(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "")
+	previousFile, previousGiven := configFile, configFlagGiven
+	t.Cleanup(func() { configFile, configFlagGiven = previousFile, previousGiven })
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile = filepath.Join(dir, "b.yaml")
+
+	configFlagGiven = false
+	if got := startCommand(); got != "orbit up" {
+		t.Fatalf("resolved config start = %q, want a bare up that resolves it again", got)
+	}
+	configFlagGiven = true
+	if got := startCommand(); got != "orbit up -c "+shellquote.Quote(configFile) {
+		t.Fatalf("explicit config start = %q", got)
+	}
+}

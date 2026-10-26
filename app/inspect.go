@@ -96,7 +96,9 @@ type inspectBuildOptions struct {
 	ConfigEnvName string
 	// EnvSwitchCommand moves the daemon to the selected config when they
 	// differ; how depends on how that config was selected.
-	EnvSwitchCommand    string
+	EnvSwitchCommand string
+	// StartCommand starts the selected config when nothing else runs.
+	StartCommand        string
 	ConfigMatchesDaemon bool
 	DaemonEnv           string
 	DaemonRunning       bool
@@ -189,6 +191,7 @@ func runInspect(cmd *cobra.Command, _ []string) error {
 		SetupRequired:    setupRequired,
 		ConfigEnvName:    projectContextName(configFile),
 		EnvSwitchCommand: envSwitchCommand(configFile),
+		StartCommand:     startCommand() + " --json",
 		DaemonRunning:    daemonRunning,
 		PID:              pid,
 		Dashboard:        fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
@@ -311,7 +314,7 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	decorateInspectReleaseUpdate(opts.ReleaseUpdate, services)
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
-	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.EnvSwitchCommand, opts.Selection)
+	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.EnvSwitchCommand, opts.StartCommand, opts.Selection)
 	// A restart onto the installed binary is the only next step; any newer
 	// release resurfaces once the daemon runs that build.
 	if !opts.UpdateAvailable && updateNeedsUserAction(opts.ReleaseUpdate) {
@@ -616,8 +619,12 @@ func inspectRecommendedActions(
 	services inspectServiceSummary,
 	configErr error,
 	envSwitch string,
+	start string,
 	selection environmentSelection,
 ) []cli.JSONAction {
+	if start == "" {
+		start = "orbit up --json"
+	}
 	actions := []cli.JSONAction{}
 	switch readiness.State {
 	case inspectReadinessSetupRequired:
@@ -664,14 +671,14 @@ func inspectRecommendedActions(
 			})
 		} else {
 			actions = append(actions, cli.JSONAction{
-				Command:     "orbit up --json",
+				Command:     start,
 				Reason:      "Start the selected environment.",
 				Destructive: false,
 			})
 		}
 	case inspectReadinessStopped:
 		actions = append(actions, cli.JSONAction{
-			Command:     "orbit up --json",
+			Command:     start,
 			Reason:      "Start the selected environment.",
 			Destructive: false,
 		})
@@ -691,7 +698,7 @@ func inspectRecommendedActions(
 		actions = append(actions, cli.StatusAction())
 	case inspectReadinessPartial:
 		actions = append(actions, cli.JSONAction{
-			Command:     "orbit up --json",
+			Command:     start,
 			Reason:      "Start stopped services and then inspect again.",
 			Destructive: false,
 		})

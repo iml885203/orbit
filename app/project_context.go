@@ -239,3 +239,13 @@ func upCommandFor(configPath string) string {
 	}
 	return (&daemon.ConfigMismatchError{Requested: configPath}).SwitchCommand()
 }
+
+// startCommand starts the config this invocation used while nothing else
+// runs: a config named with -c has to be named again, while a resolved one is
+// what a bare up resolves too.
+func startCommand() string {
+	if configFlagGiven && configFile != "" {
+		return (&daemon.ConfigMismatchError{Requested: configFile}).SwitchCommand()
+	}
+	return "orbit up"
+}

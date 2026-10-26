@@ -410,3 +410,18 @@ services:
 		}
 	}
 }
+
+func TestDoctorKeepsAnInstanceTargetedStartCommand(t *testing.T) {
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
+		Name:   "Daemon",
+		Status: daemon.CheckInfo,
+		Hint:   "run: orbit --instance e2e up -c /tmp/b.yaml",
+	}}}
+	if got := doctorStartCommand(resp); got != "orbit --instance e2e up -c /tmp/b.yaml" {
+		t.Fatalf("start command = %q", got)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit --instance e2e up -c /tmp/b.yaml --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
