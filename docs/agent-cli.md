@@ -497,7 +497,7 @@ Stable `readiness.state` values:
 | `selection_required` | true | The previous selection is unavailable. Actions contain exact `orbit switch <source>/<env> --json` choices, or `orbit source sync --json` when none are available. |
 | `config_invalid` | true | The selected config cannot be loaded. An older shared schema has the sole action `orbit source sync --json`; a newer schema has the sole action `orbit update --json`. Syntax errors and unknown fields require editing the reported file, so Orbit does not return an unchanged `inspect` self-loop. |
 | `update_required` | true | A newer Orbit binary is installed but the daemon still runs the previous version; the only action is `orbit daemon restart --json`. |
-| `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`. |
+| `stopped` | true | The selected environment is configured but not running; configured resources are listed as stopped and the only action is `orbit up --json`, or `orbit up -c <config> --json` when the config was given with `-c` (each with `--instance` when one is set). |
 | `needs_daemon` | true | A running daemon is serving a different env than the selected config. |
 | `degraded` | false | At least one resource reports `degraded`. |
 | `converging` | false | At least one resource is `pending`, `starting`, `building`, `stopping`, or `restarting`. |

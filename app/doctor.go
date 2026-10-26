@@ -65,6 +65,7 @@ func runDoctorWithOptions(options doctorOptions) error {
 	} else {
 		resp = doctorResponse(client)
 	}
+	retargetUpHints(resp)
 	if options.agentSkill {
 		resp.Checks = append(resp.Checks, agentSkillDoctorCheck())
 	}
@@ -331,7 +332,7 @@ func localDoctorResponseWithContext(
 			daemonCheck.Hint = "run: " + upCommandFor(configFile)
 		}
 	} else if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
-		daemonCheck.Hint = "run: orbit up"
+		daemonCheck.Hint = "run: " + startCommand()
 	}
 	checks = append(checks, daemonCheck)
 	// Feature-owned offline checks (the DB workflow) come from the
@@ -489,8 +490,7 @@ func doctorStartCommand(resp *daemon.DoctorResponse) string {
 		}
 	}
 	for _, check := range resp.Checks {
-		if command, ok := strings.CutPrefix(check.Hint, "run: "); ok &&
-			(command == "orbit up" || strings.HasPrefix(command, "orbit up ")) {
+		if command, ok := strings.CutPrefix(check.Hint, "run: "); ok && isUpCommand(command) {
 			return command
 		}
 	}
@@ -534,4 +534,35 @@ func addUpdateDoctorCheck(resp *daemon.DoctorResponse, version *daemon.VersionRe
 		Hint:    "run: " + orbitRestartCommand(false),
 	}}, resp.Checks...)
 	return &out
+}
+
+// isUpCommand also accepts the --instance form a start hint carries.
+func isUpCommand(command string) bool {
+	command, ok := strings.CutPrefix(command, "orbit ")
+	if !ok {
+		return false
+	}
+	if name, rest, ok := strings.Cut(command, " "); ok && name == "--instance" {
+		_, command, _ = strings.Cut(rest, " ")
+	}
+	return command == "up" || strings.HasPrefix(command, "up ")
+}
+
+// retargetUpHints rewrites the daemon's bare `orbit up` hints for this
+// invocation: the daemon cannot know the CLI was given -c or --instance, and
+// a bare up from another shell would start some other config.
+func retargetUpHints(resp *daemon.DoctorResponse) {
+	start := startCommand()
+	if start == "orbit up" {
+		return
+	}
+	for i := range resp.Checks {
+		command, ok := strings.CutPrefix(resp.Checks[i].Hint, "run: ")
+		if !ok || strings.HasPrefix(command, start) {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(command, "orbit up"); ok && (rest == "" || strings.HasPrefix(rest, " ")) {
+			resp.Checks[i].Hint = "run: " + start + rest
+		}
+	}
 }

@@ -622,3 +622,21 @@ func TestWriteJSONNotConfiguredRequiresAnEditInsteadOfDiagnosticLoop(t *testing.
 		t.Fatalf("not-configured edit invented diagnostic actions: error=%+v actions=%+v", got.Error, got.RecommendedActions)
 	}
 }
+
+func TestDaemonUnreachableStartsTheInvocationsConfig(t *testing.T) {
+	previous := StartCommand
+	t.Cleanup(func() { StartCommand = previous })
+	StartCommand = func() string { return "orbit up -c /tmp/b.yaml" }
+
+	var buf bytes.Buffer
+	if err := WriteJSONError(&buf, "orbit -c /tmp/b.yaml status --json", daemon.ErrDaemonUnreachable); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeEnvelope(t, buf.Bytes())
+	if got.Error.NextCommand != "orbit up -c /tmp/b.yaml --json" {
+		t.Fatalf("next_command = %q", got.Error.NextCommand)
+	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != got.Error.NextCommand {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+}

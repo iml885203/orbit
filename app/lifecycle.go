@@ -226,7 +226,7 @@ func lifecycleRecommendedActions(serviceNames []string) []cli.JSONAction {
 
 func lifecycleDownSuccessActions() []cli.JSONAction {
 	return []cli.JSONAction{{
-		Command:     "orbit up --json",
+		Command:     startCommand() + " --json",
 		Reason:      "Start the environment when you are ready.",
 		Destructive: false,
 	}}

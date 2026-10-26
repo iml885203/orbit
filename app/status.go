@@ -632,7 +632,7 @@ func writeStatusJSON(
 		})
 	} else if !dstatus.Running {
 		actions = append(actions, cli.JSONAction{
-			Command: "orbit up --json",
+			Command: startCommand() + " --json",
 			Reason:  "Start the selected environment.",
 		})
 	}
@@ -642,7 +642,7 @@ func writeStatusJSON(
 			actions = cli.MergeActions(actions, recoveryActions)
 		} else if statusHasStoppedResources(resources) {
 			actions = cli.MergeActions(actions, []cli.JSONAction{{
-				Command: "orbit up --json",
+				Command: startCommand() + " --json",
 				Reason:  "Start the selected environment.",
 			}})
 		} else if !setup.Required {

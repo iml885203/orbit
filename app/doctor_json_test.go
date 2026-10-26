@@ -13,6 +13,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/shellquote"
 )
 
 func TestHumanDoctorHidesInactiveDaemonImplementation(t *testing.T) {
@@ -408,5 +409,95 @@ services:
 		if check.Name == "Docker" {
 			t.Fatalf("host-only environment reported an irrelevant Docker check: %+v", check)
 		}
+	}
+}
+
+func TestDoctorKeepsAnInstanceTargetedStartCommand(t *testing.T) {
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{{
+		Name:   "Daemon",
+		Status: daemon.CheckInfo,
+		Hint:   "run: orbit --instance e2e up -c /tmp/b.yaml",
+	}}}
+	if got := doctorStartCommand(resp); got != "orbit --instance e2e up -c /tmp/b.yaml" {
+		t.Fatalf("start command = %q", got)
+	}
+	actions := doctorRecommendedActions(resp)
+	if len(actions) != 1 || actions[0].Command != "orbit --instance e2e up -c /tmp/b.yaml --json" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
+
+func TestDoctorStartHintNamesTheConfigGivenWithTheFlag(t *testing.T) {
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	t.Setenv("ORBIT_INSTANCE", "")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(dir, "b.yaml")
+	if err := os.WriteFile(envPath, []byte("version: \"3\"\nservices:\n  docs:\n    type: shell\n    path: .\n    command: echo ready\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prevFile, prevGiven := configFile, configFlagGiven
+	t.Cleanup(func() { configFile, configFlagGiven = prevFile, prevGiven })
+	configFile, configFlagGiven = envPath, true
+
+	actions := doctorRecommendedActions(localDoctorResponse())
+	want := "orbit up -c " + shellquote.Quote(envPath) + " --json"
+	if len(actions) != 1 || actions[0].Command != want {
+		t.Fatalf("actions = %+v, want %q", actions, want)
+	}
+}
+
+func TestDaemonUpHintsAreRetargetedForTheInvocation(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "")
+	prevFile, prevGiven := configFile, configFlagGiven
+	t.Cleanup(func() { configFile, configFlagGiven = prevFile, prevGiven })
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile, configFlagGiven = filepath.Join(dir, "b.yaml"), true
+	start := startCommand()
+	resp := &daemon.DoctorResponse{Checks: []daemon.DoctorCheck{
+		{Name: "Daemon", Hint: "run: orbit up"},
+		{Name: "Retry", Hint: "run: orbit up api"},
+		{Name: "Already", Hint: "run: " + start},
+		{Name: "Port", Hint: "run: lsof -i :8080"},
+		{Name: "Update", Hint: "run: orbit update"},
+	}}
+
+	retargetUpHints(resp)
+
+	want := []string{"run: " + start, "run: " + start + " api", "run: " + start, "run: lsof -i :8080", "run: orbit update"}
+	for i, check := range resp.Checks {
+		if check.Hint != want[i] {
+			t.Fatalf("%s hint = %q, want %q", check.Name, check.Hint, want[i])
+		}
+	}
+}
+
+func TestStartCommandCarriesAnInstanceWithoutAConfigFlag(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "e2e")
+	prevGiven := configFlagGiven
+	t.Cleanup(func() { configFlagGiven = prevGiven })
+	configFlagGiven = false
+	if got := startCommand(); got != "orbit --instance e2e up" {
+		t.Fatalf("start command = %q", got)
+	}
+}
+
+func TestDownFollowUpStartsTheConfigGivenWithTheFlag(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "")
+	prevFile, prevGiven := configFile, configFlagGiven
+	t.Cleanup(func() { configFile, configFlagGiven = prevFile, prevGiven })
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile, configFlagGiven = filepath.Join(dir, "b.yaml"), true
+	actions := lifecycleDownSuccessActions()
+	if len(actions) != 1 || actions[0].Command != "orbit up -c "+shellquote.Quote(configFile)+" --json" {
+		t.Fatalf("actions = %+v", actions)
 	}
 }
