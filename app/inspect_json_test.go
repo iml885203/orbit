@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iml885203/orbit/autoupdate"
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
@@ -225,6 +226,9 @@ func TestBuildInspectDataInstalledUpdateRequiresRestart(t *testing.T) {
 		ConfigEnvName:   "development",
 		DaemonRunning:   true,
 		UpdateAvailable: true,
+		// The package manager already installed the release; the daemon has
+		// not restarted onto it yet, so the upgrade must not be offered again.
+		ReleaseUpdate: &autoupdate.Summary{Owner: autoupdate.OwnerHomebrew, Phase: "available", TargetVersion: "v0.16.6"},
 		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
 			Name:  "api",
 			State: "stopped",

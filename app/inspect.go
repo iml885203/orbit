@@ -191,12 +191,7 @@ func runInspect(cmd *cobra.Command, _ []string) error {
 		Dashboard:     fmt.Sprintf("http://localhost:%d", daemon.DashboardPort()),
 		Selection:     activeEnvironmentSelection(selection, configFile),
 	}
-	if launchPath, err := invokedBinaryPath(); err == nil {
-		if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
-			summary := updateState.Summary()
-			opts.ReleaseUpdate = &summary
-		}
-	}
+	opts.ReleaseUpdate = invokedReleaseUpdate()
 	if cfg != nil {
 		opts.Configured = configuredInspectServices(cfg)
 		opts.ReadinessChecks = daemonsrv.DependencyReadinessChecks(cfg)
@@ -314,7 +309,9 @@ func buildInspectData(opts inspectBuildOptions) inspectJSONData {
 	risks := buildInspectRisks(opts, services)
 	readiness := deriveInspectReadiness(opts, services)
 	actions := inspectRecommendedActions(readiness, risks, services, opts.ConfigErr, opts.ConfigEnvName, opts.Selection)
-	if updateNeedsUserAction(opts.ReleaseUpdate) {
+	// A restart onto the installed binary is the only next step; any newer
+	// release resurfaces once the daemon runs that build.
+	if !opts.UpdateAvailable && updateNeedsUserAction(opts.ReleaseUpdate) {
 		actions = []cli.JSONAction{{
 			Command: releaseUpdateCommand(opts.ReleaseUpdate, true),
 			Reason:  releaseUpdateReason(opts.ReleaseUpdate),

@@ -195,3 +195,162 @@ func TestSummaryNamesTheUpgradeCommandOfThePackageManagerThatOwnsTheInstall(t *t
 		}
 	}
 }
+
+func TestReconcileInstalledSettlesTargetThePackageManagerAlreadyInstalled(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	state, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Owner = OwnerHomebrew
+	state.Policy = PolicyOff
+	state.CurrentVersion = "v0.16.5 (2026-10-14 17:10:53 +0800)"
+	state.TargetVersion = "v0.16.6"
+	state.Phase = "available"
+	if err := Save(state); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReconcileInstalled(launch, "v0.16.6 (2026-10-18 18:32:43 +0800)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TargetVersion != "" || got.Phase != "current" || got.CurrentVersion != "v0.16.6 (2026-10-18 18:32:43 +0800)" {
+		t.Fatalf("reconciled state = %+v", got)
+	}
+	persisted, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.TargetVersion != "" || persisted.Phase != "current" {
+		t.Fatalf("persisted state = %+v", persisted)
+	}
+}
+
+func TestReconcileInstalledClearsStagedBinaryAHandRunInstallerSuperseded(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	state, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TargetVersion = "v0.16.6"
+	state.Phase = "ready"
+	state.StagedBinary = "/staged/orbit"
+	state.ApplyEligible = true
+	if err := Save(state); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReconcileInstalled(launch, "v0.17.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TargetVersion != "" || got.StagedBinary != "" || got.ApplyEligible || got.Phase != "current" {
+		t.Fatalf("reconciled state = %+v", got)
+	}
+}
+
+func TestReconcileInstalledKeepsWhatItCannotSettle(t *testing.T) {
+	now := time.Now()
+	for name, tc := range map[string]struct {
+		installed, target, phase string
+		transaction              *Transaction
+	}{
+		"older installed release": {installed: "v0.16.5 (2026-10-14)", target: "v0.16.6", phase: "ready"},
+		"unordered source build":  {installed: "82d6473a1b2c (2026-10-26)", target: "v0.16.6", phase: "ready"},
+		"unknown build":           {installed: "unknown", target: "v0.16.6", phase: "available"},
+		"empty build":             {installed: "", target: "v0.16.6", phase: "available"},
+		"apply in flight": {installed: "v0.16.6", target: "v0.16.6", phase: "applying",
+			transaction: &Transaction{ID: "t", Operation: "update", Phase: "applying", StartedAt: now}},
+		"failed rollback to an older build": {installed: "v0.16.6", target: "v0.16.5", phase: "failed",
+			transaction: &Transaction{ID: "t", Operation: "rollback", Phase: "failed", TargetVersion: "v0.16.5", Error: "kept", StartedAt: now, FinishedAt: &now}},
+		"rollback whose target could not be probed": {installed: "v0.16.6", target: "previous", phase: "failed",
+			transaction: &Transaction{ID: "t", Operation: "rollback", Phase: "failed", TargetVersion: "previous", Error: "kept", StartedAt: now, FinishedAt: &now}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+			launch := filepath.Join(t.TempDir(), "bin", "orbit")
+			state, err := Load(launch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state.TargetVersion = tc.target
+			state.Phase = tc.phase
+			state.LastError = "kept"
+			state.Transaction = tc.transaction
+			if err := Save(state); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := ReconcileInstalled(launch, tc.installed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.TargetVersion != tc.target || got.Phase != tc.phase || got.LastError != "kept" {
+				t.Fatalf("state changed: %+v", got)
+			}
+		})
+	}
+}
+
+func TestReconcileInstalledSettlesAFailedCheckEvenAfterAnEarlierFailedApply(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	state, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := time.Now().Add(-time.Hour)
+	checked := time.Now()
+	state.TargetVersion = "v0.16.6"
+	state.Phase = "failed"
+	state.LastError = "check release: offline"
+	state.LastCheckedAt = &checked
+	state.Transaction = &Transaction{ID: "t", Operation: "update", Phase: "failed", Error: "verify replaced binary", StartedAt: finished, FinishedAt: &finished}
+	if err := Save(state); err != nil {
+		t.Fatal(err)
+	}
+	if state.RecordsTransactionOutcome() {
+		t.Fatal("a check failure must not read as the earlier apply's outcome")
+	}
+
+	got, err := ReconcileInstalled(launch, "v0.16.6")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TargetVersion != "" || got.Phase != "current" || got.LastError != "" {
+		t.Fatalf("reconciled state = %+v", got)
+	}
+}
+
+func TestReconcileInstalledClearsADeferredApplySupersededByAHandInstall(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	state, err := Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TargetVersion = "v0.16.7"
+	state.Phase = "ready"
+	state.StagedBinary = "/staged/orbit"
+	if err := Save(state); err != nil {
+		t.Fatal(err)
+	}
+	begun, err := BeginTransaction(launch, "automatic", "v0.16.7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FinishTransaction(launch, begun.Transaction.ID, "ready", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReconcileInstalled(launch, "v0.16.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TargetVersion != "" || got.StagedBinary != "" || got.Phase != "current" {
+		t.Fatalf("a deferred apply of an older build must not stay staged: %+v", got)
+	}
+}
