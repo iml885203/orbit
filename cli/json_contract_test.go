@@ -636,4 +636,7 @@ func TestDaemonUnreachableStartsTheInvocationsConfig(t *testing.T) {
 	if got.Error.NextCommand != "orbit up -c /tmp/b.yaml --json" {
 		t.Fatalf("next_command = %q", got.Error.NextCommand)
 	}
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != got.Error.NextCommand {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
 }

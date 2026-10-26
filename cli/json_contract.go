@@ -189,9 +189,9 @@ func classify(err error) JSONError {
 		nextCommand := ""
 		if portConflict.SuggestedPort > 0 {
 			if runtime.GOOS == "windows" {
-				nextCommand = "$env:ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + "; " + StartCommand()
+				nextCommand = "$env:ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + "; orbit up"
 			} else {
-				nextCommand = "ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + " " + StartCommand()
+				nextCommand = "ORBIT_DASHBOARD_PORT=" + strconv.Itoa(portConflict.SuggestedPort) + " orbit up"
 			}
 		}
 		return JSONError{
@@ -533,7 +533,7 @@ func recommendedActionsForError(err JSONError) []JSONAction {
 	}
 	if err.Code == "daemon_unreachable" {
 		return []JSONAction{{
-			Command:     "orbit up --json",
+			Command:     err.NextCommand,
 			Reason:      "Start the selected environment.",
 			Destructive: false,
 		}}
