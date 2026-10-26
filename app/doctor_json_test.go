@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	"github.com/iml885203/orbit/extension"
-	"github.com/iml885203/orbit/internal/shellquote"
 )
 
 func TestHumanDoctorHidesInactiveDaemonImplementation(t *testing.T) {

@@ -133,10 +133,6 @@ func CheckDaemonCurrent(version *VersionResponse) error {
 	}
 }
 
-// NormalizeConfigPath spells a config path the way every mismatch check and
-// recovery command does.
-func NormalizeConfigPath(path string) string { return normalizedConfigPath(path) }
-
 func normalizedConfigPath(path string) string {
 	path = strings.TrimSpace(path)
 	if abs, err := filepath.Abs(path); err == nil {

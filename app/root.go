@@ -131,7 +131,6 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 
 		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 		configFlagGiven = explicitConfig
-		cli.ConfigTarget = ""
 		configContextKind = ""
 		if daemonContextKind != "" {
 			configContextKind = daemonContextKind
@@ -140,9 +139,6 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		}
 		if configFile == "" {
 			configFile = resolveConfigFile()
-		}
-		if explicitConfig && configFile != "" {
-			cli.ConfigTarget = shellquote.Quote(daemon.NormalizeConfigPath(configFile))
 		}
 		if err := applySourceWorkspace(configFile); err != nil {
 			return err
