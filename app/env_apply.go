@@ -77,11 +77,14 @@ func runEnvApplyJSON(ctx context.Context, progress *lifecycleProgress) error {
 		err = lifecycleOperationError(ctx, err, result.reconcileDispatched)
 		progress.Close()
 		if cli.JSONOutput {
-			failure := cli.WithJSONReplacementActions(err, []cli.JSONAction{cli.StatusAction()})
-			if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), buildEnvironmentApplyJSONData(result), failure, nil); writeErr != nil {
+			// Keep the classified error's own recovery (e.g. orbit update for a
+			// newer schema), as every other lifecycle command does; replacing it
+			// with status hid that. Errors whose fix is editing the file carry
+			// no action, and timeouts/cancellations get status there.
+			if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), buildEnvironmentApplyJSONData(result), err, nil); writeErr != nil {
 				return writeErr
 			}
-			return errCLIJSONAlreadyRendered{err: failure}
+			return errCLIJSONAlreadyRendered{err: err}
 		}
 		return err
 	}

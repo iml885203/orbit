@@ -166,6 +166,20 @@ func cleanupNamedInstances(t *testing.T, env *e2eEnv) {
 		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "a")
 		_, _ = env.runNoFail(t, "-c", env.envYaml, "instance", "clean", "a-ca978112-x")
 	})
+	// Registered last so it runs first, while the instances still exist: a
+	// stuck instance otherwise fails with nothing but the CLI's wait timeout.
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		for _, name := range []string{"a", "a-ca978112-x"} {
+			status, _ := env.runNoFail(t, "-c", env.envYaml, "status", "--instance", name, "--json")
+			t.Logf("instance %s status:\n%s", name, status)
+			if log, err := os.ReadFile(filepath.Join(env.home, "instances", name, "daemon.log")); err == nil {
+				t.Logf("instance %s daemon.log:\n%s", name, log)
+			}
+		}
+	})
 }
 
 type namedInstanceSummary struct {
@@ -411,7 +425,8 @@ func upInstancePorts(t *testing.T, env *e2eEnv, name string) map[string]int {
 
 func runNamedInstance(t *testing.T, env *e2eEnv, args ...string) string {
 	t.Helper()
-	return env.run(t, append([]string{"-c", env.envYaml}, args...)...)
+	// Every caller asks for --json; stderr carries progress lines, not JSON.
+	return env.runJSON(t, append([]string{"-c", env.envYaml}, args...)...)
 }
 
 func dockerOutput(t *testing.T, args ...string) string {

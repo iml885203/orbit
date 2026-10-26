@@ -1,7 +1,10 @@
 package instance
 
 import (
+	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -195,4 +198,127 @@ func ipv6OnlyHeldPort(t *testing.T) int {
 	}
 	t.Fatal("no port free on 127.0.0.1 while held on [::1]")
 	return 0
+}
+
+func TestResolvePortsNeverHandsOutTheInstanceDashboardPort(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-dashboard"); err != nil {
+		t.Fatal(err)
+	}
+	dashboard, err := ResolveDashboardPort(availableTestPort(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The daemon binds the dashboard only after resolving service ports, so
+	// the port is still free when a relocated service looks for one.
+	cfg := testPortConfig(dashboard)
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Services["api"].Ports["http"].Host; got == dashboard {
+		t.Fatalf("service received the dashboard port %d", dashboard)
+	}
+}
+
+func writeTestPortAssignments(t *testing.T, name string, ports map[string]int) {
+	t.Helper()
+	runtime, err := Resolve(BaseHome(), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(runtime.Home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(portAssignments{Ports: ports})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtime.Home, "ports.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResolvePortsMovesAServiceOffAnEarlierDashboardCollision(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-heal"); err != nil {
+		t.Fatal(err)
+	}
+	shared := availableTestPort(t)
+	cfg := testPortConfig(availableTestPort(t))
+	key := configPortRequests(cfg)[0].key
+	writeTestPortAssignments(t, "test-heal", map[string]int{"dashboard": shared, key: shared})
+
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Services["api"].Ports["http"].Host; got == shared {
+		t.Fatalf("service kept the dashboard port %d an earlier run gave it", shared)
+	}
+}
+
+func TestResolvePortsDoesNotPinARemovedServicePort(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-rename"); err != nil {
+		t.Fatal(err)
+	}
+	declared := availableTestPort(t)
+	writeTestPortAssignments(t, "test-rename", map[string]int{"old-name/http": declared})
+
+	cfg := testPortConfig(declared)
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Services["api"].Ports["http"].Host; got != declared {
+		t.Fatalf("renamed service got %d, want its declared %d: a removed key must not hold it", got, declared)
+	}
+}
+
+func TestResolveDashboardPortAvoidsTheInstanceServicePorts(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-dash"); err != nil {
+		t.Fatal(err)
+	}
+	service := availableTestPort(t)
+	writeTestPortAssignments(t, "test-dash", map[string]int{"api/http": service})
+
+	got, err := ResolveDashboardPort(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == service {
+		t.Fatalf("dashboard took the stopped service's port %d", service)
+	}
+}
+
+func TestResolvePortsGivesASharedStoredPortToTheFirstKey(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	if _, err := Activate("test-shared"); err != nil {
+		t.Fatal(err)
+	}
+	shared := availableTestPort(t)
+	cfg := &config.Config{Services: map[string]*config.Service{
+		"api": {Ports: map[string]config.PortDef{
+			"admin": {Host: availableTestPort(t), Target: 81},
+			"http":  {Host: availableTestPort(t), Target: 80},
+		}},
+	}}
+	writeTestPortAssignments(t, "test-shared", map[string]int{"api/admin": shared, "api/http": shared})
+
+	if err := ResolvePorts(cfg); err != nil {
+		t.Fatal(err)
+	}
+	admin, http := cfg.Services["api"].Ports["admin"].Host, cfg.Services["api"].Ports["http"].Host
+	if admin != shared || http == shared {
+		t.Fatalf("admin = %d, http = %d: the first key keeps shared port %d, the other moves", admin, http, shared)
+	}
 }

@@ -158,12 +158,20 @@ func resolveEnvArg(arg string) (string, error) {
 		return managed, err
 	}
 	candidates := []string{arg}
+	// Without a registered source, envs dropped into ~/.orbit/envs are still
+	// listed and recommended by name, so the name has to resolve there too.
+	// With a source, env list hides those files, and so does resolution.
+	if !strings.ContainsAny(arg, `/\`) && !hasEnvironmentSources() {
+		candidates = append(candidates,
+			filepath.Join(envsDestDir(), arg),
+			filepath.Join(envsDestDir(), arg+".yaml"))
+	}
 	for _, c := range candidates {
 		abs, err := filepath.Abs(c)
 		if err != nil {
 			continue
 		}
-		if _, err := os.Stat(abs); err == nil {
+		if info, err := os.Stat(abs); err == nil && !info.IsDir() {
 			return abs, nil
 		}
 	}
@@ -540,4 +548,9 @@ func switchRecommendedActions(checks []daemon.DoctorCheck, ready bool) []cli.JSO
 		}}
 	}
 	return doctorRecommendedActions(&daemon.DoctorResponse{Checks: checks})
+}
+
+func hasEnvironmentSources() bool {
+	registry, err := sourceRegistry()
+	return err == nil && len(registry.List()) > 0
 }
