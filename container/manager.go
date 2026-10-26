@@ -176,6 +176,14 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 		m.narrate(name, "ERROR: "+err.Error())
 		return Runtime{}, err
 	}
+	// The daemon only warns when it cannot create the network at startup, so
+	// it can run without Docker; without this, Docker later reports just
+	// "network not found" and hides why the network is missing.
+	if err := m.EnsureNetwork(ctx); err != nil {
+		err = fmt.Errorf("creating Docker network %s: %w", m.network, err)
+		m.narrate(name, "ERROR: "+err.Error())
+		return Runtime{}, err
+	}
 
 	// Container config
 	containerConfig := &container.Config{

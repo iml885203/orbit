@@ -61,6 +61,7 @@ func registerE2ENamespace(t *testing.T, namespace string) {
 	t.Helper()
 	registry := os.Getenv("ORBIT_JOURNEY_NAMESPACE_REGISTRY")
 	if registry == "" {
+		cleanE2ENamespaceOnExit(t, namespace)
 		return
 	}
 	file, err := os.OpenFile(registry, os.O_APPEND|os.O_WRONLY, 0)
@@ -136,6 +137,24 @@ func setupE2E(t *testing.T) *e2eEnv {
 		_, _ = env.runNoFail(t, "daemon", "stop")
 	})
 	return env
+}
+
+// cleanE2ENamespaceOnExit removes a namespace's containers and network when
+// the test ends. down and daemon stop keep the network on purpose, so without
+// a journey registry each random namespace leaks one until Docker runs out of
+// address pools.
+func cleanE2ENamespaceOnExit(t *testing.T, namespace string) {
+	t.Helper()
+	script := findRepoFile(t, "scripts/clean-journey-docker-resources.sh")
+	registry := filepath.Join(t.TempDir(), "namespaces")
+	if err := os.WriteFile(registry, []byte(namespace+"\n"), 0o600); err != nil {
+		t.Fatalf("write namespace registry: %v", err)
+	}
+	t.Cleanup(func() {
+		if out, err := exec.Command(script, registry).CombinedOutput(); err != nil {
+			t.Logf("cleaning Docker resources of %s: %v\n%s", namespace, err, out)
+		}
+	})
 }
 
 // findRepoFile walks up from cwd looking for a file path. Lets the test run
@@ -522,6 +541,7 @@ services:
 	}
 
 	namespace := "e2e-restart-" + randHex(4)
+	registerE2ENamespace(t, namespace)
 	command := func(args ...string) *exec.Cmd {
 		fullArgs := append([]string{"-c", configPath}, args...)
 		cmd := exec.Command(binary, fullArgs...)
