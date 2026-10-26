@@ -192,20 +192,74 @@ func (c Checker) checkManaged(ctx context.Context, state State, currentVersion s
 func (c Checker) recordCurrent(launchPath, currentVersion string) (State, error) {
 	return Update(launchPath, func(state *State) error {
 		now := c.now()
-		state.CurrentVersion = currentVersion
-		state.TargetVersion = ""
-		state.StagedBinary = ""
-		state.StagedEvidence = nil
-		state.Phase = "current"
-		state.ApplyEligible = false
-		state.DeferReason = ""
+		state.settleAt(currentVersion)
 		state.LastCheckedAt = &now
 		next := now.Add(CheckInterval + checkJitter(state.InstallationID))
 		state.NextCheckAt = &next
-		state.LastError = ""
 		state.CheckFailures = 0
 		return nil
 	})
+}
+
+func (s *State) settleAt(installed string) {
+	s.CurrentVersion = installed
+	s.TargetVersion = ""
+	s.StagedBinary = ""
+	s.StagedEvidence = nil
+	s.Phase = "current"
+	s.ApplyEligible = false
+	s.DeferReason = ""
+	s.LastError = ""
+}
+
+// ReconcileInstalled settles an announced target that the installed build
+// already satisfies: a package manager or hand-run installer replaces the
+// binary without passing through Orbit's apply transaction. It writes only
+// when the entry is stale, which is what makes it safe on read paths. A failed
+// write only delays settling — the settled view is still right for this read
+// and the next read retries — so it is not reported.
+func ReconcileInstalled(launchPath, installed string) (State, error) {
+	state, err := Load(launchPath)
+	if err != nil || !state.announcesSatisfiedTarget(installed) {
+		return state, err
+	}
+	if written, err := Update(launchPath, func(state *State) error {
+		if state.announcesSatisfiedTarget(installed) {
+			state.settleAt(installed)
+		}
+		return nil
+	}); err == nil {
+		return written, nil
+	}
+	state.settleAt(installed)
+	return state, nil
+}
+
+// announcesSatisfiedTarget leaves Orbit's own apply or rollback outcome alone:
+// a rollback's target is older than the installed build on purpose. Unordered
+// builds or targets are left alone too, because newerRelease cannot rank them.
+func (s State) announcesSatisfiedTarget(installed string) bool {
+	if s.TargetVersion == "" || s.RecordsTransactionOutcome() {
+		return false
+	}
+	if _, ordered := releaseVersionParts(s.TargetVersion); !ordered || strings.TrimSpace(installed) == "" {
+		return false
+	}
+	if _, ordered := releaseVersionParts(strings.Fields(installed)[0]); !ordered {
+		return false
+	}
+	return !newerRelease(s.TargetVersion, installed)
+}
+
+// RecordsTransactionOutcome tells Orbit's own apply or rollback result apart
+// from a release check's: both can leave the phase "failed", but only a
+// transaction's carries that transaction's error.
+func (s State) RecordsTransactionOutcome() bool {
+	tx := s.Transaction
+	if tx == nil {
+		return false
+	}
+	return tx.FinishedAt == nil || (tx.Phase == s.Phase && tx.Error == s.LastError)
 }
 
 func (c Checker) recordCheckFailure(launchPath string, checkErr error) (State, error) {

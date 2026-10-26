@@ -305,3 +305,70 @@ func testStagedEvidence(t *testing.T, path, tag string) *autoupdate.Verification
 		VerifiedAt: time.Now().UTC(),
 	}
 }
+
+func stalePackageManagedRelease(t *testing.T, launch string) {
+	t.Helper()
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	state, err := autoupdate.Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Owner = autoupdate.OwnerHomebrew
+	state.CurrentVersion = "v0.16.5 (2026-10-14 17:10:53 +0800)"
+	state.TargetVersion = "v0.16.6"
+	state.Phase = "available"
+	if err := autoupdate.Save(state); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func runningAs(t *testing.T, build string) {
+	t.Helper()
+	previousVersion, previousTime := version, buildTime
+	version, buildTime = build, ""
+	t.Cleanup(func() { version, buildTime = previousVersion, previousTime })
+}
+
+func TestInspectDoesNotAnnounceTheReleaseAlreadyInstalled(t *testing.T) {
+	launch, err := invokedBinaryPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalePackageManagedRelease(t, launch)
+	runningAs(t, "v0.16.6")
+
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:    "/tmp/development.yaml",
+		ConfigEnvName: "development",
+		ReleaseUpdate: invokedReleaseUpdate(),
+		Configured: []daemon.ResourceStatus{
+			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
+		},
+	})
+
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+	if got.Daemon.ReleaseUpdate == nil || got.Daemon.ReleaseUpdate.TargetVersion != "" {
+		t.Fatalf("release_update = %+v", got.Daemon.ReleaseUpdate)
+	}
+}
+
+func TestDaemonStartSettlesTheReleaseItRunsFrom(t *testing.T) {
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	stalePackageManagedRelease(t, launch)
+	runningAs(t, "v0.16.6")
+
+	unregister := registerUpdateRuntime()
+	defer unregister()
+
+	state, err := autoupdate.Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.TargetVersion != "" || state.Phase != "current" {
+		t.Fatalf("registry after daemon start = %+v", state)
+	}
+}

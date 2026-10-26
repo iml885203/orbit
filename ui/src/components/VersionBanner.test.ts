@@ -75,8 +75,80 @@ describe('VersionBanner', () => {
 		}
 		render(VersionBanner)
 
+		expect(screen.getByRole('status')).toHaveTextContent('Orbit v0.17.0 is available')
+		expect(screen.getByRole('status')).not.toHaveTextContent('verified')
+		expect(screen.getByRole('status')).not.toHaveTextContent('Orbit will apply it')
 		await fireEvent.click(screen.getByRole('button', { name: 'Copy upgrade command' }))
 		expect(writeText).toHaveBeenCalledWith('brew upgrade iml885203/tap/orbit')
+	})
+
+	it('keeps reporting an update Orbit applied and could not finish', () => {
+		store.ui.version = {
+			running: 'v0.16.0',
+			update_available: false,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'direct', policy: 'automatic',
+				disclosure_shown: true, phase: 'failed', last_error: 'verify replaced binary',
+				apply_eligible: false, transaction_outcome: true,
+			},
+		}
+		render(VersionBanner)
+
+		expect(screen.getByRole('status')).toHaveTextContent('Orbit couldn’t finish the update. verify replaced binary')
+	})
+
+	it('reports a failed package-managed check as a check, not an update Orbit attempted', () => {
+		store.ui.version = {
+			running: 'v0.16.0',
+			update_available: false,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'homebrew', policy: 'automatic',
+				disclosure_shown: true, phase: 'failed', last_error: 'check release: offline',
+				apply_eligible: false, upgrade_command: 'brew upgrade iml885203/tap/orbit',
+			},
+		}
+		render(VersionBanner)
+
+		expect(screen.getByRole('status')).toHaveTextContent('Orbit couldn’t check for updates. check release: offline')
+		expect(screen.getByRole('status')).not.toHaveTextContent('finish the update')
+	})
+
+	it('still offers the restart after an offline check failed', () => {
+		store.ui.version = {
+			running: 'v0.16.5',
+			on_disk: 'v0.16.6 (2026-10-18 18:32:43 +0800)',
+			update_available: true,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'homebrew', policy: 'automatic',
+				disclosure_shown: true, target_version: 'v0.16.6', phase: 'failed', last_error: 'check release: offline',
+				apply_eligible: false, upgrade_command: 'brew upgrade iml885203/tap/orbit',
+			},
+		}
+		render(VersionBanner)
+
+		expect(screen.getByRole('status')).toHaveTextContent('Orbit v0.16.6 is ready')
+		expect(screen.getByRole('button', { name: 'Restart now' })).toBeInTheDocument()
+	})
+
+	it('asks only for a restart once the package manager has installed the release', async () => {
+		store.ui.version = {
+			running: 'v0.16.5',
+			on_disk: 'v0.16.6 (2026-10-18 18:32:43 +0800)',
+			update_available: true,
+			release_update: {
+				installation_id: 'orbit-test', owner: 'homebrew', policy: 'automatic',
+				disclosure_shown: true, target_version: 'v0.16.6', phase: 'available',
+				apply_eligible: false, upgrade_command: 'brew upgrade iml885203/tap/orbit',
+			},
+		}
+		apiPost.mockResolvedValue({ ok: true, data: { ok: true, target_version: 'v0.16.6' } })
+		fetchVersion.mockResolvedValue({ running: 'v0.16.6', update_available: false })
+		render(VersionBanner)
+
+		expect(screen.getByRole('status')).toHaveTextContent('Orbit v0.16.6 is ready')
+		expect(screen.queryByRole('button', { name: 'Copy upgrade command' })).not.toBeInTheDocument()
+		await fireEvent.click(screen.getByRole('button', { name: 'Restart now' }))
+		expect(apiPost).toHaveBeenCalledWith('/api/version/restart')
 	})
 
   it('dismisses only the current installed version', async () => {

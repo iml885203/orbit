@@ -147,6 +147,9 @@ type Summary struct {
 	Transaction     *Transaction              `json:"transaction,omitempty"`
 	RuntimeOutcomes map[string]RuntimeOutcome `json:"runtime_outcomes,omitempty"`
 	UpgradeCommand  string                    `json:"upgrade_command,omitempty"`
+	// TransactionOutcome marks Phase as the result of Orbit's own apply or
+	// rollback rather than of a release check.
+	TransactionOutcome bool `json:"transaction_outcome,omitempty"`
 }
 
 func (s State) Summary() Summary {
@@ -160,7 +163,8 @@ func (s State) Summary() Summary {
 		TargetVersion: s.TargetVersion, Phase: s.Phase, ApplyEligible: s.ApplyEligible,
 		DeferReason: s.DeferReason, LastError: s.LastError,
 		Transaction: s.Transaction, RuntimeOutcomes: outcomes,
-		UpgradeCommand: UpgradeCommand(s.Owner),
+		UpgradeCommand:     UpgradeCommand(s.Owner),
+		TransactionOutcome: s.RecordsTransactionOutcome(),
 	}
 }
 

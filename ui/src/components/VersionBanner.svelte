@@ -13,7 +13,11 @@
   let successTimer: ReturnType<typeof setTimeout> | undefined
 
   const version = $derived(store.ui.version)
-	const release = $derived(version?.release_update)
+	// A restart onto the installed binary is the only next step for anything
+	// a release check reported; only Orbit's own apply outcome still shows.
+	const release = $derived(
+		version?.update_available && !version.release_update?.transaction_outcome ? undefined : version?.release_update,
+	)
 	const packageManaged = $derived(Boolean(release?.upgrade_command))
 	const cmd = $derived(release?.upgrade_command || (release?.target_version ? 'orbit update' : 'orbit daemon restart'))
   const targetToken = $derived(version?.on_disk?.split(/\s+/)[0] ?? '')
@@ -111,9 +115,15 @@
 				{#if release?.phase === 'partial'}
 					<strong>Orbit updated with partial restoration.</strong>
 					Some resources need attention. Inspect <code>orbit status --json</code> for exact recovery.
+				{:else if release?.phase === 'failed' && !release.transaction_outcome}
+					<strong>Orbit couldn’t check for updates.</strong>
+					{release.last_error ?? 'The current installation remains available.'}
 				{:else if release?.phase === 'failed'}
 					<strong>Orbit couldn’t finish the update.</strong>
 					{release.last_error ?? 'The current installation remains available.'}
+				{:else if release?.target_version && packageManaged}
+					<strong>Orbit <code>{release.target_version}</code> is available.</strong>
+					Upgrade it with <code>{cmd}</code>.
 				{:else if release?.target_version}
 					<strong>Orbit <code>{release.target_version}</code> is verified and ready.</strong>
 					{release.defer_reason === 'resources_running'

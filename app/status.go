@@ -41,12 +41,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	daemonRunningForConfig := daemonRunning
 
 	dstatus := daemonStatus{Running: daemonRunning}
-	if launchPath, err := invokedBinaryPath(); err == nil {
-		if updateState, stateErr := autoupdate.Load(launchPath); stateErr == nil {
-			summary := updateState.Summary()
-			dstatus.ReleaseUpdate = &summary
-		}
-	}
+	dstatus.ReleaseUpdate = invokedReleaseUpdate()
 	running := make(map[string]daemon.ResourceStatus)
 	if daemonRunning {
 		if status, err := client.Status(); err == nil {

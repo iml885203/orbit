@@ -224,7 +224,7 @@ func scheduleAutomaticUpdateCheck() {
 	if err != nil {
 		return
 	}
-	if state, stateErr := autoupdate.Load(launchPath); stateErr == nil &&
+	if state, stateErr := autoupdate.ReconcileInstalled(launchPath, buildVersion()); stateErr == nil &&
 		state.Policy == autoupdate.PolicyAutomatic && state.Owner == autoupdate.OwnerDirect &&
 		state.Phase == "ready" && state.StagedBinary != "" {
 		state = recordAutomaticApplyEligibility(state)
@@ -811,11 +811,31 @@ func copyUpdateHelper(source, destination string) error {
 	return nil
 }
 
+// invokedReleaseUpdate is the release summary for the binary this command
+// runs from, settled against that build so a package-manager upgrade is not
+// announced again.
+func invokedReleaseUpdate() *autoupdate.Summary {
+	launchPath, err := invokedBinaryPath()
+	if err != nil {
+		return nil
+	}
+	state, err := autoupdate.ReconcileInstalled(launchPath, buildVersion())
+	if err != nil {
+		return nil
+	}
+	summary := state.Summary()
+	return &summary
+}
+
 func registerUpdateRuntime() func() {
 	launchPath, err := autoupdate.LaunchPath()
 	if err != nil {
 		return func() {}
 	}
+	// At startup the daemon's build is the binary on disk, so this is the one
+	// moment the daemon can settle the dashboard's release state; later the
+	// file may change underneath it.
+	_, _ = autoupdate.ReconcileInstalled(launchPath, buildVersion())
 	home := daemon.OrbitDir()
 	identity := "default"
 	if name := instance.CurrentName(); name != "" {
