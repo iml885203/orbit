@@ -83,7 +83,7 @@ func TestCheckConfigMatchRejectsOlderDaemonWithoutPath(t *testing.T) {
 		t.Fatalf("mismatch = %+v, want requested config and unknown running config", mismatch)
 	}
 	if got := err.Error(); !strings.Contains(got, "older Orbit build") ||
-		!strings.Contains(got, "orbit daemon restart -c") {
+		!strings.Contains(got, "orbit up -c") {
 		t.Fatalf("error is not actionable: %q", got)
 	}
 }

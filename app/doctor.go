@@ -323,11 +323,12 @@ func localDoctorResponseWithContext(
 			)
 		} else {
 			daemonCheck.Message = fmt.Sprintf(
-				"%s; orbit up switches to %s",
+				"%s; %s switches to %s",
 				contextState,
+				upCommandFor(configFile),
 				projectContextName(configFile),
 			)
-			daemonCheck.Hint = "run: orbit up"
+			daemonCheck.Hint = "run: " + upCommandFor(configFile)
 		}
 	} else if !daemonRunning && cfg != nil && len(cfg.Containers)+len(cfg.Services) > 0 {
 		daemonCheck.Hint = "run: orbit up"

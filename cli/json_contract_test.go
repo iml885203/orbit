@@ -213,7 +213,8 @@ func TestWriteJSONErrorClassifiesConfigMismatch(t *testing.T) {
 	if !got.Error.Retryable {
 		t.Fatal("retryable = false, want true")
 	}
-	if got.Error.NextCommand != `orbit daemon restart -c "/tmp/selected.yaml"` {
+	// restart refuses to cross environments; up switches after confirming.
+	if got.Error.NextCommand != `orbit up -c /tmp/selected.yaml --json` {
 		t.Fatalf("next_command = %q", got.Error.NextCommand)
 	}
 	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != got.Error.NextCommand {
@@ -233,9 +234,10 @@ func TestWriteJSONErrorClassifiesUnknownOlderDaemonConfig(t *testing.T) {
 	if got.Error == nil || got.Error.Code != "env_mismatch" {
 		t.Fatalf("error = %+v", got.Error)
 	}
+	// An older daemon cannot say what it serves, so restart cannot target the
+	// selected config; up switches to it after confirming.
 	if !got.Error.Retryable ||
-		got.Error.NextCommand != `orbit daemon restart -c "/tmp/selected.yaml"` ||
-		!strings.Contains(got.Error.Hint, "verify which environment") {
+		got.Error.NextCommand != `orbit up -c /tmp/selected.yaml --json` {
 		t.Fatalf("error recovery = %+v", got.Error)
 	}
 }

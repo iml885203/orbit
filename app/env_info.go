@@ -103,7 +103,7 @@ func runEnvInfo(_ *cobra.Command, args []string) error {
 	daemonInfo, status := observedEnvironmentStatus(target)
 	data := buildEnvInfoJSONData(cfg, target, daemonInfo, status, envInfoShowSecrets)
 	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, envInfoActions(daemonInfo))
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, envInfoActions(daemonInfo, configFile))
 	}
 	printEnvInfoHuman(data)
 	return nil
@@ -227,12 +227,12 @@ func buildEnvInfoResource(
 	return resource
 }
 
-func envInfoActions(daemonInfo envInfoDaemon) []cli.JSONAction {
+func envInfoActions(daemonInfo envInfoDaemon, configPath string) []cli.JSONAction {
 	if daemonInfo.Running && daemonInfo.ConfigMatch {
 		return nil
 	}
 	return []cli.JSONAction{{
-		Command:     "orbit up --json",
+		Command:     upCommandFor(configPath) + " --json",
 		Reason:      "Start this environment to observe actual states, ports, and URLs.",
 		Destructive: false,
 	}}
@@ -274,7 +274,7 @@ func printEnvInfoHuman(data envInfoJSONData) {
 	printEnvInfoSection("Services", data.Services)
 	if !data.Daemon.Running || !data.Daemon.ConfigMatch {
 		fmt.Println()
-		fmt.Println("  Next: orbit up")
+		fmt.Println("  Next: " + upCommandFor(configFile))
 	}
 }
 

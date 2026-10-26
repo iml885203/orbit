@@ -271,10 +271,11 @@ func TestConfiguredInspectServicesExposeStoppedResourcesWithoutDaemon(t *testing
 
 func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		DaemonEnv:     "local",
+		ConfigPath:       "/tmp/development.yaml",
+		ConfigEnvName:    "development",
+		EnvSwitchCommand: "orbit switch development --json",
+		DaemonRunning:    true,
+		DaemonEnv:        "local",
 		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 			{Name: "redis", State: "healthy"},
 		}},
@@ -624,5 +625,28 @@ func assertStringSlice(t *testing.T, got, want []string) {
 		if got[i] != want[i] {
 			t.Fatalf("slice = %+v, want %+v", got, want)
 		}
+	}
+}
+
+func TestEnvSwitchCommandNamesAnExplicitConfigByItsResolvedPath(t *testing.T) {
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	t.Setenv("ORBIT_INSTANCE", "")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicit := filepath.Join(dir, "e2e.yaml")
+	if err := os.WriteFile(explicit, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := envSwitchCommand(explicit); got != "orbit up -c "+explicit+" --json" {
+		t.Fatalf("explicit config switch = %q", got)
+	}
+	quoted := filepath.Join(dir, "it's mine.yaml")
+	if err := os.WriteFile(quoted, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := envSwitchCommand(quoted); got != "orbit up -c '"+strings.ReplaceAll(quoted, "'", `'"'"'`)+"' --json" {
+		t.Fatalf("a path needing quotes = %q", got)
 	}
 }

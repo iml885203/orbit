@@ -195,7 +195,9 @@ config。
 專案占用的 port 視為切換時可釋放。可能誤控另一個專案 resource 的操作指令會
 以 `project_context_inactive` 失敗；agent 應遵循唯一的 `orbit up --json`
 action。切換成功後，`up` 結果的 `data.context_switch` 會包含兩邊的專案名稱與
-啟動前停止的 resource。
+啟動前停止的 resource。`orbit up -c <config>` 也以同樣方式切換明確指定的
+config，確認後的 action 會保留 `-c`；其他指令遇到不同 config 時仍以
+`env_mismatch` fail closed，其 `next_command` 是 `orbit up -c <config> --json`。
 Inspect 遵守同一個 ownership boundary，不會把另一個專案的 resource 或
 dashboard 回報成目前專案所有。
 
@@ -371,9 +373,11 @@ Agents 應把 `blocked: true` 視為需要先恢復的狀態。Agents 可以直�
 non-destructive 的 `recommended_actions`，但任何 `destructive: true` 的 action
 仍必須先取得明確 human approval。
 
-readiness 是 `needs_daemon` 時，agents 應先執行建議的
-`orbit switch <env> --json` action，再依據 service state 行動，因為 running
-environment 與選取的 CLI config 不同。
+readiness 是 `needs_daemon` 時，agents 應先執行建議的切換 action，再依據
+service state 行動，因為 running environment 與選取的 CLI config 不同。
+Managed environment 用 `orbit switch <env> --json` 切換；明確指定的 `-c`
+config 用 `orbit up -c <config> --json`，它不會改變 selection，並像專案切換
+一樣先確認。
 
 Readiness 是 `update_required` 時，agents 必須先 restart Orbit 才能送出
 resource mutation。這些 mutation 會回傳 `orbit_update_pending`，並且只建議

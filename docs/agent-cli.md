@@ -186,7 +186,7 @@ caller (or its operator) intends the destruction.
 | `daemon_unreachable` | Orbit is not running |
 | `dashboard_port_conflict` | the dashboard port is owned by another process |
 | `dependency_blocked` | a required dependency cannot become healthy |
-| `env_mismatch` | the selected config differs from the running daemon's |
+| `env_mismatch` | the selected config differs from the running daemon's; `next_command` is `orbit up -c <config> --json`, which asks for `--yes` before stopping running resources |
 | `env_repo_access` | environment repository access or authentication failed |
 | `env_repo_unavailable` | environment repository unreachable |
 | `environment_changed` | the env file changed; apply before continuing |
@@ -303,7 +303,9 @@ its sole `orbit up --json` action. A successful switch reports
 resources stopped before startup. When resources are running, non-interactive
 and JSON switches without `--yes` fail with `confirmation_required` and
 the exact `orbit up --yes --json` action. The target is validated before
-that confirmation and no resource is stopped on refusal.
+that confirmation and no resource is stopped on refusal. `orbit up -c <config>`
+switches an explicit config the same way, keeping `-c` in the confirmed action;
+every other command still fails closed with `env_mismatch`.
 Inspect follows the same ownership boundary and never reports the other
 project's resources or dashboard as belonging to the current project.
 
@@ -518,9 +520,12 @@ Agents should treat `blocked: true` as a stop-and-recover state. Agents may run
 non-destructive `recommended_actions` directly, but must still require explicit
 human approval for any action marked `destructive: true`.
 
-When readiness is `needs_daemon`, agents should run the recommended
-`orbit switch <env> --json` action before acting on service state because the
-running environment differs from the selected CLI config.
+When readiness is `needs_daemon`, agents should run the recommended switch
+action before acting on service state because the running environment differs
+from the selected CLI config. A managed environment is switched with
+`orbit switch <env> --json`; an explicit `-c` config with
+`orbit up -c <config> --json`, which selects nothing and confirms like a
+project switch.
 
 When readiness is `update_required`, agents must restart Orbit before sending
 resource mutations. Orbit returns `orbit_update_pending` from those mutations

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -78,15 +79,20 @@ func projectContextInactive(configPath, runningPath string) error {
 	}})
 }
 
-func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
-	if environmentContextKind(configFile) != "project" {
+// switchRunningContext lets `up` move the daemon to a discovered project or a
+// config passed with -c: starting that config is the whole point of the
+// command, so it confirms what it stops instead of failing closed like every
+// other command does on a mismatch. A managed env keeps its own switch
+// (`orbit switch`), which also records the selection.
+func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
+	if kind := environmentContextKind(configFile); kind != "project" && kind != "explicit" {
 		return nil, nil
 	}
 	previousPID, alive := daemon.IsDaemonRunning()
 	if !alive {
 		return nil, nil
 	}
-	client := daemon.NewClient(daemon.DefaultSocketPath())
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 	status, err := client.Status()
 	if err != nil {
 		return nil, fmt.Errorf("checking running project: %w", err)
@@ -148,6 +154,8 @@ func switchDiscoveredProjectContext() (*projectContextSwitch, error) {
 			)
 		}
 	}
+	// Background, not ctx: once confirmed, a stop that Ctrl-C abandoned
+	// halfway would leave neither environment running.
 	if _, err := stopDaemon(previousPID); err != nil {
 		return nil, fmt.Errorf("stopping %s before project switch: %w", switched.FromName, err)
 	}
@@ -205,4 +213,13 @@ func projectContextPorts(resources []daemon.ResourceStatus) map[int]bool {
 		}
 	}
 	return ports
+}
+
+// upCommandFor is the command that brings configPath up: a bare up resolves a
+// discovered or managed config by itself, an explicit one has to be named.
+func upCommandFor(configPath string) string {
+	if configPath != "" && environmentContextKind(configPath) == "explicit" {
+		return (&daemon.ConfigMismatchError{Requested: configPath}).SwitchCommand()
+	}
+	return "orbit up"
 }

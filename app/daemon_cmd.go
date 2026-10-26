@@ -113,9 +113,11 @@ func rejectRestartAcrossEnvironments(runningConfig, requestedConfig string, expl
 	if sameFilePath(runningConfig, requestedConfig) {
 		return nil
 	}
-	return fmt.Errorf(
-		"daemon is serving %s; restart keeps that environment.\nTo run %s instead: orbit down, then orbit up -c %s",
-		runningConfig, requestedConfig, requestedConfig)
+	mismatch := daemon.CheckConfigMatch(requestedConfig, runningConfig)
+	if mismatch == nil {
+		return nil
+	}
+	return fmt.Errorf("restart keeps the running environment: %w", mismatch)
 }
 
 // restartDaemonPreservingResources restarts on whatever environment is

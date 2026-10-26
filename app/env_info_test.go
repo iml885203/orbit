@@ -128,10 +128,10 @@ func TestBuildEnvInfoIncludesEnvironmentValuesOnlyOnRequest(t *testing.T) {
 }
 
 func TestEnvInfoActionsSuggestStartingOnlyWhenObservationIsMissing(t *testing.T) {
-	if actions := envInfoActions(envInfoDaemon{Running: true, ConfigMatch: true}); actions != nil {
+	if actions := envInfoActions(envInfoDaemon{Running: true, ConfigMatch: true}, ""); actions != nil {
 		t.Fatalf("actions = %+v, want none while observing", actions)
 	}
-	actions := envInfoActions(envInfoDaemon{})
+	actions := envInfoActions(envInfoDaemon{}, "")
 	if len(actions) != 1 || actions[0].Command != "orbit up --json" {
 		t.Fatalf("actions = %+v", actions)
 	}

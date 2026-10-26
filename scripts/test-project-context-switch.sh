@@ -513,7 +513,59 @@ assert outside_matched["data"]["daemon"].get("detached_project") is not True
 assert "Using project environment" not in (root / "explicit-up.txt").read_text(encoding="utf-8")
 assert pathlib.Path(envs["context"]["config_path"]).resolve() == (root / "project-a" / "orbit.yaml").resolve()
 PY
-"$orbit_bin" --config "$test_root/project-a/orbit.yaml" down --json >/dev/null
+
+# Moving a running explicit config to another explicit config must be reachable
+# by following Orbit's own next commands, not by knowing to stop the daemon.
+run_next_command() {
+  # $1: JSON file, $2: jq-free python expression selecting the command
+  next="$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print($2)" "$1")"
+  eval "\"\$orbit_bin\" ${next#orbit }"
+}
+"$orbit_bin" --config "$test_root/project-b/orbit.yaml" inspect --json >"$test_root/explicit-switch-inspect.json"
+if "$orbit_bin" --config "$test_root/project-b/orbit.yaml" daemon restart --json >"$test_root/explicit-switch-restart.json"; then
+  echo "daemon restart unexpectedly moved the daemon to another explicit config." >&2
+  exit 1
+fi
+if "$orbit_bin" --config "$test_root/project-b/orbit.yaml" status --json >"$test_root/explicit-switch-mismatch.json"; then
+  echo "status unexpectedly addressed a daemon serving another explicit config." >&2
+  exit 1
+fi
+if run_next_command "$test_root/explicit-switch-mismatch.json" 'd["error"]["next_command"]' \
+  >"$test_root/explicit-switch-confirm.json"; then
+  echo "switching explicit configs unexpectedly skipped confirmation." >&2
+  exit 1
+fi
+run_next_command "$test_root/explicit-switch-confirm.json" 'd["recommended_actions"][0]["command"]' \
+  >"$test_root/explicit-switch-up.json"
+curl --fail --silent --show-error --retry 10 --retry-delay 1 \
+  "http://localhost:$service_port" >"$test_root/page-explicit-b.html"
+grep -F "project-b" "$test_root/page-explicit-b.html" >/dev/null
+python3 - "$test_root" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+mismatch = json.loads((root / "explicit-switch-mismatch.json").read_text(encoding="utf-8"))
+confirm = json.loads((root / "explicit-switch-confirm.json").read_text(encoding="utf-8"))
+up = json.loads((root / "explicit-switch-up.json").read_text(encoding="utf-8"))
+inspect = json.loads((root / "explicit-switch-inspect.json").read_text(encoding="utf-8"))
+restart = json.loads((root / "explicit-switch-restart.json").read_text(encoding="utf-8"))
+target = str(root / "project-b" / "orbit.yaml")
+assert mismatch["error"]["code"] == "env_mismatch"
+assert mismatch["error"]["next_command"].startswith("orbit up -c ")
+assert target in mismatch["error"]["next_command"]
+# Every surface that meets the mismatch names the same switch.
+assert inspect["recommended_actions"][0]["command"] == mismatch["error"]["next_command"], inspect["recommended_actions"]
+assert restart["error"]["code"] == "env_mismatch"
+assert restart["error"]["next_command"] == mismatch["error"]["next_command"]
+assert confirm["error"]["code"] == "confirmation_required"
+assert "--yes" in confirm["recommended_actions"][0]["command"]
+assert up["ok"] is True
+assert pathlib.Path(up["data"]["context"]["config_path"]).resolve() == pathlib.Path(target).resolve()
+assert up["data"]["context_switch"]["stopped_resources"] == ["app-a"]
+PY
+"$orbit_bin" --config "$test_root/project-b/orbit.yaml" down --json >/dev/null
 "$orbit_bin" daemon stop --json >/dev/null
 
 make_project "team-a/payments" "payments-a" "team-a"

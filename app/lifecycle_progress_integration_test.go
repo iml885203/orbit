@@ -38,7 +38,7 @@ func TestUpJSONNoAffectedResourcesSkipsReadinessPhaseAndWritesOneEnvelope(t *tes
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := runUpJSONWithProgress(ctx, nil, nil, newLifecycleProgress(ctx, os.Stderr, time.Now()))
+	err := runUpJSONWithProgress(ctx, nil, newLifecycleProgress(ctx, os.Stderr, time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestUpJSONFailureReportsEvidencePhaseOnceAndWritesOneEnvelope(t *testing.T)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err := runUpJSONWithProgress(ctx, nil, nil, newLifecycleProgress(ctx, os.Stderr, time.Now()))
+	err := runUpJSONWithProgress(ctx, nil, newLifecycleProgress(ctx, os.Stderr, time.Now()))
 	if err == nil {
 		t.Fatal("up succeeded despite degraded resource")
 	}
@@ -127,7 +127,7 @@ func TestUpJSONReadinessFeedsResourceHeartbeatIntoSharedReporter(t *testing.T) {
 	defer cancel()
 	ticker := time.NewTicker(5 * time.Millisecond)
 	progress := newLifecycleProgressWithTicker(ctx, os.Stderr, time.Now(), 40*time.Millisecond, ticker.C, ticker.Stop)
-	err := runUpJSONWithProgress(ctx, nil, nil, progress)
+	err := runUpJSONWithProgress(ctx, nil, progress)
 	if err != nil {
 		t.Fatal(err)
 	}

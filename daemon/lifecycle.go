@@ -16,6 +16,7 @@ import (
 	"github.com/iml885203/orbit/atomicio"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/instance"
+	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/iml885203/orbit/platform"
 	"github.com/iml885203/orbit/process"
 )
@@ -76,14 +77,25 @@ func (e *ConfigStaleError) Error() string {
 func (e *ConfigMismatchError) Error() string {
 	if strings.TrimSpace(e.Running) == "" {
 		return fmt.Sprintf(
-			"the running daemon does not report its active config (it may be an older Orbit build) — run 'orbit daemon restart -c %q' before continuing",
-			e.Requested,
+			"the running daemon does not report its active config (it may be an older Orbit build) — run `%s` to switch to the selected config (Orbit confirms before stopping running resources)",
+			e.SwitchCommand(),
 		)
 	}
 	return fmt.Sprintf(
-		"selected config %q differs from the running daemon config %q — run 'orbit daemon restart -c %q' to use the selected config, or rerun with '-c %q' to address the running environment",
-		e.Requested, e.Running, e.Requested, e.Running,
+		"selected config %q differs from the running daemon config %q — run `%s` to switch to it (Orbit confirms before stopping running resources), or rerun with `-c %s` to address the running environment",
+		e.Requested, e.Running, e.SwitchCommand(), shellquote.Quote(e.Running),
 	)
+}
+
+// SwitchCommand is the one recovery every mismatch shares: `up` is the only
+// command that moves the daemon to another config, and it confirms before
+// stopping what is running.
+func (e *ConfigMismatchError) SwitchCommand() string {
+	command := "orbit "
+	if name := os.Getenv("ORBIT_INSTANCE"); name != "" {
+		command += "--instance " + shellquote.Quote(name) + " "
+	}
+	return command + "up -c " + shellquote.Quote(normalizedConfigPath(e.Requested))
 }
 
 // CheckConfigMatch fails closed when an older daemon cannot identify its

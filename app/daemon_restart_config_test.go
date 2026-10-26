@@ -50,8 +50,9 @@ func TestRejectRestartAcrossEnvironments(t *testing.T) {
 				return
 			}
 			// The message has to carry the way out, not just the refusal:
-			// there is no restart flag that switches environments.
-			for _, want := range []string{tc.running, tc.requested, "orbit down"} {
+			// there is no restart flag that switches environments, and
+			// `orbit down` would leave the daemon on the running config.
+			for _, want := range []string{tc.running, "orbit up -c " + tc.requested} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("err = %q, want it to mention %q", err, want)
 				}
