@@ -11,4 +11,8 @@ overrides:
   '@sentry/node': 10.72.0
   vite: 6.4.5
   source-map-js: 1.2.2
+  # Outside chromium-bidi 17's declared zod ^3 (its error path reads the
+  # removed `.errors`), but GHSA-mrhx-c7xc-m3w5 has no 3.x fix and Lighthouse
+  # drives Chrome over CDP, never loading chromium-bidi. Drop this once
+  # puppeteer-core ships a chromium-bidi built on zod 4.
   chromium-bidi>zod: 4.6.7
