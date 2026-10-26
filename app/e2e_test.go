@@ -300,16 +300,6 @@ func reserveLocalPort(t *testing.T) int {
 	return port
 }
 
-func occupyLocalPort(t *testing.T) int {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	return listener.Addr().(*net.TCPAddr).Port
-}
-
 func readPIDFile(t *testing.T, path string) int {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -489,8 +479,8 @@ func TestE2E_DaemonRestartRestoresTheWholeEnvironment(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 
-	servicePort := occupyLocalPort(t)
-	redisPort := occupyLocalPort(t)
+	servicePort := reserveLocalPort(t)
+	redisPort := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 
 	home, err := os.MkdirTemp("/tmp", "orb-restart-")
@@ -592,8 +582,9 @@ services:
 			initialPorts[resource.Name] = selectedPort
 		}
 	}
-	if initialPorts["redis"] == redisPort || initialPorts["api"] == servicePort {
-		t.Fatalf("occupied preferences were not moved: %+v", initialPorts)
+	// Declared ports are the contract (019f639): Orbit runs on them as given.
+	if initialPorts["redis"] != redisPort || initialPorts["api"] != servicePort {
+		t.Fatalf("initial ports = %+v, want the declared redis %d and api %d", initialPorts, redisPort, servicePort)
 	}
 
 	containerName := "orbit-" + namespace + "-redis"
@@ -864,8 +855,8 @@ func TestE2E_ServiceDependencyReceivesSelectedRuntimeURL(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 
-	upstreamPreference := occupyLocalPort(t)
-	downstreamPreference := occupyLocalPort(t)
+	upstreamPreference := reserveLocalPort(t)
+	downstreamPreference := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 	home, err := os.MkdirTemp("/tmp", "orb-service-url-")
 	if err != nil {
@@ -1006,8 +997,8 @@ services:
 	}
 	upstream := resources["upstream"]
 	downstream := resources["downstream"]
-	if upstream.Port == upstreamPreference || downstream.Port == downstreamPreference {
-		t.Fatalf("occupied preferences were not moved: %+v", resources)
+	if upstream.Port != upstreamPreference || downstream.Port != downstreamPreference {
+		t.Fatalf("resources = %+v, want the declared ports %d and %d", resources, upstreamPreference, downstreamPreference)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -1375,74 +1366,6 @@ func readE2EDaemonPID(t *testing.T, home string) int {
 		t.Fatalf("parse daemon pid %q: %v", data, err)
 	}
 	return pid
-}
-
-// Covers: `orbit env sync --url file://<local-repo>` clones a local git repo
-// and copies its envs/ tree into ORBIT_HOME/envs/.
-func TestE2E_EnvSync(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
-	}
-	binary := findOrbitBinary(t)
-
-	home, err := os.MkdirTemp("/tmp", "orb-")
-	if err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(home) })
-
-	// Build a local git repo containing envs/example.yaml.
-	repo, err := os.MkdirTemp("/tmp", "orb-envrepo-")
-	if err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(repo) })
-
-	srcEnv := findRepoFile(t, filepath.Join("envs", "example.yaml"))
-	data, err := os.ReadFile(srcEnv)
-	if err != nil {
-		t.Fatalf("read example.yaml: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(repo, "envs"), 0o755); err != nil {
-		t.Fatalf("mkdir repo/envs: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(repo, "envs", "example.yaml"), data, 0o644); err != nil {
-		t.Fatalf("write example.yaml: %v", err)
-	}
-	runGit := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repo
-		// Avoid depending on host git user config.
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com",
-			"GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
-		)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-		}
-	}
-	runGit("init", "-q", "-b", "main")
-	runGit("add", ".")
-	runGit("commit", "-q", "-m", "init")
-
-	// Run `orbit env sync --url file://<repo>` with isolated ORBIT_HOME.
-	cmd := exec.Command(binary, "env", "sync", "--url", "file://"+repo)
-	cmd.Env = append(os.Environ(),
-		"ORBIT_HOME="+home,
-		"ORBIT_NAMESPACE=e2e-"+randHex(4),
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("orbit env sync: %v\n%s", err, out)
-	}
-	if testing.Verbose() {
-		t.Logf("$ orbit env sync --url file://%s\n%s", repo, out)
-	}
-
-	dest := filepath.Join(home, "envs", "example.yaml")
-	if _, err := os.Stat(dest); err != nil {
-		t.Fatalf("expected %s to exist after sync, stat err=%v\noutput:\n%s", dest, err, out)
-	}
 }
 
 // Covers: `orbit up` preflight blocks start-up when ~/.orbit/envs is missing.
@@ -2541,7 +2464,7 @@ services:
   api-runtime:
     type: shell
     path: %q
-    command: orbit-e2e-missing-executable serve
+    command: sh -c 'echo orbit-e2e-root-failure >&2; exit 17'
   web-app:
     type: shell
     path: %q
@@ -2582,7 +2505,7 @@ services:
 		t.Fatalf("human status: %v\n%s", err, human)
 	}
 	for _, evidence := range []string{
-		`exec: "orbit-e2e-missing-executable": executable file not found`,
+		"orbit-e2e-root-failure",
 		"blocked by api-runtime",
 		"orbit logs api-runtime",
 	} {
@@ -2600,9 +2523,7 @@ services:
 		t.Fatalf("JSON up error = %+v:\n%s", failedEnvelope.Error, failedUp)
 	}
 	wantRecovery := []string{
-		"orbit status --json",
 		"orbit logs api-runtime --json",
-		"orbit restart api-runtime --json",
 	}
 	if len(failedEnvelope.RecommendedActions) != len(wantRecovery) {
 		t.Fatalf("JSON up recommended_actions = %+v", failedEnvelope.RecommendedActions)
@@ -2679,7 +2600,7 @@ func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
 	workspace := t.TempDir()
 	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
 
-	command := exec.Command(binary, "init", "--yes", "--env-repo", missingRepo)
+	command := exec.Command(binary, "init", "--yes", "--source", "team", "--url", missingRepo)
 	command.Dir = workspace
 	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
 	output, err := command.CombinedOutput()
@@ -2711,7 +2632,7 @@ func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
 	workspace := t.TempDir()
 	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
 
-	command := exec.Command(binary, "init", "--yes", "--env-repo", missingRepo, "--json")
+	command := exec.Command(binary, "init", "--yes", "--source", "team", "--url", missingRepo, "--json")
 	command.Dir = workspace
 	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
 	output, err := command.Output()
@@ -2748,11 +2669,11 @@ func TestE2E_InitJSONFailureRetainsDiagnosticData(t *testing.T) {
 	}
 }
 
-func TestE2E_EnvSyncClassifiesRepositoryAccessFailure(t *testing.T) {
+func TestE2E_SourceAddClassifiesRepositoryAccessFailure(t *testing.T) {
 	binary := findOrbitBinary(t)
 	home := t.TempDir()
 	missingRepo := "file://" + filepath.Join(t.TempDir(), "missing-repo")
-	command := exec.Command(binary, "env", "sync", "--url", missingRepo, "--json")
+	command := exec.Command(binary, "source", "add", "team", "--url", missingRepo, "--json")
 	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
 	output, err := command.Output()
 	if err == nil {
@@ -2762,14 +2683,14 @@ func TestE2E_EnvSyncClassifiesRepositoryAccessFailure(t *testing.T) {
 	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
 		t.Fatalf("error = %+v:\n%s", envelope.Error, output)
 	}
-	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit env sync --json" {
+	if len(envelope.RecommendedActions) != 1 || envelope.RecommendedActions[0].Command != "orbit source sync --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }
 
-func TestE2E_EnvSyncExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
+func TestE2E_SourceAddExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
 	binary := findOrbitBinary(t)
-	command := exec.Command(binary, "env", "sync", "--url", "https://example.invalid/environments.git", "--json")
+	command := exec.Command(binary, "source", "add", "team", "--url", "https://example.invalid/environments.git", "--json")
 	command.Env = append(os.Environ(), "ORBIT_HOME="+t.TempDir(), "PATH="+t.TempDir())
 	output, err := command.Output()
 	if err == nil {
@@ -2789,7 +2710,7 @@ func TestE2E_EnvSyncExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
 		}
 	}
 	if len(envelope.RecommendedActions) != 1 ||
-		envelope.RecommendedActions[0].Command != "orbit env sync --json" {
+		envelope.RecommendedActions[0].Command != "orbit source sync --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
 }

@@ -158,12 +158,19 @@ func resolveEnvArg(arg string) (string, error) {
 		return managed, err
 	}
 	candidates := []string{arg}
+	// Without a registered source, envs dropped into ~/.orbit/envs are still
+	// listed and recommended by name, so the name has to resolve there too.
+	if !strings.ContainsAny(arg, `/\`) {
+		candidates = append(candidates,
+			filepath.Join(envsDestDir(), arg),
+			filepath.Join(envsDestDir(), arg+".yaml"))
+	}
 	for _, c := range candidates {
 		abs, err := filepath.Abs(c)
 		if err != nil {
 			continue
 		}
-		if _, err := os.Stat(abs); err == nil {
+		if info, err := os.Stat(abs); err == nil && !info.IsDir() {
 			return abs, nil
 		}
 	}

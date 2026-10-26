@@ -411,7 +411,8 @@ func upInstancePorts(t *testing.T, env *e2eEnv, name string) map[string]int {
 
 func runNamedInstance(t *testing.T, env *e2eEnv, args ...string) string {
 	t.Helper()
-	return env.run(t, append([]string{"-c", env.envYaml}, args...)...)
+	// Every caller asks for --json; stderr carries progress lines, not JSON.
+	return env.runJSON(t, append([]string{"-c", env.envYaml}, args...)...)
 }
 
 func dockerOutput(t *testing.T, args ...string) string {

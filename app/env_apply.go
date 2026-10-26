@@ -77,7 +77,9 @@ func runEnvApplyJSON(ctx context.Context, progress *lifecycleProgress) error {
 		err = lifecycleOperationError(ctx, err, result.reconcileDispatched)
 		progress.Close()
 		if cli.JSONOutput {
-			failure := cli.WithJSONReplacementActions(err, []cli.JSONAction{cli.StatusAction()})
+			// The classified error already names its recovery (e.g. orbit update
+			// for a newer schema); timeouts and cancellations get status there.
+			failure := err
 			if writeErr := cli.WriteJSONFailure(os.Stdout, commandString(), buildEnvironmentApplyJSONData(result), failure, nil); writeErr != nil {
 				return writeErr
 			}
