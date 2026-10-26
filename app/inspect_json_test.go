@@ -11,6 +11,7 @@ import (
 	"github.com/iml885203/orbit/cli"
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
+	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/envsource"
 )
@@ -273,7 +274,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	got := buildInspectData(inspectBuildOptions{
 		ConfigPath:       "/tmp/development.yaml",
 		ConfigEnvName:    "development",
-		EnvSwitchCommand: "orbit switch development --json",
+		EnvSwitchCommand: "orbit up -c /tmp/development.yaml --json",
 		DaemonRunning:    true,
 		DaemonEnv:        "local",
 		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
@@ -296,7 +297,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	if !strings.Contains(got.Risks[0].Message, "development") || !strings.Contains(got.Risks[0].Message, "local") {
 		t.Fatalf("risk message = %q, want both env names", got.Risks[0].Message)
 	}
-	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit switch development --json" {
+	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit up -c /tmp/development.yaml --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions)
 	}
 	if got.RecommendedActions[0].Reason != "Apply the selected environment through Orbit's safe switch workflow." {
@@ -648,5 +649,26 @@ func TestEnvSwitchCommandNamesAnExplicitConfigByItsResolvedPath(t *testing.T) {
 	}
 	if got := envSwitchCommand(quoted); got != "orbit up -c '"+strings.ReplaceAll(quoted, "'", `'"'"'`)+"' --json" {
 		t.Fatalf("a path needing quotes = %q", got)
+	}
+}
+
+func TestEnvSwitchCommandNamesAManagedConfigToo(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	t.Setenv("ORBIT_INSTANCE", "")
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := filepath.Join(dir, "staging.yaml")
+	if err := os.WriteFile(managed, []byte("version: \"3\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(daemonsrv.CurrentEnvPath(), []byte(managed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A bare up does not switch for a managed env, so the switch must name it.
+	if got := envSwitchCommand(managed); got != "orbit up -c "+managed+" --json" {
+		t.Fatalf("managed config switch = %q", got)
 	}
 }

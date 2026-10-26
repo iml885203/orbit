@@ -540,6 +540,15 @@ run_next_command "$test_root/explicit-switch-confirm.json" 'd["recommended_actio
 curl --fail --silent --show-error --retry 10 --retry-delay 1 \
   "http://localhost:$service_port" >"$test_root/page-explicit-b.html"
 grep -F "project-b" "$test_root/page-explicit-b.html" >/dev/null
+# A bare up that merely resolves some other config is not a switch request.
+cd "$test_root"
+if "$orbit_bin" up --yes --json >"$test_root/explicit-bare-up.json"; then
+  echo "a bare orbit up unexpectedly replaced the explicitly started config." >&2
+  exit 1
+fi
+curl --fail --silent --show-error \
+  "http://localhost:$service_port" >"$test_root/page-explicit-b-kept.html"
+grep -F "project-b" "$test_root/page-explicit-b-kept.html" >/dev/null
 python3 - "$test_root" <<'PY'
 import json
 import pathlib

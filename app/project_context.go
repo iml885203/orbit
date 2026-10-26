@@ -80,12 +80,12 @@ func projectContextInactive(configPath, runningPath string) error {
 }
 
 // switchRunningContext lets `up` move the daemon to a discovered project or a
-// config passed with -c: starting that config is the whole point of the
+// config named with -c: starting that config is the whole point of the
 // command, so it confirms what it stops instead of failing closed like every
-// other command does on a mismatch. A managed env keeps its own switch
-// (`orbit switch`), which also records the selection.
+// other command does on a mismatch. A bare `up` that merely resolved to a
+// managed or fallback config is not a request to replace what is running.
 func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
-	if kind := environmentContextKind(configFile); kind != "project" && kind != "explicit" {
+	if environmentContextKind(configFile) != "project" && configContextKind != "explicit" {
 		return nil, nil
 	}
 	previousPID, alive := daemon.IsDaemonRunning()
@@ -95,7 +95,13 @@ func switchRunningContext(ctx context.Context) (*projectContextSwitch, error) {
 	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
 	status, err := client.Status()
 	if err != nil {
-		return nil, fmt.Errorf("checking running project: %w", err)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// A recorded PID that does not answer is EnsureDaemon's to judge: it
+		// retires a stale daemon without touching an unrelated process that
+		// reused the PID. There is nothing here to switch away from.
+		return nil, nil
 	}
 	mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath)
 	if mismatch == nil {
@@ -215,11 +221,12 @@ func projectContextPorts(resources []daemon.ResourceStatus) map[int]bool {
 	return ports
 }
 
-// upCommandFor is the command that brings configPath up: a bare up resolves a
-// discovered or managed config by itself, an explicit one has to be named.
+// upCommandFor is the command that brings configPath up even while another
+// config runs: a discovered project switches with a bare up, every other
+// config is named with -c, the one form up switches for.
 func upCommandFor(configPath string) string {
-	if configPath != "" && environmentContextKind(configPath) == "explicit" {
-		return (&daemon.ConfigMismatchError{Requested: configPath}).SwitchCommand()
+	if configPath == "" || environmentContextKind(configPath) == "project" {
+		return "orbit up"
 	}
-	return "orbit up"
+	return (&daemon.ConfigMismatchError{Requested: configPath}).SwitchCommand()
 }

@@ -375,9 +375,8 @@ non-destructive 的 `recommended_actions`，但任何 `destructive: true` 的 ac
 
 readiness 是 `needs_daemon` 時，agents 應先執行建議的切換 action，再依據
 service state 行動，因為 running environment 與選取的 CLI config 不同。
-Managed environment 用 `orbit switch <env> --json` 切換；明確指定的 `-c`
-config 用 `orbit up -c <config> --json`，它不會改變 selection，並像專案切換
-一樣先確認。
+不在已偵測到的專案中時，這個 action 是 `orbit up -c <config> --json`：up 只會
+切換到明確指定的 config，不會改變 selection，並像專案切換一樣先確認。
 
 Readiness 是 `update_required` 時，agents 必須先 restart Orbit 才能送出
 resource mutation。這些 mutation 會回傳 `orbit_update_pending`，並且只建議

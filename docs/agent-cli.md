@@ -522,10 +522,9 @@ human approval for any action marked `destructive: true`.
 
 When readiness is `needs_daemon`, agents should run the recommended switch
 action before acting on service state because the running environment differs
-from the selected CLI config. A managed environment is switched with
-`orbit switch <env> --json`; an explicit `-c` config with
-`orbit up -c <config> --json`, which selects nothing and confirms like a
-project switch.
+from the selected CLI config. Outside a discovered project that action is
+`orbit up -c <config> --json`: up switches only for a config it is explicitly
+given, selects nothing, and confirms like a project switch.
 
 When readiness is `update_required`, agents must restart Orbit before sending
 resource mutations. Orbit returns `orbit_update_pending` from those mutations

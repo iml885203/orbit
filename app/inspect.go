@@ -14,7 +14,6 @@ import (
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/engine"
-	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -750,12 +749,8 @@ func printInspectHuman(data inspectJSONData) {
 	}
 }
 
-// envSwitchCommand moves the daemon to the selected config: a managed env
-// through `orbit switch`, which records the selection; a project or explicit
-// config through up, which confirms before stopping what the daemon runs.
+// envSwitchCommand moves the daemon to the selected config through up, which
+// confirms before stopping what the daemon runs.
 func envSwitchCommand(configPath string) string {
-	if environmentContextKind(configPath) == "managed" {
-		return "orbit switch " + shellquote.Quote(projectContextName(configPath)) + " --json"
-	}
 	return upCommandFor(configPath) + " --json"
 }

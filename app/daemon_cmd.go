@@ -110,9 +110,6 @@ func rejectRestartAcrossEnvironments(runningConfig, requestedConfig string, expl
 	if !explicitConfig || runningConfig == "" || requestedConfig == "" {
 		return nil
 	}
-	if sameFilePath(runningConfig, requestedConfig) {
-		return nil
-	}
 	mismatch := daemon.CheckConfigMatch(requestedConfig, runningConfig)
 	if mismatch == nil {
 		return nil

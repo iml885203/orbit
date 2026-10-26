@@ -122,3 +122,11 @@ func TestCheckDaemonCurrentRejectsInstalledUpdate(t *testing.T) {
 		t.Fatalf("current daemon rejected: %v", err)
 	}
 }
+
+func TestConfigMismatchSwitchCommandTargetsTheCurrentInstance(t *testing.T) {
+	t.Setenv("ORBIT_INSTANCE", "e2e")
+	got := (&ConfigMismatchError{Requested: "/nonexistent/b.yaml"}).SwitchCommand()
+	if got != "orbit --instance e2e up -c /nonexistent/b.yaml" {
+		t.Fatalf("switch command = %q", got)
+	}
+}
