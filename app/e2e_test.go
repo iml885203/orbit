@@ -1999,7 +1999,8 @@ func TestE2E_AgentJSONWorkflow(t *testing.T) {
 }
 
 func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
-	registerE2ENamespace(t, "e2e-port-conflict")
+	portConflictNamespace := "e2e-port-conflict-" + randHex(4)
+	registerE2ENamespace(t, portConflictNamespace)
 	binary := findOrbitBinary(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -2044,7 +2045,7 @@ services:
 		cmd := exec.Command(binary, fullArgs...)
 		cmd.Env = append(os.Environ(),
 			"ORBIT_HOME="+home,
-			"ORBIT_NAMESPACE=e2e-port-conflict",
+			"ORBIT_NAMESPACE="+portConflictNamespace,
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 		)
 		return cmd

@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -42,6 +43,9 @@ type Manager struct {
 	namespace  string
 	network    string
 	imagePulls *imagePullCoordinator
+	// networkMu serializes EnsureNetwork: container starts run concurrently,
+	// and a daemon older than API 1.44 accepts a duplicate network name.
+	networkMu sync.Mutex
 
 	// OnOutput is called for container log lines.
 	OnOutput func(name string, line string)
@@ -92,6 +96,8 @@ func NetworkName(namespace string) string {
 
 // EnsureNetwork creates the orbit Docker network if it doesn't exist.
 func (m *Manager) EnsureNetwork(ctx context.Context) error {
+	m.networkMu.Lock()
+	defer m.networkMu.Unlock()
 	// Docker's name filter matches substrings, so "orbit" would also match
 	// every "orbit-*" network; only an exact name proves this one exists.
 	networks, err := m.cli.NetworkList(ctx, client.NetworkListOptions{
