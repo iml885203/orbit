@@ -74,7 +74,7 @@ orbit update
 
 Package-manager installations remain owned by their package manager. For
 those installations, `orbit update` leaves the binary unchanged and reports
-the exact command to run: `brew upgrade orbit` or `scoop update orbit`.
+the exact command to run: `brew upgrade iml885203/tap/orbit` or `scoop update orbit`.
 `orbit update --rollback` likewise refuses to modify a package-managed binary.
 
 `orbit update` replaces the binary that is actually running, even when another
