@@ -94,6 +94,13 @@ services:
 		t.Fatal(err)
 	}
 
+	// Recent .NET SDKs keep named-mutex files under $XDG_RUNTIME_DIR. CI
+	// runners export /run/user/<uid> without creating it, and `dotnet`
+	// then fails on first use before building anything.
+	runtimeDir := filepath.Join(home, "xdg-runtime")
+	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	command := func(args ...string) *exec.Cmd {
 		cmd := exec.Command(binary, append([]string{"-c", configPath}, args...)...)
 		cmd.Env = append(os.Environ(),
@@ -102,6 +109,7 @@ services:
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 			"DOTNET_CLI_TELEMETRY_OPTOUT=1",
 			"DOTNET_NOLOGO=1",
+			"XDG_RUNTIME_DIR="+runtimeDir,
 			// No lingering MSBuild or compiler servers holding the temp
 			// workspace open after the test.
 			"DOTNET_CLI_USE_MSBUILD_SERVER=0",
