@@ -16,6 +16,10 @@
   已有文件與測試，並已準備好提供外部使用者使用。
   [1.0 test matrix](https://orbit.dotw.me/docs/1.0-test-matrix) 記錄該 tag 所需的平台證據，
   以及目前實際已驗證的項目。
+- Release candidate（例如 `v1.0.0-rc.1`）會在 stable tag 之前以 GitHub
+  pre-release 發布。Installer、`orbit update`、Homebrew 與 Scoop 都會略過它；
+  要安裝請指定 tag：`ORBIT_VERSION=v1.0.0-rc.1`。Candidate 通過後，再從同一個
+  commit 發布 stable tag。
 - 已發布的 GitHub Release 不可修改；其 tag 與 assets 都不能變更或重用。
   修正必須發布成新版本。
 
