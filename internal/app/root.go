@@ -243,6 +243,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.AddCommand(traceCmd())
 	rootCmd.AddCommand(tracingCmd())
 	configureContextualRootHelp(rootCmd)
+	rejectUnknownSubcommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		err = contextualizeUnknownFlag(rootCmd, err)
