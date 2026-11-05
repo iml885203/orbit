@@ -50,6 +50,12 @@ Skills 只放一份在 `.claude/skills/`；Claude Code 直接發現它們，Code
 - `/orbit-review` —— review unstaged + staged 的改動
 - `/orbit-review <base>` —— review 分支 vs base（例如 `/orbit-review main`）
 
+## 開 issue
+
+- `/orbit-issue-create` —— 起草 issue，用 reviewer sub-agent 對照程式碼驗證其中的
+  說法，再開出去。請用它，不要直接手寫 issue：它防的是「信心十足卻是錯的
+  issue」，這種 issue 比沒開還糟。
+
 ## 想看更多
 
 - [docs/architecture.zh-TW.md](docs/architecture.zh-TW.md) —— state machine 與 event model

@@ -58,7 +58,7 @@ orbit daemon start         # API backend + dashboard on :19800
 
 ## Build a custom Orbit distribution
 
-The extension contract remains available when config alone is insufficient. A team can fork this repo or require it as a Go module, provide its own `cmd/orbit`, and pass additional `extension.Extension` values to `app.Main`. Each extension can contribute CLI commands, daemon setup and hooks, doctor and init behavior, and distribution defaults; see [extension/extension.go](https://github.com/iml885203/orbit/blob/main/extension/extension.go).
+When config alone is insufficient, a team can fork this repository and register its own feature set in `cmd/orbit`, passing additional `extension.Extension` values to `app.Main`. Each extension can contribute CLI commands, daemon setup and hooks, doctor and init behavior, and distribution defaults; see [internal/extension/extension.go](https://github.com/iml885203/orbit/blob/main/internal/extension/extension.go). The packages are internal, so this works only inside a fork: Orbit has no public Go API ([versioning](versioning.md#stable-contracts-from-v1)).
 
 The UI build retains three compile-time seams in [ui/vite.config.ts](https://github.com/iml885203/orbit/blob/main/ui/vite.config.ts):
 

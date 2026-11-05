@@ -20,7 +20,7 @@ runnable environment, see the
 - [`externals`](#externals)
 - [Optional extension: `sqlserver`](#sqlserver)
 - [Extension-owned sections](#extension-owned-sections)
-- [User settings (`~/.orbit/settings.json`)](#user-settings-orbit-settings-json)
+- [User settings (`~/.orbit/settings.json`)](#user-settings-orbitsettingsjson)
 - [Variable substitution](#variable-substitution)
 - [Low-level runtime overrides](#low-level-runtime-overrides)
 

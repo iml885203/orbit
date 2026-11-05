@@ -16,9 +16,8 @@ publishing details.
 
 ## Supported versions
 
-Orbit is currently pre-1.0. Security fixes target the latest published preview
-and the `main` branch; older previews may require upgrading. The stable support
-policy will be finalized with `v1.0.0`.
+Security fixes ship in the latest 1.x release and on `main`. Older releases
+are not patched; upgrade to the latest release to receive a fix.
 
 ## Scope
 

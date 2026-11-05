@@ -1,8 +1,8 @@
 import { exec, home } from "herdr";
 
 const LOG_LINES = 1000;
-// Herdr's exec stops a program after 30 s, so a restart or stop asks Orbit to give up a little
-// sooner and report `timeout` itself instead of being cut off mid-wait.
+// Herdr's exec stops a program after 30 s, so a restart asks Orbit to give up a little sooner and
+// report `timeout` itself instead of being cut off mid-wait. `orbit down` has no --timeout.
 const ACTION_TIMEOUT = "25s";
 const TRACE_LIMIT = 100;
 const SQL_DIFF_CONCURRENCY = 4;
@@ -233,12 +233,13 @@ export async function loadTrace(instance, id) {
 /**
  * Orbit waits until the restart or stop is verified, so this resolves with what happened: the
  * message Orbit reports (for example that nothing was running) or the resources it acted on.
- * A `timeout` error means Orbit is still working after ACTION_TIMEOUT, not that it failed.
+ * A restart's `timeout` error means Orbit is still working after ACTION_TIMEOUT, not that it failed.
  */
 export async function runAction(instance, action, name) {
   const command = { restart: "restart", stop: "down" }[action];
   if (!command) throw new Error(`unknown action ${action}`);
-  const data = await orbitData([...targetArgs(instance), command, name, "--timeout", ACTION_TIMEOUT, "--json"]);
+  const deadline = command === "restart" ? ["--timeout", ACTION_TIMEOUT] : [];
+  const data = await orbitData([...targetArgs(instance), command, name, ...deadline, "--json"]);
   const message = asText(data.message);
   const affected = asArray(data.resources).map((one) => asText(asObject(one).name, asText(one))).filter(Boolean);
   return { message, affected };

@@ -98,6 +98,18 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 
 結果是:`orbit down` 能可靠地回收整棵 process tree —— 不管是 shell、reload 中的 `dotnet watch` server,還是 `pnpm dev` 的 Vite instance —— 而不是只對 leader 送 signal、留下孫程序。
 
+Lifecycle 取消與明確的 stop 共用同一套 process group 終止流程。Restart 會等到
+那一代 process 確實結束、manager 紀錄移除後，才開始追蹤替代的 process；被取代
+那一代較晚送來的 exit 或 health 事件會被忽略。
+
+Process 的 PID/PGID ownership 在註冊後立刻持久化，早於回報 health。Daemon
+異常結束後，Orbit 會在正常啟動建立新 child 之前，安全地結束仍存活的已持久化
+process；若直接接管它，輸出 pipe 仍接在已死的 daemon 上，可能誤報恢復。已死的
+持久化 PID 會成為一般的 stopped service。Container 帶有 namespace、service 與
+config-fingerprint label，因此新 daemon 能接管完全相符的執行中 container，或
+安全替換過時、由 Orbit 擁有的 container。只有 Orbit 無法證明是自己擁有的
+resource，才會回報為外部 port 衝突。
+
 ## Health check types
 
 `internal/health/checker.go` 實作了五種 probe:

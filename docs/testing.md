@@ -79,7 +79,7 @@ behavior. Run `make test` after a coherent feature group and
 `make preflight` once before committing that group. Release-only journeys may
 remain slower because they prove installed binaries and real platform behavior.
 
-Use `make test-journeys` before a release candidate or after changing init,
+Use `make test-journeys` before a release or after changing init,
 environment selection, lifecycle orchestration, dependency recovery, or other
 cross-process behavior. It builds once, then reuses that exact binary for the
 empty-directory, local-adoption, and project-switch journeys and for the whole

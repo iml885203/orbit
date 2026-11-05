@@ -54,7 +54,7 @@ orbit daemon start         # API backend + dashboard on :19800
 
 ## 維護自訂的 Orbit 發行版
 
-當純設定不夠用時，extension contract 仍然可用。團隊可 fork 這個 repo，或將它作為 Go module require，提供自己的 `cmd/orbit`，並將額外的 `extension.Extension` 傳給 `app.Main`。每個 extension 可提供 CLI commands、daemon setup 與 hooks、doctor 與 init 行為，以及 distribution defaults；請見 [extension/extension.go](https://github.com/iml885203/orbit/blob/main/extension/extension.go)。
+當純設定不夠用時，團隊可 fork 這個 repository，在 `cmd/orbit` 註冊自己的功能，把額外的 `extension.Extension` 傳給 `app.Main`。每個 extension 可提供 CLI commands、daemon setup 與 hooks、doctor 與 init 行為，以及 distribution defaults；請見 [internal/extension/extension.go](https://github.com/iml885203/orbit/blob/main/internal/extension/extension.go)。這些 package 都在 internal 底下，所以只能在 fork 內使用：Orbit 沒有公開的 Go API（見 [versioning](versioning.zh-TW.md)）。
 
 UI build 在 [ui/vite.config.ts](https://github.com/iml885203/orbit/blob/main/ui/vite.config.ts) 保留三個編譯時 seam：
 

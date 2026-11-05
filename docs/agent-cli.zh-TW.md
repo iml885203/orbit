@@ -219,7 +219,9 @@ config。
 專案占用的 port 視為切換時可釋放。可能誤控另一個專案 resource 的操作指令會
 以 `project_context_inactive` 失敗；agent 應遵循唯一的 `orbit up --json`
 action。切換成功後，`up` 結果的 `data.context_switch` 會包含兩邊的專案名稱與
-啟動前停止的 resource。`orbit up -c <config>` 也以同樣方式切換明確指定的
+啟動前停止的 resource。有 resource 正在執行時，非互動或 JSON 模式的切換若沒帶
+`--yes`，會以 `confirmation_required` 失敗，並附上確切的 `orbit up --yes --json`
+action；目標會在這個確認之前先驗證，拒絕時不會停止任何 resource。`orbit up -c <config>` 也以同樣方式切換明確指定的
 config，確認後的 action 會保留 `-c`；其他指令遇到不同 config 時仍以
 `env_mismatch` fail closed，其 `next_command` 是 `orbit up -c <config> --json`。
 Inspect 遵守同一個 ownership boundary，不會把另一個專案的 resource 或

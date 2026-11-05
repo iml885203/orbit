@@ -9,30 +9,29 @@ so skill-only changes can ship on their own.
 
 - Private GitHub rehearsal releases began at `v0.0.1`.
 - The source repository became public during the pre-1.0 product-hardening
-  phase. All `0.x` releases are previews and may contain breaking changes.
-- GitHub titles `0.x` releases as `Orbit vX.Y.Z (Preview)`. They remain the
-  repository's installable latest release so the default installer and
-  `orbit update` always resolve the newest supported preview without requiring
-  users to choose a release channel.
-- The first stable release is `v1.0.0`. Publishing that tag means the
-  compatibility contracts below are documented, tested, and ready for external
-  users. [The 1.0 test matrix](1.0-test-matrix.md) holds the platform evidence
-  that tag requires and records what has actually been exercised.
-- A release candidate such as `v1.0.0-rc.1` is published as a GitHub
-  pre-release before the stable tag. The installers, `orbit update`, Homebrew
-  and Scoop skip it; install it by tag with `ORBIT_VERSION=v1.0.0-rc.1`. The
-  stable tag is then published from the same commit once the candidate passes.
+  phase. The `0.x` releases were previews, titled `Orbit vX.Y.Z (Preview)`, and
+  could contain breaking changes.
+- `v1.0.0` is the first stable release: the compatibility contracts below are
+  documented, tested, and ready for external users. [The 1.0 test
+  matrix](1.0-test-matrix.md) records the platform evidence behind it.
+- Each stable release is the repository's installable latest release, so the
+  default installer and `orbit update` resolve it without users choosing a
+  release channel.
+- A tag with a pre-release suffix, such as `v1.1.0-rc.1`, is published as a
+  GitHub pre-release. The installers, `orbit update`, Homebrew and Scoop skip
+  it; install one by tag with `ORBIT_VERSION=<tag>`. `v1.0.0` shipped without a
+  release candidate.
 - Published GitHub releases are immutable: their tag and assets cannot be
   changed or reused. Fixes are published as a new version.
 
-## Preview batching
+## Release batching
 
 Commits on `main` are unreleased work and may accumulate across several related
-fixes. A preview is cut only when the batch delivers one coherent user outcome
+fixes. A release is cut only when the batch delivers one coherent user outcome
 that can be stated and verified as an installed-user journey. A passing commit
 or one corrected edge case is not, by itself, a release boundary.
 
-Freeze a preview batch in this order:
+Freeze a release batch in this order:
 
 1. Complete the related implementation and its strongest practical journey.
 2. Review the combined user-visible difference from the previous release.

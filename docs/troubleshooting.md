@@ -10,7 +10,7 @@ problem persists, find the symptom or error below for the next step.
 | Startup stalls, health checks fail, or a port is in use | [Startup](#startup) |
 | Database unavailable, publish fails, or objects are missing | [SQL Server](#sql-server) |
 | Daemon unreachable, Dashboard won't open, or update pending | [Daemon](#daemon) |
-| Orbit directory is read-only or a container is missing | [Permissions](#file-system-permissions) · [CLI](#cli) |
+| Orbit directory is read-only or a container is missing | [Permissions](#file-system--permissions) · [CLI](#cli) |
 | Need logs or more context | [Diagnosis](#diagnosis) |
 
 ## Startup
