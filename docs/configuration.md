@@ -111,6 +111,7 @@ services:            # dev processes (dotnet, node, shell)
 groups:              # named service sets for batch start + dashboard clustering
 externals:           # placeholder nodes for non-orbit systems (kafka edges)
 <extension-key>:     # optional section owned by a compiled-in extension
+x-<name>:            # ignored; holds shared YAML anchors
 ```
 
 | Key | Type | Required | Purpose |
@@ -125,14 +126,35 @@ externals:           # placeholder nodes for non-orbit systems (kafka edges)
 | `externals` | map | no | Non-orbit producers/consumers rendered as placeholder graph nodes |
 | `sqlserver` | object | no | Explicit opt-in for SQL Server Database Projects |
 | `<extension-key>` | any | no | Feature-owned configuration registered by an extension compiled into this binary; accepted keys and shapes depend on the distribution |
+| `x-<name>` | any | no | Ignored by Orbit; a place to define YAML anchors |
 
 Orbit decodes the core schema and registered extension sections strictly.
 Unknown keys and misspelled fields fail before any container or host process
 starts. The error identifies the offending field and source line and suggests
 the closest supported field or enum value when the correction is unambiguous.
 The same guidance appears through `orbit doctor`, `orbit up`, and
-`orbit inspect --json`; Orbit does not silently ignore configuration it cannot
-understand.
+`orbit inspect --json`. Apart from `x-` keys, Orbit does not silently ignore
+configuration it cannot understand.
+
+Top-level keys starting with `x-` are ignored, as in Docker Compose. Use them
+to define YAML anchors once and merge them into several services with `<<:`:
+
+```yaml
+x-dotnet-env: &dotnet-env
+  ASPNETCORE_ENVIRONMENT: Development
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "true"
+
+services:
+  api:
+    type: dotnet
+    env:
+      <<: *dotnet-env
+      HTTP_PORTS: "8080"
+```
+
+Keys written next to `<<:` override the merged values. Anchors resolve within
+the file that defines them: with `extends`, a child cannot reference a parent's
+anchor, and `x-` keys are never inherited.
 
 The former top-level `previewOnly` field has been removed. Delete it from
 existing environment files; Orbit rejects the obsolete field with migration

@@ -151,7 +151,7 @@ func validateExtensionSectionNamesLocked(cfg *Config) error {
 			if suggestion := closestName(name, known); suggestion != "" {
 				hint = fmt.Sprintf(` (did you mean %q?)`, suggestion)
 			}
-			return fmt.Errorf("line %d: unknown top-level section %s%s (available: %s)", node.Line, name, hint, strings.Join(known, ", "))
+			return fmt.Errorf("line %d: unknown top-level section %s%s (available: %s; keys starting with x- are ignored)", node.Line, name, hint, strings.Join(known, ", "))
 		}
 	}
 	return nil

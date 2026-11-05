@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -74,5 +75,81 @@ func TestDecodeStrictSuggestsExtensionField(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), `did you mean "endpoint"`) {
 		t.Fatalf("DecodeStrict() = %v, want extension field suggestion", err)
+	}
+}
+
+func TestLoadIgnoresXPrefixedTopLevelKeys(t *testing.T) {
+	path := writeOrbitYAML(t, `version: "3"
+x-notes:
+  owner: platform
+  anything: [goes, here]
+x-empty:
+services:
+  api:
+    type: node
+    command: npm start
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for name := range cfg.Extensions {
+		if strings.HasPrefix(name, "x-") {
+			t.Fatalf("x- key %q leaked into the loaded config", name)
+		}
+	}
+	if cfg.Extension("x-notes") != nil {
+		t.Fatal("x-notes decoded as an extension section")
+	}
+}
+
+func TestLoadSharesXAnchorsThroughMergeKeys(t *testing.T) {
+	path := writeOrbitYAML(t, `version: "3"
+x-dotnet-env: &dotnet-env
+  ASPNETCORE_ENVIRONMENT: Development
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "true"
+
+services:
+  api:
+    type: dotnet
+    command: dotnet run
+    env:
+      <<: *dotnet-env
+      HTTP_PORTS: "8080"
+  worker:
+    type: dotnet
+    command: dotnet run
+    env:
+      <<: *dotnet-env
+      ASPNETCORE_ENVIRONMENT: Staging
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	wantAPI := map[string]string{
+		"ASPNETCORE_ENVIRONMENT": "Development",
+		"OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+		"HTTP_PORTS": "8080",
+	}
+	if got := cfg.Services["api"].Env; !reflect.DeepEqual(got, wantAPI) {
+		t.Fatalf("api env = %#v, want %#v", got, wantAPI)
+	}
+	if got := cfg.Services["worker"].Env["ASPNETCORE_ENVIRONMENT"]; got != "Staging" {
+		t.Fatalf("worker ASPNETCORE_ENVIRONMENT = %q, want explicit key to win over the anchor", got)
+	}
+}
+
+func TestLoadRejectsUnknownTopLevelKeyWithoutXPrefix(t *testing.T) {
+	path := writeOrbitYAML(t, "version: \"3\"\nx_shared:\n  LOG_LEVEL: debug\n")
+
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "unknown top-level section x_shared") {
+		t.Fatalf("Load error = %v, want unknown section", err)
+	}
+	if !strings.Contains(err.Error(), "keys starting with x- are ignored") {
+		t.Fatalf("Load error = %v, want x- guidance", err)
 	}
 }

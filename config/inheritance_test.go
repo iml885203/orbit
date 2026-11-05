@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -315,5 +316,55 @@ func TestInheritanceFilesResolvesParentBesideChild(t *testing.T) {
 	wantParent := filepath.Join(dir, "parents", "base.yaml")
 	if len(paths) != 2 || paths[0] != childPath || paths[1] != wantParent {
 		t.Fatalf("paths = %#v, want child and %q", paths, wantParent)
+	}
+}
+
+func TestLoadExtendsResolvesXAnchorsWithinEachFile(t *testing.T) {
+	dir := t.TempDir()
+	writeEnvFile(t, dir, "base.yaml", `
+version: "3"
+x-env: &env
+  LOG_LEVEL: info
+  REGION: local
+services:
+  api:
+    type: node
+    command: npm start
+    env:
+      <<: *env
+  worker:
+    type: node
+    command: npm run worker
+    env:
+      <<: *env
+`)
+	childPath := writeEnvFile(t, dir, "child.yaml", `
+extends: base.yaml
+x-env: &env
+  LOG_LEVEL: debug
+  TRACE: "true"
+x-unused:
+services:
+  api:
+    env:
+      <<: *env
+`)
+
+	cfg, err := Load(childPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for name := range cfg.Extensions {
+		if strings.HasPrefix(name, "x-") {
+			t.Fatalf("x- key %q leaked into the inherited config", name)
+		}
+	}
+	wantAPI := map[string]string{"LOG_LEVEL": "debug", "REGION": "local", "TRACE": "true"}
+	if got := cfg.Services["api"].Env; !reflect.DeepEqual(got, wantAPI) {
+		t.Fatalf("api env = %#v, want %#v", got, wantAPI)
+	}
+	wantWorker := map[string]string{"LOG_LEVEL": "info", "REGION": "local"}
+	if got := cfg.Services["worker"].Env; !reflect.DeepEqual(got, wantWorker) {
+		t.Fatalf("worker env = %#v, want parent anchor only %#v", got, wantWorker)
 	}
 }

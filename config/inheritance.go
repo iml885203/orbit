@@ -40,17 +40,44 @@ func loadInheritedDocument(path string) (*yaml.Node, string, error) {
 	if err := validateSourceSchema(parentPath, parentExpanded, false); err != nil {
 		return nil, "", err
 	}
-	if nullPath := inheritedNullPath(parent.Content[0], child.Content[0], nil); nullPath != "" {
+	parentRoot, err := inheritableRoot(parent, parentPath)
+	if err != nil {
+		return nil, "", err
+	}
+	childRoot, err := inheritableRoot(child, path)
+	if err != nil {
+		return nil, "", err
+	}
+	if nullPath := inheritedNullPath(parentRoot, childRoot, nil); nullPath != "" {
 		return nil, "", fmt.Errorf("parsing env file %s: inherited key %s cannot be null; extends does not support delete markers", path, nullPath)
 	}
 
 	merged := *child
-	merged.Content = []*yaml.Node{mergeYAMLNodes(parent.Content[0], child.Content[0])}
+	merged.Content = []*yaml.Node{mergeYAMLNodes(parentRoot, childRoot)}
 	expanded, err := yaml.Marshal(&merged)
 	if err != nil {
 		return nil, "", fmt.Errorf("parsing env file %s: %w", path, err)
 	}
 	return &merged, string(expanded), nil
+}
+
+// inheritableRoot drops the file's x- keys and resolves its anchors before
+// merging: once the trees are combined, an alias could precede its anchor or
+// name one that only exists in the other file.
+func inheritableRoot(document *yaml.Node, path string) (*yaml.Node, error) {
+	root := *document.Content[0]
+	root.Content = nil
+	for i := 0; i < len(document.Content[0].Content); i += 2 {
+		key, value := document.Content[0].Content[i], document.Content[0].Content[i+1]
+		if !isIgnoredTopLevelKey(key.Value) {
+			root.Content = append(root.Content, key, value)
+		}
+	}
+	inlined, err := inlineAliases(&root, map[*yaml.Node]bool{})
+	if err != nil {
+		return nil, fmt.Errorf("parsing env file %s: %w", path, err)
+	}
+	return inlined, nil
 }
 
 func inheritedNullPath(parent, child *yaml.Node, path []string) string {
@@ -99,6 +126,7 @@ func validateSourceSchema(path, expanded string, allowsExtends bool) error {
 	if err := dec.Decode(&cfg); err != nil {
 		return fmt.Errorf("parsing env file %s: %w", path, addSchemaFieldGuidance(err, &cfg))
 	}
+	dropIgnoredTopLevelKeys(&cfg)
 	if allowsExtends {
 		delete(cfg.Extensions, "extends")
 	}

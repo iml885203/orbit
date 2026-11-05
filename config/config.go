@@ -43,6 +43,7 @@ func Load(path string) (*Config, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing env file %s: %w", path, addSchemaFieldGuidance(err, &cfg))
 	}
+	dropIgnoredTopLevelKeys(&cfg)
 
 	// Registered extension sections (allowlist + decoders): the inline
 	// Extensions map absorbed every non-core top-level key, so this is

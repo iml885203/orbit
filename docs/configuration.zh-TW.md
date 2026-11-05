@@ -107,6 +107,7 @@ services:            # dev processes (dotnet, node, shell)
 groups:              # 具名 service 集合 — 批次啟動 + dashboard 分群
 externals:           # 非 orbit 系統的佔位節點（kafka edges）
 <extension-key>:     # optional：由編譯進 binary 的 extension 擁有
+x-<name>:            # Orbit 會忽略；用來放共用的 YAML anchors
 ```
 
 | Key | Type | Required | 用途 |
@@ -121,12 +122,33 @@ externals:           # 非 orbit 系統的佔位節點（kafka edges）
 | `externals` | map | no | 非 orbit 管理的 producer/consumer，畫成佔位 graph 節點 |
 | `sqlserver` | object | no | 明確啟用 SQL Server Database Projects |
 | `<extension-key>` | any | no | 由編譯進此 binary 的 extension 註冊並擁有；可接受的 key 與形狀依發行版而定 |
+| `x-<name>` | any | no | Orbit 會忽略；用來定義 YAML anchors |
 
 Orbit 會嚴格 decode core schema 與已註冊的 extension sections。未知 key
 或拼錯的 field 會在任何 container 或 host process 啟動前失敗，錯誤也會指出
 有問題的 field 與來源行號；若能明確判斷，還會建議最接近的合法 field 或
 enum value。`orbit doctor`、`orbit up` 與 `orbit inspect --json` 都會提供
-同一份指引；Orbit 不會安靜忽略它無法理解的設定。
+同一份指引。除了 `x-` keys 之外，Orbit 不會安靜忽略它無法理解的設定。
+
+和 Docker Compose 一樣，以 `x-` 開頭的 top-level key 會被忽略。可以在這裡
+定義一次 YAML anchor，再用 `<<:` 合併進多個 services：
+
+```yaml
+x-dotnet-env: &dotnet-env
+  ASPNETCORE_ENVIRONMENT: Development
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "true"
+
+services:
+  api:
+    type: dotnet
+    env:
+      <<: *dotnet-env
+      HTTP_PORTS: "8080"
+```
+
+和 `<<:` 寫在同一層的 key 會覆蓋合併進來的值。Anchor 只在定義它的檔案內
+有效：使用 `extends` 時，child 不能引用 parent 的 anchor，`x-` keys 也不會被
+繼承。
 
 先前的 top-level `previewOnly` field 已移除。請從既有 environment files
 刪除此 field；Orbit 會拒絕過時設定並顯示遷移指引。現在每個合法 environment
