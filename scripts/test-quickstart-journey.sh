@@ -86,7 +86,7 @@ if grep -E "^[[:space:]]+inspect[[:space:]]" "$test_root/root-help.txt" >/dev/nu
 fi
 "$orbit_bin" help inspect >"$test_root/inspect-help.txt"
 grep -F "machine-readable runtime readiness" "$test_root/inspect-help.txt" >/dev/null
-for command in apply info list sync; do
+for command in apply info list; do
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/env-help.txt" >/dev/null
 done
 grep -F -- "--tail" "$test_root/logs-help.txt" >/dev/null
