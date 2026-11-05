@@ -71,6 +71,18 @@ jobs:
           mkdir -p bin
           go build -ldflags "-s -w -X main.version=${ORBIT_SMOKE_VERSION}" -o bin/orbit ./cmd/orbit
           ORBIT_BIN="$PWD/bin/orbit" go test -tags=platformsmoke -run 'TestPlatformSmoke(CleanUserJourney|AutomaticUpdateWorker)' -v ./app
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: ${{ startsWith(matrix.runner, 'macos') }}
+        with:
+          dotnet-version: 8.0.x
+      # Linux runs this journey on every pull request (ci.yml); macOS runs it
+      # here, where dotnet watch and the build gate meet a different OS.
+      - name: Start a .NET service in build and watch modes
+        if: ${{ startsWith(matrix.runner, 'macos') }}
+        shell: bash
+        env:
+          ORBIT_E2E_REQUIRE_DOTNET: "1"
+        run: ORBIT_BIN="$PWD/bin/orbit" go test -tags=e2e -count=1 -run '^TestE2E_DotnetServiceStartsInBuildAndWatchModes$' -v ./app
       - name: Exercise native Unix uninstall command
         if: ${{ !matrix.windows }}
         shell: bash
