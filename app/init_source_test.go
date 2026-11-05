@@ -363,3 +363,36 @@ func TestInitJSONReportsAWorkspaceResolvedDuringInit(t *testing.T) {
 		t.Fatalf("stored workspace = %q, want %q", stored.Workspace, workspace)
 	}
 }
+
+// When the sync fails and init continues with the cached environments, the
+// JSON still names the source and its workspace, as workspace_root used to.
+func TestInitJSONReportsTheWorkspaceWhenTheSyncFails(t *testing.T) {
+	orbitHome := t.TempDir()
+	local := t.TempDir()
+	writeInitSourceEnvs(t, local)
+	workspace, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := runInitSourceHelper(t, orbitHome, true, "--yes", "--source", "mine", "--path", local, "--workspace", workspace, "--env", "dev")
+	decodeInitSourceData(t, first)
+	if err := os.RemoveAll(local); err != nil {
+		t.Fatal(err)
+	}
+
+	second := runInitSourceHelper(t, orbitHome, true, "--yes", "--source", "mine", "--env", "dev")
+
+	var envelope struct {
+		Data struct {
+			Source *struct {
+				Workspace string `json:"workspace"`
+			} `json:"source"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(second.stdout), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, second.stdout)
+	}
+	if envelope.Data.Source == nil || envelope.Data.Source.Workspace != workspace {
+		t.Fatalf("data.source = %+v, want workspace %q\nstdout:\n%s", envelope.Data.Source, workspace, second.stdout)
+	}
+}

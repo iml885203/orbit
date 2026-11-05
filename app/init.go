@@ -397,9 +397,15 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			if replaceErr := registry.Replace(source); replaceErr != nil {
 				return replaceErr
 			}
-			if result.Source != nil {
-				result.Source.Workspace = workspaceRoot
-			}
+		}
+		// source.workspace is where the JSON reports the workspace, so it must
+		// carry one resolved here, and appear even when the sync failed and
+		// init continues with the cached environments.
+		if result.Source == nil {
+			reported := source
+			result.Source = &reported
+		} else {
+			result.Source.Workspace = workspaceRoot
 		}
 		if err := settings.ClearLegacyEnvironmentSettings(); err != nil {
 			return err
