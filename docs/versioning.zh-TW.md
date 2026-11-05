@@ -84,8 +84,6 @@ MINOR release 可以加入 additive change。JSON consumer 必須忽略未知欄
 未文件化的 internal implementation、daemon HTTP API、dashboard markup 與
 styling、log 文字及 test fixtures 不屬於相容性契約。Daemon HTTP API 是 CLI、
 dashboard 與 daemon 之間的通道；agent 與 script 應改用 CLI 的 `--json` 介面。
-放在本 repo `integrations/` 目錄的整合可以呼叫它，並在它使用的 route 變動時於同一個
-change 一起更新。
 
 ## Plugin 版本
 

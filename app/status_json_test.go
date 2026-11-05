@@ -311,6 +311,27 @@ func TestStatusJSONReportsHowAnExitedContainerEnded(t *testing.T) {
 	}
 }
 
+// Integrations render a container's image and its sidecar links from
+// `orbit status --json`, so the CLI carries what the daemon reports.
+func TestStatusJSONCarriesContainerImageAndSidecars(t *testing.T) {
+	cfg := &config.Config{Containers: map[string]*config.Container{"kafka": {}}}
+	running := map[string]daemon.ResourceStatus{
+		"kafka": {
+			Name: "kafka", Kind: daemon.ResourceKindContainer, State: "healthy",
+			Image:    "bitnami/kafka:3.7",
+			Sidecars: []daemon.SidecarInfo{{Name: "kafka-ui", URL: "http://localhost:28090"}},
+		},
+	}
+	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	kafka := envelope.Data.Resources[0]
+	if kafka.Image != "bitnami/kafka:3.7" {
+		t.Fatalf("image = %q, want the daemon's resolved image", kafka.Image)
+	}
+	if len(kafka.Sidecars) != 1 || kafka.Sidecars[0].Name != "kafka-ui" || kafka.Sidecars[0].URL != "http://localhost:28090" {
+		t.Fatalf("sidecars = %+v, want the daemon's sidecar links", kafka.Sidecars)
+	}
+}
+
 func TestStatusDetailKeepsExitAndApplicationEvidence(t *testing.T) {
 	service := daemon.ResourceStatus{
 		Name:            "worker",

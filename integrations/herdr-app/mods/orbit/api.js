@@ -1,6 +1,9 @@
 import { exec, home } from "herdr";
 
 const LOG_LINES = 1000;
+// Herdr's exec stops a program after 30 s, so a restart or stop asks Orbit to give up a little
+// sooner and report `timeout` itself instead of being cut off mid-wait.
+const ACTION_TIMEOUT = "25s";
 const TRACE_LIMIT = 100;
 const SQL_DIFF_CONCURRENCY = 4;
 
@@ -39,30 +42,6 @@ function parseJson(text, what) {
   }
 }
 
-async function request(dashboard, path, options) {
-  if (!dashboard) throw Object.assign(new Error("Orbit reports no dashboard for this instance"), { unreachable: true });
-  let response;
-  try {
-    response = await fetch(`${dashboard}${path}`, options);
-  } catch (error) {
-    const unreachable = new Error(`Orbit daemon unreachable at ${dashboard}: ${errorText(error)}`);
-    throw Object.assign(unreachable, { unreachable: true });
-  }
-  const text = await response.text();
-  const body = text.trim() ? parseJson(text, path) : {};
-  const reported = asText(asObject(body).error);
-  if (!response.ok || reported) throw new Error(reported || `${path}: HTTP ${response.status}`);
-  return body;
-}
-
-function getJson(dashboard, path) {
-  return request(dashboard, path, undefined);
-}
-
-function postJson(dashboard, path) {
-  return request(dashboard, path, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-}
-
 function parseHealth(raw) {
   const health = asObject(raw);
   const attempts = asNumber(health.attempts);
@@ -99,22 +78,6 @@ function envName(context, configPath) {
   return configPath.split("/").pop()?.replace(/\.ya?ml$/, "") || "unknown";
 }
 
-export function parseDaemonStatus(raw) {
-  const body = asObject(raw);
-  const context = asObject(body.context);
-  const managed = asObject(context.managed_selection);
-  const configPath = asText(body.config_path) || asText(context.config_path);
-  const selected = managed.active === false ? asText(managed.name) : "";
-  return {
-    source: "daemon", env: envName(context, configPath), configPath, selected, error: "",
-    resources: sortResources(asArray(body.resources).map(parseResource)),
-  };
-}
-
-export async function loadDaemonStatus(dashboard) {
-  return parseDaemonStatus(await getJson(dashboard, "/api/status"));
-}
-
 // cwd is HOME so Orbit never picks up a project's orbit.yaml: the default runtime is then the
 // environment selected with `orbit switch`, the one its daemon runs.
 async function runOrbit(args) {
@@ -135,7 +98,7 @@ async function orbitJson(args) {
 
 function cliError(body) {
   const error = asObject(body.error);
-  const message = asText(error.message) || "orbit status failed";
+  const message = asText(error.message) || "orbit failed";
   const hint = asText(error.hint);
   return hint ? `${message}\n${hint}` : message;
 }
@@ -193,18 +156,41 @@ async function inspectedEnv(instance) {
   return asText(asObject(asObject(body.data).environment).selected_name);
 }
 
-export async function loadCliStatus(instance) {
+/**
+ * One `orbit status --json` call. A running daemon makes the panel live and names the environment
+ * the way the daemon does; otherwise the configured resources show as stopped, with Orbit's error.
+ */
+export async function loadStatus(instance) {
   const body = await orbitJson([...targetArgs(instance), "status", "--json"]);
   const data = asObject(body.data);
-  const env = asText(asObject(data.environment).selected_name);
+  const daemon = asObject(data.daemon);
   const resources = sortResources(asArray(data.resources).map((raw) => ({ ...parseResource(raw), state: asText(asObject(raw).state) || "stopped" })));
+  // A daemon serving another environment reports the selected config's saved states, not live ones.
+  if (body.ok === true && daemon.running === true && daemon.context_mismatch !== true) {
+    const context = asObject(daemon.context);
+    const managed = asObject(context.managed_selection);
+    const configPath = asText(daemon.config_path) || asText(context.config_path);
+    const selected = managed.active === false ? asText(managed.name) : "";
+    return { source: "daemon", env: envName(context, configPath), configPath, selected, error: "", resources };
+  }
+  const env = asText(asObject(data.environment).selected_name);
+  if (body.ok === true && daemon.context_mismatch === true) {
+    return { source: "cli", env: env || "unknown", configPath: "", selected: "", error: "Orbit's daemon is running another environment; switch to it or restart the daemon here.", resources };
+  }
   if (body.ok === true) return { source: "cli", env: env || "unknown", configPath: "", selected: "", error: "", resources };
   return { source: "cli", env: env || (await inspectedEnv(instance)) || instance?.env || "unknown", configPath: "", selected: "", error: cliError(body), resources };
 }
 
-export async function loadLogs(dashboard, name) {
-  const body = asObject(await getJson(dashboard, `/api/logs/${encodeURIComponent(name)}?lines=${LOG_LINES}`));
-  return asArray(body.lines).map((line) => asText(line, JSON.stringify(line)));
+/** A resource that never produced output reports `logs_unavailable`; the panel shows an empty log. */
+export async function loadLogs(instance, name) {
+  let data;
+  try {
+    data = await orbitData([...targetArgs(instance), "logs", name, "--lines", String(LOG_LINES), "--json"]);
+  } catch (error) {
+    if (error?.code === "logs_unavailable") return [];
+    throw error;
+  }
+  return asArray(data.lines).map((line) => asText(line, JSON.stringify(line)));
 }
 
 function parseTraceSummary(raw) {
@@ -225,25 +211,37 @@ function parseSpan(raw) {
   };
 }
 
-export async function loadTraces(dashboard, includeHealth) {
-  const query = includeHealth ? `limit=${TRACE_LIMIT}&include_health=1` : `limit=${TRACE_LIMIT}`;
-  const body = await getJson(dashboard, `/api/traces?${query}`);
-  return asArray(body).map(parseTraceSummary).filter((one) => one.id);
+export async function loadTraces(instance, includeHealth) {
+  const args = [...targetArgs(instance), "trace", "--limit", String(TRACE_LIMIT), ...(includeHealth ? ["--include-health"] : []), "--json"];
+  const data = await orbitData(args);
+  return asArray(data.traces).map(parseTraceSummary).filter((one) => one.id);
 }
 
-export async function loadTrace(dashboard, id) {
-  const body = asObject(await getJson(dashboard, `/api/traces/${encodeURIComponent(id)}`));
-  return { ...parseTraceSummary(body), spans: asArray(body.spans).map(parseSpan) };
+/** The trace and the stdout lines that name it, from one `orbit trace <id> --logs --json`. */
+export async function loadTrace(instance, id) {
+  const body = await orbitJson([...targetArgs(instance), "trace", id, "--logs", "--json"]);
+  if (body.ok !== true) throw Object.assign(new Error(cliError(body)), { code: asText(asObject(body.error).code) });
+  const data = asObject(body.data);
+  const detail = { ...parseTraceSummary(data), spans: asArray(data.spans).map(parseSpan) };
+  const unavailable = asArray(body.notices).map(asObject).find((one) => one.code === "stdout_lines_unavailable");
+  const logs = unavailable
+    ? [`(trace logs unavailable: ${asText(unavailable.message)})`]
+    : asArray(data.stdout_lines).map(asObject).map((one) => `[${asText(one.service, "?")}] ${asText(one.line)}`);
+  return { detail, logs };
 }
 
-export async function loadTraceLogs(dashboard, id) {
-  const body = asObject(await getJson(dashboard, `/api/traces/${encodeURIComponent(id)}/logs`));
-  return asArray(body.lines).map(asObject).map((one) => `[${asText(one.service, "?")}] ${asText(one.line)}`);
-}
-
-export async function runAction(dashboard, action, name) {
-  if (action !== "restart" && action !== "stop") throw new Error(`unknown action ${action}`);
-  await postJson(dashboard, `/api/${action}/${encodeURIComponent(name)}`);
+/**
+ * Orbit waits until the restart or stop is verified, so this resolves with what happened: the
+ * message Orbit reports (for example that nothing was running) or the resources it acted on.
+ * A `timeout` error means Orbit is still working after ACTION_TIMEOUT, not that it failed.
+ */
+export async function runAction(instance, action, name) {
+  const command = { restart: "restart", stop: "down" }[action];
+  if (!command) throw new Error(`unknown action ${action}`);
+  const data = await orbitData([...targetArgs(instance), command, name, "--timeout", ACTION_TIMEOUT, "--json"]);
+  const message = asText(data.message);
+  const affected = asArray(data.resources).map((one) => asText(asObject(one).name, asText(one))).filter(Boolean);
+  return { message, affected };
 }
 
 /**

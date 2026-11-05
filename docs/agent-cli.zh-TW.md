@@ -148,7 +148,8 @@ Orbit 還在等 container 變 healthy 時，若 container 停止，等待會立�
 
 停在 `starting` 的 resource 會回報它停在哪裡。`starting_phase` 為
 `launching`（port 檢查、`pre_start`、啟動 process 或 container）或 `probing`
-（等待 readiness）。受監管的 host process 會帶 `pid`。`http`、`tcp`、`exec` 或
+（等待 readiness）。受監管的 host process 會帶 `pid`；執行中的 container 會帶解析後的
+`image`，有 sidecar 時另帶 `sidecars`（`{name, url}`）。`http`、`tcp`、`exec` 或
 `healthcheck` check 的 probe 一旦開始（`log` check 沒有 probe），
 `health_progress` 就帶 `attempts`、`max_retries`、`last_err`、`recovering`、
 `probe_started_at`（只在 probe 進行中出現）、`last_probe_at`（最近一次 probe
@@ -375,8 +376,11 @@ event 取代先前的。
 典型 agent 工作流：`orbit trace --search <路徑或文字> --json`（或
 `orbit trace --json` → 挑出 errored trace）→
 `orbit trace <id> --logs --json` 找失敗的 span，並取得帶有該 trace id 的 OTLP
-log record（`data.logs`）。該 trace 的 stdout log 行不在 JSON 裡；人類可讀的
-`orbit trace <id> --logs` 輸出會列出它們。
+log record（`data.logs`），以及提到該 trace 的 stdout log 行
+（`data.stdout_lines`，每筆為 `{service, line}`）。OTLP log record 只存在於有匯出
+log 的服務；stdout 行則是在各服務仍保留在 buffer 的輸出中，以 trace id 比對而得。
+任一份讀取失敗時，該清單為 `[]`，`notices` 會有 `log_records_unavailable` 或
+`stdout_lines_unavailable`。
 
 ### Log records
 

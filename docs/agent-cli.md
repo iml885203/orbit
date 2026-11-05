@@ -173,6 +173,8 @@ relying on `error.code` alone: a dependent resource can be reported first as
 A resource that stays `starting` reports where it stopped. `starting_phase`
 is `launching` (port check, `pre_start`, process exec or container start) or
 `probing` (waiting for readiness). A supervised host process carries its `pid`.
+A running container carries its resolved `image`, and `sidecars` (`{name, url}`)
+when it has any.
 Once a probe of an `http`, `tcp`, `exec`, or `healthcheck` check has started
 (a `log` check has no probes), `health_progress` carries `attempts`,
 `max_retries`, `last_err`, `recovering`, `probe_started_at` (present only while
@@ -524,8 +526,10 @@ accumulates spans; the latest event supersedes earlier ones.
 A typical agent workflow: `orbit trace --search <path or text> --json` (or
 `orbit trace --json` → pick the errored trace) →
 `orbit trace <id> --logs --json` to find the failing span and the OTLP log
-records stamped with the trace id (`data.logs`). The trace's stdout lines are
-not in the JSON; the human `orbit trace <id> --logs` output shows them.
+records stamped with the trace id (`data.logs`), plus the stdout lines that
+name the trace (`data.stdout_lines`, each `{service, line}`). OTLP records exist
+only for services that export logs; stdout lines are matched by trace id in
+every service's output while it is still buffered.
 
 ### Log records
 
@@ -574,9 +578,9 @@ across a restart). The page then starts at the oldest retained record, and the
 human footer says so. Take a fresh `latestSeq` before relying on the cursor
 again.
 
-`orbit trace <id> --logs --json` still returns the trace when the log records
-cannot be read: `data.logs` is `[]` and `notices` holds a
-`log_records_unavailable` entry whose `message` carries the error.
+`orbit trace <id> --logs --json` still returns the trace when either read
+fails: the failed list is `[]` and `notices` holds a `log_records_unavailable`
+or `stdout_lines_unavailable` entry whose `message` carries the error.
 
 ## Inspect
 
