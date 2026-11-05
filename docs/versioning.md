@@ -18,6 +18,10 @@ so skill-only changes can ship on their own.
   compatibility contracts below are documented, tested, and ready for external
   users. [The 1.0 test matrix](1.0-test-matrix.md) holds the platform evidence
   that tag requires and records what has actually been exercised.
+- A release candidate such as `v1.0.0-rc.1` is published as a GitHub
+  pre-release before the stable tag. The installers, `orbit update`, Homebrew
+  and Scoop skip it; install it by tag with `ORBIT_VERSION=v1.0.0-rc.1`. The
+  stable tag is then published from the same commit once the candidate passes.
 - Published GitHub releases are immutable: their tag and assets cannot be
   changed or reused. Fixes are published as a new version.
 
