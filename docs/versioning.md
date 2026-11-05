@@ -106,16 +106,19 @@ The following surfaces are compatibility contracts:
 - agent-facing JSON envelopes and their named schema versions;
 - environment YAML schema and validation behavior;
 - persisted user settings;
-- daemon HTTP API;
 - public extension API.
 
-Additive changes are allowed in MINOR releases. Consumers of JSON and HTTP
-responses must ignore unknown fields. Removing or renaming a field, command,
+Additive changes are allowed in MINOR releases. Consumers of JSON responses
+must ignore unknown fields. Removing or renaming a field, command,
 flag, configuration key, or public Go symbol requires either a new named schema
 version or a MAJOR Orbit release.
 
-Undocumented internals, dashboard markup and styling, log wording, and test
-fixtures are not compatibility contracts.
+Undocumented internals, the daemon HTTP API, dashboard markup and styling, log
+wording, and test fixtures are not compatibility contracts. The daemon HTTP API
+is the channel between the CLI, the dashboard, and the daemon; agents and
+scripts use the CLI `--json` surface instead. Integrations kept in this
+repository's `integrations/` directory may call it, and are updated in the same
+change as any route they use.
 
 ## Plugin version
 

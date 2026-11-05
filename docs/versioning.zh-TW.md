@@ -75,15 +75,17 @@ bytes。這個 runtime boundary 與發布流程的驗證、build provenance 各�
 - Agent 使用的 JSON envelope 與具名 schema version；
 - Environment YAML schema 與 validation 行為；
 - 儲存於本機的 user settings；
-- Daemon HTTP API；
 - Public extension API。
 
-MINOR release 可以加入 additive change。JSON 與 HTTP consumer 必須忽略
-未知欄位。移除或重新命名欄位、command、flag、設定 key 或 public Go symbol，
+MINOR release 可以加入 additive change。JSON consumer 必須忽略未知欄位。
+移除或重新命名欄位、command、flag、設定 key 或 public Go symbol，
 必須建立新的具名 schema version，或發布新的 MAJOR Orbit 版本。
 
-未文件化的 internal implementation、dashboard markup 與 styling、log 文字及
-test fixtures 不屬於相容性契約。
+未文件化的 internal implementation、daemon HTTP API、dashboard markup 與
+styling、log 文字及 test fixtures 不屬於相容性契約。Daemon HTTP API 是 CLI、
+dashboard 與 daemon 之間的通道；agent 與 script 應改用 CLI 的 `--json` 介面。
+放在本 repo `integrations/` 目錄的整合可以呼叫它，並在它使用的 route 變動時於同一個
+change 一起更新。
 
 ## Plugin 版本
 

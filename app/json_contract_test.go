@@ -20,6 +20,20 @@ func decodeEnvelope(t *testing.T, raw []byte) cli.JSONEnvelope {
 	return got
 }
 
+// envelopeData asserts an ok orbit.cli.v1 envelope and returns its data object.
+func envelopeData(t *testing.T, output []byte) map[string]any {
+	t.Helper()
+	envelope := decodeEnvelope(t, output)
+	if envelope.SchemaVersion != cli.SchemaVersion || !envelope.OK {
+		t.Fatalf("envelope = %+v, want an ok %s envelope", envelope, cli.SchemaVersion)
+	}
+	data, ok := envelope.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data = %#v, want an object", envelope.Data)
+	}
+	return data
+}
+
 func TestWriteCLIJSONServiceFailureKeepsRecoveryActionsFocused(t *testing.T) {
 	var buf bytes.Buffer
 	err := cli.WithJSONActions(

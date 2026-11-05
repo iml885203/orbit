@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -38,7 +37,7 @@ func historyCmd() *cobra.Command {
 				return err
 			}
 			if cli.JSONOutput {
-				return json.NewEncoder(os.Stdout).Encode(records)
+				return cli.WriteJSONSuccess(os.Stdout, commandString(), historyListJSON{Records: nonNilSlice(records)}, nil)
 			}
 			printHistory(records)
 			return nil
@@ -59,7 +58,7 @@ func historyCmd() *cobra.Command {
 				return err
 			}
 			if cli.JSONOutput {
-				return json.NewEncoder(os.Stdout).Encode(items)
+				return cli.WriteJSONSuccess(os.Stdout, commandString(), historyGapsJSON{Gaps: nonNilSlice(items)}, nil)
 			}
 			printGaps(items)
 			return nil
@@ -67,6 +66,24 @@ func historyCmd() *cobra.Command {
 	}
 	cmd.AddCommand(gapsCmd)
 	return cmd
+}
+
+// The payloads keep history.Record and gaps.Gap as they are, because the
+// dashboard reads the same types from /api/history/*.
+type historyListJSON struct {
+	Records []history.Record `json:"records"`
+}
+
+type historyGapsJSON struct {
+	Gaps []gaps.Gap `json:"gaps"`
+}
+
+// nonNilSlice keeps an empty result a JSON array, not null.
+func nonNilSlice[T any](items []T) []T {
+	if items == nil {
+		return []T{}
+	}
+	return items
 }
 
 // The history client calls live here rather than on the public
