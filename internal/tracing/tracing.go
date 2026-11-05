@@ -9,7 +9,8 @@ import (
 
 // Store is the in-memory trace ring buffer. It accumulates spans by trace,
 // evicts the oldest trace once capacity is exceeded, and notifies subscribers
-// when a trace changes.
+// when a trace changes. It also owns the log-record ring the same OTLP
+// receiver feeds (see Logs).
 //
 // All mutable state is guarded by mu. Subscriber channels use non-blocking
 // send (drop-on-full): trace summaries are observational, and a slow UI that
@@ -41,6 +42,8 @@ type Store struct {
 	// A func rather than a value because the daemon's config can change
 	// underneath the store; nil means no trace counts as health traffic.
 	healthRule func() HealthRule
+
+	logs *LogStore
 }
 
 type traceAccum struct {
@@ -76,7 +79,13 @@ func NewStore(max int) *Store {
 		max:  max,
 		byID: make(map[string]*traceAccum),
 		subs: make(map[int]chan TraceSummary),
+		logs: NewLogStore(maxLogRecords, maxLogBytes),
 	}
+}
+
+// Logs returns the store of OTLP log records received alongside the spans.
+func (s *Store) Logs() *LogStore {
+	return s.logs
 }
 
 // Ingest adds spans to the store and notifies subscribers of every affected

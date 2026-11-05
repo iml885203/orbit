@@ -277,7 +277,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit tunnel release --json` | Returns the released count, paths or local port, and gateway in the envelope. |
 | `orbit trace --json` | Returns recent trace summaries in `data.traces`, newest first; `--search` and `--service` narrow the list before `--limit`, and `--include-health` adds Orbit's own health-probe traces. |
 | `orbit trace -f --json` | Streams NDJSON trace-summary events, one JSON object per line; `--service`, `--include-health` and a summary-only `--search` apply to each event. |
-| `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`. |
+| `orbit trace <id> --json` | Returns one full trace (summary fields + `spans`) in `data`; `--logs` adds the trace's OTLP log records in `data.logs` (see [Log records](#log-records)). |
+| `orbit trace logs --json` | Returns OTLP log records in `data.logs`, newest first, with `data.latestSeq`, `data.hasMore` and `data.cursorReset`; `--service`, `--severity`, `--trace`, `--search` and `--since` narrow the records before `--limit`. |
 | `orbit tracing status --json` | Returns the receiver's health, the port in use, and ingest counters in `data`. |
 
 Lifecycle commands keep decorative and diagnostic progress off stdout in JSON
@@ -518,9 +519,61 @@ accumulates spans; the latest event supersedes earlier ones.
 
 A typical agent workflow: `orbit trace --search <path or text> --json` (or
 `orbit trace --json` → pick the errored trace) →
-`orbit trace <id> --json` to find the failing span → the trace's log lines via
-`GET /api/traces/{id}/logs` on the daemon, or `orbit trace <id> --logs` for
-human-readable output.
+`orbit trace <id> --logs --json` to find the failing span and the OTLP log
+records stamped with the trace id (`data.logs`). The trace's stdout lines come
+from `GET /api/traces/{id}/logs` on the daemon, or `orbit trace <id> --logs`
+for human-readable output.
+
+### Log records
+
+Services whose OpenTelemetry exporter also ships logs send structured log
+records to the same receiver. `orbit trace logs` reads them; `orbit logs
+<resource>` still reads the resource's stdout.
+
+```bash
+orbit trace logs --json                          # newest 100 records, all services
+orbit trace logs --service api --severity warn --json   # warnings and worse from api
+orbit trace logs --trace <trace-id> --json       # every record of one request
+orbit trace logs --search "card declined" --json # body or any attribute value
+orbit trace logs --since 1234 --json             # only records after seq 1234
+```
+
+`--severity` is a minimum level: `trace`, `debug`, `info`, `warn`, `error`,
+`fatal` (also `verbose`, `information`, `warning`, `critical`, or an OTLP
+number 1-24).
+Records without a severity are dropped once it is set. `--service` names a
+configured resource or a service that has sent records; any other name fails
+with `unknown_resource`. `--limit 0` returns every match.
+
+`data.logs` holds records newest first. Each carries `seq`, `timeUnixNano`,
+`observedTimeUnixNano`, `severityNumber`, `severityText`, `body`, `traceId`,
+`spanId`, `service`, `scope`, and `attributes` (string values, including
+`exception.type`, `exception.message` and `exception.stacktrace`). `seq` is
+an integer that increases across all services; it starts from the daemon's
+start time in microseconds, so it keeps increasing across `orbit down && orbit
+up`. Non-string bodies are rendered as JSON;
+`timeUnixNano` is `0` when the exporter did not stamp the event.
+`severityText`, `traceId`, `spanId`, `scope` and `attributes` are omitted when
+empty. These key names are pinned by contract tests.
+
+To read only what happens after an action, take `data.latestSeq` before it,
+then pass that value as `--since`. Any `--since` value, including `0`, is a
+cursor: the page holds the oldest matches after that seq; when `data.hasMore`
+is true, continue with the highest `seq` in the page. When `hasMore` is false,
+`latestSeq` is the next cursor. Without `--since`, `hasMore` means older
+matches exceeded `--limit`. Records live in a bounded in-memory ring (see
+[tracing.md](tracing.md#log-records)), so a cursor older than the ring
+silently skips the evicted records.
+
+`data.cursorReset` is `true` when `--since` is greater than `latestSeq`: the
+running daemon did not issue that cursor (for example, the clock moved back
+across a restart). The page then starts at the oldest retained record, and the
+human footer says so. Take a fresh `latestSeq` before relying on the cursor
+again.
+
+`orbit trace <id> --logs --json` still returns the trace when the log records
+cannot be read: `data.logs` is `[]` and `notices` holds a
+`log_records_unavailable` entry whose `message` carries the error.
 
 ## Inspect
 

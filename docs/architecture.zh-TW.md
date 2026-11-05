@@ -151,7 +151,7 @@ state layout、port persistence 與 cleanup semantics 定義於
 | `handlers_logging.go` | SSE log tail |
 | `handlers_env_toggles.go` | 各 env 的 feature toggle |
 | `handlers_events.go` | SSE status event stream |
-| `handlers_traces.go` | Trace 列表 / 詳情([tracing.zh-TW.md](tracing.zh-TW.md)) |
+| `handlers_traces.go` | Trace 列表 / 詳情與 OTLP log record([tracing.zh-TW.md](tracing.zh-TW.md)) |
 | `handlers_graph.go` | 相依 DAG 查詢 |
 | `handlers_history.go` | 過去執行紀錄 |
 | `handlers_settings.go` | User settings(workspace root) |

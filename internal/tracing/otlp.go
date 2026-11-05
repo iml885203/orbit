@@ -9,24 +9,27 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	collectorlogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectorpb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 // OTLPHandler returns the HTTP handler for the OTLP/HTTP receiver. It accepts
-// traces on /v1/traces; metrics and logs (which a service's OTLP exporter may
-// also push when its endpoint env points here) are accepted and dropped so the
-// exporter doesn't log delivery errors.
+// traces on /v1/traces and log records on /v1/logs; metrics (which a
+// service's OTLP exporter may also push when its endpoint env points here)
+// are accepted and dropped so the exporter doesn't log delivery errors.
 func (s *Store) OTLPHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/traces", s.handleOTLPTraces)
+	mux.HandleFunc("/v1/logs", s.handleOTLPLogs)
 	mux.HandleFunc("/v1/metrics", drainOK)
-	mux.HandleFunc("/v1/logs", drainOK)
 	return mux
 }
 
@@ -39,13 +42,36 @@ func drainOK(w http.ResponseWriter, r *http.Request) {
 // decompression). always_on sampling can produce large batches; this bounds the
 // per-request memory the decoder allocates so one client can't push an
 // arbitrarily large payload into the in-process store. Oversized requests are
-// rejected with 413 and their spans never reach Ingest.
+// rejected with 413 and their contents never reach the store.
 const maxOTLPBodyBytes = 8 * 1024 * 1024
 
 func (s *Store) handleOTLPTraces(w http.ResponseWriter, r *http.Request) {
+	req := &collectorpb.ExportTraceServiceRequest{}
+	isJSON, ok := decodeOTLPExport(w, r, req, "trace")
+	if !ok {
+		return
+	}
+	s.Ingest(spansFromExport(req))
+	writeOTLPResponse(w, isJSON, &collectorpb.ExportTraceServiceResponse{})
+}
+
+func (s *Store) handleOTLPLogs(w http.ResponseWriter, r *http.Request) {
+	req := &collectorlogspb.ExportLogsServiceRequest{}
+	isJSON, ok := decodeOTLPExport(w, r, req, "log")
+	if !ok {
+		return
+	}
+	s.logs.Ingest(logRecordsFromExport(req, time.Now()))
+	writeOTLPResponse(w, isJSON, &collectorlogspb.ExportLogsServiceResponse{})
+}
+
+// decodeOTLPExport reads an export request body (gzip-aware, size-capped) into
+// req, in protobuf or JSON per the Content-Type. On failure it has already
+// written the error response and returns ok=false.
+func decodeOTLPExport(w http.ResponseWriter, r *http.Request, req proto.Message, signal string) (isJSON, ok bool) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+		return false, false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxOTLPBodyBytes)
 	body, err := readBody(r)
@@ -53,30 +79,29 @@ func (s *Store) handleOTLPTraces(w http.ResponseWriter, r *http.Request) {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-			return
+			return false, false
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return false, false
 	}
 
-	req := &collectorpb.ExportTraceServiceRequest{}
-	contentType := r.Header.Get("Content-Type")
-	isJSON := strings.Contains(contentType, "json")
+	isJSON = strings.Contains(r.Header.Get("Content-Type"), "json")
 	if isJSON {
 		err = protojson.Unmarshal(body, req)
 	} else {
 		err = proto.Unmarshal(body, req)
 	}
 	if err != nil {
-		slog.Warn("otlp trace decode failed", "component", "tracing", "json", isJSON, "err", err)
+		slog.Warn("otlp "+signal+" decode failed", "component", "tracing", "json", isJSON, "err", err)
 		http.Error(w, "decode failed", http.StatusBadRequest)
-		return
+		return isJSON, false
 	}
+	return isJSON, true
+}
 
-	s.Ingest(spansFromExport(req))
-
-	// Empty success response in the same encoding the client used.
-	resp := &collectorpb.ExportTraceServiceResponse{}
+// writeOTLPResponse writes the empty success response in the same encoding
+// the client used.
+func writeOTLPResponse(w http.ResponseWriter, isJSON bool, resp proto.Message) {
 	var out []byte
 	if isJSON {
 		out, _ = protojson.Marshal(resp)
@@ -123,7 +148,7 @@ func convertSpan(sp *tracepb.Span, service string) Span {
 	out := Span{
 		TraceID:       hex.EncodeToString(sp.GetTraceId()),
 		SpanID:        hex.EncodeToString(sp.GetSpanId()),
-		ParentID:      spanIDOrEmpty(sp.GetParentSpanId()),
+		ParentID:      hexIDOrEmpty(sp.GetParentSpanId()),
 		Service:       service,
 		Name:          sp.GetName(),
 		Kind:          spanKind(sp.GetKind()),
@@ -137,15 +162,64 @@ func convertSpan(sp *tracepb.Span, service string) Span {
 	return out
 }
 
-// spanIDOrEmpty hex-encodes a parent span id, returning "" for the all-zero
-// (no parent) id so summaries treat the span as a root.
-func spanIDOrEmpty(b []byte) string {
+// hexIDOrEmpty hex-encodes a trace or span id, returning "" for the all-zero
+// (absent) id: a parentless span is a root, and a log record emitted outside
+// any span has no trace.
+func hexIDOrEmpty(b []byte) string {
 	for _, c := range b {
 		if c != 0 {
 			return hex.EncodeToString(b)
 		}
 	}
 	return ""
+}
+
+// logRecordsFromExport flattens an OTLP logs export into Orbit log records,
+// carrying the resource's service.name and the scope name down onto each.
+// receivedAt stands in for an exporter that left the observed time unset.
+func logRecordsFromExport(req *collectorlogspb.ExportLogsServiceRequest, receivedAt time.Time) []LogRecord {
+	var records []LogRecord
+	for _, rl := range req.GetResourceLogs() {
+		service := serviceName(rl.GetResource().GetAttributes())
+		for _, sl := range rl.GetScopeLogs() {
+			scope := sl.GetScope().GetName()
+			for _, lr := range sl.GetLogRecords() {
+				records = append(records, convertLogRecord(lr, service, scope, receivedAt))
+			}
+		}
+	}
+	return records
+}
+
+func convertLogRecord(lr *logspb.LogRecord, service, scope string, receivedAt time.Time) LogRecord {
+	observed := int64(lr.GetObservedTimeUnixNano())
+	if observed == 0 {
+		observed = receivedAt.UnixNano()
+	}
+	severity := int32(lr.GetSeverityNumber())
+	if severity == 0 {
+		severity, _ = ParseSeverity(lr.GetSeverityText())
+	}
+	var body string
+	if lr.GetBody() != nil {
+		body = stringifyValue(lr.GetBody())
+	}
+	attrs := lr.GetAttributes()
+	if len(attrs) > maxLogAttributes {
+		attrs = attrs[:maxLogAttributes]
+	}
+	return LogRecord{
+		TimeUnixNano:         int64(lr.GetTimeUnixNano()),
+		ObservedTimeUnixNano: observed,
+		SeverityNumber:       severity,
+		SeverityText:         lr.GetSeverityText(),
+		Body:                 body,
+		TraceID:              hexIDOrEmpty(lr.GetTraceId()),
+		SpanID:               hexIDOrEmpty(lr.GetSpanId()),
+		Service:              service,
+		Scope:                scope,
+		Attributes:           flattenAttrs(attrs),
+	}
 }
 
 func serviceName(attrs []*commonpb.KeyValue) string {

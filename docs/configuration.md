@@ -224,8 +224,9 @@ storage driver performs poorly under concurrent extraction.
 
 Enables Orbit's built-in local OpenTelemetry receiver. When on, the daemon runs
 an OTLP/HTTP receiver and injects `OTEL_*` env vars into every dev service so
-their spans flow into Orbit. Services must have an OTLP exporter configured to
-read these standard environment variables.
+their spans and log records flow into Orbit. Services must have an OTLP
+exporter configured to read these standard environment variables. Metrics are
+accepted and dropped.
 
 ```yaml
 tracing:
@@ -242,7 +243,7 @@ Tracing is **on by default**. Omitting the section or adding it only to tune
 |---|---|---|---|
 | `enabled` | bool | `true` | Run the receiver and inject `OTEL_*` env into dev services. Only explicit `false` turns it off |
 | `otlp_port` | int | `4318` | OTLP/HTTP port the receiver binds on `127.0.0.1`. Auto-advances past a conflict unless pinned |
-| `max_traces` | int | `1000` | Ring-buffer size; oldest trace is evicted past this. Not persisted — cleared on `orbit down` |
+| `max_traces` | int | `1000` | Ring-buffer size; oldest trace is evicted past this. Not persisted — cleared on `orbit down`. Log records have their own fixed ring (see [tracing.md](tracing.md#log-records)) |
 
 Injected into each dev service when enabled: `OTEL_SERVICE_NAME` (the Orbit
 service name), `OTEL_TRACES_EXPORTER=otlp`,

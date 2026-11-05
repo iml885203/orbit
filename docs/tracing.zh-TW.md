@@ -53,8 +53,9 @@ orbit trace --search item/1  # span 名稱或 attribute 值相符的 trace
 orbit trace --service api    # 經過該 service 的 trace
 orbit trace --json           # 結構化清單（給 agent）；搭配 -f 時輸出 NDJSON
 orbit trace <id>             # 一條 trace 的 ASCII waterfall
-orbit trace <id> --logs      # waterfall + 帶有這個 trace id 的 log 行
+orbit trace <id> --logs      # waterfall + 帶有這個 trace id 的 log 行與 log record
 orbit trace <id> --json      # 完整 span tree 與每個 span 的資料
+orbit trace logs             # OTLP log record（見下方 Log records）
 orbit tracing status         # receiver 健康嗎？用哪個 port？計數器
 ```
 
@@ -98,6 +99,23 @@ path 等於該資源的 `health_check.path`，就算 health 流量。`orbit trac
 在 Services graph 上，**Live** 開關會讓最近載有 trace 的 edge 跑流動光點 ——
 一種「系統正在動」的氛圍視圖，與單一 trace 的重播是分開的。
 
+## Log records
+
+OpenTelemetry logging pipeline 有設定 OTLP exporter 的 service，會把 log record
+送到同一個 receiver（`/v1/logs`）。它讀的是 Orbit 注入的 endpoint，不需要額外
+設定。Orbit 保留每筆 record 的 severity、body、trace 與 span id、scope 和
+attributes，包含 `exception.type`、`exception.message`、`exception.stacktrace`。
+Record 跟 span 一樣依 resource 的 `service.name` 歸屬。送到 `/v1/metrics` 的
+metrics 會被接受後丟棄。
+
+`orbit trace logs` 列出 record，`orbit trace <id> --logs` 顯示單一 trace 的
+record；`orbit logs <resource>` 不變，仍然顯示 resource 的 stdout。Flag、JSON
+頁面與 `--since` 分頁見 [agent-cli.md](agent-cli.md#log-records)。
+
+所有 service 共用一個 in-memory ring，`orbit down` 即清空。Ring 同時以筆數和
+bytes 設上限，超過任一上限就淘汰最舊的 record。過長的 body 或 attribute 值會
+被截斷，超過 OpenTelemetry 預設數量上限的 attribute 會被丟棄。
+
 ## Logs ↔ traces
 
 因為 orbit 同時擁有 trace store 和 log stream，而 log 本來就帶
@@ -110,7 +128,7 @@ path 等於該資源的 `health_check.path`，就算 health 流量。`orbit trac
 ## 運作方式
 
 ```
-dev service ──OTLP/HTTP──▶ daemon receiver (:4318) ──▶ ring buffer
+dev service ──OTLP/HTTP──▶ daemon receiver (:4318) ──▶ trace + log-record rings
                                                           │
    CLI (orbit trace)  ◀── unix socket ◀──────────────────┤
    dashboard          ◀── HTTP + SSE 'trace' event ◀──────┘

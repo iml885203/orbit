@@ -365,8 +365,16 @@ event 取代先前的。
 
 典型 agent 工作流：`orbit trace --search <路徑或文字> --json`（或
 `orbit trace --json` → 挑出 errored trace）→
-`orbit trace <id> --json` 找失敗的 span → 該 trace 的 log 行走 daemon 的
+`orbit trace <id> --logs --json` 找失敗的 span，並取得帶有該 trace id 的 OTLP
+log record（`data.logs`）。該 trace 的 stdout log 行走 daemon 的
 `GET /api/traces/{id}/logs`，或人類可讀輸出用 `orbit trace <id> --logs`。
+
+### Log records
+
+服務的 OpenTelemetry exporter 也送 log 時，結構化 log record 會進到同一個
+receiver，用 `orbit trace logs --json` 讀取；`orbit logs <resource>` 仍然讀該
+resource 的 stdout。旗標、`data.logs` 欄位與 `--since` cursor 規則只維護一份，
+見英文版 [agent-cli.md 的 Log records](agent-cli.md#log-records)。
 
 ## Inspect
 

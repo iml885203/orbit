@@ -171,7 +171,7 @@ All HTTP handlers live in `internal/daemon/*.go` by concern:
 | `handlers_logging.go` | SSE log tail |
 | `handlers_env_toggles.go` | Per-env feature toggles |
 | `handlers_events.go` | SSE status event stream |
-| `handlers_traces.go` | Trace list / detail ([tracing.md](tracing.md)) |
+| `handlers_traces.go` | Trace list / detail and OTLP log records ([tracing.md](tracing.md)) |
 | `handlers_graph.go` | Dependency DAG queries |
 | `handlers_history.go` | Past run history |
 | `handlers_settings.go` | User settings (workspace root) |

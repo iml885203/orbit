@@ -79,9 +79,11 @@ packages:
     output_path: "ui/src/lib/types/tracing.gen.ts"
     exclude_files:
       - "tracing.go"
+      - "logs.go"
       - "otlp.go"
       - "filter.go"
       - "tracing_test.go"
+      - "logs_test.go"
       - "otlp_test.go"
   - path: "github.com/iml885203/orbit/internal/dbstate"
     output_path: "ui/src/lib/types/dbstate.gen.ts"

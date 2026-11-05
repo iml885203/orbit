@@ -54,8 +54,9 @@ orbit trace --search item/1  # traces whose span names or attribute values match
 orbit trace --service api    # traces that include that service
 orbit trace --json           # structured list (for agents); with -f, NDJSON
 orbit trace <id>             # ASCII waterfall of one trace
-orbit trace <id> --logs      # waterfall + log lines carrying this trace id
+orbit trace <id> --logs      # waterfall + log lines and log records carrying this trace id
 orbit trace <id> --json      # full span tree + per-span data
+orbit trace logs             # OTLP log records (see Log records below)
 orbit tracing status         # is the receiver healthy? which port? counters
 ```
 
@@ -105,6 +106,27 @@ On the Services graph, the **Live** toggle pulses the flow-dot along edges that
 recently carried a trace — an ambient "the system is moving" view, separate from
 single-trace playback.
 
+## Log records
+
+A service whose OpenTelemetry logging pipeline has an OTLP exporter sends its
+log records to the same receiver (`/v1/logs`); it reads the endpoint Orbit
+injects, so no extra configuration is needed. Orbit keeps each record's
+severity, body, trace and span ids, scope, and attributes, including
+`exception.type`, `exception.message` and `exception.stacktrace`. Records are
+attributed to the resource's `service.name`, like spans. Metrics sent to
+`/v1/metrics` are accepted and dropped.
+
+`orbit trace logs` lists them, `orbit trace <id> --logs` shows the records of
+one trace, and `orbit logs <resource>` is unchanged and still shows the
+resource's stdout. Flags, the JSON page and `--since` paging are in
+[agent-cli.md](agent-cli.md#log-records).
+
+Records live in one in-memory ring shared by every service and are dropped on
+`orbit down`. The ring is bounded by record count and by bytes, evicting the
+oldest records past either bound. Very long body and attribute values are
+truncated, and attributes past the OpenTelemetry default count limit are
+dropped.
+
 ## Logs ↔ traces
 
 Because Orbit owns both the trace store and the log stream, and the logs already
@@ -117,7 +139,7 @@ carry `TraceId`/`SpanId`, the join is **exact** — never a fuzzy timestamp matc
 ## How it works
 
 ```
-dev service ──OTLP/HTTP──▶ daemon receiver (:4318) ──▶ ring buffer
+dev service ──OTLP/HTTP──▶ daemon receiver (:4318) ──▶ trace + log-record rings
                                                           │
    CLI (orbit trace)  ◀── unix socket ◀──────────────────┤
    dashboard          ◀── HTTP + SSE 'trace' event ◀──────┘

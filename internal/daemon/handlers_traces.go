@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -16,6 +17,7 @@ func registerTracingHandlers(mux *http.ServeMux, s *Server) {
 	mux.HandleFunc("/api/tracing/status", s.handleTracingStatus)
 	mux.HandleFunc("/api/traces", s.handleTracesList)
 	mux.HandleFunc("/api/traces/", s.handleTraceDetail)
+	mux.HandleFunc("/api/otel/logs", s.handleOTelLogs)
 }
 
 // handleTracingStatus reports collector health for the live indicator.
@@ -68,6 +70,58 @@ func (s *Server) handleTracesList(w http.ResponseWriter, r *http.Request) {
 	})
 	w.Header().Set(HiddenHealthTracesHeader, strconv.Itoa(hidden))
 	writeJSON(w, http.StatusOK, traces)
+}
+
+// handleOTelLogs returns OTLP log records newest-first as a tracing.LogPage.
+// ?service=, ?severity= (minimum level), ?trace=, ?search= and ?since= (Seq,
+// exclusive; present means paging, so since=0 reads from the oldest record)
+// narrow the records inside the store, before ?limit= (default 100, 0 = all). A service must be a configured resource or have sent records:
+// a misspelled name is an error, not an empty page.
+func (s *Server) handleOTelLogs(w http.ResponseWriter, r *http.Request) {
+	if requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	q := r.URL.Query()
+	limit, err := nonNegativeQueryInt(q.Get("limit"), 100)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "limit " + err.Error()})
+		return
+	}
+	since, err := nonNegativeQueryInt(q.Get("since"), 0)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "since " + err.Error()})
+		return
+	}
+	filter := tracing.LogFilter{
+		Service:  q.Get("service"),
+		TraceID:  q.Get("trace"),
+		Search:   q.Get("search"),
+		HasSince: q.Has("since"),
+		Since:    since,
+	}
+	if v := q.Get("severity"); v != "" {
+		if filter.MinSeverity, err = tracing.ParseSeverity(v); err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Error: err.Error()})
+			return
+		}
+	}
+	logs := s.tracing.Logs()
+	if filter.Service != "" && !s.holder.Load().ServiceOrContainerExists(filter.Service) && !logs.HasService(filter.Service) {
+		writeUnknownResource(w, filter.Service)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs.Query(int(limit), filter))
+}
+
+func nonNegativeQueryInt(v string, fallback int64) (int64, error) {
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("must be a non-negative integer, got %q", v)
+	}
+	return n, nil
 }
 
 // handleTraceDetail serves /api/traces/{id} (full trace) and

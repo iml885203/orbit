@@ -108,19 +108,17 @@ func TestOTLPReceiverEndToEnd(t *testing.T) {
 	}
 }
 
-// TestOTLPReceiverDropsMetricsAndLogs verifies the metrics/logs endpoints
-// accept and discard payloads so a service's exporter doesn't error.
-func TestOTLPReceiverDropsMetricsAndLogs(t *testing.T) {
+// TestOTLPReceiverDrainsMetrics verifies the metrics endpoint accepts and
+// discards payloads so a service's exporter doesn't error.
+func TestOTLPReceiverDrainsMetrics(t *testing.T) {
 	srv := httptest.NewServer(NewStore(10).OTLPHandler())
 	defer srv.Close()
-	for _, path := range []string{"/v1/metrics", "/v1/logs"} {
-		resp, err := http.Post(srv.URL+path, "application/x-protobuf", bytes.NewReader([]byte{1, 2, 3}))
-		if err != nil {
-			t.Fatalf("post %s: %v", path, err)
-		}
-		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("%s status = %d, want 200", path, resp.StatusCode)
-		}
+	resp, err := http.Post(srv.URL+"/v1/metrics", "application/x-protobuf", bytes.NewReader([]byte{1, 2, 3}))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 }

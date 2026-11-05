@@ -3,13 +3,14 @@
 //////////
 // source: model.go
 /*
-Package tracing implements Orbit's built-in local trace store: an
-in-memory ring buffer of OTLP spans, an OTLP/HTTP receiver, and query +
-subscription APIs for the CLI and dashboard.
+Package tracing implements Orbit's built-in local telemetry store: in-memory
+ring buffers of OTLP spans and log records, an OTLP/HTTP receiver, and query
++ subscription APIs for the CLI and dashboard.
 
 model.go holds only the wire types (exported to TypeScript via tygo). The
-store and OTLP ingest live in tracing.go and otlp.go and are excluded from
-tygo because they carry locks and protobuf types TS must never see.
+stores and OTLP ingest live in tracing.go, logs.go and otlp.go and are
+excluded from tygo because they carry locks and protobuf types TS must never
+see.
 */
 
 /**
@@ -97,4 +98,39 @@ export interface TracingStatus {
    * store is shedding load, not that nothing is arriving.
    */
   spansDropped: number /* int64 */;
+}
+/**
+ * LogRecord is one OTLP log record. Seq is assigned by Orbit on ingest and
+ * increases across every service and, starting from the wall clock, across
+ * daemon restarts, so a reader can resume after the last record it saw.
+ * TimeUnixNano is 0 when the exporter did not stamp the event;
+ * ObservedTimeUnixNano falls back to the receive time. SeverityNumber follows
+ * the OTLP scale (1-24; 0 = unspecified).
+ */
+export interface LogRecord {
+  seq: number /* int64 */;
+  timeUnixNano: number /* int64 */;
+  observedTimeUnixNano: number /* int64 */;
+  severityNumber: number /* int32 */;
+  severityText?: string;
+  body: string;
+  traceId?: string;
+  spanId?: string;
+  service: string;
+  scope?: string;
+  attributes?: { [key: string]: string};
+}
+/**
+ * LogPage is one query over the log-record store, newest first. LatestSeq is
+ * the highest Seq the store has assigned, regardless of filters, so a reader
+ * can take a cursor before acting. HasMore reports that the limit withheld
+ * matching records. CursorReset reports that the since cursor is beyond
+ * LatestSeq, so this daemon did not issue it (it restarted, or the clock
+ * stepped back); the page then starts at the oldest retained record.
+ */
+export interface LogPage {
+  logs: LogRecord[];
+  latestSeq: number /* int64 */;
+  hasMore: boolean;
+  cursorReset: boolean;
 }

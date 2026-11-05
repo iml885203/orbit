@@ -215,8 +215,9 @@ health check 與 host process 啟動仍彼此獨立。每個 container 在自己
 ## `tracing`
 
 啟用 Orbit 內建的本地 OpenTelemetry receiver。開啟後 daemon 會跑一個
-OTLP/HTTP receiver，並對每個 dev service 注入 `OTEL_*` 環境變數,讓 span 自動
-流進 Orbit。服務必須設定 OTLP exporter 讀取這些標準環境變數。
+OTLP/HTTP receiver，並對每個 dev service 注入 `OTEL_*` 環境變數，讓 span 與
+log record 自動流進 Orbit。服務必須設定 OTLP exporter 讀取這些標準環境變數。
+Metrics 會被接受後丟棄。
 
 ```yaml
 tracing:
@@ -232,7 +233,7 @@ Tracing **預設開啟**。省略整段，或只是加入 `otlp_port` / `max_tra
 |---|---|---|---|
 | `enabled` | bool | `true` | 啟動 receiver 並對 dev service 注入 `OTEL_*`。只有明確 `false` 才會關閉 |
 | `otlp_port` | int | `4318` | receiver 綁定在 `127.0.0.1` 的 OTLP/HTTP port。未釘死時遇衝突會自動往後找 |
-| `max_traces` | int | `1000` | ring buffer 上限，超過淘汰最舊；不落盤，`orbit down` 即清空 |
+| `max_traces` | int | `1000` | ring buffer 上限，超過淘汰最舊；不落盤，`orbit down` 即清空。Log record 有自己固定大小的 ring（見 [tracing.zh-TW.md](tracing.zh-TW.md#log-records)） |
 
 開啟時注入每個 dev service 的變數：`OTEL_SERVICE_NAME`（orbit 的服務名）、
 `OTEL_TRACES_EXPORTER=otlp`、`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`、

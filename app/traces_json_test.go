@@ -85,3 +85,11 @@ func TestTraceLogLineWireContract(t *testing.T) {
 	assertExactKeys(t, jsonKeys(t, daemon.TraceLogLine{Service: "api", Line: "l"}),
 		[]string{"service", "line"})
 }
+
+func TestLogPageWireContract(t *testing.T) {
+	assertExactKeys(t, jsonKeys(t, tracing.LogPage{}), []string{"logs", "latestSeq", "hasMore", "cursorReset"})
+	assertExactKeys(t, jsonKeys(t, traceWithLogRecords{Trace: &tracing.Trace{Health: true}}), []string{
+		"traceId", "rootService", "rootName", "startUnixNano",
+		"durationMs", "spanCount", "services", "status", "health", "spans", "logs",
+	})
+}
