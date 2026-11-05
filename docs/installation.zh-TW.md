@@ -69,7 +69,7 @@ orbit update
 
 透過 package manager 安裝的 Orbit 仍由原本的 package manager 管理。
 `orbit update` 不會修改其 binary，而會回報明確指令：
-`brew upgrade orbit` 或 `scoop update orbit`。`orbit update --rollback`
+`brew upgrade iml885203/tap/orbit` 或 `scoop update orbit`。`orbit update --rollback`
 也不會直接修改 package manager 管理的 binary。
 
 `orbit update` 會替換目前真正執行的 binary，即使 `PATH` 前面還有另一套

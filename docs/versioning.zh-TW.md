@@ -7,30 +7,27 @@
 ## 發布順序
 
 - GitHub private 演練版從 `v0.0.1` 開始。
-- Source repository 已在 1.0 產品打磨期間先行公開；所有 `0.x` release
-  都是 preview，可能包含 breaking changes。
-- GitHub 上的 `0.x` title 統一為 `Orbit vX.Y.Z (Preview)`。它仍是 repository
-  可安裝的 latest release，讓預設 installer 與 `orbit update` 永遠取得最新
-  支援的 preview，不要求使用者理解或選擇 release channel。
-- 第一個 stable release 是 `v1.0.0`。發布這個 tag 代表下列相容性契約
-  已有文件與測試，並已準備好提供外部使用者使用。
-  [1.0 test matrix](https://orbit.dotw.me/docs/1.0-test-matrix) 記錄該 tag 所需的平台證據，
-  以及目前實際已驗證的項目。
-- Release candidate（例如 `v1.0.0-rc.1`）會在 stable tag 之前以 GitHub
-  pre-release 發布。Installer、`orbit update`、Homebrew 與 Scoop 都會略過它；
-  要安裝請指定 tag：`ORBIT_VERSION=v1.0.0-rc.1`。Candidate 通過後，再從同一個
-  commit 發布 stable tag。
+- Source repository 在 1.0 前的產品打磨期間公開；`0.x` release 都是
+  preview，title 為 `Orbit vX.Y.Z (Preview)`，可能包含 breaking changes。
+- `v1.0.0` 是第一個 stable release：下列相容性契約已有文件與測試，並已準備好
+  提供外部使用者使用。[1.0 test matrix](https://orbit.dotw.me/docs/1.0-test-matrix)
+  記錄背後的平台證據。
+- 每個 stable release 都是 repository 可安裝的 latest release，讓預設 installer
+  與 `orbit update` 直接取得，不需要使用者選擇 release channel。
+- 帶 pre-release 後綴的 tag（例如 `v1.1.0-rc.1`）會以 GitHub pre-release 發布。
+  Installer、`orbit update`、Homebrew 與 Scoop 都會略過它；要安裝請指定 tag：
+  `ORBIT_VERSION=<tag>`。`v1.0.0` 沒有經過 release candidate。
 - 已發布的 GitHub Release 不可修改；其 tag 與 assets 都不能變更或重用。
   修正必須發布成新版本。
 
-## Preview 批次原則
+## 發布批次原則
 
 `main` 上的 commit 都是尚未發布的工作，可以累積多個彼此相關的修正。只有當
 整個批次交付一個完整、能以 installed-user journey 描述並驗證的使用者成果時，
-才切出 preview。單一 commit 通過測試或只修好一個 edge case，本身不構成發布
+才切出 release。單一 commit 通過測試或只修好一個 edge case，本身不構成發布
 邊界。
 
-Preview batch 依照下列順序 freeze：
+Release batch 依照下列順序 freeze：
 
 1. 完成相關 implementation，以及實務上最強的 journey 驗證。
 2. 一次 review 相較於前一版的完整使用者差異。
@@ -46,6 +43,26 @@ Preview batch 依照下列順序 freeze：
 Release notes 在 approve release workflow 時輸入，保留於 GitHub Releases，
 不再累積在 source tree。內容先描述整個 batch 的使用者成果，個別修正則作為
 支援細節。
+
+## Demo repository 獨立編版
+
+`orbit init` 會 clone [orbit-demo](https://github.com/iml885203/orbit-demo)
+在 `internal/distribution` 的 `EnvRepoRef` 所 pin 的 ref，因此該 ref 必須
+一直存在；不存在時 `make release-check` 會失敗。
+
+Demo **不會**隨每個 Orbit release 重新打 tag。它採用日曆式版本
+`vYEAR.MONTH.N`，`N` 是當月第幾次發布（`v2026.8.1` 是八月第一個），只有 demo
+本身變動時才打 tag。採用新的 demo tag 時，在同一個 commit 更新 `EnvRepoRef`；
+這是由 demo 驅動的變更，不是切 Orbit release 的步驟。
+
+Repository 自動化透過 `make distribution-metadata` 讀取這些編譯期的值。它的
+`orbit.distribution.v1` JSON schema 是與 Orbit 版本無關的 maintainer contract；
+runtime 程式仍直接使用 Go 宣告。獨立的 installer 會把 repository 預設值寫在
+腳本裡，讓 `curl | sh` 與 `irm | iex` 保持自足，`make test-distribution-metadata`
+會核對這些預設值與匯出的 metadata 一致。
+
+先前的做法是共用 Orbit 的版本號，結果每次 Orbit release 都要替 demo 打一個
+只宣告配對關係的空 tag，所以兩者現在各自編版。
 
 Package updates 使用 private `iml885203-package-sync` GitHub App。只將 App
 安裝到 `iml885203/homebrew-tap` 與 `iml885203/scoop-bucket`，並授予

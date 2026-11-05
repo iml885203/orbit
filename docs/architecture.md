@@ -200,7 +200,7 @@ actions, and cross-machine tunnel claims remain in their domain endpoints.
 ## Extension points
 
 Common changes and where they land. Optional features wire commands, daemon
-routes, and dashboard panels through the `extension` package; the points below
+routes, and dashboard panels through the `internal/extension` package; the points below
 cover changes to the core itself.
 
 ### Add a new service `type`
