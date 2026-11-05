@@ -78,9 +78,9 @@ type CLIInit struct {
 // updates and defaults from — properties of the built artifact, not of
 // any daemon feature.
 type Distribution struct {
-	// EnvRepoURL is the default git repo for `orbit env sync` (and the
-	// suggested default in `orbit init`), used when no --url flag,
-	// env_repo_url setting, or ORBIT_ENV_REPO_URL env var overrides it.
+	// EnvRepoURL is the default git repo that `orbit init` suggests, used
+	// when no --url flag, env_repo_url setting, or ORBIT_ENV_REPO_URL env var
+	// overrides it.
 	EnvRepoURL string
 	// EnvRepoRef pins the default repository to the demo revision compatible
 	// with this binary release. Custom repositories remain unpinned unless

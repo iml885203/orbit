@@ -110,26 +110,26 @@ func TestRunBoundedPublish(t *testing.T) {
 }
 
 func TestForcedPublishRequiresVisibleApproval(t *testing.T) {
-	previousForce, previousYes := publishForce, publishYes
+	previousForce, previousYes := publishAllowDataLoss, publishYes
 	t.Cleanup(func() {
-		publishForce = previousForce
+		publishAllowDataLoss = previousForce
 		publishYes = previousYes
 	})
 	targets := []publishTargetRef{{DB: "Accounts"}, {DB: "Orders"}}
 
-	publishForce, publishYes = false, false
+	publishAllowDataLoss, publishYes = false, false
 	if !authorizeForcedPublish(targets) {
 		t.Fatal("ordinary data-preserving publish must not prompt")
 	}
 
-	publishForce, publishYes = true, true
+	publishAllowDataLoss, publishYes = true, true
 	if !authorizeForcedPublish(targets) {
-		t.Fatal("--force --yes must count as explicit approval")
+		t.Fatal("--allow-data-loss --yes must count as explicit approval")
 	}
 
-	publishForce, publishYes = true, false
+	publishAllowDataLoss, publishYes = true, false
 	if authorizeForcedPublish(targets) {
-		t.Fatal("non-interactive --force without --yes must abort")
+		t.Fatal("non-interactive --allow-data-loss without --yes must abort")
 	}
 
 	prompt := forcedPublishPrompt(targets)

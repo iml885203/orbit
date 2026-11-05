@@ -9,7 +9,7 @@ describe('dbOpHint', () => {
     ['sql_project_not_found', /sqlserver\.projects/],
     ['dacpac_artifact_missing', /artifact root.*project directory.*expected leaf/],
     ['build_failed', /build errors/],
-    ['publish_blocked_data_loss', /--force/],
+    ['publish_blocked_data_loss', /--allow-data-loss/],
     ['sql_server_unavailable', /configured SQL Server target/],
     ['database_busy', /active connections/],
     ['publish_failed', /operation log/],

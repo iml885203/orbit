@@ -1194,95 +1194,6 @@ externals:
 	}
 }
 
-func TestLoadAcceptsReadablePreferredPortMappings(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "preferred-ports.yaml")
-	source := `version: "3"
-containers:
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      redis:
-        preferred: 26379
-        target: 6379
-services:
-  api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http:
-        preferred: 28080
-`
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	redis := cfg.Containers["redis"].Ports["redis"]
-	if redis.Host != 26379 || redis.Target != 6379 {
-		t.Fatalf("redis port = %+v, want fixed 26379:6379", redis)
-	}
-	http := cfg.Services["api"].Ports["http"]
-	if http.Host != 28080 || http.Target != 28080 {
-		t.Fatalf("http port = %+v, want fixed 28080", http)
-	}
-}
-
-func TestLoadRejectsUnknownPreferredPortFields(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "invalid-preferred-port.yaml")
-	source := `version: "3"
-services:
-  api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http:
-        preferred: 28080
-        typo: 28081
-`
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := Load(path); err == nil {
-		t.Fatal("unknown preferred port field was accepted")
-	} else if !strings.Contains(err.Error(), `line 10: unknown port field "typo"`) {
-		t.Fatalf("error = %q", err)
-	}
-}
-
-func TestLoadRejectsPortMappingWithoutPreferred(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "target-only-port.yaml")
-	source := `version: "3"
-services:
-  api:
-    type: python
-    path: .
-    command: python3 app.py
-    ports:
-      http:
-        target: 8080
-`
-	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("port mapping without preferred was accepted")
-	}
-	if !strings.Contains(err.Error(), `needs "preferred"`) {
-		t.Errorf("error = %q, want it to name the missing field", err)
-	}
-	if strings.Contains(err.Error(), "preferred port 0") {
-		t.Errorf("error blames a field the author never wrote: %q", err)
-	}
-}
-
 func TestLoadTreatsConfigAsAnAuthoringContract(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1302,14 +1213,6 @@ func TestLoadTreatsConfigAsAnAuthoringContract(t *testing.T) {
     ports:
       http: 28411`,
 			want: `service "app" url uses port 28412 but ports.http declares 28411`,
-		},
-		{
-			name: "preferred port typo",
-			service: `    command: python3 app.py
-    ports:
-      http:
-        prefered: 28411`,
-			want: `unknown port field "prefered" (did you mean "preferred"?)`,
 		},
 	}
 	for _, test := range tests {
@@ -1360,5 +1263,29 @@ func TestValidateRejectsOverlappingHostPorts(t *testing.T) {
 	}
 	if err := Validate(cfg); err == nil {
 		t.Fatal("two resources declaring the same host port must be a config error")
+	}
+}
+
+// The {preferred, target} mapping was removed before 1.0. A file that still
+// uses it must fail with the replacement spelled out, not a generic decode
+// error.
+func TestLoadRejectsRemovedPreferredPortMappingWithItsReplacement(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  redis:
+    image: redis:7.4
+    ports:
+      redis:
+        preferred: 26379
+        target: 6379
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("removed {preferred, target} port mapping was accepted")
+	}
+	if !strings.Contains(err.Error(), `"host:target"`) {
+		t.Fatalf("error = %v, want it to name the \"host:target\" replacement", err)
 	}
 }

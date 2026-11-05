@@ -38,11 +38,11 @@ func TestDBPublishJSONRejectsInvalidNameBeforeDestructiveRecommendation(t *testi
 }
 
 func TestDataPreservingPublishJSONReturnsStableSuccess(t *testing.T) {
-	originalJSON, originalForce, originalAll, originalParallel := cli.JSONOutput, publishForce, publishAll, publishParallel
+	originalJSON, originalForce, originalAll, originalParallel := cli.JSONOutput, publishAllowDataLoss, publishAll, publishParallel
 	t.Cleanup(func() {
-		cli.JSONOutput, publishForce, publishAll, publishParallel = originalJSON, originalForce, originalAll, originalParallel
+		cli.JSONOutput, publishAllowDataLoss, publishAll, publishParallel = originalJSON, originalForce, originalAll, originalParallel
 	})
-	cli.JSONOutput, publishForce, publishAll, publishParallel = true, false, false, 0
+	cli.JSONOutput, publishAllowDataLoss, publishAll, publishParallel = true, false, false, 0
 
 	if err := rejectForcedPublishJSON([]string{"AppDB"}); err != nil {
 		t.Fatalf("ordinary publish rejected as destructive: %v", err)
@@ -65,18 +65,18 @@ func TestDataPreservingPublishJSONReturnsStableSuccess(t *testing.T) {
 }
 
 func TestForcedPublishJSONPreservesDestructiveIntentForManualApproval(t *testing.T) {
-	originalJSON, originalForce, originalYes, originalAll, originalParallel := cli.JSONOutput, publishForce, publishYes, publishAll, publishParallel
+	originalJSON, originalForce, originalYes, originalAll, originalParallel := cli.JSONOutput, publishAllowDataLoss, publishYes, publishAll, publishParallel
 	t.Cleanup(func() {
-		cli.JSONOutput, publishForce, publishYes, publishAll, publishParallel = originalJSON, originalForce, originalYes, originalAll, originalParallel
+		cli.JSONOutput, publishAllowDataLoss, publishYes, publishAll, publishParallel = originalJSON, originalForce, originalYes, originalAll, originalParallel
 	})
-	cli.JSONOutput, publishForce, publishYes, publishAll, publishParallel = true, true, true, true, 4
+	cli.JSONOutput, publishAllowDataLoss, publishYes, publishAll, publishParallel = true, true, true, true, 4
 
 	err := rejectForcedPublishJSON(nil)
 	if err == nil {
 		t.Fatal("forced publish unexpectedly accepted JSON mode")
 	}
 	var buf bytes.Buffer
-	if writeErr := cli.WriteJSONError(&buf, "orbit sqlserver publish --all --parallel=4 --force --yes --json", err); writeErr != nil {
+	if writeErr := cli.WriteJSONError(&buf, "orbit sqlserver publish --all --parallel=4 --allow-data-loss --yes --json", err); writeErr != nil {
 		t.Fatalf("WriteJSONError: %v", writeErr)
 	}
 	got := decodeEnvelope(t, buf.Bytes())

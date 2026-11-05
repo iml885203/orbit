@@ -13,7 +13,7 @@ const Schema = "orbit.distribution.v1"
 
 var official = extension.Distribution{
 	EnvRepoURL:        "https://github.com/iml885203/orbit-demo.git",
-	EnvRepoRef:        "v2026.8.1",
+	EnvRepoRef:        "v2026.11.1",
 	InstallURL:        "https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.sh",
 	ReleaseAPIURL:     "https://api.github.com/repos/iml885203/orbit/releases/latest",
 	ReleaseRepository: "iml885203/orbit",

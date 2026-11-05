@@ -45,8 +45,8 @@ var (
 var extensions []extension.Extension
 
 // distribution holds the binary's distribution endpoints (first non-nil
-// extension.Distribution). Zero-valued in an unbranded build — env sync
-// and update then require explicit configuration.
+// extension.Distribution). Zero-valued in an unbranded build — source
+// setup and update then require explicit configuration.
 var distribution extension.Distribution
 
 // dashboardFS holds the dashboard assets injected by Main (rooted at

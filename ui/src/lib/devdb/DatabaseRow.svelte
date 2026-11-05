@@ -47,7 +47,7 @@
   const failed = $derived(!!operation?.done && !operation?.ok && !operation.all && operation?.db === database)
   // A publish blocked on possible data loss gets its own next action: the
   // user reviews the row's failure text (the log has the exact drops) and
-  // can force the publish here instead of switching to the CLI's --force.
+  // can force the publish here instead of switching to the CLI's --allow-data-loss.
   const dataLossBlocked = $derived(failed && operation?.op === 'publish' && operation?.errorCode === 'publish_blocked_data_loss' && !!onForcePublish)
   const status = $derived(
     running ? { pill: 'pill-info', dot: true, label: operation?.op === 'reset' ? 'Resetting' : 'Publishing' }

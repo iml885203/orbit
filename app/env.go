@@ -47,26 +47,11 @@ local directory that provides shared environments; manage those with
 	}
 	cmd.AddCommand(useCmd)
 	cmd.AddCommand(envInfoCmd())
-	currentCmd := &cobra.Command{
-		Use:    "current",
-		Short:  "Show the active environment config",
-		Hidden: true,
-		Run: func(_ *cobra.Command, _ []string) {
-			path := readCurrentEnv()
-			if path == "" {
-				fmt.Println("No environment set. Use: orbit switch <env>")
-				return
-			}
-			fmt.Println(path)
-		},
-	}
-	cmd.AddCommand(currentCmd)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List available environment configs",
 		RunE:  runEnvList,
 	})
-	cmd.AddCommand(envSyncCmd())
 	cmd.AddCommand(envApplyCmd())
 	toggleCmd := &cobra.Command{
 		Use:    "toggle <service> <var> <on|off>",

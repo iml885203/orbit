@@ -481,7 +481,7 @@ func canceledJSONError(message string) JSONError {
 
 // IsManagedEnvironmentPath reports whether path belongs to Orbit's synced
 // environment repository. Project-local files require a documented schema
-// edit; recommending env sync for them creates a recovery loop.
+// edit; recommending a source sync for them creates a recovery loop.
 func IsManagedEnvironmentPath(path string) bool {
 	root := filepath.Join(daemon.OrbitDir(), "envs")
 	relative, err := filepath.Rel(root, path)

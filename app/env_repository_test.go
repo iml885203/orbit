@@ -109,7 +109,7 @@ func TestEnvRepoSyncErrorDoesNotAssumeMissingGitHubRepoIsPrivate(t *testing.T) {
 	}
 
 	var output bytes.Buffer
-	if writeErr := cli.WriteJSONError(&output, "orbit env sync --json", err); writeErr != nil {
+	if writeErr := cli.WriteJSONError(&output, "orbit source sync --json", err); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 	envelope := decodeEnvelope(t, output.Bytes())

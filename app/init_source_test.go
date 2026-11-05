@@ -329,3 +329,70 @@ func TestInitWithLocalPathDoesNotClaimTheDemo(t *testing.T) {
 		t.Fatalf("--path init did not announce its environment source:\n%s", run.stdout)
 	}
 }
+
+// The init JSON reports the resolved workspace through source.workspace only,
+// so a workspace found during init (here from WORKSPACE_ROOT) must land in
+// that field, not just in the registry.
+func TestInitJSONReportsAWorkspaceResolvedDuringInit(t *testing.T) {
+	orbitHome := t.TempDir()
+	local := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(local, "envs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := "version: \"3\"\nservices:\n  api:\n    type: node\n    path: ${WORKSPACE_ROOT}/api\n    command: node server.js\n"
+	if err := os.WriteFile(filepath.Join(local, "envs", "dev.yaml"), []byte(env), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(workspace, "api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	run := runInitSourceHelperWithEnv(t, orbitHome, true, []string{"WORKSPACE_ROOT=" + workspace},
+		"--yes", "--source", "mine", "--path", local, "--env", "dev")
+
+	data := decodeInitSourceData(t, run)
+	source, ok := data["source"].(map[string]any)
+	if !ok || source["workspace"] != workspace {
+		t.Fatalf("data.source = %v, want workspace %q", data["source"], workspace)
+	}
+	if stored := storedInitSource(t, orbitHome, "mine"); stored.Workspace != workspace {
+		t.Fatalf("stored workspace = %q, want %q", stored.Workspace, workspace)
+	}
+}
+
+// When the sync fails and init continues with the cached environments, the
+// JSON still names the source and its workspace, as workspace_root used to.
+func TestInitJSONReportsTheWorkspaceWhenTheSyncFails(t *testing.T) {
+	orbitHome := t.TempDir()
+	local := t.TempDir()
+	writeInitSourceEnvs(t, local)
+	workspace, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := runInitSourceHelper(t, orbitHome, true, "--yes", "--source", "mine", "--path", local, "--workspace", workspace, "--env", "dev")
+	decodeInitSourceData(t, first)
+	if err := os.RemoveAll(local); err != nil {
+		t.Fatal(err)
+	}
+
+	second := runInitSourceHelper(t, orbitHome, true, "--yes", "--source", "mine", "--env", "dev")
+
+	var envelope struct {
+		Data struct {
+			Source *struct {
+				Workspace string `json:"workspace"`
+			} `json:"source"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(second.stdout), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, second.stdout)
+	}
+	if envelope.Data.Source == nil || envelope.Data.Source.Workspace != workspace {
+		t.Fatalf("data.source = %+v, want workspace %q\nstdout:\n%s", envelope.Data.Source, workspace, second.stdout)
+	}
+}

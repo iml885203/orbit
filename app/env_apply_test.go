@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -277,5 +278,58 @@ func TestEnvironmentApplySeparatesRestoredIntentFromNewDependencies(t *testing.T
 	if !reflect.DeepEqual(data.RestoredResources, restored) ||
 		!reflect.DeepEqual(data.StartedDependencies, []string{"redis"}) {
 		t.Fatalf("apply data = %+v", data)
+	}
+}
+
+// After a source sync, a running daemon with stale config is offered an
+// apply. --dry never asks the daemon, and --no-apply defers with the command
+// to run later instead of applying.
+func TestSourceSyncApplyOfferHonorsDryAndNoApply(t *testing.T) {
+	home, err := os.MkdirTemp(shortTestTempRoot(), "apply-offer-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	t.Setenv("ORBIT_HOME", home)
+	if err := os.MkdirAll(daemon.OrbitDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := daemon.WritePID(); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", daemon.DefaultSocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statusCalls, reconcileCalls atomic.Int32
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/status":
+			statusCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(daemon.StatusResponse{ConfigStale: true})
+		case "/api/env/reconcile":
+			reconcileCalls.Add(1)
+		}
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
+
+	finishCapture := captureLifecycleProcessStreams(t)
+	if err := offerEnvironmentApply(sourceSyncOptions{dry: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := offerEnvironmentApply(sourceSyncOptions{noApply: true}); err != nil {
+		t.Fatal(err)
+	}
+	output, _ := finishCapture()
+
+	if got := statusCalls.Load(); got != 1 {
+		t.Fatalf("status calls = %d, want 1: --dry must not ask the daemon", got)
+	}
+	if got := reconcileCalls.Load(); got != 0 {
+		t.Fatalf("reconcile calls = %d, want 0: neither --dry nor --no-apply applies", got)
+	}
+	if !strings.Contains(string(output), "Apply later with: orbit env apply") {
+		t.Fatalf("output = %q, want the deferred apply command", output)
 	}
 }

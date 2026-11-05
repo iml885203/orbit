@@ -29,7 +29,6 @@ var (
 )
 
 type initResult struct {
-	WorkspaceRoot string               `json:"workspace_root,omitempty"` // Deprecated: use source.workspace.
 	Source        *envsource.Source    `json:"source,omitempty"`
 	EnvsDir       string               `json:"envs_dir"`
 	EnvRepoURL    string               `json:"env_repo_url,omitempty"`
@@ -122,23 +121,11 @@ For non-interactive setup (CI, scripts):
 	cmd.Flags().StringVar(&initPath, "path", "", "local directory containing envs/")
 	cmd.Flags().StringVar(&initEnvRef, "ref", "", "repository branch, tag, or commit")
 	cmd.Flags().StringVar(&initWorkspace, "workspace", "", "local application workspace for this source")
-	cmd.Flags().String("env-repo", "", "deprecated; use --url")
-	cmd.Flags().String("env-ref", "", "deprecated; use --ref")
-	_ = cmd.Flags().MarkHidden("env-repo")
-	_ = cmd.Flags().MarkHidden("env-ref")
 	cmd.Flags().StringVar(&initEnvName, "env", "", "active env short name (e.g. dev); skips the selection prompt")
 	return cmd
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
-	if cmd != nil {
-		if legacyURL, _ := cmd.Flags().GetString("env-repo"); initEnvRepo == "" {
-			initEnvRepo = legacyURL
-		}
-		if legacyRef, _ := cmd.Flags().GetString("env-ref"); initEnvRef == "" {
-			initEnvRef = legacyRef
-		}
-	}
 	if initEnvRepo != "" && initPath != "" {
 		return cli.NewInvalidArgumentError("--url and --path are mutually exclusive")
 	}
@@ -392,17 +379,17 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 		var err error
 		_ = os.Setenv("ORBIT_SOURCE_NAME", source.Name)
-		if source.Workspace != "" {
-			_ = os.Setenv("WORKSPACE_ROOT", source.Workspace)
-			result.WorkspaceRoot = source.Workspace
+		workspaceRoot := source.Workspace
+		if workspaceRoot != "" {
+			_ = os.Setenv("WORKSPACE_ROOT", workspaceRoot)
 		} else {
-			workspaceStepShown, result.WorkspaceRoot, err = configureRequiredWorkspace(output, settings, absPath)
+			workspaceStepShown, workspaceRoot, err = configureRequiredWorkspace(output, settings, absPath)
 		}
 		if err != nil {
 			return err
 		}
-		if result.WorkspaceRoot != source.Workspace {
-			source.Workspace = result.WorkspaceRoot
+		if workspaceRoot != source.Workspace {
+			source.Workspace = workspaceRoot
 			registry, loadErr := envsource.Load(envsource.RegistryPath(daemon.OrbitDir()))
 			if loadErr != nil {
 				return loadErr
@@ -410,6 +397,15 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			if replaceErr := registry.Replace(source); replaceErr != nil {
 				return replaceErr
 			}
+		}
+		// source.workspace is where the JSON reports the workspace, so it must
+		// carry one resolved here, and appear even when the sync failed and
+		// init continues with the cached environments.
+		if result.Source == nil {
+			reported := source
+			result.Source = &reported
+		} else {
+			result.Source.Workspace = workspaceRoot
 		}
 		if err := settings.ClearLegacyEnvironmentSettings(); err != nil {
 			return err

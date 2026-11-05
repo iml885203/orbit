@@ -32,8 +32,7 @@ services:
     command: python3 -m http.server 0
     url: http://localhost:18080/docs
     ports:
-      http:
-        preferred: 18080
+      http: 18080
     env:
       API_KEY: secret
 `

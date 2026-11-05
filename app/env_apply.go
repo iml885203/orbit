@@ -12,6 +12,7 @@ import (
 	"github.com/iml885203/orbit/config"
 	"github.com/iml885203/orbit/daemon"
 	daemonsrv "github.com/iml885203/orbit/internal/daemon"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -376,4 +377,62 @@ func printEnvironmentApplyResult(result environmentApplyResult) {
 			strings.Join(result.UnavailableResources, ", "),
 		)
 	}
+}
+
+func inspectEnvironmentApply() (environmentApplyResult, error) {
+	result := emptyEnvironmentApplyResult()
+	pid, alive := daemon.IsDaemonRunning()
+	result.DaemonRunning = alive
+	result.PreviousPID = pid
+	result.PID = pid
+	if !alive {
+		return result, nil
+	}
+	status, err := daemon.NewClient(daemon.DefaultSocketPath()).Status()
+	if err != nil {
+		return result, fmt.Errorf("checking environment changes: %w", err)
+	}
+	result.ChangesPending = status.ConfigStale
+	result.FinalStatus = status
+	return result, nil
+}
+
+func offerEnvironmentApply(options sourceSyncOptions) error {
+	if options.dry {
+		return nil
+	}
+	pending, err := inspectEnvironmentApply()
+	if err != nil {
+		return err
+	}
+	if !pending.DaemonRunning || !pending.ChangesPending {
+		return nil
+	}
+	if options.noApply {
+		fmt.Println("\nUpdates downloaded. Apply later with: orbit env apply")
+		return nil
+	}
+
+	if !options.yes {
+		if !isatty.IsTerminal(os.Stdin.Fd()) {
+			fmt.Println("\nEnvironment updates downloaded. Apply when ready with: orbit env apply")
+			return nil
+		}
+		message := "\nApply environment updates now?"
+		running := runningEnvironmentResources(pending.FinalStatus.Resources)
+		if len(running) > 0 {
+			message = fmt.Sprintf("\nApply environment updates and restore %d running resource(s)?", len(running))
+		}
+		if !cli.Confirm(message) {
+			fmt.Println("Updates downloaded. Apply later with: orbit env apply")
+			return nil
+		}
+	}
+
+	result, err := applyEnvironmentChanges(environmentApplyProgress())
+	if err != nil {
+		return err
+	}
+	printEnvironmentApplyResult(result)
+	return nil
 }

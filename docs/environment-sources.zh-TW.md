@@ -70,8 +70,3 @@ orbit init --source company --env e2e --yes
 既有單一 repository 設定、cached environments、selection 與 workspace 會在
 無網路時一次遷移到 `default`。Orbit 會回報保留了哪些狀態，並建議檢查及同步
 遷移後的 source。Source 與 selection 成功儲存後才移除舊設定。
-
-遷移期間，不帶 repository 變更 flags 的 `orbit env sync` 仍會同步第一個
-source，並顯示 deprecated 提示。舊的 `--url`、`--path`、`--ref` 不會隱含修改
-source；它們會失敗並指向明確的移除後重新新增流程，且不會靜默忽略任何已接受
-的 flag。
