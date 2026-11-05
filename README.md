@@ -56,7 +56,7 @@ Windows PowerShell (Beta):
 irm https://raw.githubusercontent.com/iml885203/orbit/main/scripts/install.ps1 | iex
 ```
 
-This installs the latest published preview release. Orbit installs only its
+This installs the latest published release. Orbit installs only its
 own CLI—never a project's runtimes or dependencies; `orbit doctor` reports
 what the selected environment expects and the specific remedy. Upgrade,
 rollback, uninstall, and platform details are in
