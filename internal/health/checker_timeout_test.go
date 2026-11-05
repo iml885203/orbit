@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 // An HTTP check honours its configured timeout. `tcp` always did; `http` was

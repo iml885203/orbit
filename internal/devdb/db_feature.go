@@ -3,9 +3,9 @@ package devdb
 import (
 	"context"
 
-	"github.com/iml885203/orbit/daemon"
-	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/dbstate"
+	"github.com/iml885203/orbit/internal/extension"
 	"github.com/iml885203/orbit/internal/sqlpublish"
 )
 

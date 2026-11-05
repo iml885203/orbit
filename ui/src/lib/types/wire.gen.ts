@@ -44,12 +44,12 @@ export interface Settings {
 //////////
 // source: wire.go
 /*
-Package daemon is the public wire-and-host surface of the orbit
+Package daemon is the shared wire-and-host surface of the orbit
 daemon: the JSON contracts the CLI, dashboard, and extensions speak,
 the socket client, settings, and the capability types a feature's
-DaemonSetup consumes. The concrete HTTP server lives in the
-core-private internal/daemon — it implements these contracts; nothing
-here depends on it.
+DaemonSetup consumes. The concrete HTTP server lives in
+internal/daemonsrv — it implements these contracts; nothing here
+depends on it.
 */
 
 /**

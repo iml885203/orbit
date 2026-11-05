@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/devdb"
 	"github.com/iml885203/orbit/internal/distribution"
+	"github.com/iml885203/orbit/internal/extension"
 	"github.com/iml885203/orbit/internal/tunnel"
 )
 

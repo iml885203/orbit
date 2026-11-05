@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/iml885203/orbit/config"
+import "github.com/iml885203/orbit/internal/config"
 
 // FilterEnabledServices returns the set of service/container names that should
 // be started based on the enabled groups. If no groups are defined, all

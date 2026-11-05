@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/iml885203/orbit/config"
+import "github.com/iml885203/orbit/internal/config"
 
 // DepGraph is a snapshot of the dependency adjacency for a Config,
 // with detached edges already filtered out. It's the single source

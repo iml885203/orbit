@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/cli"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/dbstate"
 	"github.com/iml885203/orbit/internal/shellquote"
 	"github.com/iml885203/orbit/internal/sqlpublish"

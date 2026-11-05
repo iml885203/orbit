@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 // startContainerForExit starts redis with a fake runtime ID and returns the

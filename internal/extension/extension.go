@@ -1,0 +1,126 @@
+// Package extension defines the compile-time contract between the orbit
+// core and its feature sets (internal/devdb, internal/tunnel). The core
+// never imports an extension; cmd/orbit constructs the registrations and
+// hands them to the core at startup. It is internal: Orbit has no public
+// Go API, so only this module can register an extension. Registration is an explicit
+// slice — no global init() registry — so wiring order is visible and
+// testable.
+//
+// The contract grew batch by batch with the extension-interface
+// extraction; fields are added when the seam they serve is registered,
+// not before.
+package extension
+
+import (
+	"io/fs"
+	"net/http"
+
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/daemon"
+
+	"github.com/spf13/cobra"
+)
+
+type Extension struct {
+	// Name keys the extension in daemon registration and diagnostics
+	// once B3 wires DaemonSetup; until then it only labels the wiring.
+	Name string
+
+	// Commands returns CLI commands appended to the root command. The
+	// commands emit the shared output contract via internal/cli.
+	Commands func() []*cobra.Command
+
+	// CommandVisibility returns whether each extension command belongs in
+	// root help for the selected environment. Hidden commands remain
+	// callable, so explicit discovery and automation do not depend on help.
+	CommandVisibility func(cfg *config.Config) map[string]bool
+
+	// DaemonSetup is invoked once from the daemon's route setup (before
+	// any listener serves). It constructs the extension's daemon state,
+	// registers routes on mux, and returns the hooks the daemon honours.
+	DaemonSetup func(host Host, mux *http.ServeMux) DaemonHooks
+
+	// CLIDoctor contributes to `orbit doctor`'s OFFLINE path (daemon not
+	// running — the daemon path uses DoctorRegistrar via DaemonSetup).
+	// Two hooks because the human rendering has feature-specific prose
+	// (clone hints, mode lines) that structured checks can't carry
+	// without changing the printed output.
+	CLIDoctor *CLIDoctor
+
+	// Distribution brands the built binary with its distribution
+	// endpoints. Nil leaves those commands requiring explicit
+	// configuration (flag, setting, or env var). When several
+	// extensions set it, the first non-nil wins.
+	Distribution *Distribution
+
+	// CLIInit contributes to `orbit init`'s interactive wizard.
+	CLIInit *CLIInit
+}
+
+// CLIInit is the init-wizard contribution: workspace-root detection
+// hints and feature-specific settings steps. All fields are optional.
+type CLIInit struct {
+	// WorkspaceCandidates returns auto-detect candidates for the
+	// workspace root, tried in order when neither settings nor env
+	// provide one.
+	WorkspaceCandidates func(home string) []string
+	// WorkspaceMarkers reports known repo directories under root. At least
+	// one marker proves an auto-detected candidate is a real workspace.
+	WorkspaceMarkers func(root string) []string
+	// Steps runs feature-specific settings prompts after core environment
+	// and contextual workspace setup. yes mirrors --yes (accept defaults,
+	// no prompting); prompt reads one trimmed line from the user. quiet
+	// asks the extension to keep stdout machine-readable for --json.
+	Steps func(settings *daemon.Settings, yes bool, prompt func(label string) string, quiet bool) error
+}
+
+// Distribution names where a distribution of the binary gets its
+// updates and defaults from — properties of the built artifact, not of
+// any daemon feature.
+type Distribution struct {
+	// EnvRepoURL is the default git repo that `orbit init` suggests, used
+	// when no --url flag, env_repo_url setting, or ORBIT_ENV_REPO_URL env var
+	// overrides it.
+	EnvRepoURL string
+	// EnvRepoRef pins the default repository to the demo revision compatible
+	// with this binary release. Custom repositories remain unpinned unless
+	// their owner selects a ref explicitly.
+	EnvRepoRef string
+	// InstallURL is the install script `orbit update` pipes to
+	// bash, unless ORBIT_INSTALL_URL overrides it.
+	InstallURL string
+	// ReleaseAPIURL returns release metadata and artifact URLs used for
+	// background update discovery. Empty disables automatic discovery; the
+	// update channel decides which integrity evidence it requires.
+	ReleaseAPIURL string
+	// ReleaseRepository pins the identity whose release evidence the update
+	// channel accepts. A URL alone is discovery metadata, not a trust policy.
+	ReleaseRepository string
+	// DefaultEnv is the env file preferred when none is selected: the
+	// fallback config path when no current env is set, and the init
+	// wizard's pick when several envs are available. Empty means no
+	// preference (first available wins; no fallback path).
+	DefaultEnv string
+	// AgentSkill is the agent skill bundled with this distribution, rooted
+	// at the directory holding its SKILL.md. `orbit skill install` copies it
+	// into the universal agent skills directory. Nil when the build bundles
+	// none; the command then reports that and does nothing.
+	AgentSkill fs.FS
+	// PluginMarketplace is the GitHub repository (owner/name) Claude Code
+	// adds as a plugin marketplace before installing the Orbit plugin, and
+	// PluginID is the plugin's `name@marketplace` identity there. Either
+	// empty disables the plugin route.
+	PluginMarketplace string
+	PluginID          string
+}
+
+// CLIDoctor is the offline-doctor contribution. cfg is the loaded and
+// validated config, read from configPath; callers never invoke these with a
+// nil cfg (a failed config load is reported by the core Config check instead).
+type CLIDoctor struct {
+	// Checks returns structured checks for the --json local response.
+	Checks func(cfg *config.Config, configPath string) []daemon.DoctorCheck
+	// PrintHuman renders the feature's section of the human doctor
+	// output to stdout.
+	PrintHuman func(cfg *config.Config)
+}

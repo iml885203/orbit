@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/dbstate"
 )
 

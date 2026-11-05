@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 // writeProjFixture creates <root>/<project>/<db>/<db>.sqlproj.

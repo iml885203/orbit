@@ -66,7 +66,7 @@ test-ui-unit:
 # End-to-end tests against a real daemon + Docker. Uses the freshly built
 # ./bin/orbit (skips tests if they detect container name collisions).
 test-e2e: build
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -v -count=1 ./app/ -run E2E
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -v -count=1 ./internal/app/ -run E2E
 
 # Installed-user journeys share one freshly built binary. Keep these out of the
 # inner loop: they intentionally use real Git repositories, processes, and
@@ -112,10 +112,10 @@ test-journey-project-context-switch:
 # The .NET journey runs in its own non-blocking CI job (test-journey-dotnet)
 # until it proves stable on Linux runners.
 test-journey-recovery:
-	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 12m ./app -run '^TestE2E_' -skip '^TestE2E_Dotnet'
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 12m ./internal/app -run '^TestE2E_' -skip '^TestE2E_Dotnet'
 
 test-journey-dotnet: build
-	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 10m ./app -run '^TestE2E_Dotnet' -v
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 10m ./internal/app -run '^TestE2E_Dotnet' -v
 
 test-journey-startup-readiness:
 	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh

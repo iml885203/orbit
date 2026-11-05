@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/daemon"
 )
 
 // The reset endpoint's request-shape validation before any SQL Server probe.

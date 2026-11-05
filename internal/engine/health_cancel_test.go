@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 // Phase 2: a Stop issued while the health check is still polling must cancel

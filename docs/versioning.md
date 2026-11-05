@@ -109,13 +109,17 @@ The following surfaces are compatibility contracts:
 - CLI command names, flags, exit behavior, and documented human workflows;
 - agent-facing JSON envelopes and their named schema versions;
 - environment YAML schema and validation behavior;
-- persisted user settings;
-- public extension API.
+- persisted user settings.
 
 Additive changes are allowed in MINOR releases. Consumers of JSON responses
 must ignore unknown fields. Removing or renaming a field, command,
-flag, configuration key, or public Go symbol requires either a new named schema
-version or a MAJOR Orbit release.
+or configuration key requires either a new named schema version or a MAJOR
+Orbit release.
+
+Orbit has no public Go API. Every Go package lives under `internal/`, so no
+other module can import it. The one exception is `plugins`, which must sit next
+to the bundled plugin files it embeds; it is not a compatibility contract
+either. A designed public API may be added later as a MINOR change.
 
 Undocumented internals, the daemon HTTP API, dashboard markup and styling, log
 wording, and test fixtures are not compatibility contracts. The daemon HTTP API

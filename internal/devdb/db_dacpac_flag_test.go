@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// `--dacpac-dir ''` used to read as "flag omitted" and fall back to building
+// `--dacpac-dir ”` used to read as "flag omitted" and fall back to building
 // from source, which then failed on project paths that do not exist on that
 // machine — an error pointing at the config rather than at the argument.
 // Reported from CI that signals "no artifacts this run" by clearing the

@@ -1,0 +1,374 @@
+package app
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/iml885203/orbit/internal/autoupdate"
+	"github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/instance"
+	"github.com/spf13/cobra"
+)
+
+func TestUpdateMutationCommandKeepsObservationAvailable(t *testing.T) {
+	root := &cobra.Command{Use: "orbit"}
+	status := &cobra.Command{Use: "status"}
+	up := &cobra.Command{Use: "up"}
+	skill := &cobra.Command{Use: "skill"}
+	skillInstall := &cobra.Command{Use: "install"}
+	root.AddCommand(status, up, skill)
+	skill.AddCommand(skillInstall)
+	if updateMutationCommand(status) {
+		t.Fatal("status must observe a pending update without waiting")
+	}
+	if !updateMutationCommand(up) {
+		t.Fatal("up must wait for a pending update transaction")
+	}
+	if updateMutationCommand(skillInstall) {
+		t.Fatal("skill install touches agent directories, not the daemon; it must not wait on an update transaction")
+	}
+}
+
+func TestWorkerTransactionBypassesItsOwnPendingGate(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	state, err := autoupdate.BeginTransaction(launch, "update", "v0.17.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(daemon.UpdateTransactionEnv, state.Transaction.ID)
+	root := &cobra.Command{Use: "orbit"}
+	up := &cobra.Command{Use: "up"}
+	root.AddCommand(up)
+	if err := waitForPendingAutomaticUpdate(up); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPackageManagedUpdateHasOneOwnerAction(t *testing.T) {
+	update := &autoupdate.Summary{Owner: autoupdate.OwnerHomebrew, Phase: "available", TargetVersion: "v0.17.0"}
+	if !updateNeedsUserAction(update) {
+		t.Fatal("package-managed release must require its owner action")
+	}
+	if command := releaseUpdateCommand(update, true); command != "brew upgrade iml885203/tap/orbit" {
+		t.Fatalf("command = %q", command)
+	}
+}
+
+func TestPackageManagerDetectionFollowsHomebrewSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink fixture")
+	}
+	root := t.TempDir()
+	target := filepath.Join(root, "Cellar", "orbit", "0.17.0", "bin", "orbit")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(root, "bin", "orbit")
+	if err := os.MkdirAll(filepath.Dir(launcher), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, launcher); err != nil {
+		t.Fatal(err)
+	}
+	managed := packageManagerForBinary(launcher, runtime.GOOS)
+	if managed == nil || managed.command != "brew upgrade iml885203/tap/orbit" {
+		t.Fatalf("managed = %+v", managed)
+	}
+}
+
+func TestAutomaticUpdateSettingUsesDocumentedKey(t *testing.T) {
+	if got, err := translateSettingsKey("automatic-updates"); err != nil || got != "automatic_updates" {
+		t.Fatalf("translated = %q, err = %v", got, err)
+	}
+}
+
+func TestNamedContextStillDiscoversDefaultRuntimeSocket(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv(instance.EnvBaseHome, base)
+	t.Setenv(instance.EnvName, "agent-one")
+	t.Setenv("ORBIT_HOME", filepath.Join(base, "instances", "agent-one"))
+	sockets := discoverableDefaultRuntimeSockets()
+	wantDefault := filepath.Join(base, "orbit.sock")
+	wantNamed := filepath.Join(base, "instances", "agent-one", "orbit.sock")
+	if len(sockets) != 2 || sockets[0] != wantDefault || sockets[1] != wantNamed {
+		t.Fatalf("sockets = %v, want [%s %s]", sockets, wantDefault, wantNamed)
+	}
+}
+
+func TestUpdateWorkerReplacesVerifiedBinaryAndKeepsBackup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture is a POSIX executable script")
+	}
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target := filepath.Join(dir, "orbit")
+	staged := filepath.Join(dir, "staged")
+	oldScript := "#!/bin/sh\necho 'v0.16.0'\n"
+	newScript := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'v0.17.0'; else echo '{\"schema_version\":\"orbit.cli.v1\",\"ok\":true}'; fi\n"
+	if err := os.WriteFile(target, []byte(oldScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte(newScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err := autoupdate.Load(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.TargetVersion = "v0.17.0"
+	state.StagedBinary = staged
+	state.StagedEvidence = testStagedEvidence(t, staged, state.TargetVersion)
+	if err := autoupdate.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	installed, _ := os.ReadFile(target)
+	backup, _ := os.ReadFile(target + ".prev")
+	if !strings.Contains(string(installed), "orbit.cli.v1") || string(backup) != oldScript {
+		t.Fatalf("installed=%q backup=%q", installed, backup)
+	}
+	final, err := autoupdate.Load(target)
+	if err != nil || final.Phase != "succeeded" {
+		t.Fatalf("final=%+v err=%v", final, err)
+	}
+}
+
+func TestUpdateWorkerRollsBackWrongReportedVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture is a POSIX executable script")
+	}
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target := filepath.Join(dir, "orbit")
+	staged := filepath.Join(dir, "staged")
+	oldScript := "#!/bin/sh\necho 'v0.16.0'\n"
+	wrongScript := "#!/bin/sh\necho 'v9.9.9'\n"
+	if err := os.WriteFile(target, []byte(oldScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte(wrongScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion = "v0.17.0"
+		next.StagedBinary = staged
+		next.StagedEvidence = testStagedEvidence(t, staged, next.TargetVersion)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("wrong target version was accepted")
+	}
+	installed, err := os.ReadFile(target)
+	if err != nil || string(installed) != oldScript {
+		t.Fatalf("installed=%q err=%v", installed, err)
+	}
+}
+
+func TestUpdateWorkerRejectsStagedMutationBeforeReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture is a POSIX executable script")
+	}
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target := filepath.Join(dir, "orbit")
+	staged := filepath.Join(dir, "staged")
+	oldScript := []byte("#!/bin/sh\necho 'v0.16.0'\n")
+	verifiedScript := []byte("#!/bin/sh\necho 'v0.17.0'\n")
+	if err := os.WriteFile(target, oldScript, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, verifiedScript, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion = "v0.17.0"
+		next.StagedBinary = staged
+		next.StagedEvidence = testStagedEvidence(t, staged, next.TargetVersion)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte("mutated"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := false
+	previousDrain := drainUpdateRuntimes
+	drainUpdateRuntimes = func(autoupdate.State, bool) (map[string]drainedRuntime, error) {
+		drained = true
+		return nil, nil
+	}
+	defer func() { drainUpdateRuntimes = previousDrain }()
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("mutated staged binary was accepted")
+	}
+	if drained {
+		t.Fatal("runtime drain started before staged evidence validation")
+	}
+	installed, err := os.ReadFile(target)
+	if err != nil || !bytes.Equal(installed, oldScript) {
+		t.Fatalf("installed=%q err=%v", installed, err)
+	}
+	if _, err := os.Stat(target + ".prev"); !os.IsNotExist(err) {
+		t.Fatalf("backup created before evidence failure: %v", err)
+	}
+	final, err := autoupdate.Load(target)
+	if err != nil || final.Transaction == nil || final.Transaction.Phase != "failed" {
+		t.Fatalf("final=%+v err=%v", final, err)
+	}
+}
+
+func TestUpdateWorkerRejectsMissingEvidenceBeforeRuntimeDrain(t *testing.T) {
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	dir := t.TempDir()
+	target, staged := filepath.Join(dir, "orbit"), filepath.Join(dir, "staged")
+	for _, path := range []string{target, staged} {
+		if err := os.WriteFile(path, []byte("candidate"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := autoupdate.Update(target, func(next *autoupdate.State) error {
+		next.TargetVersion, next.StagedBinary, next.StagedEvidence = "v0.17.0", staged, nil
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = autoupdate.BeginTransaction(target, "update", state.TargetVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := false
+	previousDrain := drainUpdateRuntimes
+	drainUpdateRuntimes = func(autoupdate.State, bool) (map[string]drainedRuntime, error) { drained = true; return nil, nil }
+	defer func() { drainUpdateRuntimes = previousDrain }()
+	if err := runUpdateWorker("update", target, staged, state.InstallationID, state.Transaction.ID, 0); err == nil {
+		t.Fatal("missing staged evidence was accepted")
+	}
+	if drained {
+		t.Fatal("runtime drain started before missing evidence was rejected")
+	}
+}
+
+func testStagedEvidence(t *testing.T, path, tag string) *autoupdate.VerificationRecord {
+	t.Helper()
+	previous := distribution.ReleaseRepository
+	distribution.ReleaseRepository = "test/repo"
+	t.Cleanup(func() { distribution.ReleaseRepository = previous })
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(contents)
+	assetName, err := autoupdate.PlatformAssetName()
+	if err != nil {
+		panic(err)
+	}
+	return &autoupdate.VerificationRecord{
+		PolicyVersion: "github-release-v1", Repository: "test/repo", Tag: tag,
+		TargetCommit: strings.Repeat("a", 40), AssetName: assetName,
+		AssetSHA256: hex.EncodeToString(digest[:]), ChecksumsSHA256: strings.Repeat("b", 64),
+		VerifiedAt: time.Now().UTC(),
+	}
+}
+
+func stalePackageManagedRelease(t *testing.T, launch string) {
+	t.Helper()
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	state, err := autoupdate.Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Owner = autoupdate.OwnerHomebrew
+	state.CurrentVersion = "v0.16.5 (2026-10-14 17:10:53 +0800)"
+	state.TargetVersion = "v0.16.6"
+	state.Phase = "available"
+	if err := autoupdate.Save(state); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func runningAs(t *testing.T, build string) {
+	t.Helper()
+	previousVersion, previousTime := version, buildTime
+	version, buildTime = build, ""
+	t.Cleanup(func() { version, buildTime = previousVersion, previousTime })
+}
+
+func TestInspectDoesNotAnnounceTheReleaseAlreadyInstalled(t *testing.T) {
+	launch, err := invokedBinaryPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalePackageManagedRelease(t, launch)
+	runningAs(t, "v0.16.6")
+
+	got := buildInspectData(inspectBuildOptions{
+		ConfigPath:    "/tmp/development.yaml",
+		ConfigEnvName: "development",
+		ReleaseUpdate: invokedReleaseUpdate(),
+		Configured: []daemon.ResourceStatus{
+			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
+		},
+	})
+
+	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up --json" {
+		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+	}
+	if got.Daemon.ReleaseUpdate == nil || got.Daemon.ReleaseUpdate.TargetVersion != "" {
+		t.Fatalf("release_update = %+v", got.Daemon.ReleaseUpdate)
+	}
+}
+
+func TestDaemonStartSettlesTheReleaseItRunsFrom(t *testing.T) {
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	launch := filepath.Join(t.TempDir(), "bin", "orbit")
+	t.Setenv(autoupdate.EnvLaunchPath, launch)
+	stalePackageManagedRelease(t, launch)
+	runningAs(t, "v0.16.6")
+
+	unregister := registerUpdateRuntime()
+	defer unregister()
+
+	state, err := autoupdate.Load(launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.TargetVersion != "" || state.Phase != "current" {
+		t.Fatalf("registry after daemon start = %+v", state)
+	}
+}

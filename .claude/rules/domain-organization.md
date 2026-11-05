@@ -10,8 +10,8 @@ paths: ["**/*.go", "**/*.svelte", "**/*.ts"]
 
 **Good** (Go):
 ```
-internal/daemon/handlers_settings.go      ← owns the settings HTTP domain
-internal/daemon/handlers_graph.go         ← owns the graph HTTP domain
+internal/daemonsrv/handlers_settings.go      ← owns the settings HTTP domain
+internal/daemonsrv/handlers_graph.go         ← owns the graph HTTP domain
 internal/engine/dep_graph.go              ← owns dep-graph logic
 ```
 

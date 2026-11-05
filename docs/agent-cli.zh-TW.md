@@ -367,7 +367,7 @@ trace summary 帶有 `traceId`、`rootService`、`rootName`、`startUnixNano`、
 （`ok` | `error`），health-probe 流量另帶 `health: true`（否則省略）。完整 trace 多了 `spans`，每個 span 有
 `traceId`/`spanId`/`parentId`、`service`、`name`、`kind`、
 `startUnixNano`/`endUnixNano`/`durationMs`、`status`/`statusMsg` 與
-`attributes`。這些欄位名由 contract test（`app/traces_json_test.go`）
+`attributes`。這些欄位名由 contract test（`internal/app/traces_json_test.go`）
 釘住 —— 改名視同 breaking change。
 
 `-f --json` 模式下，同一個 `traceId` 會隨 span 累積而重複發出；後到的

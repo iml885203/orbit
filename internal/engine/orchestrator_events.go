@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/iml885203/orbit/port"
+	"github.com/iml885203/orbit/internal/port"
 )
 
 func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {

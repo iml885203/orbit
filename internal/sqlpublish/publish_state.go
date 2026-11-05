@@ -51,7 +51,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/iml885203/orbit/atomicio"
+	"github.com/iml885203/orbit/internal/atomicio"
 )
 
 // dbMarkerSet is the cheap DB-side drift signal, shared by the publish

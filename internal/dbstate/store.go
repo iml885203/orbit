@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iml885203/orbit/atomicio"
+	"github.com/iml885203/orbit/internal/atomicio"
 )
 
 // Store maintains per-db state in memory and on disk. Daemon-owned;

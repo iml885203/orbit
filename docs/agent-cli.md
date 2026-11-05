@@ -517,7 +517,7 @@ A trace summary carries `traceId`, `rootService`, `rootName`, `startUnixNano`,
 otherwise). The full trace adds `spans`, each with
 `traceId`/`spanId`/`parentId`, `service`, `name`, `kind`, `startUnixNano`/
 `endUnixNano`/`durationMs`, `status`/`statusMsg`, and `attributes`. These key
-names are pinned by contract tests (`app/traces_json_test.go`) — treat
+names are pinned by contract tests (`internal/app/traces_json_test.go`) — treat
 renames as breaking.
 
 In `-f --json` mode the same `traceId` may be emitted repeatedly as its trace
