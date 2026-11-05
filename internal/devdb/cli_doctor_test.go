@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/daemon"
 )
 
 func TestPublishToolchainChecks_PrebuildAlternatives(t *testing.T) {

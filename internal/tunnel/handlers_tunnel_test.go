@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/extension"
-	"github.com/iml885203/orbit/process"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/extension"
+	"github.com/iml885203/orbit/internal/process"
 	"github.com/iml885203/tunlease/pkg/tunnelclient"
 )
 

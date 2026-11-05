@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/extension"
 	"github.com/iml885203/orbit/plugins"
 )
 

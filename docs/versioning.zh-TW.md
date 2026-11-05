@@ -74,12 +74,15 @@ bytes。這個 runtime boundary 與發布流程的驗證、build provenance 各�
 - CLI command 名稱、flags、exit 行為與文件化操作流程；
 - Agent 使用的 JSON envelope 與具名 schema version；
 - Environment YAML schema 與 validation 行為；
-- 儲存於本機的 user settings；
-- Public extension API。
+- 儲存於本機的 user settings。
 
 MINOR release 可以加入 additive change。JSON consumer 必須忽略未知欄位。
-移除或重新命名欄位、command、flag、設定 key 或 public Go symbol，
-必須建立新的具名 schema version，或發布新的 MAJOR Orbit 版本。
+移除或重新命名欄位、command、flag 或設定 key，必須建立新的具名 schema
+version，或發布新的 MAJOR Orbit 版本。
+
+Orbit 沒有公開的 Go API。所有 Go package 都在 `internal/` 底下，其他 module
+無法 import。唯一的例外是 `plugins`：它必須放在它 embed 的 plugin 檔案旁邊，
+同樣不是相容性契約。之後若要提供設計過的公開 API，可在 MINOR 版本新增。
 
 未文件化的 internal implementation、daemon HTTP API、dashboard markup 與
 styling、log 文字及 test fixtures 不屬於相容性契約。Daemon HTTP API 是 CLI、

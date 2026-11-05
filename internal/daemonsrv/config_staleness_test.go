@@ -1,0 +1,174 @@
+package daemonsrv
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func writeTempConfig(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// staleServer returns a Server with just enough state for configStale:
+// the baseline is recorded through the production choke point.
+func staleServer(t *testing.T, configPath string) *Server {
+	t.Helper()
+	t.Setenv("ORBIT_HOME", t.TempDir())
+	s := &Server{}
+	s.SetConfigPath(configPath)
+	return s
+}
+
+func advanceModTime(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := info.ModTime().Add(time.Second)
+	if err := os.Chtimes(path, next, next); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigStale_FreshBaselineIsNotStale(t *testing.T) {
+	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"3\"\n")
+	s := staleServer(t, path)
+
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("fresh baseline reported stale: %s", reason)
+	}
+}
+
+func TestConfigStale_FileEdited(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\n")
+	s := staleServer(t, path)
+
+	writeTempConfig(t, dir, "dev.yaml", "version: \"3\"\nsettings:\n  shutdown_timeout: 15s\n")
+	advanceModTime(t, path)
+
+	stale, reason := s.configStale()
+	if !stale || reason != "env file edited" {
+		t.Fatalf("edited file not detected: stale=%v reason=%q", stale, reason)
+	}
+}
+
+func TestConfigStale_ParentFileEdited(t *testing.T) {
+	dir := t.TempDir()
+	parent := writeTempConfig(t, dir, "base.yaml", "version: \"3\"\n")
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	writeTempConfig(t, dir, "base.yaml", "version: \"3\"\nsettings:\n  shutdown_timeout: 15s\n")
+	advanceModTime(t, parent)
+
+	stale, reason := s.configStale()
+	if !stale || reason != "env file edited" {
+		t.Fatalf("edited parent not detected: stale=%v reason=%q", stale, reason)
+	}
+}
+
+func TestConfigStale_ParentMissingAfterTwoChecks(t *testing.T) {
+	dir := t.TempDir()
+	parent := writeTempConfig(t, dir, "base.yaml", "version: \"3\"\n")
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	if err := os.Remove(parent); err != nil {
+		t.Fatal(err)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("first missing check should absorb a transient save: %s", reason)
+	}
+	wantReason := "parent env file missing: " + parent
+	if stale, reason := s.configStale(); !stale || reason != wantReason {
+		t.Fatalf("persistent missing parent: stale=%v reason=%q, want %q", stale, reason, wantReason)
+	}
+}
+
+func TestConfigStale_ParentReappearsBeforeSecondCheck(t *testing.T) {
+	dir := t.TempDir()
+	content := "version: \"3\"\n"
+	parent := writeTempConfig(t, dir, "base.yaml", content)
+	child := writeTempConfig(t, dir, "dev.yaml", "extends: base.yaml\n")
+	s := staleServer(t, child)
+
+	if err := os.Remove(parent); err != nil {
+		t.Fatal(err)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("first missing check should absorb a transient save: %s", reason)
+	}
+	writeTempConfig(t, dir, "base.yaml", content)
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("restored parent reported stale: %s", reason)
+	}
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("missing counter did not reset: %s", reason)
+	}
+}
+
+func TestConfigStale_TouchWithoutChangeIsNotStale(t *testing.T) {
+	dir := t.TempDir()
+	content := "version: \"3\"\n"
+	path := writeTempConfig(t, dir, "dev.yaml", content)
+	s := staleServer(t, path)
+
+	// Same bytes, new mtime — the hash comparison must absorb the touch.
+	writeTempConfig(t, dir, "dev.yaml", content)
+	advanceModTime(t, path)
+
+	if stale, reason := s.configStale(); stale {
+		t.Fatalf("touch without change reported stale: %s", reason)
+	}
+}
+
+func TestConfigStale_SelectionChanged_OnlyForCurrentBackedDaemons(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("ORBIT_HOME", home)
+	dir := t.TempDir()
+	loaded := writeTempConfig(t, dir, "development.yaml", "version: \"3\"\n")
+	other := writeTempConfig(t, dir, "sports.yaml", "version: \"3\"\n")
+
+	// Daemon started from the current selection.
+	if err := os.WriteFile(filepath.Join(home, "current"), []byte(loaded+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{}
+	s.SetConfigPath(loaded)
+
+	// User switches selection behind the daemon's back (orbit switch).
+	if err := os.WriteFile(filepath.Join(home, "current"), []byte(other+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stale, reason := s.configStale()
+	if !stale || reason != "env selection changed" {
+		t.Fatalf("selection change not detected: stale=%v reason=%q", stale, reason)
+	}
+
+	// A -c daemon (loaded path never matched current) must not false-alarm.
+	explicit := &Server{}
+	explicit.SetConfigPath(writeTempConfig(t, dir, "custom.yaml", "version: \"3\"\n"))
+	if stale, reason := explicit.configStale(); stale {
+		t.Fatalf("-c daemon false-alarmed on selection: %s", reason)
+	}
+}
+
+func TestConfigStale_EngineStaleSticky(t *testing.T) {
+	path := writeTempConfig(t, t.TempDir(), "dev.yaml", "version: \"3\"\n")
+	s := staleServer(t, path)
+
+	s.engineStale.Store(true)
+	stale, reason := s.configStale()
+	if !stale || reason != "environment graph needs refresh" {
+		t.Fatalf("engine staleness not reported: stale=%v reason=%q", stale, reason)
+	}
+}

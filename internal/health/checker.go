@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/logging"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/logging"
 )
 
 // ContainerInspector is the narrow Docker-facing surface the exec and

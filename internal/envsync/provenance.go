@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iml885203/orbit/atomicio"
+	"github.com/iml885203/orbit/internal/atomicio"
 )
 
 const provenanceFilename = ".orbit-source.json"

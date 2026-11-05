@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 func TestBuildDAG_TopologicalOrder(t *testing.T) {

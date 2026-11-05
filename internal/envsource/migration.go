@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/gofrs/flock"
-	"github.com/iml885203/orbit/atomicio"
+	"github.com/iml885203/orbit/internal/atomicio"
 	"github.com/iml885203/orbit/internal/envsync"
 )
 

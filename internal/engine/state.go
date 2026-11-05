@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/iml885203/orbit/port"
+	"github.com/iml885203/orbit/internal/port"
 )
 
 // ServiceState represents the lifecycle state of a service or container.

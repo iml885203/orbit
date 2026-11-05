@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/iml885203/orbit/config"
+import "github.com/iml885203/orbit/internal/config"
 
 // BuildDAGWithDetached returns a topologically sorted start order and the
 // full deps adjacency, honoring a detached-edges overlay.

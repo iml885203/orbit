@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/tunnel"
 )
 

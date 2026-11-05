@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/iml885203/orbit/daemon"
-	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/dbstate"
+	"github.com/iml885203/orbit/internal/extension"
 )
 
 // SetupDaemon wires the DB workflow into the daemon before the listener starts.

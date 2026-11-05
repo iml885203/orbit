@@ -23,16 +23,16 @@ The rest of this doc drills into each piece.
 ```
 orbit up
   │
-  ├─ Config Loader      config/                 YAML → typed schema, env-var substitution, validation
-  ├─ Dependency DAG     internal/engine/        Topological sort over services + containers
-  ├─ Orchestrator       internal/engine/        Event loop: translates events into state transitions
-  ├─ Scheduler          internal/engine/        Decides what to start / stop / restart next
-  ├─ Container Manager  container/              Docker SDK wrapper (inspect, start, stop, poll, seed, init)
-  ├─ Process Manager    process/                Spawn / kill dev processes with group isolation
-  ├─ Health Checker     internal/health/        http, tcp, log, exec, healthcheck probes + wait strategies
-  ├─ Port / Preflight   port/, internal/preflight/  Reserve ports, check prerequisites before launch
-  ├─ Env Sync           internal/envsync/       Shallow-clone / refresh env configs from git
-  └─ Daemon Server      internal/daemon/        Unix socket + TCP :19800 API, Svelte 5 dashboard, SSE
+  ├─ Config Loader      internal/config/            YAML → typed schema, env-var substitution, validation
+  ├─ Dependency DAG     internal/engine/            Topological sort over services + containers
+  ├─ Orchestrator       internal/engine/            Event loop: translates events into state transitions
+  ├─ Scheduler          internal/engine/            Decides what to start / stop / restart next
+  ├─ Container Manager  internal/container/         Docker SDK wrapper (inspect, start, stop, poll, seed, init)
+  ├─ Process Manager    internal/process/           Spawn / kill dev processes with group isolation
+  ├─ Health Checker     internal/health/            http, tcp, log, exec, healthcheck probes + wait strategies
+  ├─ Port / Preflight   internal/port/, internal/preflight/  Reserve ports, check prerequisites before launch
+  ├─ Env Sync           internal/envsync/           Shallow-clone / refresh env configs from git
+  └─ Daemon Server      internal/daemonsrv/         Unix socket + TCP :19800 API, Svelte 5 dashboard, SSE
 ```
 
 The CLI (the `app` package, wired by each binary's thin `cmd/orbit/main.go`) is a thin client over the daemon — every subcommand either talks to the daemon over its unix socket or runs local subprocesses (docker, dotnet).
@@ -78,7 +78,7 @@ immediately instead of entering a health timeout.
 
 | | Container | Process |
 |---|---|---|
-| Owner | `container/manager.go` | `process/manager.go` |
+| Owner | `internal/container/manager.go` | `internal/process/manager.go` |
 | Start | Docker `container.create` + `container.start` | `exec.Command` under a fresh process group (`setpgid` on Unix, Job Objects on Windows) |
 | Stop | Docker stop + 10s grace → kill | SIGTERM to the group → `shutdown_timeout` grace (default 30s) → SIGKILL to the group |
 | Health | Polled every 2s via `container.inspect` plus the service's declared `health_check` | The declared `health_check` only |
@@ -96,7 +96,7 @@ returns; restarting Orbit or each container is not part of the recovery model.
 
 Killing a dev process (e.g. `dotnet watch`) with SIGTERM often leaves grandchild processes running. Orbit solves this by putting every spawned process in its own process group and signalling the **group**, not the leader.
 
-- **Unix** (`platform/process_unix.go` on Linux/macOS): `syscall.SysProcAttr{Setpgid: true}`, then `syscall.Kill(-pgid, sig)` on shutdown.
+- **Unix** (`internal/platform/process_unix.go` on Linux/macOS): `syscall.SysProcAttr{Setpgid: true}`, then `syscall.Kill(-pgid, sig)` on shutdown.
 - **Windows**: Job Objects. The spawned process is attached to a job, and closing the job handle terminates every descendant atomically.
 
 Result: `orbit down` reliably reaps the whole process tree — shell, `dotnet watch` reloading, or `pnpm dev` Vite instance — rather than signalling only the leader and leaving grandchildren behind.
@@ -149,7 +149,7 @@ so still-running dependents recover without a restart.
 
 ## Daemon server
 
-`internal/daemon/server.go` is the single long-running process. It exposes:
+`internal/daemonsrv/server.go` is the single long-running process. It exposes:
 
 - **Unix socket** (`~/.orbit/orbit.sock`) — CLI ↔ daemon HTTP (REST `/api/...`) over the unix socket
 - **Loopback TCP :19800** — same HTTP API plus the Svelte 5 dashboard
@@ -160,7 +160,7 @@ The unnamed runtime uses these legacy paths and names unchanged. Named runtime
 ownership, state layout, port persistence, and cleanup semantics are defined in
 [Isolated runtime instances](instances.md).
 
-All HTTP handlers live in `internal/daemon/*.go` by concern:
+All HTTP handlers live in `internal/daemonsrv/*.go` by concern:
 
 | File | Concern |
 |---|---|
@@ -204,7 +204,7 @@ routes, and dashboard panels through the `extension` package; the points below
 cover changes to the core itself.
 
 ### Add a new service `type`
-1. Extend the `Service.Type` discriminator in `config/schema.go`.
+1. Extend the `Service.Type` discriminator in `internal/config/schema.go`.
 2. Add a launcher in `internal/engine/scheduler.go` that knows how to start that type.
 3. If health-checking differs, add a probe type in `internal/health/checker.go`.
 4. Update `envs/example.yaml` with a reference entry.
@@ -215,13 +215,13 @@ cover changes to the core itself.
 
 ### Add a new init hook
 Current types: `kafka_topics`, `mongo_rs`. To add one:
-1. Add a case in `container/init.go`.
-2. Define the config struct in `config/schema.go` under the container's `init` block.
+1. Add a case in `internal/container/init.go`.
+2. Define the config struct in `internal/config/schema.go` under the container's `init` block.
 
 ### Add a new CLI subcommand
-1. New file under `app/` returning a `*cobra.Command` from a `fooCmd()` factory.
-2. Register it in `Main()` in `app/root.go`.
-3. If it talks to the daemon, add a handler in `internal/daemon/*.go` and call it from the command: a `daemon.Client` method if the payload is wire-typed (public `daemon` package), or an unexported helper next to the command built on `Client.GetDecode`/`PostJSON` if the payload names core-internal types (see `app/traces.go`, `app/history.go`).
+1. New file under `internal/app/` returning a `*cobra.Command` from a `fooCmd()` factory.
+2. Register it in `Main()` in `internal/app/root.go`.
+3. If it talks to the daemon, add a handler in `internal/daemonsrv/*.go` and call it from the command: a `daemon.Client` method if the payload is wire-typed (the `internal/daemon` package), or an unexported helper next to the command built on `Client.GetDecode`/`PostJSON` if the payload names core-internal types (see `internal/app/traces.go`, `internal/app/history.go`).
 
 ### Ship a new asset alongside the binary
 Embed via `//go:embed` rather than relying on an on-disk path — the installed binary has no source tree. See `cmd/orbit/dashboard.go` for the dashboard bundle (embedded in the binary's main package and injected into the daemon server; a branded binary embeds its own dashboard build the same way).

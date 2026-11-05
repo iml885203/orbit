@@ -3,8 +3,8 @@ package tunnel
 import (
 	"fmt"
 
-	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/cli"
+	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/tunlease/pkg/tunnelcli"
 	"github.com/spf13/cobra"
 )

@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/logging"
-	"github.com/iml885203/orbit/process"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/logging"
+	"github.com/iml885203/orbit/internal/process"
 )
 
 func TestDotnetBuildGateSerializesAndReleases(t *testing.T) {

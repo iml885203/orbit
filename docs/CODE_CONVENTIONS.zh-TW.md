@@ -10,7 +10,7 @@
 
 ### 以 domain 而非 layer 來組織
 
-Code 是依照「它做什麼」來分組，而不是依照「它是哪一種物件」。`internal/daemon/handlers_settings.go` 屬於 settings 這個 domain；`internal/engine/dep_graph.go` 屬於 dependency-graph 這個概念。一個叫做 `services.go` 或 `helpers.go` 的檔案會讓人忍不住問「是哪個 domain？」——答案是什麼，就用那個答案來命名。
+Code 是依照「它做什麼」來分組，而不是依照「它是哪一種物件」。`internal/daemonsrv/handlers_settings.go` 屬於 settings 這個 domain；`internal/engine/dep_graph.go` 屬於 dependency-graph 這個概念。一個叫做 `services.go` 或 `helpers.go` 的檔案會讓人忍不住問「是哪個 domain？」——答案是什麼，就用那個答案來命名。
 
 ### Composition 優於 service indirection
 
@@ -51,7 +51,7 @@ Code 是依照「它做什麼」來分組，而不是依照「它是哪一種物
 ```
 
 **記錄外部或環境上的限制。**
-`internal/daemon/config_staleness.go` 說明了為什麼 transient editor save 與 atomic-rename window 會被視為 unknown，而不是 stale：
+`internal/daemonsrv/config_staleness.go` 說明了為什麼 transient editor save 與 atomic-rename window 會被視為 unknown，而不是 stale：
 
 ```go
 // fileStamp hashes a config file. ok=false when the file can't be read —
@@ -60,7 +60,7 @@ Code 是依照「它做什麼」來分組，而不是依照「它是哪一種物
 ```
 
 **說明 wire-format 或 API shape 上的限制。**
-`daemon/wire_more.go` 解釋了為什麼 `SettingsResponse` 要重複欄位、而不是直接 embed `APIResponse`：
+`internal/daemon/wire_more.go` 解釋了為什麼 `SettingsResponse` 要重複欄位、而不是直接 embed `APIResponse`：
 
 ```go
 // SettingsResponse is the /api/settings response. Fields duplicate APIResponse
@@ -68,7 +68,7 @@ Code 是依照「它做什麼」來分組，而不是依照「它是哪一種物
 ```
 
 **記錄 atomicity 或 concurrency 的保證。**
-`atomicio/atomicio.go` 解釋了 rename-is-atomic 這個保證，以及它的前置條件：
+`internal/atomicio/atomicio.go` 解釋了 rename-is-atomic 這個保證，以及它的前置條件：
 
 ```go
 // writeFileAtomic writes data to path via a temp file + rename. The rename
@@ -122,7 +122,7 @@ Robert C. Martin 把那些只是把 code 用散文重述一遍的 "noise comment
 
 **一個 package 回答的是「這個 domain 做什麼？」**
 
-`internal/engine/` 擁有 dependency graph、orchestration、scheduling。`internal/daemon/` 擁有 HTTP API、SSE、settings、environment lifecycle。如果一個概念橫跨多個 package，問問哪個 package *擁有* 它。`detachedSet` 之所以放在 `engine/dep_graph.go`，是因為 detach 是 dependency-graph 的概念；它不會只因為 daemon 會呼叫它，就應該住在 daemon package 裡。
+`internal/engine/` 擁有 dependency graph、orchestration、scheduling。`internal/daemonsrv/` 擁有 HTTP API、SSE、settings、environment lifecycle。如果一個概念橫跨多個 package，問問哪個 package *擁有* 它。`detachedSet` 之所以放在 `engine/dep_graph.go`，是因為 detach 是 dependency-graph 的概念；它不會只因為 daemon 會呼叫它，就應該住在 daemon package 裡。
 
 **跨 domain 的 helper 放在擁有該概念的 domain 裡。**
 

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/internal/cli"
 )
 
 func decodeEnvelope(t *testing.T, raw []byte) cli.JSONEnvelope {

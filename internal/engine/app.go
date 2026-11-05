@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/container"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/container"
 	"github.com/iml885203/orbit/internal/env"
 	"github.com/iml885203/orbit/internal/health"
-	"github.com/iml885203/orbit/logging"
-	"github.com/iml885203/orbit/port"
-	"github.com/iml885203/orbit/process"
+	"github.com/iml885203/orbit/internal/logging"
+	"github.com/iml885203/orbit/internal/port"
+	"github.com/iml885203/orbit/internal/process"
 )
 
 // App wires together all components and manages the full lifecycle.

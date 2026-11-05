@@ -1,0 +1,217 @@
+// Package daemon is the shared wire-and-host surface of the orbit
+// daemon: the JSON contracts the CLI, dashboard, and extensions speak,
+// the socket client, settings, and the capability types a feature's
+// DaemonSetup consumes. The concrete HTTP server lives in
+// internal/daemonsrv — it implements these contracts; nothing here
+// depends on it.
+package daemon
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
+)
+
+// UpRequest is the body for POST /api/up.
+type UpRequest struct {
+	Resources []string `json:"resources"`
+	InfraOnly bool     `json:"infra_only"`
+	Groups    []string `json:"groups"`
+}
+
+// DownRequest is the body for POST /api/down.
+type DownRequest struct {
+	Resources []string `json:"resources"`
+	InfraOnly bool     `json:"infra_only"`
+	Groups    []string `json:"groups"`
+	All       bool     `json:"all"`
+	Wait      bool     `json:"wait"`
+}
+
+// StatusResponse is the response for GET /api/status.
+type StatusResponse struct {
+	// Epoch is the daemon's startedAt timestamp in unix-milliseconds. It
+	// changes on every restart, so clients can detect when their cached
+	// env-derived state belongs to a previous daemon. Milliseconds (not
+	// nanoseconds) keeps the value safely within JS Number precision.
+	Epoch     int64            `json:"epoch"`
+	Resources []ResourceStatus `json:"resources"`
+	// ConfigPath identifies the environment loaded by the running daemon.
+	// CLI clients compare it with their selected config before combining
+	// local config with daemon state.
+	ConfigPath string             `json:"config_path"`
+	Context    EnvironmentContext `json:"context"`
+	// Instance identifies the isolated named runtime serving this status.
+	// It is omitted for the default runtime so existing clients stay quiet.
+	Instance string `json:"instance,omitempty"`
+	// ConfigStale means the loaded config has fallen behind reality (env
+	// file edited, selection changed, or an API env switch left the
+	// orchestrator on the previous env) — `orbit env apply` applies.
+	ConfigStale       bool   `json:"config_stale,omitempty"`
+	ConfigStaleReason string `json:"config_stale_reason,omitempty"`
+}
+
+type EnvironmentContext struct {
+	Kind             string                       `json:"kind"`
+	Identity         string                       `json:"identity"`
+	DisplayName      string                       `json:"display_name"`
+	ConfigPath       string                       `json:"config_path"`
+	ProjectRoot      string                       `json:"project_root,omitempty"`
+	Available        bool                         `json:"available"`
+	Running          bool                         `json:"running"`
+	ManagedSelection *ManagedEnvironmentSelection `json:"managed_selection,omitempty"`
+}
+
+type ManagedEnvironmentSelection struct {
+	Identity string `json:"identity,omitempty"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Active   bool   `json:"active"`
+}
+
+// ResourceKind identifies how Orbit runs a resource.
+type ResourceKind string
+
+const (
+	ResourceKindContainer ResourceKind = "container"
+	ResourceKindService   ResourceKind = "service"
+)
+
+// SidecarInfo represents a sidecar's UI link.
+type SidecarInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// ResourceStatus represents a single container or service.
+type ResourceStatus struct {
+	Name string       `json:"name"`
+	Kind ResourceKind `json:"kind"`
+	// Role describes where the resource sits in the user journey. Unlike Kind,
+	// which distinguishes host services from containers, Role is frontend,
+	// backend, or infra.
+	Role  string `json:"role,omitempty"`
+	State string `json:"state"`
+	// StartingPhase splits "starting" into "launching" (port check,
+	// pre_start, process exec or container start) and "probing" (waiting
+	// for readiness); empty in every other state.
+	StartingPhase string `json:"starting_phase,omitempty"`
+	// PID is the managed host process's pid while Orbit supervises one;
+	// absent for containers and stopped services.
+	PID int `json:"pid,omitempty"`
+	// PendingDependencies identifies exactly what keeps a pending resource
+	// from starting, so clients can distinguish useful waiting from a
+	// terminal dependency failure.
+	PendingDependencies []string `json:"pending_dependencies,omitempty"`
+	// BlockedBy names the direct dependency that makes an otherwise-running
+	// resource unavailable. The dependency chain remains inspectable without
+	// pretending the dependent process itself stopped.
+	BlockedBy string `json:"blocked_by,omitempty"`
+	// StateReason says why the resource is degraded (crash message, health
+	// failure, build failure); empty in every other state.
+	StateReason     string                `json:"state_reason,omitempty"`
+	FailureKind     string                `json:"failure_kind,omitempty"`
+	FailureEvidence string                `json:"failure_evidence,omitempty"`
+	PortConflict    *ResourcePortConflict `json:"port_conflict,omitempty"`
+	// ExitCode and OOMKilled report how a container that exited unexpectedly
+	// ended, as Docker recorded it; absent in every other state.
+	ExitCode             *int                `json:"exit_code,omitempty"`
+	OOMKilled            bool                `json:"oom_killed,omitempty"`
+	LogsAvailable        bool                `json:"logs_available,omitempty"`
+	RestartCount         int                 `json:"restart_count"`
+	ExternalRestartCount int                 `json:"external_restart_count"`
+	LastRestart          *ResourceRestart    `json:"last_restart,omitempty"`
+	Ports                map[string]int      `json:"ports,omitempty"`
+	URL                  string              `json:"url,omitempty"`
+	Image                string              `json:"image,omitempty"` // resolved container image; containers only
+	StartupTime          string              `json:"startup_time,omitempty"`
+	Uptime               string              `json:"uptime,omitempty"`
+	Sidecars             []SidecarInfo       `json:"sidecars,omitempty"`
+	Mode                 string              `json:"mode,omitempty"` // "dev" or "container" (only for dual-defined services)
+	HealthProgress       *HealthProgressInfo `json:"health_progress,omitempty"`
+}
+
+// ResourceRestart describes the most recent restart Orbit observed but did
+// not initiate.
+type ResourceRestart struct {
+	Source     string    `json:"source"`
+	StartedAt  time.Time `json:"started_at"`
+	ObservedAt time.Time `json:"observed_at"`
+}
+
+// ResourcePortConflict is actionable evidence for a resource that could not
+// bind its configured host port.
+type ResourcePortConflict struct {
+	Port           int    `json:"port"`
+	Resource       string `json:"resource"`
+	PID            string `json:"pid,omitempty"`
+	Process        string `json:"process,omitempty"`
+	InspectCommand string `json:"inspect_command"`
+}
+
+// HealthProgressInfo reports retry state for a resource that has a
+// configured health check. nil on ResourceStatus means the resource either
+// has no health check or has not yet started a probe (caller hides UI).
+type HealthProgressInfo struct {
+	Attempts   int    `json:"attempts"`
+	MaxRetries int    `json:"max_retries,omitempty"`
+	LastErr    string `json:"last_err,omitempty"`
+	// Recovering means the startup retry budget is spent but the daemon is
+	// still probing and will flip the service back to healthy on success.
+	// CLI waits treat degraded+recovering as "still trying", not terminal.
+	Recovering bool `json:"recovering,omitempty"`
+	// ProbeStartedAt is present only while a probe is in flight; a value
+	// that keeps aging means the probe itself never returned.
+	ProbeStartedAt *time.Time `json:"probe_started_at,omitempty"`
+	// LastProbeAt is when the most recent probe returned. Its verdict is
+	// recorded before the result reaches the lifecycle, so a starting
+	// resource with an empty LastErr and no probe in flight passed its
+	// probe but never turned healthy: a LastProbeAt that stops advancing
+	// means delivery is stuck, one that keeps advancing means monitoring
+	// runs and the transition was dropped.
+	LastProbeAt *time.Time `json:"last_probe_at,omitempty"`
+	// Protocol is the cleartext HTTP protocol that answered the last probe:
+	// "h2c" or the HTTP/1.x version, such as "HTTP/1.1". Absent for other
+	// check types and HTTPS.
+	Protocol string `json:"protocol,omitempty"`
+}
+
+// LogsResponse is the response for GET /api/logs/{name}.
+type LogsResponse struct {
+	Lines []string `json:"lines"`
+}
+
+// APIResponse is a generic API response wrapper.
+type APIResponse struct {
+	OK      bool   `json:"ok,omitempty"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+	// AffectedResources identifies the resources accepted by a lifecycle
+	// request, including dependencies selected by the daemon.
+	AffectedResources []string `json:"affected_resources,omitempty"`
+	// Code is a stable, machine-readable discriminator a client can
+	// switch on when the plain Error string isn't enough — e.g. the
+	// reset endpoint's "reset_requires_recreate". Empty for most errors.
+	Code string `json:"code,omitempty"`
+}
+
+// WriteJSON writes v as JSON with the given status — the daemon's one
+// response serializer, shared by core handlers and extension-owned ones.
+func WriteJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("json encode error", "component", "daemon", "err", err)
+	}
+}
+
+// RequireMethod checks the HTTP method and writes a 405 response if it
+// doesn't match. Returns true when the method is wrong (caller returns).
+func RequireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Error: "method not allowed"})
+		return true
+	}
+	return false
+}

@@ -22,16 +22,16 @@
 ```
 orbit up
   │
-  ├─ Config Loader      config/                YAML → typed schema, env-var substitution, validation
-  ├─ Dependency DAG     internal/engine/       Topological sort over services + containers
-  ├─ Orchestrator       internal/engine/       Event loop: translates events into state transitions
-  ├─ Scheduler          internal/engine/       Decides what to start / stop / restart next
-  ├─ Container Manager  container/             Docker SDK wrapper (inspect, start, stop, poll, seed, init)
-  ├─ Process Manager    process/               Spawn / kill dev processes with group isolation
-  ├─ Health Checker     internal/health/       http, tcp, log, exec, healthcheck probes + wait strategies
-  ├─ Port / Preflight   port/, internal/preflight/  Reserve ports, check prerequisites before launch
-  ├─ Env Sync           internal/envsync/      Shallow-clone / refresh env configs from git
-  └─ Daemon Server      internal/daemon/       Unix socket + TCP :19800 API, Svelte 5 dashboard, SSE
+  ├─ Config Loader      internal/config/            YAML → typed schema, env-var substitution, validation
+  ├─ Dependency DAG     internal/engine/            Topological sort over services + containers
+  ├─ Orchestrator       internal/engine/            Event loop: translates events into state transitions
+  ├─ Scheduler          internal/engine/            Decides what to start / stop / restart next
+  ├─ Container Manager  internal/container/         Docker SDK wrapper (inspect, start, stop, poll, seed, init)
+  ├─ Process Manager    internal/process/           Spawn / kill dev processes with group isolation
+  ├─ Health Checker     internal/health/            http, tcp, log, exec, healthcheck probes + wait strategies
+  ├─ Port / Preflight   internal/port/, internal/preflight/  Reserve ports, check prerequisites before launch
+  ├─ Env Sync           internal/envsync/           Shallow-clone / refresh env configs from git
+  └─ Daemon Server      internal/daemonsrv/         Unix socket + TCP :19800 API, Svelte 5 dashboard, SSE
 ```
 
 CLI(`app` package，由各 binary 的薄 `cmd/orbit/main.go` 接線)是 daemon 的薄客戶端 —— 每個 subcommand 要嘛透過 unix socket 跟 daemon 對話，要嘛在本機跑 subprocess(docker、dotnet)。
@@ -76,7 +76,7 @@ Orchestrator 跑一條 goroutine，從 buffered channel 消費事件。事件定
 
 | | Container | Process |
 |---|---|---|
-| 擁有者 | `container/manager.go` | `process/manager.go` |
+| 擁有者 | `internal/container/manager.go` | `internal/process/manager.go` |
 | 啟動 | Docker `container.create` + `container.start` | `exec.Command` 放在獨立的 process group(Unix 上用 `setpgid`，Windows 上用 Job Objects) |
 | 停止 | Docker stop + 10 秒緩衝 → kill | 對 group 送 SIGTERM → `shutdown_timeout` 緩衝（預設 30 秒）→ 對 group 送 SIGKILL |
 | Health | 每 2 秒透過 `container.inspect` polling，再加上 service 宣告的 `health_check` | 只跑宣告的 `health_check` |
@@ -93,7 +93,7 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 
 用 SIGTERM 殺 dev process(例如 `dotnet watch`)時，孫程序常常會殘留。Orbit 的解法是把每個 spawn 出來的 process 放進自己的 process group，然後對**整個 group** 送 signal，而不是只對 leader。
 
-- **Unix**(Linux/macOS 上的 `platform/process_unix.go`):`syscall.SysProcAttr{Setpgid: true}`，shutdown 時呼叫 `syscall.Kill(-pgid, sig)`。
+- **Unix**(Linux/macOS 上的 `internal/platform/process_unix.go`):`syscall.SysProcAttr{Setpgid: true}`，shutdown 時呼叫 `syscall.Kill(-pgid, sig)`。
 - **Windows**:Job Objects。Spawn 出來的 process 會被附掛到一個 job，關閉 job handle 會把所有後代 atomic 地一起終止。
 
 結果是:`orbit down` 能可靠地回收整棵 process tree —— 不管是 shell、reload 中的 `dotnet watch` server,還是 `pnpm dev` 的 Vite instance —— 而不是只對 leader 送 signal、留下孫程序。
@@ -129,7 +129,7 @@ process 依賴 stopped 或 degraded 資源，API view 會以 degraded 和
 
 ## Daemon server
 
-`internal/daemon/server.go` 就是那個單一長駐 process，它對外暴露:
+`internal/daemonsrv/server.go` 就是那個單一長駐 process，它對外暴露:
 
 - **Unix socket**（`~/.orbit/orbit.sock`）—— CLI ↔ daemon 的 HTTP（REST `/api/...`），走 unix socket
 - **Loopback TCP :19800** —— 同一套 HTTP API，加上 Svelte 5 dashboard（透過
@@ -140,7 +140,7 @@ Unnamed runtime 會維持這些舊有 paths 與 names。Named runtime 的 owners
 state layout、port persistence 與 cleanup semantics 定義於
 [隔離的 runtime instances](instances.zh-TW.md)。
 
-所有 HTTP handler 依關注點分散在 `internal/daemon/*.go`:
+所有 HTTP handler 依關注點分散在 `internal/daemonsrv/*.go`:
 
 | File | 負責 |
 |---|---|
@@ -183,7 +183,7 @@ Snapshot 不取代 domain-specific API。Streams、graph presentation、actions
 daemon routes 與 dashboard panels；以下各點適用於 core 本身的變更。
 
 ### 新增一種 service `type`
-1. 在 `config/schema.go` 擴充 `Service.Type` discriminator。
+1. 在 `internal/config/schema.go` 擴充 `Service.Type` discriminator。
 2. 在 `internal/engine/scheduler.go` 加上能拉起這個 type 的 launcher。
 3. 如果 health check 邏輯不同，在 `internal/health/checker.go` 加一個 probe type。
 4. 在 `envs/example.yaml` 補上參考設定。
@@ -194,13 +194,13 @@ daemon routes 與 dashboard panels；以下各點適用於 core 本身的變更�
 
 ### 新增一種 init hook
 目前的 type:`kafka_topics`、`mongo_rs`。要新增一種:
-1. 在 `container/init.go` 加一個 case。
-2. 在 `config/schema.go` container 的 `init` block 底下定義對應 config struct。
+1. 在 `internal/container/init.go` 加一個 case。
+2. 在 `internal/config/schema.go` container 的 `init` block 底下定義對應 config struct。
 
 ### 新增一個 CLI subcommand
-1. 在 `app/` 底下新增檔案，由 `fooCmd()` factory 回傳 `*cobra.Command`。
-2. 在 `app/root.go` 的 `Main()` 註冊。
-3. 如果它要跟 daemon 對話，在 `internal/daemon/*.go` 加對應 handler，再從 command 呼叫:payload 是 wire 型別就加 `daemon.Client` method(公開 `daemon` package);payload 用到 core-internal 型別，就在 command 旁邊用 `Client.GetDecode`/`PostJSON` 寫 unexported helper(見 `app/traces.go`、`app/history.go`)。
+1. 在 `internal/app/` 底下新增檔案，由 `fooCmd()` factory 回傳 `*cobra.Command`。
+2. 在 `internal/app/root.go` 的 `Main()` 註冊。
+3. 如果它要跟 daemon 對話，在 `internal/daemonsrv/*.go` 加對應 handler，再從 command 呼叫:payload 是 wire 型別就加 `daemon.Client` method(`internal/daemon` package);payload 用到 core-internal 型別，就在 command 旁邊用 `Client.GetDecode`/`PostJSON` 寫 unexported helper(見 `internal/app/traces.go`、`internal/app/history.go`)。
 
 ### 隨 binary 一起出貨新的 asset
 用 `//go:embed` 內嵌，不要依賴 on-disk 路徑 —— 安裝好的 binary 旁邊不會有 source tree。Dashboard bundle 可參考 `cmd/orbit/dashboard.go`(在 binary 的 main package 內嵌後注入 daemon server;branded binary 也以相同方式內嵌自己的 dashboard build)。

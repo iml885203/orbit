@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/iml885203/orbit/cli"
-	"github.com/iml885203/orbit/config"
-	"github.com/iml885203/orbit/container"
-	"github.com/iml885203/orbit/daemon"
+	"github.com/iml885203/orbit/internal/cli"
+	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/container"
+	"github.com/iml885203/orbit/internal/daemon"
 )
 
 // CLIDoctorChecks is the structured (--json) twin of the human printer:

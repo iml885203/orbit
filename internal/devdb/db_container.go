@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/iml885203/orbit/container"
+	"github.com/iml885203/orbit/internal/container"
 )
 
 // dbTargetDockerName maps an env container name to the same runtime docker

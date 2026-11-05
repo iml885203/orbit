@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/health"
-	"github.com/iml885203/orbit/process"
+	"github.com/iml885203/orbit/internal/process"
 )
 
 func TestHealthProtocolFailuresReachStateReason(t *testing.T) {

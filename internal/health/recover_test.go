@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iml885203/orbit/config"
+	"github.com/iml885203/orbit/internal/config"
 )
 
 // A service whose first requests fail must flip healthy once it recovers —

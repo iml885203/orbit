@@ -4,7 +4,7 @@
 # barrel that re-exports every file below; add a line there when adding a
 # package here.
 packages:
-  - path: "github.com/iml885203/orbit/config"
+  - path: "github.com/iml885203/orbit/internal/config"
     output_path: "ui/src/lib/types/config.gen.ts"
     type_mappings:
       time.Time: "string"
@@ -24,7 +24,7 @@ packages:
       - "schema_test.go"
       - "config_test.go"
       - "validate_test.go"
-  - path: "github.com/iml885203/orbit/daemon"
+  - path: "github.com/iml885203/orbit/internal/daemon"
     output_path: "ui/src/lib/types/wire.gen.ts"
     # Only daemon wire contracts belong in the generated UI types.
     # Client, lifecycle, and host plumbing are not wire data.
@@ -44,7 +44,7 @@ packages:
       - "host_tools.go"
       - "settings_namespace.go"
       - "settings_test.go"
-  - path: "github.com/iml885203/orbit/internal/daemon"
+  - path: "github.com/iml885203/orbit/internal/daemonsrv"
     output_path: "ui/src/lib/types/daemon.gen.ts"
     # KafkaIO lives in config.gen.ts — the one cross-package reference.
     frontmatter: |

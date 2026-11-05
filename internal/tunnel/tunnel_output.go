@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iml885203/orbit/cli"
+	"github.com/iml885203/orbit/internal/cli"
 	"github.com/spf13/cobra"
 )
 

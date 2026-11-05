@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/iml885203/orbit/daemon"
-	"github.com/iml885203/orbit/extension"
+	"github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/extension"
 )
 
 // SetupDaemon wires tunnel routes, resources, events, and shutdown cleanup

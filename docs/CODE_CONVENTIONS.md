@@ -11,7 +11,7 @@ behavior, and review changes before committing.
 
 ### Organise by domain, not layer
 
-Code is grouped by what it does, not what kind of object it is. `internal/daemon/handlers_settings.go` owns the settings domain. `internal/engine/dep_graph.go` owns the dependency-graph concept. A file called `services.go` or `helpers.go` raises the question "what domain?" — name it for the answer.
+Code is grouped by what it does, not what kind of object it is. `internal/daemonsrv/handlers_settings.go` owns the settings domain. `internal/engine/dep_graph.go` owns the dependency-graph concept. A file called `services.go` or `helpers.go` raises the question "what domain?" — name it for the answer.
 
 ### Composition over service indirection
 
@@ -54,7 +54,7 @@ The tooltip singleton in `ui/src/lib/tooltip.svelte.ts` is the canonical example
 ```
 
 **Documenting an external or environmental constraint.**
-`internal/daemon/config_staleness.go` explains why transient editor saves and atomic-rename windows are treated as unknown rather than stale:
+`internal/daemonsrv/config_staleness.go` explains why transient editor saves and atomic-rename windows are treated as unknown rather than stale:
 
 ```go
 // fileStamp hashes a config file. ok=false when the file can't be read —
@@ -63,7 +63,7 @@ The tooltip singleton in `ui/src/lib/tooltip.svelte.ts` is the canonical example
 ```
 
 **Explaining a wire-format or API shape constraint.**
-`daemon/wire_more.go` explains why `SettingsResponse` duplicates fields instead of embedding `APIResponse`:
+`internal/daemon/wire_more.go` explains why `SettingsResponse` duplicates fields instead of embedding `APIResponse`:
 
 ```go
 // SettingsResponse is the /api/settings response. Fields duplicate APIResponse
@@ -71,7 +71,7 @@ The tooltip singleton in `ui/src/lib/tooltip.svelte.ts` is the canonical example
 ```
 
 **Documenting atomicity or concurrency guarantees.**
-`atomicio/atomicio.go` explains the rename-is-atomic guarantee and its precondition:
+`internal/atomicio/atomicio.go` explains the rename-is-atomic guarantee and its precondition:
 
 ```go
 // writeFileAtomic writes data to path via a temp file + rename. The rename
@@ -125,7 +125,7 @@ Good: `handlers_settings.go`, `handlers_graph.go`, `config_staleness.go`. Each n
 
 **A package answers "what does this domain do?"**
 
-`internal/engine/` owns the dependency graph, orchestration, and scheduling. `internal/daemon/` owns the HTTP API, SSE, settings, and environment lifecycle. If a concept spans multiple packages ask which package *owns* it. `detachedSet` lives in `engine/dep_graph.go` because detach is a dependency-graph concept; it doesn't belong in the daemon package just because the daemon calls it.
+`internal/engine/` owns the dependency graph, orchestration, and scheduling. `internal/daemonsrv/` owns the HTTP API, SSE, settings, and environment lifecycle. If a concept spans multiple packages ask which package *owns* it. `detachedSet` lives in `engine/dep_graph.go` because detach is a dependency-graph concept; it doesn't belong in the daemon package just because the daemon calls it.
 
 **Cross-domain helpers go in the domain that owns the concept.**
 

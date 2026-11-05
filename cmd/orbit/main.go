@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/iml885203/orbit/app"
+	"github.com/iml885203/orbit/internal/app"
 )
 
 // Set via -ldflags -X main.version / -X main.buildTime (CI release job
