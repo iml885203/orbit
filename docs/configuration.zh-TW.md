@@ -332,9 +332,8 @@ Default runtime 會把每個宣告的 host port 視為固定值。衝突是一�
 Orbit 會把 `<ALIAS>_PORT` 注入 host service；只有一個 port 的 service
 也會收到慣用的 `PORT` 變數。
 
-舊的 `{preferred, target}` 寫法仍可解析，意義與 `"host:target"` 相同的
-固定 port——它原本代表的搬移行為已移除。若團隊想在不改檔案的情況下做
-機器層級的覆寫，port 值內可以使用 environment substitution
+若團隊想在不改檔案的情況下做機器層級的覆寫，port 值內可以使用
+environment substitution
 （`http: "${API_PORT:-28080}"`）。
 
 ### Dashboard 上的 infra logo

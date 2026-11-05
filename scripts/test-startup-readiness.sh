@@ -74,8 +74,7 @@ services:
     path: .
     command: python3 api.py
     ports:
-      http:
-        preferred: $api_port
+      http: $api_port
   client:
     type: python
     path: .
@@ -141,8 +140,7 @@ services:
     path: .
     command: python3 sleep.py
     ports:
-      http:
-        preferred: $silent_port
+      http: $silent_port
 YAML
 
 cd "$test_root/silent"

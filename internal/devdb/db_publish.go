@@ -21,10 +21,10 @@ import (
 )
 
 var (
-	publishForce    bool
-	publishAll      bool
-	publishParallel int
-	publishYes      bool
+	publishAllowDataLoss bool
+	publishAll           bool
+	publishParallel      int
+	publishYes           bool
 )
 
 func dbPublishCmd() *cobra.Command {
@@ -66,9 +66,7 @@ SDK requirement; sqlpackage remains required.`,
 		},
 		RunE: runDBPublish,
 	}
-	cmd.Flags().BoolVar(&publishForce, "allow-data-loss", false, "allow schema changes that can permanently delete data")
-	cmd.Flags().BoolVar(&publishForce, "force", false, "deprecated alias for --allow-data-loss")
-	_ = cmd.Flags().MarkHidden("force")
+	cmd.Flags().BoolVar(&publishAllowDataLoss, "allow-data-loss", false, "allow schema changes that can permanently delete data")
 	cmd.Flags().BoolVar(&publishAll, "all", false, "publish every configured database")
 	cmd.Flags().IntVar(&publishParallel, "parallel", 0, "with --all or a multi-database project, publish up to N databases concurrently (0 = sequential); bare --parallel uses 4. For repeat publishes to a server that already has the databases. Leave it off the first time: creating them races on the logins and roles the projects share")
 	cmd.Flags().Lookup("parallel").NoOptDefVal = "4"
@@ -82,7 +80,7 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if publishYes && !publishForce {
+	if publishYes && !publishAllowDataLoss {
 		return fmt.Errorf("--yes requires --allow-data-loss")
 	}
 	// Input validation outranks the destructive-command recommendation: a
@@ -147,7 +145,7 @@ func runDBPublish(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	opts.Force = publishForce
+	opts.Force = publishAllowDataLoss
 	opts.DacpacDir = artifactRoot
 	if !authorizeForcedPublish([]publishTargetRef{{DB: dbName}}) {
 		fmt.Println("Aborted.")
@@ -176,7 +174,7 @@ func writeDBPublishJSONTo(out io.Writer, args, databases []string) error {
 }
 
 func rejectForcedPublishJSON(args []string) error {
-	if !cli.JSONOutput || !publishForce {
+	if !cli.JSONOutput || !publishAllowDataLoss {
 		return nil
 	}
 	return cli.NewUnsupportedDestructiveJSONCommandError(
@@ -195,7 +193,7 @@ func dbPublishCommand(args []string, jsonOutput, includeYes bool) string {
 	if publishParallel > 0 {
 		parts = append(parts, fmt.Sprintf("--parallel=%d", publishParallel))
 	}
-	if publishForce {
+	if publishAllowDataLoss {
 		parts = append(parts, "--allow-data-loss")
 	}
 	if dacpacDir != "" {
@@ -253,7 +251,7 @@ func runDBPublishAll(client *daemon.Client, out io.Writer) ([]publishTargetRef, 
 }
 
 func authorizeForcedPublish(targets []publishTargetRef) bool {
-	if !publishForce || publishYes {
+	if !publishAllowDataLoss || publishYes {
 		return true
 	}
 	return cli.Confirm(forcedPublishPrompt(targets))
@@ -280,7 +278,7 @@ func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope 
 	if err != nil {
 		return err
 	}
-	base.Force = publishForce
+	base.Force = publishAllowDataLoss
 	artifactRoot, err := invocationDacpacDir()
 	if err != nil {
 		return err

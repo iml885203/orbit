@@ -225,16 +225,11 @@ func sourceListCmd() *cobra.Command {
 	}
 }
 
-func sourceSyncCmd() *cobra.Command {
-	return sourceSyncCmdWithDeprecation("")
-}
-
 type sourceSyncOptions struct {
-	all               bool
-	dry               bool
-	yes               bool
-	noApply           bool
-	deprecatedCommand string
+	all     bool
+	dry     bool
+	yes     bool
+	noApply bool
 }
 
 type sourceSyncRecord struct {
@@ -243,7 +238,7 @@ type sourceSyncRecord struct {
 	Error   string   `json:"error,omitempty"`
 }
 
-func sourceSyncCmdWithDeprecation(deprecatedCommand string) *cobra.Command {
+func sourceSyncCmd() *cobra.Command {
 	var all, dry, yes, noApply bool
 	cmd := &cobra.Command{
 		Use:   "sync [name]",
@@ -259,7 +254,7 @@ apply it unless --no-apply is set.`,
   orbit source sync --all --no-apply`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runSourceSync(args, sourceSyncOptions{all: all, dry: dry, yes: yes, noApply: noApply, deprecatedCommand: deprecatedCommand})
+			return runSourceSync(args, sourceSyncOptions{all: all, dry: dry, yes: yes, noApply: noApply})
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "synchronize every source")
@@ -320,10 +315,6 @@ func synchronizeSources(registry *envsource.Registry, sources []envsource.Source
 
 func writeSourceSyncJSON(records []sourceSyncRecord, failures []error, options sourceSyncOptions) error {
 	data := map[string]any{"operation": "source_sync", "dry_run": options.dry, "sources": records}
-	if options.deprecatedCommand != "" {
-		data["deprecated_command"] = options.deprecatedCommand
-		data["replacement_command"] = "orbit source sync"
-	}
 	if len(failures) == 0 {
 		return cli.WriteJSONSuccess(os.Stdout, commandString(), data, nil)
 	}
@@ -345,8 +336,7 @@ func writeSourceSyncHuman(records []sourceSyncRecord, failures []error, options 
 	if len(failures) > 0 {
 		return errCLIHumanAlreadyRendered{err: errors.Join(failures...)}
 	}
-	envSyncDryRun, envSyncYes, envSyncNoApply = options.dry, options.yes, options.noApply
-	return offerEnvironmentApply()
+	return offerEnvironmentApply(options)
 }
 
 func sourceRemoveCmd() *cobra.Command {

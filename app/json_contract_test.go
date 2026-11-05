@@ -48,7 +48,7 @@ func TestWriteCLIJSONServiceFailureKeepsRecoveryActionsFocused(t *testing.T) {
 func TestEnvRepoAccessJSONPointsToAuthenticationAndRetry(t *testing.T) {
 	var buf bytes.Buffer
 	err := cli.NewEnvRepoAccessError("cannot access environment repo https://github.com/example/private.git")
-	if err := cli.WriteJSONError(&buf, "orbit env sync --json", err); err != nil {
+	if err := cli.WriteJSONError(&buf, "orbit source sync --json", err); err != nil {
 		t.Fatal(err)
 	}
 	got := decodeEnvelope(t, buf.Bytes())

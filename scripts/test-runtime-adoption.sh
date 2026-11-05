@@ -99,18 +99,15 @@ services:
   python:
     command: python3 app.py
     ports:
-      http:
-        preferred: $python_port
+      http: $python_port
   node:
     command: node server.mjs
     ports:
-      http:
-        preferred: $node_port
+      http: $node_port
   go:
     command: go run main.go
     ports:
-      http:
-        preferred: $go_port
+      http: $go_port
 YAML
 
 cd "$test_root"

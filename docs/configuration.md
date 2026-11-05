@@ -348,10 +348,8 @@ ownership and cleanup model is documented in
 Orbit injects `<ALIAS>_PORT` into the host service; a service with one port
 also receives the conventional `PORT` variable.
 
-The legacy `{preferred, target}` mapping is still parsed and means the same
-fixed port as `"host:target"` — the relocation behavior it used to opt into
-was removed. Environment substitution works inside port values when a team
-wants a machine-specific override without changing the file
+Environment substitution works inside port values when a team wants a
+machine-specific override without changing the file
 (`http: "${API_PORT:-28080}"`).
 
 ### Infra logos in the dashboard

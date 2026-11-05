@@ -171,8 +171,7 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 
 // PortDef declares a fixed host port. The file is the single source of
 // truth: Orbit never relocates a port, so a conflict surfaces as an error
-// naming the owner instead of a silently different address. The legacy
-// {preferred, target} mapping is still parsed and means the same fixed port.
+// naming the owner instead of a silently different address.
 type PortDef struct {
 	Host   int
 	Target int // container-internal port; same as Host if not specified
@@ -212,41 +211,10 @@ func (p *PortDef) UnmarshalYAML(node *yaml.Node) error {
 		return p.parseMapping(s)
 	}
 
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: port must be an int, a \"host:target\" string, or a {preferred, target} mapping", node.Line)
+	if node.Kind == yaml.MappingNode {
+		return fmt.Errorf("line %d: the {preferred, target} port mapping was removed; write \"host:target\" (for example \"5432:5432\") or a plain port", node.Line)
 	}
-	for i := 0; i < len(node.Content); i += 2 {
-		key := node.Content[i]
-		if key.Value != "preferred" && key.Value != "target" {
-			hint := ""
-			if key.Value == "prefered" {
-				hint = " (did you mean \"preferred\"?)"
-			}
-			return fmt.Errorf("line %d: unknown port field %q%s", key.Line, key.Value, hint)
-		}
-	}
-	var legacyMapping struct {
-		Preferred int `yaml:"preferred"`
-		Target    int `yaml:"target"`
-	}
-	if err := node.Decode(&legacyMapping); err != nil {
-		return fmt.Errorf("line %d: invalid port mapping: %w", node.Line, err)
-	}
-	if legacyMapping.Preferred == 0 {
-		return fmt.Errorf("line %d: port mapping needs \"preferred\"; use a plain int for a fixed host port", node.Line)
-	}
-	if err := validatePortNumber(legacyMapping.Preferred); err != nil {
-		return fmt.Errorf("line %d: preferred %w", node.Line, err)
-	}
-	if legacyMapping.Target == 0 {
-		legacyMapping.Target = legacyMapping.Preferred
-	}
-	if err := validatePortNumber(legacyMapping.Target); err != nil {
-		return fmt.Errorf("line %d: target %w", node.Line, err)
-	}
-	p.Host = legacyMapping.Preferred
-	p.Target = legacyMapping.Target
-	return nil
+	return fmt.Errorf("line %d: port must be an int or a \"host:target\" string", node.Line)
 }
 
 func (p *PortDef) parseMapping(s string) error {

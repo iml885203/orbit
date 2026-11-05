@@ -1200,7 +1200,11 @@ func TestE2E_SwitchRejectsInvalidTargetBeforeStoppingCurrentEnvironment(t *testi
 	if state := env.serviceState(t, "redis"); state != "healthy" {
 		t.Fatalf("current redis state = %s after rejected switch, want healthy", state)
 	}
-	if current := strings.TrimSpace(env.run(t, "env", "current")); current != env.envYaml {
+	selected, err := os.ReadFile(filepath.Join(env.home, "current"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current := strings.TrimSpace(string(selected)); current != env.envYaml {
 		t.Fatalf("current environment = %q after rejected switch, want %q", current, env.envYaml)
 	}
 }
@@ -1583,7 +1587,7 @@ func TestE2E_StatusBeforeInitPointsDirectlyToSetup(t *testing.T) {
 			t.Fatalf("human status missing %q:\n%s", evidence, human)
 		}
 	}
-	for _, competingPath := range []string{"orbit up", "orbit env sync", "Current config issue", home} {
+	for _, competingPath := range []string{"orbit up", "orbit source sync", "Current config issue", home} {
 		if bytes.Contains(human, []byte(competingPath)) {
 			t.Fatalf("human status exposed %q before setup:\n%s", competingPath, human)
 		}
@@ -2746,7 +2750,7 @@ func TestE2E_SourceAddClassifiesRepositoryAccessFailure(t *testing.T) {
 	command.Env = append(os.Environ(), "ORBIT_HOME="+home)
 	output, err := command.Output()
 	if err == nil {
-		t.Fatalf("env sync unexpectedly succeeded:\n%s", output)
+		t.Fatalf("source add unexpectedly succeeded:\n%s", output)
 	}
 	envelope := parseE2EEnvelope(t, string(output))
 	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {
@@ -2772,7 +2776,7 @@ func TestE2E_JSONNeverEchoesURLCredentials(t *testing.T) {
 			command.Env = append(os.Environ(), "ORBIT_HOME="+t.TempDir(), "GIT_TERMINAL_PROMPT=0")
 			output, err := command.Output()
 			if err == nil {
-				t.Fatalf("env sync unexpectedly succeeded:\n%s", output)
+				t.Fatalf("source add unexpectedly succeeded:\n%s", output)
 			}
 			if bytes.Contains(output, []byte("secret")) {
 				t.Fatalf("envelope leaks URL credentials:\n%s", output)
@@ -2792,7 +2796,7 @@ func TestE2E_SourceAddExplainsMissingGitAtTheSyncBoundary(t *testing.T) {
 	command.Env = append(os.Environ(), "ORBIT_HOME="+t.TempDir(), "PATH="+t.TempDir())
 	output, err := command.Output()
 	if err == nil {
-		t.Fatalf("env sync unexpectedly succeeded:\n%s", output)
+		t.Fatalf("source add unexpectedly succeeded:\n%s", output)
 	}
 	envelope := parseE2EEnvelope(t, string(output))
 	if envelope.Error == nil || envelope.Error.Code != "env_repo_access" {

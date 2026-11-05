@@ -80,9 +80,3 @@ Existing single-repository settings, cached environments, selection, and
 workspace migrate once to `default` without network access. Orbit reports what
 it preserved and recommends inspecting and synchronizing the migrated source.
 Legacy settings are removed only after the source and selection are saved.
-
-During the transition period, `orbit env sync` without repository-changing
-flags synchronizes the first source and prints a deprecation warning. Legacy
-`--url`, `--path`, and `--ref` forms never mutate implicitly: they fail and
-point to the explicit remove-and-add workflow. No accepted flag is silently
-dropped.

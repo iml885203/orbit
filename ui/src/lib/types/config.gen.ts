@@ -101,8 +101,7 @@ export interface Container {
 /**
  * PortDef declares a fixed host port. The file is the single source of
  * truth: Orbit never relocates a port, so a conflict surfaces as an error
- * naming the owner instead of a silently different address. The legacy
- * {preferred, target} mapping is still parsed and means the same fixed port.
+ * naming the owner instead of a silently different address.
  */
 export interface PortDef {
   Host: number /* int */;
