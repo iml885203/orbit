@@ -523,6 +523,8 @@ type jsonService struct {
 	ExternalRestartCount int                          `json:"external_restart_count"`
 	LastRestart          *daemon.ResourceRestart      `json:"last_restart,omitempty"`
 	HealthProgress       *daemon.HealthProgressInfo   `json:"health_progress,omitempty"`
+	Image                string                       `json:"image,omitempty"`
+	Sidecars             []daemon.SidecarInfo         `json:"sidecars,omitempty"`
 }
 
 type daemonStatus struct {
@@ -783,6 +785,8 @@ func applyRuntimeStatus(target *jsonService, source daemon.ResourceStatus, runni
 	target.StartingPhase = source.StartingPhase
 	target.PID = source.PID
 	target.HealthProgress = source.HealthProgress
+	target.Image = source.Image
+	target.Sidecars = source.Sidecars
 	if source.Role != "" {
 		target.Role = source.Role
 	}

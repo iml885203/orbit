@@ -1,4 +1,4 @@
-import { loadInstances, loadDaemonStatus, loadCliStatus, loadLogs, loadTraces, loadTrace, loadTraceLogs, loadSqlList, diffSql, runAction, stopDaemon, errorText } from "./api.js";
+import { loadInstances, loadStatus, loadLogs, loadTraces, loadTrace, loadSqlList, diffSql, runAction, stopDaemon, errorText } from "./api.js";
 import { askAgent, logsPrompt, tracePrompt } from "./ask.js";
 import { dockBeside } from "./dock.js";
 import { isErrorTrace } from "./model.js";
@@ -35,29 +35,29 @@ function isCurrent(panel, generation) {
   return !panel.closed && panel.generation === generation;
 }
 
-async function cliStatus(panel, instance, isForced) {
-  const { status } = panel.state;
-  if (!isForced && status.source === "cli" && Date.now() - status.at < CLI_RETRY_MS) return null;
-  try {
-    return await loadCliStatus(instance);
-  } catch (error) {
-    const resources = status.resources.map((one) => ({ ...one, state: "stopped" }));
-    return { ...EMPTY_STATUS, source: "none", env: status.env || instance?.env || "", resources, error: `orbit status --json failed: ${errorText(error)}` };
-  }
-}
-
+// While the daemon is stopped, status is re-read only every CLI_RETRY_MS: the instance list below
+// notices a start sooner, and a stopped runtime has nothing to refresh.
 async function readStatus(panel, instance, isForced) {
+  const { status } = panel.state;
+  const isStopped = status.source === "cli" && instance?.daemon !== true;
+  if (!isForced && isStopped && Date.now() - status.at < CLI_RETRY_MS) return null;
+  let loaded;
   try {
-    return await loadDaemonStatus(instance?.dashboard ?? "");
+    loaded = await loadStatus(instance);
   } catch (error) {
-    if (!error?.unreachable) return { ...panel.state.status, source: "daemon", error: `Status unreadable: ${errorText(error)}` };
+    loaded = { ...EMPTY_STATUS, source: "none", env: status.env || instance?.env || "", resources: status.resources.map((one) => ({ ...one, state: "stopped" })), error: `orbit status --json failed: ${errorText(error)}` };
   }
-  return cliStatus(panel, instance, isForced);
+  // One unreadable status while the daemon is up keeps the live view and shows the error, instead
+  // of flipping the panel to stopped until the next tick.
+  if (loaded.source !== "daemon" && loaded.error && status.source === "daemon" && instance?.daemon === true) {
+    return { ...status, error: `Status unreadable: ${loaded.error}` };
+  }
+  return loaded;
 }
 
-// Each tick asks the shown instance's dashboard (one local HTTP call). The instance list (two CLI
-// processes) is re-read every INSTANCES_MS, on a forced refresh, and on every tick while the shown
-// instance has no dashboard: a stopped daemon reports none, so that is how a start is noticed.
+// Each tick runs one `orbit status --json`. The instance list (two more CLI processes) is re-read
+// every INSTANCES_MS, on a forced refresh, and on every tick while the shown instance has no
+// dashboard: a stopped daemon reports none, so that is how a start is noticed.
 export function refreshStatus(panel, cx, isForced) {
   if (panel.state.loadingStatus) return;
   const { generation } = panel;
@@ -159,10 +159,10 @@ export function reloadLogs(panel, cx) {
   const previous = logs.name === name ? logs.lines : [];
   panel.set({ logs: { ...logs, name, lines: previous, loading: true } });
   const { generation } = panel;
-  const dashboard = dashboardOf(panel);
+  const instance = currentInstance(panel);
   cx.spawn(async (cx) => {
     try {
-      const lines = await loadLogs(dashboard, name);
+      const lines = await loadLogs(instance, name);
       if (!isCurrent(panel, generation)) return;
       // Another resource was picked meanwhile: only clear the loading flag if this load still owns it.
       if (panel.state.logResource !== name) {
@@ -191,10 +191,10 @@ export function reloadTraces(panel, cx) {
   }
   panel.set({ traces: { ...traces, loading: true } });
   const { generation } = panel;
-  const dashboard = dashboardOf(panel);
+  const instance = currentInstance(panel);
   cx.spawn(async (cx) => {
     try {
-      const list = await loadTraces(dashboard, includeHealth);
+      const list = await loadTraces(instance, includeHealth);
       if (isCurrent(panel, generation)) panel.set({ traces: { list, error: "", loading: false, at: Date.now() } });
     } catch (error) {
       if (isCurrent(panel, generation)) panel.set({ traces: { ...panel.state.traces, loading: false, error: `Traces: ${errorText(error)}` } });
@@ -214,11 +214,11 @@ export function openTrace(panel, id, cx) {
   panel.set({ trace: { id, detail: null, logs: [], error: "", loading: true }, traceCursor: id });
   cx.notify();
   const { generation } = panel;
-  const dashboard = dashboardOf(panel);
+  const instance = currentInstance(panel);
   const isShown = () => isCurrent(panel, generation) && panel.state.trace?.id === id;
   cx.spawn(async (cx) => {
     try {
-      const [detail, logs] = await Promise.all([loadTrace(dashboard, id), loadTraceLogs(dashboard, id).catch((error) => [`(trace logs unavailable: ${errorText(error)})`])]);
+      const { detail, logs } = await loadTrace(instance, id);
       if (!isShown()) return;
       panel.set({ trace: { id, detail, logs, error: "", loading: false } });
     } catch (error) {
@@ -315,14 +315,18 @@ function performAction(panel, action, name, cx) {
   panel.set({ confirm: null, acting: name, message: `${action === "restart" ? "Restarting" : "Stopping"} ${name}...` });
   cx.notify();
   const { generation } = panel;
-  const dashboard = dashboardOf(panel);
+  const instance = currentInstance(panel);
   cx.spawn(async (cx) => {
     let message;
     try {
-      await runAction(dashboard, action, name);
-      message = `${action === "restart" ? "Restart" : "Stop"} requested for ${name}.`;
+      const result = await runAction(instance, action, name);
+      const others = result.affected.filter((one) => one !== name);
+      message = result.message
+        || `${action === "restart" ? "Restarted" : "Stopped"} ${name}${others.length ? ` (also ${others.join(", ")})` : ""}.`;
     } catch (error) {
-      message = `Could not ${action} ${name}: ${errorText(error)}`;
+      message = error?.code === "timeout"
+        ? `${action === "restart" ? "Restart" : "Stop"} of ${name} is still in progress; the status will update when it finishes.`
+        : `Could not ${action} ${name}: ${errorText(error)}`;
     } finally {
       if (!isCurrent(panel, generation)) return;
       panel.set({ acting: "", message });

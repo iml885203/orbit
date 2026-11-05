@@ -1,4 +1,4 @@
-.PHONY: distribution-metadata build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-check test-release test-release-security test-distribution-metadata release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
+.PHONY: distribution-metadata build ui install clean test test-go test-ui test-ui-check test-ui-lint test-ui-unit test-e2e test-journeys test-journey-harness test-journey-quickstart test-journey-local-first-adoption test-journey-project-context-switch test-journey-recovery test-journey-dotnet test-journey-startup-readiness test-install test-docs test-docs-site-setup docs-site-dev docs-site-build docs-site-preview docs-site-deps docs-site-check test-release test-release-security test-distribution-metadata release-check lint lint-filenames setup fmt gen-types verify-types kafka-producer-image preflight vulncheck notice test-notice
 
 # GOEXE is ".exe" on Windows, empty elsewhere. Without it the Windows build
 # lands at bin/orbit and the daemon's os.Executable() self-exec fails with
@@ -109,8 +109,13 @@ test-journey-project-context-switch:
 	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-project-context-switch.sh
 
 # Runs the whole Go e2e suite: a curated subset let the rest rot unseen (#202).
+# The .NET journey runs in its own non-blocking CI job (test-journey-dotnet)
+# until it proves stable on Linux runners.
 test-journey-recovery:
-	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 12m ./internal/app -run '^TestE2E_'
+	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 12m ./internal/app -run '^TestE2E_' -skip '^TestE2E_Dotnet'
+
+test-journey-dotnet: build
+	ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) go test -tags=e2e -count=1 -timeout 10m ./internal/app -run '^TestE2E_Dotnet' -v
 
 test-journey-startup-readiness:
 	./scripts/retry-journey-port-conflict.sh env ORBIT_BIN=$(abspath $(BUILD_DIR)/$(BINARY)$(GOEXE)) ./scripts/test-startup-readiness.sh

@@ -94,13 +94,6 @@ services:
 		t.Fatal(err)
 	}
 
-	// Recent .NET SDKs keep named-mutex files under $XDG_RUNTIME_DIR. CI
-	// runners export /run/user/<uid> without creating it, and `dotnet`
-	// then fails on first use before building anything.
-	runtimeDir := filepath.Join(home, "xdg-runtime")
-	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
 	command := func(args ...string) *exec.Cmd {
 		cmd := exec.Command(binary, append([]string{"-c", configPath}, args...)...)
 		cmd.Env = append(os.Environ(),
@@ -109,7 +102,6 @@ services:
 			fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort),
 			"DOTNET_CLI_TELEMETRY_OPTOUT=1",
 			"DOTNET_NOLOGO=1",
-			"XDG_RUNTIME_DIR="+runtimeDir,
 			// No lingering MSBuild or compiler servers holding the temp
 			// workspace open after the test.
 			"DOTNET_CLI_USE_MSBUILD_SERVER=0",
@@ -127,6 +119,16 @@ services:
 		_ = command("down").Run()
 		_ = command("daemon", "stop").Run()
 	})
+
+	// The first `dotnet` command on a fresh machine runs one-time setup that
+	// creates its named-mutex directories. Two services starting at once (the
+	// build of `built` and `dotnet watch` of `watched`) race on that setup on
+	// Linux and one fails with mkdirat ENOENT. Run it once, alone, first.
+	warmUp := exec.Command("dotnet", "nuget", "locals", "http-cache", "--list")
+	warmUp.Env = append(os.Environ(), "DOTNET_CLI_TELEMETRY_OPTOUT=1", "DOTNET_NOLOGO=1")
+	if output, err := warmUp.CombinedOutput(); err != nil {
+		t.Fatalf("dotnet first-use setup failed: %v\n%s", err, output)
+	}
 
 	doctorOutput, err := command("doctor", "--json").Output()
 	if err != nil {

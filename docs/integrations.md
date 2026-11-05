@@ -30,7 +30,7 @@ Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/iml885
 
 The agent reads every file first, copies `mods/orbit/` into
 `~/.config/herdr-app/mods/` and merges `cmd-o` from `keys.json`; `cmd-o` then
-opens the window. Needs Orbit 0.16.10+ for SQL status. How it is built is in
+opens the window. Needs Orbit 0.17.0 or later. How it is built is in
 [RECIPE.md](https://github.com/iml885203/orbit/blob/main/integrations/herdr-app/RECIPE.md).
 
 Update: running the install prompt again adds a second copy, because Herdr

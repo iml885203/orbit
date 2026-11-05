@@ -29,8 +29,8 @@ Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/iml885
 ```
 
 agent 會先讀過每個檔案，把 `mods/orbit/` 複製到 `~/.config/herdr-app/mods/`，
-並合併 `keys.json` 的 `cmd-o`；之後按 `cmd-o` 就能開啟視窗。SQL 狀態需要
-Orbit 0.16.10+。建置方式見 [RECIPE.md](https://github.com/iml885203/orbit/blob/main/integrations/herdr-app/RECIPE.md)。
+並合併 `keys.json` 的 `cmd-o`；之後按 `cmd-o` 就能開啟視窗。需要 Orbit
+0.17.0 以上。建置方式見 [RECIPE.md](https://github.com/iml885203/orbit/blob/main/integrations/herdr-app/RECIPE.md)。
 
 更新：再貼一次安裝 prompt 會多裝一份，因為 Herdr 不會覆蓋已安裝的 mod。請改用
 [RECIPE.md › Updating](https://github.com/iml885203/orbit/blob/main/integrations/herdr-app/RECIPE.md#updating)

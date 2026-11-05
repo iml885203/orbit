@@ -24,3 +24,7 @@ website/playwright-report/
 __pycache__/
 *.pyc
 docs/examples/mini-shop/apps/*/*.db
+
+# Herdr editor typings written by `herdr-app check`
+integrations/herdr-app/mods/**/gpui-kit.d.ts
+integrations/herdr-app/mods/**/jsconfig.json

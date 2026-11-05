@@ -33,7 +33,7 @@ import (
 // These tests exercise the real orbit binary against a real Docker engine.
 // They are gated behind `//go:build e2e`. Run with:
 //
-//	make test-e2e      # or: go test -tags=e2e -v ./app/
+//	make test-e2e      # or: go test -tags=e2e -v ./internal/app/
 //
 // Every test gets its own isolated instance:
 //   - ORBIT_HOME → unique tmp dir (socket, pid, state, env config)

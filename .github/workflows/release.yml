@@ -198,14 +198,21 @@ jobs:
             exit 1
           fi
           release_title="Orbit $RELEASE_VERSION"
-          if [[ "$RELEASE_VERSION" =~ ^v0\. ]]; then
+          prerelease_flag=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            # A release candidate such as v1.0.0-rc.1 is a GitHub pre-release:
+            # releases/latest, and so the installers and `orbit update`, skip it.
+            release_title="$release_title (Release candidate)"
+            prerelease_flag=(--prerelease)
+          elif [[ "$RELEASE_VERSION" =~ ^v0\. ]]; then
             release_title="$release_title (Preview)"
           fi
           mapfile -t release_assets < <(sed 's|^|dist/|' .github/actions/verify-orbit-release/assets.txt)
           gh release create "$RELEASE_VERSION" "${release_assets[@]}" \
             --target "$GITHUB_SHA" \
             --notes "$RELEASE_NOTES" \
-            --title "$release_title"
+            --title "$release_title" \
+            "${prerelease_flag[@]}"
       - name: Verify immutable published release
         uses: ./.github/actions/verify-orbit-release
         env:
@@ -216,8 +223,11 @@ jobs:
           expected-commit: ${{ github.sha }}
           asset-directory: dist
 
+  # Package channels track stable releases only; a release candidate stays on
+  # GitHub, where it is installed by tag (ORBIT_VERSION=v1.0.0-rc.1).
   update-homebrew:
     needs: release
+    if: ${{ !contains(inputs.tag, '-') }}
     uses: ./.github/workflows/sync-homebrew.yml
     with:
       version: ${{ inputs.tag }}
@@ -226,6 +236,7 @@ jobs:
 
   update-scoop:
     needs: release
+    if: ${{ !contains(inputs.tag, '-') }}
     uses: ./.github/workflows/sync-scoop.yml
     with:
       version: ${{ inputs.tag }}

@@ -46,7 +46,8 @@ func serveTelemetryDaemon(t *testing.T) <-chan url.Values {
 }
 
 // serveTelemetryDaemonAnswering is serveTelemetryDaemon with the log-record
-// response chosen by the test.
+// response chosen by the test. The trace's stdout lines fail with the same
+// status, so one failing fixture covers both reads.
 func serveTelemetryDaemonAnswering(t *testing.T, logsStatus int, logsBody any) <-chan url.Values {
 	t.Helper()
 	home, err := os.MkdirTemp(shortTestTempRoot(), "otel-")
@@ -71,6 +72,17 @@ func serveTelemetryDaemonAnswering(t *testing.T, logsStatus int, logsBody any) <
 	mux.HandleFunc("/api/traces/"+logsTraceID, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(fixtureTrace())
+	})
+	mux.HandleFunc("/api/traces/"+logsTraceID+"/logs", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(logsStatus)
+		if logsStatus != http.StatusOK {
+			_ = json.NewEncoder(w).Encode(daemon.APIResponse{Error: "log buffer gone"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(daemon.TraceLogsResponse{Lines: []daemon.TraceLogLine{
+			{Service: "api", Line: "TraceId=" + logsTraceID + " payment declined"},
+		}})
 	})
 	server := &http.Server{Handler: mux}
 	go func() { _ = server.Serve(listener) }()
@@ -239,6 +251,11 @@ func TestTraceShowWithLogsJoinsLogRecords(t *testing.T) {
 	if envelope.Data["traceId"] == nil || envelope.Data["spans"] == nil || len(logs) != 2 {
 		t.Errorf("data should be the trace's fields plus its log records: %s", output)
 	}
+	var stdoutLines []daemon.TraceLogLine
+	_ = json.Unmarshal(envelope.Data["stdout_lines"], &stdoutLines)
+	if len(stdoutLines) != 1 || stdoutLines[0].Service != "api" || !strings.Contains(stdoutLines[0].Line, "payment declined") {
+		t.Errorf("stdout_lines = %s, want the trace's stdout line from api", envelope.Data["stdout_lines"])
+	}
 }
 
 func TestTraceShowWithLogsJSONKeepsTheTraceWhenLogRecordsFail(t *testing.T) {
@@ -257,11 +274,15 @@ func TestTraceShowWithLogsJSONKeepsTheTraceWhenLogRecordsFail(t *testing.T) {
 	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
 		t.Fatalf("parse envelope: %v\n%s", err, output)
 	}
-	if !envelope.OK || envelope.Data["traceId"] == nil || string(envelope.Data["logs"]) != "[]" {
-		t.Errorf("want ok with the trace and logs: [], got %s", output)
+	if !envelope.OK || envelope.Data["traceId"] == nil || string(envelope.Data["logs"]) != "[]" || string(envelope.Data["stdout_lines"]) != "[]" {
+		t.Errorf("want ok with the trace, logs: [] and stdout_lines: [], got %s", output)
 	}
-	if len(envelope.Notices) != 1 || envelope.Notices[0].Code != "log_records_unavailable" ||
-		!strings.Contains(envelope.Notices[0].Message, "log store exploded") {
-		t.Errorf("notices = %+v, want one log_records_unavailable carrying the daemon error", envelope.Notices)
+	codes := map[string]string{}
+	for _, notice := range envelope.Notices {
+		codes[notice.Code] = notice.Message
+	}
+	if !strings.Contains(codes["log_records_unavailable"], "log store exploded") ||
+		!strings.Contains(codes["stdout_lines_unavailable"], "log buffer gone") || len(codes) != 2 {
+		t.Errorf("notices = %+v, want log_records_unavailable and stdout_lines_unavailable carrying the daemon errors", envelope.Notices)
 	}
 }
