@@ -174,6 +174,10 @@ settings:
   health_check_interval: 5s
   docker_poll_interval: 2s
   image_pull_concurrency: 0
+  health_check:
+    timeout: 5s
+    retries: 12
+    failure_threshold: 3
 ```
 
 | Field | Type | Default | Description |
@@ -366,6 +370,9 @@ health_check:
 | `log` | Tail container logs for a regex match (one-shot readiness signal; not a runtime liveness probe) |
 | `healthcheck` | Use the image's own `HEALTHCHECK` as reported by `docker inspect` |
 
+A check that omits `timeout`, `retries`, or `failure_threshold` takes the
+value under [`settings.health_check`](#settings).
+
 An `exec` command is passed to the container as an argument vector, so no
 shell runs: `$VAR` is not expanded, and a `$PASSWORD` argument reaches the
 program as those nine literal characters. Wrap the command in `sh -c` when it
@@ -393,7 +400,8 @@ authoritative and never causes a retry over the other protocol.
 A resource with no explicit `health_check` gets a TCP readiness check when it
 declares one port, or an `http` or `https` port among several. This applies equally to
 host services and containers: declaring the endpoint is enough for Orbit to
-wait before releasing dependents. Use an explicit HTTP, log, `exec`, or image
+wait before releasing dependents. The inferred check uses the
+`settings.health_check` values. Use an explicit HTTP, log, `exec`, or image
 `healthcheck` probe when listening alone is not sufficient proof. A portless
 host worker must remain running through a short startup stabilization window
 before Orbit releases its dependents; a portless container that needs a

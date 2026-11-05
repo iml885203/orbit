@@ -167,6 +167,10 @@ settings:
   health_check_interval: 5s
   docker_poll_interval: 2s
   image_pull_concurrency: 0
+  health_check:
+    timeout: 5s
+    retries: 12
+    failure_threshold: 3
 ```
 
 | Field | Type | Default | 說明 |
@@ -349,6 +353,9 @@ health_check:
 | `log` | tail container logs 比對 regex（僅為一次性 readiness 訊號，不是 runtime liveness probe） |
 | `healthcheck` | 直接用 image 自己的 `HEALTHCHECK`，由 `docker inspect` 回報 |
 
+Check 省略 `timeout`、`retries` 或 `failure_threshold` 時，會套用
+[`settings.health_check`](#settings) 的值。
+
 `exec` 的 command 是以 argument vector 傳進 container，不會經過 shell：`$VAR`
 不會展開，`$PASSWORD` 這個參數會原封不動地以九個字元傳給程式。需要變數、pipe
 或重導向時，請用 `sh -c` 包起來。這件事值得一次寫對，因為寫錯的失敗樣子跟
@@ -371,12 +378,13 @@ HTTP/1.1。Orbit 會在 resource 這次啟動期間記住所用協定，因此�
 Resource 沒有明確設定 `health_check` 時，如果只宣告一個 port，或多個 port
 中包含 `http` 或 `https`，Orbit 會自動使用 TCP readiness check。Host service 與
 container 採用同一規則：宣告 endpoint 就足以讓 Orbit 等到它可用再放行
-dependent。若「能連線」仍不足以代表應用程式 ready，請明確使用 HTTP、
-log、`exec` 或 image `healthcheck` probe。沒有 port 的 host worker 會先
-通過一小段 startup stabilization window；沒有 port 的 container 若需要
-readiness 保證，則必須宣告明確 probe。當其他 resource 依賴一個沒有 probe、
-且 Orbit 無法選定單一 endpoint 的 container 時，`orbit doctor` 會直接警告
-並指出應補上的 `health_check` path，不會默默暗示它已經 ready。
+dependent，這個自動產生的 check 使用 `settings.health_check` 的值。若
+「能連線」仍不足以代表應用程式 ready，請明確使用 HTTP、log、`exec` 或 image
+`healthcheck` probe。沒有 port 的 host worker 會先通過一小段 startup
+stabilization window；沒有 port 的 container 若需要 readiness 保證，則必須
+宣告明確 probe。當其他 resource 依賴一個沒有 probe、且 Orbit 無法選定單一
+endpoint 的 container 時，`orbit doctor` 會直接警告並指出應補上的
+`health_check` path，不會默默暗示它已經 ready。
 
 ### `seed`
 

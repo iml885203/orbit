@@ -22,6 +22,15 @@ func Validate(cfg *Config) error {
 	if cfg.Settings.ImagePullConcurrency < 0 {
 		errs = append(errs, "settings.image_pull_concurrency must be zero or positive")
 	}
+	if cfg.Settings.HealthCheck.Timeout < 0 {
+		errs = append(errs, "settings.health_check.timeout must be zero or positive")
+	}
+	if cfg.Settings.HealthCheck.Retries < 0 {
+		errs = append(errs, "settings.health_check.retries must be zero or positive")
+	}
+	if cfg.Settings.HealthCheck.FailureThreshold < 0 {
+		errs = append(errs, "settings.health_check.failure_threshold must be zero or positive")
+	}
 
 	known := make(map[string]bool)
 	for name := range cfg.Containers {

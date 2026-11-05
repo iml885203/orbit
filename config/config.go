@@ -226,6 +226,10 @@ const DefaultHealthRetries = 12
 // into a red environment while still surfacing a real outage quickly.
 const DefaultHealthFailureThreshold = 3
 
+// DefaultHealthTimeout bounds one http or tcp probe when neither the check nor
+// settings.health_check sets a timeout.
+const DefaultHealthTimeout = 5 * time.Second
+
 // DefaultShutdownTimeout is the grace period before a stopping process group
 // is killed. It is shared because instance cleanup may have no config at all.
 const DefaultShutdownTimeout = 30 * time.Second
@@ -240,12 +244,13 @@ func applyDefaults(cfg *Config) {
 	if cfg.Settings.DockerPollInterval == 0 {
 		cfg.Settings.DockerPollInterval = 2 * time.Second
 	}
+	applyHealthCheckSettingsDefaults(&cfg.Settings.HealthCheck)
 
 	for _, c := range cfg.Containers {
 		if c.PullPolicy == "" {
 			c.PullPolicy = "always"
 		}
-		applyHealthCheckDefaults(c.HealthCheck, c.Ports, cfg.Settings.HealthCheckInterval)
+		ApplyHealthCheckDefaults(c.HealthCheck, c.Ports, cfg.Settings)
 	}
 
 	for _, s := range cfg.Services {
@@ -255,7 +260,7 @@ func applyDefaults(cfg *Config) {
 		if s.Type == "" {
 			s.Type = inferServiceType(s.Command)
 		}
-		applyHealthCheckDefaults(s.HealthCheck, s.Ports, cfg.Settings.HealthCheckInterval)
+		ApplyHealthCheckDefaults(s.HealthCheck, s.Ports, cfg.Settings)
 		if s.Type == "dotnet" && s.Command == "" {
 			s.Command = "dotnet watch run"
 		}
@@ -290,12 +295,25 @@ func inferServiceType(command string) string {
 	}
 }
 
-// applyHealthCheckDefaults fills the zero fields of a health_check stanza.
-// Shared by the container and service loops so the two can't drift.
-func applyHealthCheckDefaults(
+func applyHealthCheckSettingsDefaults(defaults *HealthCheckSettings) {
+	if defaults.Timeout == 0 {
+		defaults.Timeout = DefaultHealthTimeout
+	}
+	if defaults.Retries == 0 {
+		defaults.Retries = DefaultHealthRetries
+	}
+	if defaults.FailureThreshold == 0 {
+		defaults.FailureThreshold = DefaultHealthFailureThreshold
+	}
+}
+
+// ApplyHealthCheckDefaults fills the zero fields of a health_check stanza.
+// Shared by the container and service loops, and by the engine's inferred
+// readiness check, so none of them can drift.
+func ApplyHealthCheckDefaults(
 	hc *HealthCheckConfig,
 	ports map[string]PortDef,
-	interval time.Duration,
+	settings RuntimeSettings,
 ) {
 	if hc == nil {
 		return
@@ -316,16 +334,16 @@ func applyHealthCheckDefaults(
 		}
 	}
 	if hc.Interval == 0 {
-		hc.Interval = interval
+		hc.Interval = settings.HealthCheckInterval
 	}
 	if hc.Timeout == 0 {
-		hc.Timeout = 5 * time.Second
+		hc.Timeout = settings.HealthCheck.Timeout
 	}
 	if hc.Retries == 0 {
-		hc.Retries = DefaultHealthRetries
+		hc.Retries = settings.HealthCheck.Retries
 	}
 	if hc.FailureThreshold == 0 {
-		hc.FailureThreshold = DefaultHealthFailureThreshold
+		hc.FailureThreshold = settings.HealthCheck.FailureThreshold
 	}
 }
 

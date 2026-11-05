@@ -85,7 +85,7 @@ func (c *Checker) NewProbeSession(ctx context.Context, name string, generation i
 	if hc != nil && hc.TLSSkipVerify {
 		httpsTransport = c.insecureHTTPClient.Transport
 	}
-	timeout := 5 * time.Second
+	timeout := config.DefaultHealthTimeout
 	if hc != nil && hc.Timeout != 0 {
 		timeout = hc.Timeout
 	}
@@ -154,7 +154,7 @@ func (s *ProbeSession) checkHTTP(ctx context.Context, hc *config.HealthCheckConf
 	// probe slower than the HTTP one the old fixed 5s was tuned for.
 	timeout := hc.Timeout
 	if timeout == 0 {
-		timeout = 5 * time.Second
+		timeout = config.DefaultHealthTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -195,7 +195,7 @@ func cleartextProtocol(scheme string, resp *http.Response) string {
 func (c *Checker) checkTCP(ctx context.Context, name string, hc *config.HealthCheckConfig, start time.Time) Result {
 	timeout := hc.Timeout
 	if timeout == 0 {
-		timeout = 5 * time.Second
+		timeout = config.DefaultHealthTimeout
 	}
 
 	addr := fmt.Sprintf("localhost:%d", hc.Port)

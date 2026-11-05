@@ -11,8 +11,16 @@ func TestResourceReadinessUsesOneDeclaredEndpointWithoutExtraConfig(t *testing.T
 	ports := map[string]config.PortDef{
 		"database": {Host: 25432, Target: 5432},
 	}
+	settings := config.RuntimeSettings{
+		HealthCheckInterval: 2 * time.Second,
+		HealthCheck: config.HealthCheckSettings{
+			Timeout:          7 * time.Second,
+			Retries:          60,
+			FailureThreshold: 4,
+		},
+	}
 
-	got := resourceReadinessCheck(nil, ports, 2*time.Second)
+	got := resourceReadinessCheck(nil, ports, settings)
 
 	if got == nil {
 		t.Fatal("readiness check was not inferred")
@@ -21,10 +29,10 @@ func TestResourceReadinessUsesOneDeclaredEndpointWithoutExtraConfig(t *testing.T
 		t.Fatalf("readiness check = %#v, want TCP on selected host port 25432", got)
 	}
 	if got.Interval != 2*time.Second ||
-		got.Timeout != 5*time.Second ||
-		got.Retries != config.DefaultHealthRetries ||
-		got.FailureThreshold != config.DefaultHealthFailureThreshold {
-		t.Fatalf("readiness defaults = %#v", got)
+		got.Timeout != 7*time.Second ||
+		got.Retries != 60 ||
+		got.FailureThreshold != 4 {
+		t.Fatalf("readiness check = %#v, want the settings health_check values", got)
 	}
 }
 
@@ -38,7 +46,7 @@ func TestResourceReadinessPreservesExplicitApplicationProbe(t *testing.T) {
 	got := resourceReadinessCheck(
 		explicit,
 		map[string]config.PortDef{"http": {Host: 29090}},
-		time.Second,
+		config.RuntimeSettings{HealthCheckInterval: time.Second},
 	)
 
 	if got != explicit {

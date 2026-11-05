@@ -85,10 +85,17 @@ func (c *Config) TracingMaxTraces() int {
 }
 
 type RuntimeSettings struct {
-	ShutdownTimeout      time.Duration `yaml:"shutdown_timeout"`
-	HealthCheckInterval  time.Duration `yaml:"health_check_interval"`
-	DockerPollInterval   time.Duration `yaml:"docker_poll_interval"`
-	ImagePullConcurrency int           `yaml:"image_pull_concurrency"`
+	ShutdownTimeout      time.Duration       `yaml:"shutdown_timeout"`
+	HealthCheckInterval  time.Duration       `yaml:"health_check_interval"`
+	DockerPollInterval   time.Duration       `yaml:"docker_poll_interval"`
+	ImagePullConcurrency int                 `yaml:"image_pull_concurrency"`
+	HealthCheck          HealthCheckSettings `yaml:"health_check"`
+}
+
+type HealthCheckSettings struct {
+	Timeout          time.Duration `yaml:"timeout"`
+	Retries          int           `yaml:"retries"`
+	FailureThreshold int           `yaml:"failure_threshold"`
 }
 
 // Group is a named collection of services. It serves two purposes:

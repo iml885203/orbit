@@ -37,6 +37,12 @@ export interface RuntimeSettings {
   health_check_interval: number;
   docker_poll_interval: number;
   image_pull_concurrency: number /* int */;
+  health_check: HealthCheckSettings;
+}
+export interface HealthCheckSettings {
+  timeout: number;
+  retries: number /* int */;
+  failure_threshold: number /* int */;
 }
 /**
  * Group is a named collection of services. It serves two purposes:

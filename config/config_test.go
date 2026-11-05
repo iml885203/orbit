@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadMinimalConfig(t *testing.T) {
@@ -827,6 +828,117 @@ settings:
 	_, err := Load(path)
 	if err == nil || !strings.Contains(err.Error(), "settings.image_pull_concurrency must be zero or positive") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadAppliesSettingsHealthCheckToChecksThatOmitThem(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+settings:
+  health_check:
+    timeout: 8s
+    retries: 60
+    failure_threshold: 5
+containers:
+  redis:
+    image: redis:7.4
+    ports:
+      redis: 6379
+    health_check:
+      type: tcp
+services:
+  api:
+    type: node
+    command: npm start
+    ports:
+      http: 5000
+    health_check:
+      type: http
+      path: /health
+      timeout: 2s
+      retries: 4
+      failure_threshold: 1
+  web:
+    type: node
+    command: npm run web
+    ports:
+      http: 5001
+    health_check:
+      type: http
+      retries: 20
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		check *HealthCheckConfig
+		want  HealthCheckSettings
+	}{
+		{"omits every field", cfg.Containers["redis"].HealthCheck, HealthCheckSettings{8 * time.Second, 60, 5}},
+		{"sets every field", cfg.Services["api"].HealthCheck, HealthCheckSettings{2 * time.Second, 4, 1}},
+		{"sets one field", cfg.Services["web"].HealthCheck, HealthCheckSettings{8 * time.Second, 20, 5}},
+	}
+	for _, tt := range tests {
+		got := HealthCheckSettings{tt.check.Timeout, tt.check.Retries, tt.check.FailureThreshold}
+		if got != tt.want {
+			t.Errorf("%s: timeout/retries/failure_threshold = %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestLoadKeepsBuiltInHealthCheckDefaultsWithoutSettings(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  redis:
+    image: redis:7.4
+    ports:
+      redis: 6379
+    health_check:
+      type: tcp
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	check := cfg.Containers["redis"].HealthCheck
+	got := HealthCheckSettings{check.Timeout, check.Retries, check.FailureThreshold}
+	want := HealthCheckSettings{DefaultHealthTimeout, DefaultHealthRetries, DefaultHealthFailureThreshold}
+	if got != want {
+		t.Fatalf("timeout/retries/failure_threshold = %+v, want built-in %+v", got, want)
+	}
+}
+
+func TestLoadRejectsInvalidSettingsHealthCheck(t *testing.T) {
+	tests := []struct {
+		field string
+		value string
+		want  string
+	}{
+		{"timeout", "-1s", "settings.health_check.timeout must be zero or positive"},
+		{"retries", "-1", "settings.health_check.retries must be zero or positive"},
+		{"failure_threshold", "-2", "settings.health_check.failure_threshold must be zero or positive"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.field, func(t *testing.T) {
+			path := writeOrbitYAML(t, `
+version: "3"
+settings:
+  health_check:
+    `+tt.field+`: `+tt.value+`
+`)
+
+			_, err := Load(path)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeEnvFile(t *testing.T, dir, name, content string) string {
@@ -76,6 +77,33 @@ services:
 	}
 	if got := cfg.Services["api"].Env["REGION"]; got != "local" {
 		t.Fatalf("REGION = %q, want inherited local", got)
+	}
+}
+
+func TestLoadMergesInheritedSettingsHealthCheckPerKey(t *testing.T) {
+	dir := t.TempDir()
+	writeEnvFile(t, dir, "base.yaml", `
+version: "3"
+settings:
+  health_check:
+    timeout: 8s
+    retries: 60
+`)
+	childPath := writeEnvFile(t, dir, "e2e.yaml", `
+extends: base.yaml
+settings:
+  health_check:
+    retries: 30
+`)
+
+	cfg, err := Load(childPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Settings.HealthCheck
+	want := HealthCheckSettings{Timeout: 8 * time.Second, Retries: 30, FailureThreshold: DefaultHealthFailureThreshold}
+	if got != want {
+		t.Fatalf("settings.health_check = %+v, want %+v", got, want)
 	}
 }
 
