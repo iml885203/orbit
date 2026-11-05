@@ -403,7 +403,6 @@ assert service["data"] == {
     "url": demo_url,
     "target": "service",
     "resource": "demo-shop",
-    "service": "demo-shop",
     "opened": True,
 }
 assert dashboard["data"]["target"] == "dashboard"

@@ -24,7 +24,6 @@ type openJSONData struct {
 	URL      string `json:"url"`
 	Target   string `json:"target"`
 	Resource string `json:"resource,omitempty"`
-	Service  string `json:"service,omitempty"`
 	Opened   bool   `json:"opened"`
 }
 
@@ -38,15 +37,10 @@ func openURL(url, target, resource string) error {
 		return err
 	}
 	if cli.JSONOutput {
-		service := ""
-		if target == "service" {
-			service = resource
-		}
 		return writeOpenJSON(os.Stdout, commandString(), openJSONData{
 			URL:      url,
 			Target:   target,
 			Resource: resource,
-			Service:  service,
 			Opened:   true,
 		})
 	}

@@ -283,23 +283,28 @@ Host service path 尚未解析或不存在時，會使用穩定的
 
 當先前已有 daemon 在跑時，daemon stop/restart payload 可能包含 `stop_method`。穩定值為 `graceful`、`terminated`、`killed`。
 
-## Legacy JSON Commands
+## Daemon Status 與 History
 
-部分指令早於 envelope 存在，為了相容性會刻意保留既有的 JSON 形狀：
+`orbit daemon status --json` 回傳 `data.running`，daemon 執行中時另附 daemon
+細節。Daemon 已停止時仍是成功 envelope，值為 `running: false`。
+
+`orbit history --json` 回傳 `data.records`，`orbit history gaps --json` 回傳
+`data.gaps`。兩者都是陣列，沒有資料時為空陣列而非 `null`，項目沿用 dashboard
+讀取的 camelCase 欄位。
+
+## 串流例外
+
+只有一個 `--json` 指令是即時串流而非 envelope：
 
 | Command | 行為 |
 |---|---|
-| `orbit daemon status --json` | 回傳 legacy daemon status 物件。 |
-| `orbit history --json` | 保持既有的 history payload。 |
-| `orbit history gaps --json` | 保持既有的 history gaps payload。 |
 | `orbit tunnel claim --json` | 串流 Tunlease 形狀的 NDJSON 事件（`schema_version: 1`、每事件一個 `type`）——它是即時串流，不是請求-回應。`list`/`release` 的上游事件形狀仍可用 `-o json` 取得。 |
 
 ## Open
 
 `orbit open [resource] --json` 會開啟目標並回傳一個成功 envelope。Payload
 包含 `url`、`opened`，以及值為 `dashboard`、`service` 或 `container` 的
-`target`。指定資源時，`resource` 會包含其名稱。為了向後相容，service target
-也會在 `service` 保留相同名稱；container target 不使用這個 legacy 欄位。
+`target`。指定資源時，`resource` 會包含其名稱。
 
 ## Passthrough Commands
 
@@ -311,6 +316,10 @@ Host service path 尚未解析或不存在時，會使用穩定的
 只有失敗會用錯誤 envelope。
 
 不要預設每一個 `--json` 指令都有 envelope。解析前請先確認該指令各自的 contract。
+
+Daemon HTTP API 屬於 Orbit CLI 與 dashboard 的內部通道，不是相容性契約
+（見 [versioning](versioning.zh-TW.md)）；請改為解析 CLI 的
+`--json` 輸出。
 
 ## Logs
 
@@ -366,8 +375,8 @@ event 取代先前的。
 典型 agent 工作流：`orbit trace --search <路徑或文字> --json`（或
 `orbit trace --json` → 挑出 errored trace）→
 `orbit trace <id> --logs --json` 找失敗的 span，並取得帶有該 trace id 的 OTLP
-log record（`data.logs`）。該 trace 的 stdout log 行走 daemon 的
-`GET /api/traces/{id}/logs`，或人類可讀輸出用 `orbit trace <id> --logs`。
+log record（`data.logs`）。該 trace 的 stdout log 行不在 JSON 裡；人類可讀的
+`orbit trace <id> --logs` 輸出會列出它們。
 
 ### Log records
 

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -335,9 +334,7 @@ func runDaemonStatus(_ *cobra.Command, _ []string) error {
 	}
 
 	if cli.JSONOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(out)
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), out, nil)
 	}
 
 	if !alive {

@@ -421,25 +421,29 @@ action. Execute that action before retrying; `up` has not started dependencies.
 Daemon stop/restart payloads may include `stop_method` when a prior daemon was
 running. Stable values are `graceful`, `terminated`, and `killed`.
 
-## Legacy JSON Commands
+## Daemon Status and History
 
-Some commands predate the envelope and intentionally keep their existing JSON
-shape for compatibility:
+`orbit daemon status --json` returns `data.running`, plus the daemon's details
+when it is running. A stopped daemon is still a success envelope with
+`running: false`.
+
+`orbit history --json` returns `data.records` and `orbit history gaps --json`
+returns `data.gaps`. Both are arrays, empty rather than `null`, and their items
+use the same camelCase fields the dashboard reads.
+
+## Stream Exception
+
+One `--json` command is a live stream rather than an envelope:
 
 | Command | Behavior |
 |---|---|
-| `orbit daemon status --json` | Returns the legacy daemon status object. |
-| `orbit history --json` | Keeps its existing history payload. |
-| `orbit history gaps --json` | Keeps its existing history gaps payload. |
 | `orbit tunnel claim --json` | Streams Tunlease-shaped NDJSON events (`schema_version: 1`, `type` per event) — it is a live stream, not a request-response. The upstream event shape also stays available on `list`/`release` behind `-o json`. |
 
 ## Open
 
 `orbit open [resource] --json` opens the target and returns one success envelope.
 The payload contains `url`, `opened`, and a `target` of `dashboard`, `service`,
-or `container`. A named target includes its name in `resource`. Service targets
-also retain the same value in `service` for backward compatibility; container
-targets do not use that legacy field.
+or `container`. A named target includes its name in `resource`.
 
 ## Passthrough Commands
 
@@ -453,9 +457,9 @@ success; only its failures use the error envelope.
 Do not assume every `--json` command has an envelope. Check the command-specific
 contract before parsing.
 
-The daemon HTTP API is structured for the Orbit UI and CLI internals, but the
-current agent-facing compatibility contract is the CLI `--json` surface unless
-a future design explicitly says otherwise.
+The daemon HTTP API is internal to Orbit's CLI and dashboard and is not a
+compatibility contract ([versioning](versioning.md#stable-contracts-from-v1));
+parse the CLI `--json` surface instead.
 
 ## Logs
 
@@ -520,9 +524,8 @@ accumulates spans; the latest event supersedes earlier ones.
 A typical agent workflow: `orbit trace --search <path or text> --json` (or
 `orbit trace --json` → pick the errored trace) →
 `orbit trace <id> --logs --json` to find the failing span and the OTLP log
-records stamped with the trace id (`data.logs`). The trace's stdout lines come
-from `GET /api/traces/{id}/logs` on the daemon, or `orbit trace <id> --logs`
-for human-readable output.
+records stamped with the trace id (`data.logs`). The trace's stdout lines are
+not in the JSON; the human `orbit trace <id> --logs` output shows them.
 
 ### Log records
 
