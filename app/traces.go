@@ -384,7 +384,17 @@ func runTraceShow(_ *cobra.Command, args []string) error {
 		} else {
 			logs = page.Logs
 		}
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), traceWithLogRecords{Trace: trace, Logs: logs}, nil)
+		stdoutLines, err := client.TraceLogs(trace.TraceID)
+		if err != nil {
+			cli.AddJSONNotice(cli.JSONNotice{
+				Code:    "stdout_lines_unavailable",
+				Message: fmt.Sprintf("stdout lines unavailable: %v", err),
+			})
+		}
+		if stdoutLines == nil {
+			stdoutLines = []daemon.TraceLogLine{}
+		}
+		return cli.WriteJSONSuccess(os.Stdout, commandString(), traceWithLogRecords{Trace: trace, Logs: logs, StdoutLines: stdoutLines}, nil)
 	}
 
 	renderWaterfall(os.Stdout, trace)
@@ -396,10 +406,13 @@ func runTraceShow(_ *cobra.Command, args []string) error {
 }
 
 // traceWithLogRecords is `orbit trace <id> --logs --json`: the trace's fields
-// flattened beside its OTLP log records.
+// flattened beside its OTLP log records and the stdout lines that name it.
+// The two differ in origin: OTLP records exist only for services that export
+// logs, while stdout lines are matched by trace id in every service's output.
 type traceWithLogRecords struct {
 	*tracing.Trace
-	Logs []tracing.LogRecord `json:"logs"`
+	Logs        []tracing.LogRecord   `json:"logs"`
+	StdoutLines []daemon.TraceLogLine `json:"stdout_lines"`
 }
 
 // renderWaterfall prints the trace header and a span timeline. Bars are

@@ -116,9 +116,7 @@ version or a MAJOR Orbit release.
 Undocumented internals, the daemon HTTP API, dashboard markup and styling, log
 wording, and test fixtures are not compatibility contracts. The daemon HTTP API
 is the channel between the CLI, the dashboard, and the daemon; agents and
-scripts use the CLI `--json` surface instead. Integrations kept in this
-repository's `integrations/` directory may call it, and are updated in the same
-change as any route they use.
+scripts use the CLI `--json` surface instead.
 
 ## Plugin version
 
