@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { homepageCopy } from './homepage-copy'
@@ -241,6 +242,7 @@ export default defineConfig({
     /^\.\/(?:CONTRIBUTING|testing|1\.0-test-matrix)$/,
   ],
   head: [
+    ['script', {}, readFileSync(fileURLToPath(new URL('../analytics/analytics.js', import.meta.url)), 'utf8')],
     ['meta', { name: 'theme-color', content: '#0d1117' }],
     ['link', { rel: 'icon', href: '/orbit-logo-badge.svg' }],
     ['link', { rel: 'ai-catalog', href: '/.well-known/ai-catalog.json', type: 'application/json' }],

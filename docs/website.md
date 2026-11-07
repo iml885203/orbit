@@ -85,3 +85,7 @@ therefore pins the patched Vite 6.4.3 release. The production build, generated
 link/search contract, and browser interaction checks are the compatibility
 gate for that temporary major-version override. Remove it when a stable
 VitePress release supports a patched Vite major.
+
+## Website analytics
+
+The public website uses PostHog Cloud (US) for pageviews, page departures and project-link clicks. Events include `product` and `site_domain` and share a project with Logan’s other public websites. URL queries and fragments are stripped before sending. Tracking runs only on the production website hostname and honors Do Not Track and Global Privacy Control. Session replay, autocapture and user identification are disabled. It does not instrument the locally running application or CLI. The browser project token is public; analytics-reading credentials must never be added to the frontend.
