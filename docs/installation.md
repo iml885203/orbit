@@ -197,7 +197,7 @@ Verify the SHA-256 checksum before moving the binary onto your `PATH`.
 With the CLI installed, one command puts the Orbit skill where the coding
 agents on this machine load it; without `--yes` it previews the plan, `orbit
 skill uninstall --yes` reverses it, and `orbit doctor` reports its state. The
-[published skill](https://orbit.dotw.me/agent/SKILL.md) describes what it
+[published skill](https://orbit.ilogan.app/agent/SKILL.md) describes what it
 installs.
 
 ```bash

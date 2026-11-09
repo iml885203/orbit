@@ -2,14 +2,14 @@
   "specVersion": "1.0",
   "host": {
     "displayName": "Orbit",
-    "identifier": "did:web:orbit.dotw.me"
+    "identifier": "did:web:orbit.ilogan.app"
   },
   "entries": [
     {
-      "identifier": "urn:air:orbit.dotw.me:skill:orbit",
+      "identifier": "urn:air:orbit.ilogan.app:skill:orbit",
       "displayName": "Orbit local environment operations",
       "type": "text/markdown",
-      "url": "https://orbit.dotw.me/agent/SKILL.md",
+      "url": "https://orbit.ilogan.app/agent/SKILL.md",
       "representativeQueries": [
         "set up this project with Orbit",
         "start and verify my local development environment",

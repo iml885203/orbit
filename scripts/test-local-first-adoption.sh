@@ -10,7 +10,7 @@ example_config="$repo_root/docs/examples/local-first/orbit.yaml"
 for guide in docs/local-first.md docs/local-first.zh-TW.md; do
   guide_path="$repo_root/$guide"
 
-  if ! grep -F "https://orbit.dotw.me" "$guide_path" >/dev/null; then
+  if ! grep -F "https://orbit.ilogan.app" "$guide_path" >/dev/null; then
     echo "$guide is missing the URL-first onboarding request." >&2
     exit 1
   fi

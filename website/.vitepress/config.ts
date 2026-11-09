@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { homepageCopy } from './homepage-copy'
 
-const siteOrigin = 'https://orbit.dotw.me'
+const siteOrigin = 'https://orbit.ilogan.app'
 const siteBase = '/'
 const homepageTitle = 'Orbit — Local dev environments your agent understands'
 // The page description is the homepage subhead, so search results and share
@@ -219,7 +219,7 @@ export default defineConfig({
     },
   },
   sitemap: {
-    hostname: 'https://orbit.dotw.me/',
+    hostname: 'https://orbit.ilogan.app/',
   },
   srcExclude: [
     'launch-video/**',
@@ -257,7 +257,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '開始使用', link: '/zh-TW/docs/local-first' },
-          { text: '給 Agent', link: 'https://orbit.dotw.me/agent/SKILL.md' },
+          { text: '給 Agent', link: 'https://orbit.ilogan.app/agent/SKILL.md' },
           {
             text: '文件',
             items: [
@@ -281,7 +281,7 @@ export default defineConfig({
           copyright: footerLinks([
             ['為什麼選擇 Orbit', '/zh-TW/docs/why-orbit'],
             ['文件', '/zh-TW/docs/local-first'],
-            ['給 Agent', 'https://orbit.dotw.me/agent/SKILL.md'],
+            ['給 Agent', 'https://orbit.ilogan.app/agent/SKILL.md'],
             ['GitHub', 'https://github.com/iml885203/orbit'],
             ['English', '/'],
           ]),
@@ -388,7 +388,7 @@ export default defineConfig({
     siteTitle: 'Orbit',
     nav: [
       { text: 'Get started', link: '/docs/local-first' },
-      { text: 'For agents', link: 'https://orbit.dotw.me/agent/SKILL.md' },
+      { text: 'For agents', link: 'https://orbit.ilogan.app/agent/SKILL.md' },
       {
         text: 'Docs',
         items: [
@@ -429,7 +429,7 @@ export default defineConfig({
       copyright: footerLinks([
         ['Why Orbit', '/docs/why-orbit'],
         ['Docs', '/docs/local-first'],
-        ['For agents', 'https://orbit.dotw.me/agent/SKILL.md'],
+        ['For agents', 'https://orbit.ilogan.app/agent/SKILL.md'],
         ['GitHub', 'https://github.com/iml885203/orbit'],
         ['繁體中文', '/zh-TW/'],
       ]),

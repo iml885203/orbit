@@ -26,7 +26,7 @@ export const homepageCopy: Record<HomepageLocale, HomepageCopy> = {
   'en-US': {
     headline: ['Build the product.', 'Let your agent know the whole project.'],
     subhead: 'One contract for all your microservices. Your agent reads it, and runs only the slice it needs.',
-    prompt: 'Read https://orbit.dotw.me and set up a local environment I can verify my changes in. You may install the Orbit CLI and plugin; ask before installing anything else.',
+    prompt: 'Read https://orbit.ilogan.app and set up a local environment I can verify my changes in. You may install the Orbit CLI and plugin; ask before installing anything else.',
     promptLabel: 'paste into your coding agent',
     copyButton: { idle: 'Copy', copied: 'Copied', failed: 'Copy failed, select the text' },
     getStartedId: 'get-started',
@@ -51,7 +51,7 @@ export const homepageCopy: Record<HomepageLocale, HomepageCopy> = {
   'zh-TW': {
     headline: ['專心打造產品。', '讓 agent 懂整個專案。'],
     subhead: '一份契約描述你所有的微服務。agent 讀它，只跑需要的那一片。',
-    prompt: '閱讀 https://orbit.dotw.me，幫我建立一個可以在本機驗證我的修改的環境。你可以安裝 Orbit CLI 和 plugin；要安裝其他東西先問我。',
+    prompt: '閱讀 https://orbit.ilogan.app，幫我建立一個可以在本機驗證我的修改的環境。你可以安裝 Orbit CLI 和 plugin；要安裝其他東西先問我。',
     promptLabel: '貼給你的 coding agent',
     copyButton: { idle: '複製', copied: '已複製', failed: '複製失敗，請直接選取文字' },
     getStartedId: '開始使用',

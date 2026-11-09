@@ -85,7 +85,7 @@ export const Finale = ({ t }: { t: number }) => {
           ["Orbit", 112, "#e6edf3", 26.65],
           ["Build the product.", 42, "#e6edf3", 26.95],
           ["Let your agent know the whole project.", 42, "#8ec5ff", 27.15],
-          ["orbit.dotw.me", 24, "#8b949e", 27.45],
+          ["orbit.ilogan.app", 24, "#8b949e", 27.45],
         ].map(([text, size, color, start], i) => (
           <div
             key={i}

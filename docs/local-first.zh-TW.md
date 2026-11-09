@@ -4,7 +4,7 @@
 
 在想跑起來的專案中，把一個需求交給 coding agent：
 
-> 閱讀 https://orbit.dotw.me，幫我建立一個可以在本機驗證我的修改的環境。
+> 閱讀 https://orbit.ilogan.app，幫我建立一個可以在本機驗證我的修改的環境。
 > 你可以安裝 Orbit CLI 和 plugin；要安裝其他東西先問我。
 
 Agent 會建立專案的 `orbit.yaml`、啟動環境，並驗證一個應用程式請求或測試。
@@ -15,4 +15,4 @@ Agent 會建立專案的 `orbit.yaml`、啟動環境，並驗證一個應用程�
 
 ## Agent Skill
 
-[Orbit Skill](https://orbit.dotw.me/agent/SKILL.md) 說明 Agent 在回報環境就緒前會做哪些檢查。
+[Orbit Skill](https://orbit.ilogan.app/agent/SKILL.md) 說明 Agent 在回報環境就緒前會做哪些檢查。

@@ -10,7 +10,7 @@
 - Source repository 在 1.0 前的產品打磨期間公開；`0.x` release 都是
   preview，title 為 `Orbit vX.Y.Z (Preview)`，可能包含 breaking changes。
 - `v1.0.0` 是第一個 stable release：下列相容性契約已有文件與測試，並已準備好
-  提供外部使用者使用。[1.0 test matrix](https://orbit.dotw.me/docs/1.0-test-matrix)
+  提供外部使用者使用。[1.0 test matrix](https://orbit.ilogan.app/docs/1.0-test-matrix)
   記錄背後的平台證據。
 - 每個 stable release 都是 repository 可安裝的 latest release，讓預設 installer
   與 `orbit update` 直接取得，不需要使用者選擇 release channel。

@@ -35,7 +35,7 @@ const html = `<!doctype html>
   <div class="brand">${logo}<span>Orbit</span></div>
   <h1>${copy.headline[0]}<br>${copy.headline[1]}</h1>
   <p>${copy.subhead}</p>
-  <div class="url">orbit.dotw.me</div>
+  <div class="url">orbit.ilogan.app</div>
 </body></html>`
 
 const browser = await chromium.launch()

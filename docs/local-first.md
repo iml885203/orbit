@@ -4,7 +4,7 @@
 
 From the project you want to run, give your coding agent one request:
 
-> Read https://orbit.dotw.me and set up a local environment I can verify my
+> Read https://orbit.ilogan.app and set up a local environment I can verify my
 > changes in. You may install the Orbit CLI and plugin; ask before installing
 > anything else.
 
@@ -18,5 +18,5 @@ To set up the environment yourself, [install Orbit](installation.md#install-orbi
 
 ## Agent Skill
 
-The [Orbit skill](https://orbit.dotw.me/agent/SKILL.md) defines what the agent
+The [Orbit skill](https://orbit.ilogan.app/agent/SKILL.md) defines what the agent
 checks before reporting that the environment is ready.

@@ -2,4 +2,4 @@ User-agent: *
 Content-Signal: ai-train=no, search=yes, ai-input=yes
 Allow: /
 
-Sitemap: https://orbit.dotw.me/sitemap.xml
+Sitemap: https://orbit.ilogan.app/sitemap.xml

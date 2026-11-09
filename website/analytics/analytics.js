@@ -76,7 +76,7 @@
     const destination = new URL(link.href, location.href);
     const projects = {
       'about.dotw.me': 'about', 'blog.dotw.me': 'blog',
-      'orbit.dotw.me': 'orbit', 'tunlease.dotw.me': 'tunlease',
+      'orbit.ilogan.app': 'orbit', 'tunlease.dotw.me': 'tunlease',
     };
     const destinationProduct = projects[destination.hostname] ||
       (destination.hostname === 'github.com' && /^\/iml885203\/(orbit|tunlease)(?:\/|$)/.exec(destination.pathname)?.[1]);

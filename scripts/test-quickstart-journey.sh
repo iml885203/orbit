@@ -15,7 +15,7 @@ for readme in README.md README.zh-TW.md; do
     ' "$repo_root/$readme"
   )"
 
-  if ! grep -F "https://orbit.dotw.me" <<<"$demo_section" >/dev/null; then
+  if ! grep -F "https://orbit.ilogan.app" <<<"$demo_section" >/dev/null; then
     echo "$readme is missing the URL-first onboarding request." >&2
     exit 1
   fi
@@ -79,7 +79,7 @@ for command in daemon doctor down env init logs open restart service settings st
   grep -E "^[[:space:]]+$command[[:space:]]" "$test_root/root-help.txt" >/dev/null
 done
 grep -F "orbit inspect --json" "$test_root/root-help.txt" >/dev/null
-grep -F "https://orbit.dotw.me/docs/agent-cli" "$test_root/root-help.txt" >/dev/null
+grep -F "https://orbit.ilogan.app/docs/agent-cli" "$test_root/root-help.txt" >/dev/null
 if grep -E "^[[:space:]]+inspect[[:space:]]" "$test_root/root-help.txt" >/dev/null; then
   echo "agent-only inspect command appeared in the human command list instead of its dedicated signpost." >&2
   exit 1

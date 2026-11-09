@@ -6,12 +6,12 @@ Orbit gives coding agents a reliable way to get the local environment a
 project needs running, understand failures, and verify that the application
 actually works.
 
-[Official website](https://orbit.dotw.me/) · [Documentation](#documentation) ·
+[Official website](https://orbit.ilogan.app/) · [Documentation](#documentation) ·
 [繁體中文](README.zh-TW.md)
 
-[![Orbit — Build the product. Let your agent know the whole project.](docs/assets/orbit-showcase.png)](https://orbit.dotw.me/#demo)
+[![Orbit — Build the product. Let your agent know the whole project.](docs/assets/orbit-showcase.png)](https://orbit.ilogan.app/#demo)
 
-[Watch the full demo · 34 seconds](https://orbit.dotw.me/#demo)
+[Watch the full demo · 34 seconds](https://orbit.ilogan.app/#demo)
 
 ## Get started
 
@@ -20,7 +20,7 @@ actually works.
 Paste this into your coding agent from the project you want to run:
 
 ```text
-Read https://orbit.dotw.me and set up a local environment I can verify my
+Read https://orbit.ilogan.app and set up a local environment I can verify my
 changes in. You may install the Orbit CLI and plugin; ask before installing
 anything else.
 ```
@@ -94,7 +94,7 @@ For adopters and contributors:
 - [Architecture](docs/architecture.md)
 - [Development](docs/development.md)
 - [Agent CLI contract](docs/agent-cli.md)
-- [Agent instructions](https://orbit.dotw.me/agent/SKILL.md)
+- [Agent instructions](https://orbit.ilogan.app/agent/SKILL.md)
 - [Contributing](CONTRIBUTING.md)
 - [Documentation website maintenance](docs/website.md)
 

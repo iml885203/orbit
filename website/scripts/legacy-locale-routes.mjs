@@ -10,7 +10,7 @@ const translatedPages = readdirSync(join(repositoryRoot, 'docs'))
 
 function redirectDocument(target) {
   const escapedTarget = JSON.stringify(target)
-  return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><link rel="canonical" href="https://orbit.dotw.me${target}"><title>Orbit</title></head><body><script>location.replace(${escapedTarget}+location.hash)</script><a href="${target}">前往新版頁面</a></body></html>`
+  return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><link rel="canonical" href="https://orbit.ilogan.app${target}"><title>Orbit</title></head><body><script>location.replace(${escapedTarget}+location.hash)</script><a href="${target}">前往新版頁面</a></body></html>`
 }
 
 mkdirSync(join(outputRoot, 'docs'), { recursive: true })

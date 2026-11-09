@@ -180,7 +180,7 @@ SHA-256 checksum 後，再把 binary 放到 `PATH`。
 已安裝 CLI 時，一個指令就能把 Orbit skill 放到這台機器上的 coding agent
 會載入的位置；不加 `--yes` 只預覽計畫，`orbit skill uninstall --yes` 會還原，
 `orbit doctor` 會回報它的狀態。它安裝的內容由
-[公開的 skill](https://orbit.dotw.me/agent/SKILL.md) 說明。
+[公開的 skill](https://orbit.ilogan.app/agent/SKILL.md) 說明。
 
 ```bash
 orbit skill install --yes

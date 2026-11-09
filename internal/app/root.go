@@ -63,7 +63,7 @@ An environment is a runnable configuration. A source is a Git repository or
 local directory that provides shared environments; manage it with orbit source.
 
 Agents: run 'orbit inspect --json' for machine-readable runtime readiness.
-Contract: https://orbit.dotw.me/docs/agent-cli`
+Contract: https://orbit.ilogan.app/docs/agent-cli`
 
 // Main assembles and runs the orbit CLI. version/buildTime come from the
 // caller's -ldflags -X main.version/-X main.buildTime (each binary's main

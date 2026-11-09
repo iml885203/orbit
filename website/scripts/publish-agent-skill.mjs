@@ -30,7 +30,7 @@ const discoveryIndex = {
     name: 'orbit',
     type: 'skill-md',
     description: 'Operate and diagnose local development environments with the Orbit CLI.',
-    url: 'https://orbit.dotw.me/agent/SKILL.md',
+    url: 'https://orbit.ilogan.app/agent/SKILL.md',
     digest: `sha256:${createHash('sha256').update(skillArtifact).digest('hex')}`,
   }],
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const outputDirectory = new URL('../.vitepress/dist/', import.meta.url)
 const outputPath = fileURLToPath(outputDirectory)
-const baseURL = new URL('https://orbit.dotw.me/')
+const baseURL = new URL('https://orbit.ilogan.app/')
 const requiredPages = [
   'index.html',
   'zh-TW/index.html',
@@ -78,11 +78,11 @@ assert.match(home, /property="og:title" content="Orbit — Local dev environment
 assert.match(home, /property="og:description" content="One contract for all your microservices\. Your agent reads it, and runs only the slice it needs\.">/)
 assert.ok(home.includes(englishPrompt), 'the homepage must carry the prompt owned by docs/local-first.md')
 assert.match(home, /rel="alternate" type="text\/markdown" href="\/agent\/SKILL\.md"/)
-assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.dotw\.me\/"/)
-assert.match(home, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
+assert.match(home, /rel="alternate" hreflang="en" href="https:\/\/orbit\.ilogan\.app\/"/)
+assert.match(home, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.ilogan\.app\/"/)
 assert.match(home, /type="application\/ld\+json"/)
 assert.match(home, /"@type":"SoftwareApplication"/)
-assert.match(home, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbit-social-card\.png"/)
+assert.match(home, /property="og:image" content="https:\/\/orbit\.ilogan\.app\/orbit-social-card\.png"/)
 assert.match(home, /property="og:image:width" content="1200"/)
 assert.match(home, /property="og:image:height" content="630"/)
 assert.match(home, /rel="ai-catalog" href="\/\.well-known\/ai-catalog\.json"/)
@@ -97,12 +97,12 @@ assert.match(robots, /Content-Signal: ai-train=no, search=yes, ai-input=yes/)
 
 const skillIndex = JSON.parse(readFileSync(join(outputPath, '.well-known/agent-skills/index.json'), 'utf8'))
 assert.equal(skillIndex.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json')
-assert.equal(skillIndex.skills[0].url, 'https://orbit.dotw.me/agent/SKILL.md')
+assert.equal(skillIndex.skills[0].url, 'https://orbit.ilogan.app/agent/SKILL.md')
 assert.match(skillIndex.skills[0].digest, /^sha256:[a-f0-9]{64}$/)
 
 const agentCatalog = JSON.parse(readFileSync(join(outputPath, '.well-known/ai-catalog.json'), 'utf8'))
-assert.equal(agentCatalog.host.identifier, 'did:web:orbit.dotw.me')
-assert.equal(agentCatalog.entries[0].url, 'https://orbit.dotw.me/agent/SKILL.md')
+assert.equal(agentCatalog.host.identifier, 'did:web:orbit.ilogan.app')
+assert.equal(agentCatalog.entries[0].url, 'https://orbit.ilogan.app/agent/SKILL.md')
 
 const notFound = readFileSync(join(outputPath, '404.html'), 'utf8')
 assert.match(notFound, /<meta name="robots" content="noindex, nofollow">/)
@@ -147,9 +147,9 @@ for (const [page, language, counterpart] of [
   assert.match(html, /property="og:title"/)
   assert.match(html, /property="og:site_name" content="Orbit"/)
   assert.match(html, /name="twitter:card"/)
-  assert.match(html, /property="og:image" content="https:\/\/orbit\.dotw\.me\/orbit-social-card\.png"/)
-  assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://orbit.dotw.me${counterpart}"`))
-  assert.match(html, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.dotw\.me\/"/)
+  assert.match(html, /property="og:image" content="https:\/\/orbit\.ilogan\.app\/orbit-social-card\.png"/)
+  assert.match(html, new RegExp(`rel="alternate"[^>]+href="https://orbit.ilogan.app${counterpart}"`))
+  assert.match(html, /rel="alternate" hreflang="x-default" href="https:\/\/orbit\.ilogan\.app\/"/)
 }
 assert.match(chineseGuide, /href="https:\/\/github.com\/iml885203\/orbit\/edit\/main\/docs\/local-first\.zh-TW\.md"/)
 
