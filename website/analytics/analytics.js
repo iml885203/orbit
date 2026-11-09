@@ -1,6 +1,6 @@
 (() => {
   const product = 'orbit';
-  if (location.hostname !== product + '.dotw.me' || window.posthog ||
+  if (location.hostname !== product + '.ilogan.app' || window.posthog ||
       navigator.doNotTrack === '1' || navigator.globalPrivacyControl === true) return;
 
   // PostHog's public browser loader queues events until its asynchronous SDK arrives.
@@ -75,8 +75,10 @@
     if (!link) return;
     const destination = new URL(link.href, location.href);
     const projects = {
+      'ilogan.app': 'about', 'about.ilogan.app': 'about', 'blog.ilogan.app': 'blog',
+      'orbit.ilogan.app': 'orbit', 'tunlease.ilogan.app': 'tunlease',
       'about.dotw.me': 'about', 'blog.dotw.me': 'blog',
-      'orbit.ilogan.app': 'orbit', 'tunlease.dotw.me': 'tunlease',
+      'orbit.dotw.me': 'orbit', 'tunlease.dotw.me': 'tunlease',
     };
     const destinationProduct = projects[destination.hostname] ||
       (destination.hostname === 'github.com' && /^\/iml885203\/(orbit|tunlease)(?:\/|$)/.exec(destination.pathname)?.[1]);
