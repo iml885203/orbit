@@ -447,3 +447,60 @@ func TestConfig_TracingPortExplicit(t *testing.T) {
 		t.Errorf("default TracingOTLPPort = %d, want %d", got, defaultOTLPPort)
 	}
 }
+
+func TestParseMapping_HostIP(t *testing.T) {
+	cases := []struct {
+		input, wantIP, wantMapping string
+		host, target               int
+	}{
+		{"127.0.0.1:5432:5432", "127.0.0.1", "127.0.0.1:5432:5432", 5432, 5432},
+		{"0.0.0.0:15432:5432", "0.0.0.0", "0.0.0.0:15432:5432", 15432, 5432},
+		{"[::1]:5432:5432", "::1", "[::1]:5432:5432", 5432, 5432},
+		{"[::]:5432:5432", "::", "[::]:5432:5432", 5432, 5432},
+		{"5432:5432", "", "5432:5432", 5432, 5432},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			var p PortDef
+			if err := p.parseMapping(tc.input); err != nil {
+				t.Fatal(err)
+			}
+			if p.HostIP != tc.wantIP || p.Host != tc.host || p.Target != tc.target {
+				t.Fatalf("got %+v", p)
+			}
+			if got := p.Mapping(); got != tc.wantMapping {
+				t.Errorf("Mapping() = %q, want %q", got, tc.wantMapping)
+			}
+		})
+	}
+}
+
+func TestPortDef_BindIPDefaultsToLoopback(t *testing.T) {
+	if got := (PortDef{Host: 5432, Target: 5432}).BindIP(); got != "127.0.0.1" {
+		t.Fatalf("BindIP() = %q, want 127.0.0.1", got)
+	}
+}
+
+func TestParseMapping_InvalidHostIP(t *testing.T) {
+	cases := []struct{ input, match string }{
+		{"localhost:5432:5432", "not an IPv4 address"},
+		{"999.0.0.1:5432:5432", "not an IPv4 address"},
+		{"::1:5432:5432", "must be bracketed"},
+		{"[127.0.0.1]:5432:5432", "not an IPv6 address"},
+		{"[::1]5432:5432", "must be followed"},
+		{"127.0.0.1:abc:5432", "not a number"},
+		{"127.0.0.1:5432", "needs both ports"},
+		{"[::1]:5432", "needs both ports"},
+		{"192.168.1.5:5432:5432", "loopback address or 0.0.0.0"},
+		{"[fe80::1%en0]:5432:5432", "loopback address or 0.0.0.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			var p PortDef
+			err := p.parseMapping(tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.match) {
+				t.Fatalf("parseMapping(%q) error = %v, want %q", tc.input, err, tc.match)
+			}
+		})
+	}
+}

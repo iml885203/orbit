@@ -287,7 +287,7 @@ containers:
 | `url` | string | no | Canonical application URL used by `orbit open`, status, and dependency injection. Local URLs follow named-instance port resolution; omit when an `http` or `https` port identifies the endpoint |
 | `platform` | string | no | Platform override (`linux/amd64` for forced emulation) |
 | `pull_policy` | string | no | `always` (default), `if_not_present`, `never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`. A single endpoint also supplies an omitted `health_check.port`; `http`/`https` supplies the default application URL |
+| `ports` | map | no | `alias: "hostPort:containerPort"`, optionally prefixed with a bind address (`"0.0.0.0:5432:5432"`, `"[::1]:5432:5432"`). Published on `127.0.0.1` unless a bind address is given — see [Bind address](#bind-address). A single endpoint also supplies an omitted `health_check.port`; `http`/`https` supplies the default application URL |
 | `environment` | map | no | Container env vars. `${VAR}` is substituted from the host |
 | `volumes` | list | no | Docker volume / bind mount strings. Relative bind sources resolve from the selected `orbit.yaml` directory, including values inherited from a parent; they do not use the shell's current directory |
 | `command` | list | no | Override the image's default command |
@@ -330,6 +330,48 @@ These commands are connection conveniences, not a generic schema lifecycle.
 The optional `sqlserver` workflow owns SQL Server Database Project diff,
 publish, and reset semantics because those operations do not map honestly onto
 every database.
+
+### Bind address
+
+Container ports are published on `127.0.0.1` by default, so a local database
+with committed credentials is not reachable from the LAN or public Wi-Fi.
+Prefix a mapping with an address to choose another interface, using the same
+syntax as Docker Compose:
+
+```yaml
+containers:
+  postgres:
+    ports:
+      postgres: "5432:5432"            # 127.0.0.1:5432 (default)
+  api:
+    ports:
+      http: "0.0.0.0:8080:8080"        # every interface: phones, other machines, VMs
+  cache:
+    ports:
+      redis: "[::1]:6379:6379"         # IPv6 loopback; brackets are required
+```
+
+Use `0.0.0.0` when something other than this machine's own processes must
+reach the port: a phone or another computer on the LAN, a VM guest, or — on a
+Linux Docker engine — a container that reaches a sibling through the docker0
+gateway (`172.17.0.1` or a `host-gateway` mapping of `host.docker.internal`).
+Docker Desktop's `host.docker.internal` still reaches loopback-bound ports.
+`orbit status` shows the address each container port is bound to, and
+`orbit status --json` reports it as `bind_addresses`.
+
+The address must be a loopback address or `0.0.0.0` / `[::]`: Orbit's health
+probes and injected URLs dial `localhost`, so a port bound only to one LAN
+address would never turn healthy. A bind address needs both ports
+(`"127.0.0.1:5432:5432"`), and IPv6 must be bracketed.
+
+A bind address only applies to container ports. Orbit does not bind a service's
+port, so a service sets its own listen address and a prefix on a service port
+is a config error.
+
+Orbit before 1.1 published container ports on `0.0.0.0`. Changing the bind
+address recreates the container once; named volumes survive, anonymous volumes
+(such as the `VOLUME` an image declares when no `volumes:` entry mounts it) do
+not, as on any `orbit down`.
 
 ### Port resolution
 

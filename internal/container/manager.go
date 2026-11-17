@@ -156,16 +156,10 @@ func (m *Manager) start(ctx context.Context, name string, cfg *config.Container,
 		return Runtime{}, conflict
 	}
 
-	// Build port bindings
-	exposedPorts := network.PortSet{}
-	portBindings := network.PortMap{}
-	for _, pd := range cfg.Ports {
-		containerPort := network.MustParsePort(strconv.Itoa(pd.Target) + "/tcp")
-		exposedPorts[containerPort] = struct{}{}
-		portBindings[containerPort] = []network.PortBinding{{
-			HostIP:   netip.IPv4Unspecified(),
-			HostPort: strconv.Itoa(pd.Host),
-		}}
+	exposedPorts, portBindings, err := containerPortBindings(name, cfg.Ports)
+	if err != nil {
+		m.narrate(name, "ERROR: "+err.Error())
+		return Runtime{}, err
 	}
 
 	var envList []string
@@ -328,13 +322,47 @@ func containerConfigFingerprint(cfg *config.Container, parentName string) string
 		Entrypoint:  cfg.Entrypoint,
 		User:        cfg.User,
 		Platform:    cfg.Platform,
-		Ports:       cfg.Ports,
+		Ports:       fingerprintPorts(cfg.Ports),
 		Environment: cfg.Environment,
 		Volumes:     cfg.Volumes,
 		Parent:      parentName,
 	}
 	encoded, _ := json.Marshal(spec)
 	return fmt.Sprintf("%x", sha256.Sum256(encoded))
+}
+
+// containerPortBindings publishes each port on its resolved bind address.
+func containerPortBindings(name string, ports map[string]config.PortDef) (network.PortSet, network.PortMap, error) {
+	exposed := network.PortSet{}
+	bindings := network.PortMap{}
+	for _, pd := range ports {
+		hostIP, err := netip.ParseAddr(pd.BindIP())
+		if err != nil {
+			return nil, nil, fmt.Errorf("container %s: host IP %q: %w", name, pd.BindIP(), err)
+		}
+		containerPort := network.MustParsePort(strconv.Itoa(pd.Target) + "/tcp")
+		exposed[containerPort] = struct{}{}
+		bindings[containerPort] = []network.PortBinding{{
+			HostIP:   hostIP,
+			HostPort: strconv.Itoa(pd.Host),
+		}}
+	}
+	return exposed, bindings, nil
+}
+
+// fingerprintPorts hashes each port with its resolved bind address, so a
+// container published under an older default (0.0.0.0) or a different
+// explicit address is recreated rather than adopted with the wrong exposure.
+func fingerprintPorts(ports map[string]config.PortDef) map[string]config.PortDef {
+	if len(ports) == 0 {
+		return ports // keeps port-less containers' fingerprints, so upgrading does not recreate them
+	}
+	resolved := make(map[string]config.PortDef, len(ports))
+	for alias, port := range ports {
+		port.HostIP = port.BindIP()
+		resolved[alias] = port
+	}
+	return resolved
 }
 
 func containerPortConflict(name string, cfg *config.Container) *orbitport.ConflictError {
@@ -359,7 +387,7 @@ func formatPortBindings(ports map[string]config.PortDef) string {
 	}
 	parts := make([]string, 0, len(ports))
 	for _, p := range ports {
-		parts = append(parts, strconv.Itoa(p.Host)+":"+strconv.Itoa(p.Target))
+		parts = append(parts, p.Mapping())
 	}
 	return "[" + strings.Join(parts, ",") + "]"
 }

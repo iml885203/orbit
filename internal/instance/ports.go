@@ -210,7 +210,8 @@ func configPortRequests(cfg *config.Config) []portRequest {
 				key: name + "/" + label, resource: name, container: isContainer, preferred: original.Host,
 				apply: func(assigned int) {
 					updated := ports[label]
-					ports[label] = config.PortDef{Host: assigned, Target: updated.Target}
+					updated.Host = assigned
+					ports[label] = updated
 					if applicationURL != nil {
 						*applicationURL = config.RemapApplicationURL(*applicationURL, original.Host, assigned)
 					}

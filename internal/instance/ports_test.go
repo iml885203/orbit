@@ -553,3 +553,34 @@ func TestResolveDashboardPortMovesAStoredPortAnotherInstanceRecorded(t *testing.
 		t.Fatalf("dashboard kept port %d another live instance recorded", shared)
 	}
 }
+
+// A remapped port must keep its bind address; dropping it would silently
+// publish a named instance's container on the default instead of the
+// address the config chose.
+func TestResolvePortsKeepsBindAddressWhenRemapping(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("ORBIT_HOME", base)
+	t.Setenv(EnvBaseHome, base)
+	preferred := availableTestPort(t)
+	blocker, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(preferred)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blocker.Close() }()
+	cfg := &config.Config{Containers: map[string]*config.Container{
+		"db": {Ports: map[string]config.PortDef{"pg": {Host: preferred, Target: 5432, HostIP: "0.0.0.0"}}},
+	}}
+	if _, err := Activate("bind-remap"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ResolvePorts(cfg, noDefaultDashboard, Survivors{}); err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.Containers["db"].Ports["pg"]
+	if got.Host == preferred {
+		t.Fatalf("port remained blocked preference %d", preferred)
+	}
+	if got.HostIP != "0.0.0.0" || got.Target != 5432 {
+		t.Fatalf("remapped port = %+v, want bind 0.0.0.0 and target 5432 kept", got)
+	}
+}

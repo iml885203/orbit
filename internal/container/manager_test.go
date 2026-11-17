@@ -3,6 +3,7 @@ package container
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/logging"
 	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -801,5 +803,67 @@ func TestEnsureNetworkMatchesOnlyItsExactName(t *testing.T) {
 	// A concurrent start that lost the create race sees a conflict, not a failure.
 	if err := manager.EnsureNetwork(context.Background()); err != nil {
 		t.Fatalf("conflicting create = %v, want success", err)
+	}
+}
+
+func TestContainerPortBindingsDefaultToLoopback(t *testing.T) {
+	_, bindings, err := containerPortBindings("postgres", map[string]config.PortDef{
+		"postgres": {Host: 15432, Target: 5432},
+		"admin":    {Host: 8081, Target: 80, HostIP: "0.0.0.0"},
+		"ipv6":     {Host: 9000, Target: 9000, HostIP: "::1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"5432/tcp": "127.0.0.1:15432", "80/tcp": "0.0.0.0:8081", "9000/tcp": "[::1]:9000"}
+	for port, address := range want {
+		got := bindings[network.MustParsePort(port)]
+		if len(got) != 1 {
+			t.Fatalf("%s bindings = %+v", port, got)
+		}
+		if actual := net.JoinHostPort(got[0].HostIP.String(), got[0].HostPort); actual != address {
+			t.Errorf("%s published on %s, want %s", port, actual, address)
+		}
+	}
+}
+
+func TestContainerConfigFingerprintCoversResolvedBindAddress(t *testing.T) {
+	implicit := &config.Container{Image: "postgres:16", Ports: map[string]config.PortDef{"pg": {Host: 5432, Target: 5432}}}
+	loopback := &config.Container{Image: "postgres:16", Ports: map[string]config.PortDef{"pg": {Host: 5432, Target: 5432, HostIP: "127.0.0.1"}}}
+	exposed := &config.Container{Image: "postgres:16", Ports: map[string]config.PortDef{"pg": {Host: 5432, Target: 5432, HostIP: "0.0.0.0"}}}
+
+	if containerConfigFingerprint(implicit, "") != containerConfigFingerprint(loopback, "") {
+		t.Fatal("default bind and explicit 127.0.0.1 must adopt the same container")
+	}
+	if containerConfigFingerprint(implicit, "") == containerConfigFingerprint(exposed, "") {
+		t.Fatal("changing the bind address must recreate the container")
+	}
+
+	// A container created before bind addresses existed was hashed without
+	// the field and published on 0.0.0.0; it must not be adopted as loopback.
+	var legacy struct {
+		Image       string
+		Command     []string
+		Entrypoint  []string
+		User        string
+		Platform    string
+		Ports       map[string]struct{ Host, Target int }
+		Environment map[string]string
+		Volumes     []string
+		Parent      string
+	}
+	legacyHash := func(ports map[string]struct{ Host, Target int }) string {
+		legacy.Image, legacy.Ports = "postgres:16", ports
+		encoded, _ := json.Marshal(legacy)
+		return fmt.Sprintf("%x", sha256.Sum256(encoded))
+	}
+	// Anchor: without ports the legacy shape must still hash identically, so
+	// the inequality below is caused by the bind address and not by a typo
+	// in this hand-copied struct.
+	if legacyHash(nil) != containerConfigFingerprint(&config.Container{Image: "postgres:16"}, "") {
+		t.Fatal("legacy fingerprint shape no longer matches the v1.0.0 format")
+	}
+	if legacyHash(map[string]struct{ Host, Target int }{"pg": {5432, 5432}}) == containerConfigFingerprint(implicit, "") {
+		t.Fatal("upgrade would adopt a container published under the old 0.0.0.0 default")
 	}
 }

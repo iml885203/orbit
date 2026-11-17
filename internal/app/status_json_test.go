@@ -964,3 +964,36 @@ func TestStatusJSONShowsWhereAStartingResourceStopped(t *testing.T) {
 		t.Fatalf("health_progress = %+v, want the daemon's probe evidence", hp)
 	}
 }
+
+func TestStatusReportsWhereEachContainerPortIsBound(t *testing.T) {
+	ports := map[string]config.PortDef{
+		"postgres": {Host: 5432, Target: 5432},
+		"admin":    {Host: 8081, Target: 80, HostIP: "0.0.0.0"},
+	}
+	cfg := &config.Config{Containers: map[string]*config.Container{"db": {Ports: ports}}}
+	var buf bytes.Buffer
+	if err := writeStatusJSON(&buf, "orbit status --json", cfg, nil, daemonStatus{}, statusSetupState{}); err != nil {
+		t.Fatalf("writeStatusJSON: %v", err)
+	}
+	var envelope struct {
+		Data statusJSON `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(envelope.Data.Resources) != 1 {
+		t.Fatalf("resources = %+v", envelope.Data.Resources)
+	}
+	db := envelope.Data.Resources[0]
+	if db.BindAddresses["postgres"] != "127.0.0.1" || db.BindAddresses["admin"] != "0.0.0.0" {
+		t.Fatalf("bind_addresses = %v", db.BindAddresses)
+	}
+	if db.Ports["postgres"] != 5432 {
+		t.Fatalf("ports contract changed: %v", db.Ports)
+	}
+
+	ports["http"] = config.PortDef{Host: 8080, Target: 80, HostIP: "0.0.0.0"}
+	if got := formatPorts(map[string]int{"postgres": 5432, "admin": 8081, "http": 8080}, ports); got != "0.0.0.0:8081 http://localhost:8080 (0.0.0.0) 127.0.0.1:5432" {
+		t.Fatalf("human status ports = %q", got)
+	}
+}
