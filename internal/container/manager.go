@@ -387,6 +387,7 @@ func formatPortBindings(ports map[string]config.PortDef) string {
 	}
 	parts := make([]string, 0, len(ports))
 	for _, p := range ports {
+		p.HostIP = p.BindIP()
 		parts = append(parts, p.Mapping())
 	}
 	return "[" + strings.Join(parts, ",") + "]"
