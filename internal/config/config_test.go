@@ -1289,3 +1289,34 @@ containers:
 		t.Fatalf("error = %v, want it to name the \"host:target\" replacement", err)
 	}
 }
+
+func TestLoadAcceptsContainerBindAddressAndRejectsItOnServices(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  postgres:
+    image: postgres:16
+    ports:
+      postgres: "127.0.0.1:25432:5432"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Containers["postgres"].Ports["postgres"]; got.HostIP != "127.0.0.1" || got.Host != 25432 || got.Target != 5432 {
+		t.Fatalf("postgres port = %+v", got)
+	}
+
+	path = writeOrbitYAML(t, `
+version: "3"
+services:
+  api:
+    type: dotnet
+    ports:
+      http: "127.0.0.1:25080:25080"
+`)
+	_, err = Load(path)
+	if err == nil || !strings.Contains(err.Error(), "only container ports can be bound") {
+		t.Fatalf("Load error = %v, want service bind address rejected", err)
+	}
+}

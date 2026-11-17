@@ -102,11 +102,23 @@ export interface Container {
  * PortDef declares a fixed host port. The file is the single source of
  * truth: Orbit never relocates a port, so a conflict surfaces as an error
  * naming the owner instead of a silently different address.
+ * HostIP is the address a container port is published on, written as the
+ * Compose-style prefix of the mapping ("127.0.0.1:5432:5432",
+ * "[::1]:5432:5432"). Empty means DefaultContainerHostIP; a service port never
+ * carries one because Orbit does not bind service ports itself.
  */
 export interface PortDef {
   Host: number /* int */;
   Target: number /* int */; // container-internal port; same as Host if not specified
+  HostIP?: string;
 }
+/**
+ * DefaultContainerHostIP keeps a container port off every non-loopback
+ * interface unless the config opts out with "0.0.0.0:host:target". A local dev
+ * database with committed credentials would otherwise be reachable from the
+ * LAN whenever it runs.
+ */
+export const DefaultContainerHostIP = "127.0.0.1";
 export interface Sidecar {
   name: string;
   image: string;

@@ -276,7 +276,7 @@ containers:
 | `url` | string | no | `orbit open`、status 與 dependency injection 使用的標準 application URL。本機 URL 會套用 named instance 解析後的 port；已有 `http` 或 `https` port 時可省略 |
 | `platform` | string | no | Platform 覆寫（`linux/amd64` 用於強制 emulation） |
 | `pull_policy` | string | no | `always`（預設）、`if_not_present`、`never` |
-| `ports` | map | no | `alias: "hostPort:containerPort"`。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用；`http`/`https` 也會成為預設 application URL |
+| `ports` | map | no | `alias: "hostPort:containerPort"`，可加綁定位址前綴（`"0.0.0.0:5432:5432"`、`"[::1]:5432:5432"`）。沒寫位址時發佈在 `127.0.0.1`，見[綁定位址](#綁定位址)。只有一個 endpoint 時，也會供省略的 `health_check.port` 使用；`http`/`https` 也會成為預設 application URL |
 | `environment` | map | no | Container env vars。`${VAR}` 會從 host 替換進來 |
 | `volumes` | list | no | Docker volume 或 bind mount 字串。相對 bind source 會以選定的 `orbit.yaml` 目錄解析，包含從 parent 繼承的值；不使用 shell 的目前目錄 |
 | `command` | list | no | 覆寫 image 預設的 command |
@@ -316,6 +316,31 @@ command 會列出名稱並要求 `--container <name>`。其他 database client �
 這些 commands 是連線便利層，不是泛用 schema lifecycle。選用的 `sqlserver`
 workflow 擁有 SQL Server Database Project 的 diff、publish 與 reset semantics，
 因為這些操作無法誠實地套用到所有 database。
+
+### 綁定位址
+
+Container port 預設發佈在 `127.0.0.1`，避免帶著已提交帳密的本機資料庫被 LAN 或公共 Wi-Fi 上的其他人連到。要改用其他介面，就在 mapping 前加上位址，語法與 Docker Compose 相同：
+
+```yaml
+containers:
+  postgres:
+    ports:
+      postgres: "5432:5432"            # 127.0.0.1:5432（預設）
+  api:
+    ports:
+      http: "0.0.0.0:8080:8080"        # 所有介面：手機、其他電腦、VM
+  cache:
+    ports:
+      redis: "[::1]:6379:6379"         # IPv6 loopback，必須加中括號
+```
+
+需要讓本機以外的對象連到 port 時，請用 `0.0.0.0`：LAN 上的手機或其他電腦、VM guest，或在 Linux Docker engine 上透過 docker0 gateway（`172.17.0.1`，或以 `host-gateway` 對應的 `host.docker.internal`）連到另一個 container 的 container。Docker Desktop 的 `host.docker.internal` 仍可連到綁在 loopback 的 port。`orbit status` 會顯示每個 container port 綁定的位址，`orbit status --json` 則以 `bind_addresses` 回報。
+
+位址必須是 loopback 位址或 `0.0.0.0` / `[::]`：Orbit 的 health probe 與注入的 URL 都連 `localhost`，只綁單一 LAN 位址的 port 永遠不會變成 healthy。寫綁定位址時兩個 port 都要寫（`"127.0.0.1:5432:5432"`），IPv6 必須加中括號。
+
+綁定位址只適用於 container port。Orbit 不會替 service 綁 port，service 要自行設定 listen 位址；在 service port 加前綴會是設定錯誤。
+
+Orbit 1.1 之前把 container port 發佈在 `0.0.0.0`。綁定位址改變會讓 container 重建一次；named volume 會保留，anonymous volume（例如 image 宣告的 `VOLUME`，且沒有用 `volumes:` 掛載時）不會保留，與任何一次 `orbit down` 相同。
 
 ### Port 解析
 

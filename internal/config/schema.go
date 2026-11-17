@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -172,9 +174,43 @@ func (c *Config) WithContainer(name string, ctr *Container) *Config {
 // PortDef declares a fixed host port. The file is the single source of
 // truth: Orbit never relocates a port, so a conflict surfaces as an error
 // naming the owner instead of a silently different address.
+//
+// HostIP is the address a container port is published on, written as the
+// Compose-style prefix of the mapping ("127.0.0.1:5432:5432",
+// "[::1]:5432:5432"). Empty means DefaultContainerHostIP; a service port never
+// carries one because Orbit does not bind service ports itself.
 type PortDef struct {
 	Host   int
-	Target int // container-internal port; same as Host if not specified
+	Target int    // container-internal port; same as Host if not specified
+	HostIP string `json:",omitempty"`
+}
+
+// DefaultContainerHostIP keeps a container port off every non-loopback
+// interface unless the config opts out with "0.0.0.0:host:target". A local dev
+// database with committed credentials would otherwise be reachable from the
+// LAN whenever it runs.
+const DefaultContainerHostIP = "127.0.0.1"
+
+// BindIP returns the address the port is published on.
+func (p PortDef) BindIP() string {
+	if p.HostIP == "" {
+		return DefaultContainerHostIP
+	}
+	return p.HostIP
+}
+
+// Mapping renders the port in the orbit.yaml syntax, including the bind
+// address only when the config set one.
+func (p PortDef) Mapping() string {
+	mapping := strconv.Itoa(p.Host) + ":" + strconv.Itoa(p.Target)
+	switch {
+	case p.HostIP == "":
+		return mapping
+	case strings.Contains(p.HostIP, ":"):
+		return "[" + p.HostIP + "]:" + mapping
+	default:
+		return p.HostIP + ":" + mapping
+	}
 }
 
 // ReadinessPort returns the host port a readiness probe should target when the
@@ -222,7 +258,12 @@ func (p *PortDef) parseMapping(s string) error {
 	if s == "" {
 		return fmt.Errorf("port mapping is empty")
 	}
-	parts := strings.SplitN(s, ":", 2)
+	hostIP, rest, err := splitHostIP(s)
+	if err != nil {
+		return fmt.Errorf("invalid port mapping %q: %w", s, err)
+	}
+	p.HostIP = hostIP
+	parts := strings.SplitN(rest, ":", 2)
 	host, err := parsePort(parts[0])
 	if err != nil {
 		return fmt.Errorf("invalid port mapping %q: host %w", s, err)
@@ -238,6 +279,59 @@ func (p *PortDef) parseMapping(s string) error {
 		p.Target = host
 	}
 	return nil
+}
+
+// splitHostIP separates an optional Compose-style bind address from a port
+// mapping. Only a three-part "ip:host:target" carries one, and an IPv6
+// address must be bracketed so its colons cannot be mistaken for the mapping's.
+func splitHostIP(s string) (hostIP, rest string, err error) {
+	if strings.HasPrefix(s, "[") {
+		end := strings.Index(s, "]:")
+		if end < 0 {
+			return "", "", fmt.Errorf("bracketed host IP must be followed by \":host:target\"")
+		}
+		hostIP, rest = s[1:end], s[end+2:]
+		if !strings.Contains(rest, ":") {
+			return "", "", errHostIPNeedsMapping
+		}
+		addr, err := netip.ParseAddr(hostIP)
+		if err != nil || !addr.Is6() {
+			return "", "", fmt.Errorf("host IP %q is not an IPv6 address", hostIP)
+		}
+		hostIP, err = validateBindAddrIP(addr)
+		return hostIP, rest, err
+	}
+	switch colons := strings.Count(s, ":"); {
+	case colons > 2:
+		return "", "", fmt.Errorf("an IPv6 host IP must be bracketed, e.g. \"[::1]:5432:5432\"")
+	case colons == 1:
+		if first, _, _ := strings.Cut(s, ":"); strings.Contains(first, ".") {
+			return "", "", errHostIPNeedsMapping
+		}
+		return "", s, nil
+	case colons == 0:
+		return "", s, nil
+	}
+	hostIP, rest, _ = strings.Cut(s, ":")
+	addr, err := netip.ParseAddr(hostIP)
+	if err != nil || !addr.Is4() {
+		return "", "", fmt.Errorf("host IP %q is not an IPv4 address (bracket IPv6, e.g. \"[::1]:5432:5432\")", hostIP)
+	}
+	hostIP, err = validateBindAddrIP(addr)
+	return hostIP, rest, err
+}
+
+var errHostIPNeedsMapping = errors.New(`a host IP needs both ports, e.g. "127.0.0.1:5432:5432"`)
+
+// validateBindAddrIP limits a bind address to loopback or every interface.
+// Orbit's health probes, injected URLs, and status links all dial localhost,
+// so a container bound only to a specific LAN address would never turn
+// healthy.
+func validateBindAddrIP(addr netip.Addr) (string, error) {
+	if addr.Zone() != "" || (!addr.IsLoopback() && !addr.IsUnspecified()) {
+		return "", fmt.Errorf("host IP %q must be a loopback address or 0.0.0.0/[::]", addr.String())
+	}
+	return addr.String(), nil
 }
 
 // parsePort validates a port string in range 1-65535.

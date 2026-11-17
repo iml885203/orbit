@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -169,13 +171,13 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		for _, name := range names {
 			c := cfg.Containers[name]
 			if svc, ok := running[name]; ok {
-				printContainerLine(name, svc)
+				printContainerLine(name, c.Ports, svc)
 				printStatusDetail(svc, running)
 				if svc.State == "stopped" {
 					stoppedInfra = true
 				}
 			} else {
-				ports := configPorts(c.Ports)
+				ports := formatPorts(configPortNumbers(c.Ports), c.Ports)
 				fmt.Printf("  %s %-20s  %-10s %s\n", cli.Faint.Sprint("○"), name, cli.Faint.Sprint("stopped"), cli.Faint.Sprint(ports))
 				stoppedInfra = true
 			}
@@ -201,7 +203,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 				if s.URL != "" {
 					info = cli.Faint.Sprint(s.URL)
 				} else {
-					info = cli.Faint.Sprint(configPorts(s.Ports))
+					info = cli.Faint.Sprint(formatPorts(configPortNumbers(s.Ports), nil))
 				}
 				fmt.Printf("  %s %-20s  %-10s %s\n", cli.Faint.Sprint("○"), name, cli.Faint.Sprint("stopped"), info)
 				stoppedServices = append(stoppedServices, name)
@@ -249,7 +251,7 @@ func printRunningSnapshot(running map[string]daemon.ResourceStatus) (bool, []str
 	_, _ = cli.Bold.Println("CONTAINERS")
 	for _, name := range sortedResourceNames(running, daemon.ResourceKindContainer) {
 		svc := running[name]
-		printContainerLine(name, svc)
+		printContainerLine(name, nil, svc)
 		printStatusDetail(svc, running)
 		if svc.State == "stopped" {
 			stoppedInfra = true
@@ -291,9 +293,9 @@ func configFileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func printContainerLine(name string, svc daemon.ResourceStatus) {
+func printContainerLine(name string, definitions map[string]config.PortDef, svc daemon.ResourceStatus) {
 	icon := cli.StateIcon(svc.State)
-	ports := formatPorts(svc.Ports)
+	ports := formatPorts(svc.Ports, definitions)
 	timing := formatTiming(svc)
 	fmt.Printf("  %s %-20s  %-10s %-30s %s\n", icon, name, cli.ColorState(svc.State), ports, cli.Faint.Sprint(timing))
 }
@@ -308,7 +310,7 @@ func printServiceLine(name string, _ *config.Service, svc daemon.ResourceStatus)
 	if svc.URL != "" {
 		info = cli.Faint.Sprint(svc.URL)
 	} else {
-		info = formatPorts(svc.Ports)
+		info = formatPorts(svc.Ports, nil)
 	}
 	timing := formatTiming(svc)
 	fmt.Printf("  %s %-20s  %-10s %s%s %s\n", icon, name, cli.ColorState(svc.State), info, extra, cli.Faint.Sprint(timing))
@@ -466,22 +468,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-func configPorts(ports map[string]config.PortDef) string {
-	if len(ports) == 0 {
-		return ""
-	}
-	labels := make([]string, 0, len(ports))
-	for label := range ports {
-		labels = append(labels, label)
-	}
-	sort.Strings(labels)
-	parts := make([]string, 0, len(labels))
-	for _, label := range labels {
-		parts = append(parts, portURL(label, ports[label].Host))
-	}
-	return strings.Join(parts, " ")
-}
-
 type statusJSONData struct {
 	SetupRequired     bool                 `json:"setup_required"`
 	SelectionRequired bool                 `json:"selection_required,omitempty"`
@@ -517,6 +503,7 @@ type jsonService struct {
 	BlockedBy            string                       `json:"blocked_by,omitempty"`
 	URL                  string                       `json:"url,omitempty"`
 	Ports                map[string]int               `json:"ports,omitempty"`
+	BindAddresses        map[string]string            `json:"bind_addresses,omitempty"`
 	StartupTime          string                       `json:"startup_time,omitempty"`
 	Uptime               string                       `json:"uptime,omitempty"`
 	RestartCount         int                          `json:"restart_count"`
@@ -573,10 +560,13 @@ func writeStatusJSON(
 		for name, c := range cfg.Containers {
 			svc := jsonService{Name: name, Kind: "container", Role: c.ResolveKind(), State: "stopped"}
 			ports := make(map[string]int, len(c.Ports))
+			bindAddresses := make(map[string]string, len(c.Ports))
 			for label, p := range c.Ports {
 				ports[label] = p.Host
+				bindAddresses[label] = p.BindIP()
 			}
 			svc.Ports = ports
+			svc.BindAddresses = bindAddresses
 			if r, ok := running[name]; ok {
 				applyRuntimeStatus(&svc, r, running)
 			}
@@ -989,19 +979,31 @@ func projectContextShellCommand(configPath, command string) string {
 	return "cd " + shellquote.Quote(filepath.Dir(configPath)) + " && " + command
 }
 
-func formatPorts(ports map[string]int) string {
+// formatPorts renders ports as browsable URLs or ":port". With container
+// definitions it also shows each bind address, so a port open beyond loopback
+// is visible at a glance; a stale snapshot has no config to read them from and
+// passes nil.
+func formatPorts(ports map[string]int, definitions map[string]config.PortDef) string {
 	if len(ports) == 0 {
 		return ""
 	}
-	labels := make([]string, 0, len(ports))
-	for label := range ports {
-		labels = append(labels, label)
-	}
-	sort.Strings(labels)
-
+	labels := sortedKeys(ports)
 	parts := make([]string, 0, len(labels))
 	for _, label := range labels {
-		parts = append(parts, portURL(label, ports[label]))
+		port := ports[label]
+		rendered := portURL(label, port)
+		if definition, ok := definitions[label]; ok {
+			bindIP := definition.BindIP()
+			switch {
+			case strings.Contains(rendered, "://"):
+				if bindIP != config.DefaultContainerHostIP {
+					rendered += " (" + bindIP + ")"
+				}
+			default:
+				rendered = net.JoinHostPort(bindIP, strconv.Itoa(port))
+			}
+		}
+		parts = append(parts, rendered)
 	}
 	return strings.Join(parts, " ")
 }

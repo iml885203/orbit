@@ -59,6 +59,7 @@ func Validate(cfg *Config) error {
 		if err := validateApplicationURL("service", name, s.URL, s.Ports); err != nil {
 			errs = append(errs, err.Error())
 		}
+		errs = append(errs, validateServicePortsUnbound(name, s.Ports)...)
 		errs = append(errs, validateHealthCheck("service", name, s.HealthCheck, false)...)
 		for _, dep := range s.DependsOn {
 			if !known[dep] {
@@ -343,4 +344,26 @@ func detectPortConflicts(cfg *Config) []string {
 	}
 
 	return conflicts
+}
+
+// validateServicePortsUnbound rejects a bind address on a service port: Orbit
+// launches the process but never binds its port, so the address would be
+// silently ignored and the service would still listen wherever its own config
+// says.
+func validateServicePortsUnbound(name string, ports map[string]PortDef) []string {
+	aliases := make([]string, 0, len(ports))
+	for alias, port := range ports {
+		if port.HostIP != "" {
+			aliases = append(aliases, alias)
+		}
+	}
+	sort.Strings(aliases)
+	errs := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		errs = append(errs, fmt.Sprintf(
+			"service %q port %q sets host IP %q; only container ports can be bound to an address (configure the listen address in the service itself)",
+			name, alias, ports[alias].HostIP,
+		))
+	}
+	return errs
 }
