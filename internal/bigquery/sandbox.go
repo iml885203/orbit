@@ -43,10 +43,12 @@ func (r *sandboxRunner) prepare(ctx context.Context, p Profile, runKey string, i
 	case errors.Is(err, os.ErrNotExist):
 		generation := nonce()
 		jobs := map[string]string{}
+		states := map[string]string{}
 		for _, table := range input.Tables {
 			jobs[table.ID] = "orbit_load_" + generation + "_" + digest([]byte(table.ID))[:16]
+			states[table.ID] = "planned"
 		}
-		rec = &Receipt{ProfileName: p.ID, Version: "orbit.bq.receipt.v1", StoreID: r.store.id, Scope: scope, RunKey: runKey, Generation: generation, RuntimeGeneration: r.generation, Instance: r.instance, ConfigHash: digest(config), FixtureHash: input.Hash, Target: p, DatasetID: "orbit_test_" + generation, Jobs: jobs, JobStates: map[string]string{}, TableGenerations: map[string]int64{}, Phase: "intent", AppRuntime: "unverified"}
+		rec = &Receipt{ProfileName: p.ID, Version: "orbit.bq.receipt.v1", StoreID: r.store.id, Scope: scope, RunKey: runKey, Generation: generation, RuntimeGeneration: r.generation, Instance: r.instance, ConfigHash: digest(config), FixtureHash: input.Hash, Target: p, DatasetID: "orbit_test_" + generation, Jobs: jobs, JobStates: states, TableGenerations: map[string]int64{}, Phase: "intent", AppRuntime: "unverified"}
 	case err != nil:
 		return nil, err
 	case rec.StoreID != r.store.id || rec.RuntimeGeneration != r.generation:
@@ -207,15 +209,8 @@ func (r *sandboxRunner) clean(ctx context.Context, p Profile, runKey string, con
 	if err = r.store.save(rec); err != nil {
 		return rec, failure("receipt_write_failed", err)
 	}
-	if err := r.verifyDataset(ctx, rec); err != nil {
-		if apiStatus(err, 404) {
-			rec.Phase = "cleaned"
-			return rec, r.store.save(rec)
-		}
-		return rec, err
-	}
 	for table, jobID := range rec.Jobs {
-		if rec.JobStates[table] == "" || rec.JobStates[table] == "schema_only" {
+		if rec.JobStates[table] == "planned" || rec.JobStates[table] == "schema_only" {
 			continue
 		}
 		job, jobErr := r.api.Jobs.Get(p.JobProject, jobID).Location(p.Location).Context(ctx).Do()
@@ -229,6 +224,14 @@ func (r *sandboxRunner) clean(ctx context.Context, p Profile, runKey string, con
 		if job.Status == nil || job.Status.State != "DONE" {
 			return rec, failure("cleanup_job_pending", nil)
 		}
+	}
+	if err := r.verifyDataset(ctx, rec); err != nil {
+		if apiStatus(err, 404) {
+			rec.Phase = "cleaned"
+			rec.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			return rec, r.store.save(rec)
+		}
+		return rec, err
 	}
 	if err = r.api.Datasets.Delete(p.DataProject, rec.DatasetID).DeleteContents(true).Context(ctx).Do(); err != nil && !apiStatus(err, 404) {
 		return rec, failure("cleanup_unknown", err)
@@ -259,7 +262,7 @@ func appConfig(p Profile, dataset string) map[string]string {
 func (r *sandboxRunner) prepareTable(ctx context.Context, rec *Receipt, table tableInput) error {
 	p := rec.Target
 	var err error
-	if rec.TableGenerations[table.ID] == 0 && rec.JobStates[table.ID] == "" {
+	if rec.TableGenerations[table.ID] == 0 && rec.JobStates[table.ID] == "planned" {
 		_, err = r.api.Tables.Insert(p.DataProject, rec.DatasetID, &bq.Table{TableReference: &bq.TableReference{ProjectId: p.DataProject, DatasetId: rec.DatasetID, TableId: table.ID}, Schema: table.Schema}).Context(ctx).Do()
 		if err != nil && !apiStatus(err, 409) {
 			return failure("schema_create_unknown", err)
@@ -286,7 +289,7 @@ func (r *sandboxRunner) prepareTable(ctx context.Context, rec *Receipt, table ta
 	jobID := rec.Jobs[table.ID]
 	job, getErr := r.api.Jobs.Get(p.JobProject, jobID).Location(p.Location).Context(ctx).Do()
 	if apiStatus(getErr, 404) {
-		if rec.JobStates[table.ID] != "" {
+		if rec.JobStates[table.ID] != "planned" {
 			return failure("job_state_unknown", getErr)
 		}
 		rec.JobStates[table.ID] = "submission_intent"

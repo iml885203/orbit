@@ -689,3 +689,5 @@ cleanup uncertainty fail closed. Follow the [domain recovery process](./bigquery
 `GET /api/features/bigquery` is dashboard metadata: configured profiles and
 local receipts with source/freshness/error; it never acquires ADC. It has no
 mutation counterpart.
+
+Every tracked job has an explicit `planned`, `submission_intent`, `terminal` or `schema_only` state. A missing state is malformed evidence, never proof of non-submission. Cleanup confirms tracked submitted jobs are terminal even if the dataset has already disappeared.

@@ -220,7 +220,7 @@ func validateReceipt(rec *Receipt, scope string) error {
 		return failure("receipt_invalid", err)
 	}
 	config, _ := json.Marshal(rec.Target)
-	if digest(config) != rec.ConfigHash || len(rec.Jobs) != len(rec.Target.Tables) {
+	if digest(config) != rec.ConfigHash || len(rec.Jobs) != len(rec.Target.Tables) || len(rec.JobStates) != len(rec.Jobs) {
 		return failure("receipt_invalid", nil)
 	}
 	switch rec.Phase {
@@ -232,11 +232,11 @@ func validateReceipt(rec *Receipt, scope string) error {
 		if rec.Jobs[table] != "orbit_load_"+rec.Generation+"_"+digest([]byte(table))[:16] {
 			return failure("receipt_invalid", nil)
 		}
-		if rec.JobStates[table] != "" && rec.TableGenerations[table] <= 0 {
+		if rec.JobStates[table] != "planned" && rec.TableGenerations[table] <= 0 {
 			return failure("receipt_invalid", nil)
 		}
 		switch rec.JobStates[table] {
-		case "", "submission_intent", "terminal", "schema_only":
+		case "planned", "submission_intent", "terminal", "schema_only":
 		default:
 			return failure("receipt_invalid", nil)
 		}

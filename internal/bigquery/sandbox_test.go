@@ -187,7 +187,7 @@ func TestReplacedGenerationBlocksCleanup(t *testing.T) {
 	}
 }
 func TestCleanupUnknownJobBlocksButNeverSubmittedJobDoesNot(t *testing.T) {
-	for _, state := range []string{"", "submission_intent"} {
+	for _, state := range []string{"planned", "submission_intent"} {
 		t.Run("state_"+state, func(t *testing.T) {
 			fake := testFake(t)
 			r := testRunner(t, fake, t.TempDir())
@@ -198,7 +198,7 @@ func TestCleanupUnknownJobBlocksButNeverSubmittedJobDoesNot(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := r.clean(context.Background(), testProfile(), "run-1", true)
-			if state == "" {
+			if state == "planned" {
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -349,7 +349,7 @@ func TestPartialSetupWithNoSubmittedJobsCanBeDisposed(t *testing.T) {
 	r := testRunner(t, fake, t.TempDir())
 	rec, err := r.prepare(context.Background(), testProfile(), "partial", testInputs())
 	requireCode(t, err, "schema_create_unknown")
-	if rec.CreationTime == 0 || rec.JobStates["orders"] != "" {
+	if rec.CreationTime == 0 || rec.JobStates["orders"] != "planned" {
 		t.Fatal("incorrect partial intent")
 	}
 	if _, err = r.clean(context.Background(), testProfile(), "partial", true); err != nil {
@@ -357,5 +357,30 @@ func TestPartialSetupWithNoSubmittedJobsCanBeDisposed(t *testing.T) {
 	}
 	if fake.deletes != 1 || fake.loads != 0 {
 		t.Fatal("partial teardown did not dispose without loading")
+	}
+}
+
+func TestMissingDatasetDoesNotHidePendingOrUnknownJobs(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		t.Run(fmt.Sprint(pending), func(t *testing.T) {
+			fake := testFake(t)
+			r := testRunner(t, fake, t.TempDir())
+			rec := ready(t, r)
+			delete(fake.datasets, rec.Target.DataProject+"."+rec.DatasetID)
+			if pending {
+				fake.jobs[rec.Target.JobProject+"."+rec.Jobs["orders"]].Status.State = "RUNNING"
+			} else {
+				delete(fake.jobs, rec.Target.JobProject+"."+rec.Jobs["orders"])
+			}
+			cleaned, err := r.clean(context.Background(), testProfile(), "run-1", true)
+			want := "cleanup_job_unknown"
+			if pending {
+				want = "cleanup_job_pending"
+			}
+			requireCode(t, err, want)
+			if cleaned.Phase == "cleaned" || fake.deletes != 0 {
+				t.Fatal("reported disposal without job evidence")
+			}
+		})
 	}
 }

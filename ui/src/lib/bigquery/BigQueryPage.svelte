@@ -47,7 +47,9 @@
     </section>
     <section aria-labelledby="bq-sandboxes">
       <h3 id="bq-sandboxes">Sandbox records</h3>
-      {#if snapshot.records.length === 0}
+      {#if snapshot.error}
+        <p class="notice" role="status">Sandbox records are unavailable. Preserve local evidence and inspect it with the CLI before preparing another run.</p>
+      {:else if snapshot.records.length === 0}
         <p class="empty">No local sandbox records. Prepare a sandbox with <code>orbit bq sandbox prepare PROFILE --run RUN_KEY --json</code>.</p>
       {:else}
         <div class="records">

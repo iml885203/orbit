@@ -108,7 +108,7 @@ func TestLocalCLIJSONDoesNotNeedCredentials(t *testing.T) {
 	}
 }
 func TestMalformedCanonicalEvidenceCannotMutate(t *testing.T) {
-	for _, mutate := range []func(*Receipt){func(r *Receipt) { r.FixtureHash = "" }, func(r *Receipt) { r.Jobs = nil }, func(r *Receipt) { r.Target.DataProject = "another-project" }, func(r *Receipt) { r.Generation = "bad" }, func(r *Receipt) { delete(r.TableGenerations, "orders") }, func(r *Receipt) { r.TableGenerations["orders"] = 0 }, func(r *Receipt) { r.TableGenerations["unknown"] = 3 }, func(r *Receipt) { r.Phase = "other" }} {
+	for _, mutate := range []func(*Receipt){func(r *Receipt) { r.FixtureHash = "" }, func(r *Receipt) { r.Jobs = nil }, func(r *Receipt) { delete(r.JobStates, "orders") }, func(r *Receipt) { r.Target.DataProject = "another-project" }, func(r *Receipt) { r.Generation = "bad" }, func(r *Receipt) { delete(r.TableGenerations, "orders") }, func(r *Receipt) { r.TableGenerations["orders"] = 0 }, func(r *Receipt) { r.TableGenerations["unknown"] = 3 }, func(r *Receipt) { r.Phase = "other" }} {
 		fake := testFake(t)
 		r := testRunner(t, fake, t.TempDir())
 		rec := ready(t, r)

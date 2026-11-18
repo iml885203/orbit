@@ -489,3 +489,5 @@ Recommended actions 只做本地只讀檢查，保留 config、instance、profil
 [domain 復原流程](./bigquery.zh-TW.md#復原與人工處置)處理。
 `GET /api/features/bigquery` 提供 configured profiles、本地 receipts、來源、時間與錯誤，
 不取得 ADC，沒有對應 mutation API。
+
+每個追蹤 job 都有明確的 `planned`、`submission_intent`、`terminal` 或 `schema_only` 狀態。缺少狀態是損毀證據，不代表從未提交；即使 dataset 已消失，cleanup 仍須確認已提交 jobs 都 terminal。

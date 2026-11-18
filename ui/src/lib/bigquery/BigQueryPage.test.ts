@@ -28,4 +28,13 @@ describe('BigQueryPage', () => {
     expect(screen.getByText(/No local sandbox records/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /prepare|clean/i })).not.toBeInTheDocument()
   })
+  it('does not turn unreadable recovery evidence into an empty list or prepare advice', () => {
+    bqState.snapshot = { configured: true, profiles: [], records: [], source: 'local', observed_at: 'now', error: 'Local recovery records could not be read.' }
+    render(BigQueryPage)
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be read')
+    expect(screen.getByRole('status')).toHaveTextContent('records are unavailable')
+    expect(screen.queryByText(/No local sandbox records/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/orbit bq sandbox prepare/)).not.toBeInTheDocument()
+  })
+
 })
