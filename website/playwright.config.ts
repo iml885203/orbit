@@ -1,10 +1,12 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   retries: 0,
-  outputDir: '/tmp/orbit-docs-playwright-results',
+  outputDir: join(tmpdir(), 'orbit-docs-playwright-results'),
   use: {
     baseURL: 'http://127.0.0.1:4173/',
     browserName: 'chromium',

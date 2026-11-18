@@ -70,3 +70,7 @@ command 都要維持相同 `--instance` target，並在 suite 結束後清理。
 若 CI 的 Docker daemon 或 storage driver 無法穩定處理並行 image 解壓縮，請使用
 [設定](configuration.zh-TW.md#settings)中的 pull 併發上限，而不必另外維護 image
 預拉清單。
+
+## BigQuery
+
+[BigQuery 開發與整合測試](./bigquery.zh-TW.md) 說明選用環境設定、CLI prepare/inspect/list/clean、ADC 身分、只讀 dashboard，以及離線證據與真實 GCP E2E 的差異。`orbit bq` 使用標準 `orbit.cli.v1` JSON envelope；sandbox inspect/list 不連雲端。明確 clean 需 `--yes --app-stopped --restricted-writers`，停止環境不會刪除 dataset。

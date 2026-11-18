@@ -848,3 +848,32 @@ Set low-level overrides before `orbit up` — changing them after the daemon is 
 
 - [docs/architecture.md](architecture.md) — how these fields feed the orchestrator
 - [envs/example.yaml](https://github.com/iml885203/orbit/blob/main/envs/example.yaml) — complete runnable example
+
+## `bigquery`
+
+The optional BigQuery extension uses schema v3 and requires Orbit v1.2.0 or later. `bigquery.identity` and `profiles` explicitly enable the selected environment. Without this section, Orbit requires no GCP credentials. See [BigQuery development and integration tests](./bigquery.md) for the complete field reference, ADC, tests and cleanup boundaries.
+
+`identity` is a stable, nonsecret environment identity. Keep it stable across file
+moves. Use a different identity for a different environment. Each profile has:
+
+| Field | Meaning |
+| --- | --- |
+| `mode` | `shared` for read-only metadata inspection; `sandbox` for isolated test data |
+| `job_project` | Explicit project where load jobs run and job permissions apply |
+| `data_project` | Explicit project containing datasets/tables |
+| `location` | Exact BigQuery location, e.g. `asia-east1`, `US` or `EU` |
+| `dataset` | Required only for `shared`; never selects an existing sandbox |
+| `tables` | Sandbox table IDs mapped to `schema` JSON and `fixture` NDJSON paths |
+| `app_mapping` | `job_project`, `dataset`, `location` mapped to app-specific environment names |
+
+Schema and fixture paths resolve relative to the selected YAML directory and
+must remain inside it after resolving symlinks. In inherited environments, use
+paths relative to the selected child file. Each input is limited to 8 MiB.
+Schemas use `{"fields":[...]}`. Supported field options are `name`, `type`,
+`mode`, `description`, and nested `fields` for `RECORD`. Supported types are
+`STRING`, `INTEGER`, `FLOAT`, `BOOLEAN`, `TIMESTAMP`, `DATE`, `DATETIME`, `TIME`,
+`NUMERIC`, `BIGNUMERIC`, `BYTES`, `RECORD`, `JSON` and `GEOGRAPHY`. Modes are
+`NULLABLE` (default), `REQUIRED`, `REPEATED`. Advanced options are explicitly
+rejected. Fixtures contain one JSON object per line. An empty fixture prepares
+an empty schema-only table. JSON syntax/schema structure is validated locally;
+BigQuery still validates field values and service-specific limits.

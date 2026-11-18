@@ -1,0 +1,25 @@
+version: "3"
+
+# Requires Orbit with BigQuery support (v1.2.0+). Replace project IDs.
+bigquery:
+  identity: orders-development
+  profiles:
+    shared:
+      mode: shared
+      job_project: your-test-project
+      data_project: your-data-project
+      location: asia-east1
+      dataset: shared_orders
+    integration:
+      mode: sandbox
+      job_project: your-test-project
+      data_project: your-test-project
+      location: asia-east1
+      tables:
+        orders:
+          schema: orders.schema.json
+          fixture: orders.ndjson
+      app_mapping:
+        job_project: ORDERS_JOB_PROJECT
+        dataset: ORDERS_DATASET
+        location: ORDERS_LOCATION

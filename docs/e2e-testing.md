@@ -79,3 +79,7 @@ For a CI Docker daemon or storage driver that is unstable under concurrent
 image extraction, use the bounded pull setting described in
 [Configuration](configuration.md#settings) instead of maintaining a separate
 image pull list.
+
+## BigQuery
+
+See [BigQuery development and integration tests](./bigquery.md) for opt-in configuration, CLI prepare/inspect/list/clean, ADC identities, the read-only dashboard, and the distinction between offline evidence and real GCP E2E. `orbit bq` emits the standard `orbit.cli.v1` JSON envelope; sandbox inspect/list never contact GCP. Explicit clean requires `--yes --app-stopped --restricted-writers`; stopping an environment does not delete datasets.

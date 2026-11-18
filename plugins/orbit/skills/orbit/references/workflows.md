@@ -137,3 +137,30 @@ Claim only the narrowest callback path needed. Confirm the target is a
 development or authorized staging environment, and release the claim when the
 task ends. Callback bodies may contain credentials or personal data; do not
 copy them into reports.
+
+## BigQuery integration tests
+
+Confirm the selected environment has a `bigquery:` profile, explicit job/data
+project and location, and authorized test credentials. Keep the same config,
+instance, profile and nonsecret run key throughout the operation.
+
+Install a `finally`/CI `always` teardown before prepare: failures must still stop
+any app started by the harness, preserve evidence and attempt authorized cleanup
+only when its preconditions hold. Uncertain jobs/generations go to recovery;
+SIGKILL or a lost runner cannot guarantee teardown.
+
+1. Use `orbit bq sandbox prepare PROFILE --run RUN_KEY --json`. Follow its scoped
+   local inspection action on a pending/unknown outcome; do not choose a new key
+   to hide unresolved cloud resources. Shared metadata uses `orbit bq inspect`.
+2. Parse `data.app_config`, configure the app with its own credentials, and assert
+   actual application/API behavior. Fixture readiness alone is not E2E success.
+3. Stop app/external jobs and restrict writers before authorized disposal with
+   `orbit bq sandbox clean PROFILE --run RUN_KEY --yes --app-stopped
+   --restricted-writers --json`. These flags attest operational conditions.
+4. Preserve canonical evidence if cleanup is blocked. Foreign or recreated
+   instance generations cannot automatically take over; use the manual
+   disposition process in `docs/bigquery.md`, not edited receipts.
+
+No real test project/credentials means live validation is **SKIP**. Offline SDK
+fixtures do not prove IAM, GoogleSQL or app readiness. Full field semantics,
+recovery and the unfenced GET/DELETE limitation live in `docs/bigquery.md`.

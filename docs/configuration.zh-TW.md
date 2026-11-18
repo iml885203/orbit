@@ -788,3 +788,29 @@ checkout、agent 與 CI job 應優先使用 `--instance`；詳見
 
 - [docs/architecture.md](architecture.md) —— 這些欄位如何餵給 orchestrator
 - [envs/example.yaml](https://github.com/iml885203/orbit/blob/main/envs/example.yaml) —— 完整可執行範例
+
+## `bigquery`
+
+選用的 BigQuery extension 使用 schema v3，需 Orbit v1.2.0 以上。以 `bigquery.identity` 與 `profiles` 明確啟用目前環境；無此 section 不要求 GCP。完整欄位、ADC、測試與清理界線見 [BigQuery 開發與整合測試](./bigquery.zh-TW.md)。
+
+`identity` 是穩定、非機密的環境識別，搬動 YAML 時保持不變，不同環境不要共用。
+Profile 欄位如下：
+
+| 欄位 | 用途 |
+| --- | --- |
+| `mode` | `shared` 只讀既有 dataset metadata；`sandbox` 建立隔離測試資料 |
+| `job_project` | 明確指定執行 load job 的 project，需具備 job 權限 |
+| `data_project` | 存放 dataset/table 的 project |
+| `location` | 精確位置，例如 `asia-east1`、`US`、`EU` |
+| `dataset` | shared 必填；sandbox 不可指定既有 dataset |
+| `tables` | sandbox table ID 對應 `schema` JSON 與 `fixture` NDJSON 路徑 |
+| `app_mapping` | 將 `job_project`、`dataset`、`location` 對應到應用程式自己的環境變數名稱 |
+
+檔案路徑相對於目前選定 YAML 的目錄；含 symlink 解析後都必須留在該目錄內。
+繼承設定時，路徑仍以選定的 child YAML 為準。每個輸入最多 8 MiB。
+Schema 格式為 `{"fields":[...]}`，支援 `name`、`type`、`mode`、`description`，
+以及 `RECORD` 的巢狀 `fields`。型別支援 `STRING`、`INTEGER`、`FLOAT`、`BOOLEAN`、
+`TIMESTAMP`、`DATE`、`DATETIME`、`TIME`、`NUMERIC`、`BIGNUMERIC`、`BYTES`、
+`RECORD`、`JSON`、`GEOGRAPHY`；mode 為 `NULLABLE`（預設）、`REQUIRED`、`REPEATED`。
+進階選項會明確拒絕。Fixture 每行一個 JSON object；空檔案表示只建 schema 的空表。
+本地先驗證 JSON 語法與 schema 基本結構，資料值及服務端限制仍由 BQ 驗證。

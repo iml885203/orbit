@@ -90,7 +90,7 @@ func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 	root := &cobra.Command{Use: "orbit"}
 	for _, name := range []string{
 		"down", "restart", "logs", "open", "exec", "query", "topics", "seed",
-		"edge", "service", "sqlserver", "tunnel", "trace", "tracing",
+		"edge", "service", "sqlserver", "tunnel", "bq", "trace", "tracing",
 	} {
 		parent := &cobra.Command{Use: name}
 		child := &cobra.Command{Use: "child"}

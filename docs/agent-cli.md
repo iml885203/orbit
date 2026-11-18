@@ -660,3 +660,32 @@ reported environment is ready. In particular, `orbit inspect --json` exits
 `0` with `ok: true` when it successfully reports `readiness.blocked: true`.
 Agents must inspect `data.readiness.blocked`; `orbit status --json` may instead
 exit `1` when the selected state prevents status from being produced.
+
+## BigQuery
+
+See [BigQuery development and integration tests](./bigquery.md) for opt-in configuration, CLI prepare/inspect/list/clean, ADC identities, the read-only dashboard, and the distinction between offline evidence and real GCP E2E. `orbit bq` emits the standard `orbit.cli.v1` JSON envelope; sandbox inspect/list never contact GCP. Explicit clean requires `--yes --app-stopped --restricted-writers`; stopping an environment does not delete datasets.
+
+| Command | `data` and evidence |
+| --- | --- |
+| `orbit bq inspect PROFILE --json` | Shared cloud dataset metadata observation: dataset, job project, location, `verified`, `auth_context`, observation time, app mapping. No SQL/job-write proof. |
+| `orbit bq sandbox prepare PROFILE --run KEY --json` | Canonical receipt, also returned with failures once intent exists. Read `sandbox_data_ready`, `phase`, `last_error`, `warnings`; `app_runtime` remains `unverified`. |
+| `orbit bq sandbox inspect PROFILE --run KEY --json` | Local receipt only; does not refresh cloud evidence. |
+| `orbit bq sandbox list --json` | Local receipt array, including old instance generations. |
+| `orbit bq sandbox clean PROFILE --run KEY --yes --app-stopped --restricted-writers --json` | Updated canonical receipt after explicit recursive deletion, or failure evidence. No implicit cleanup. |
+
+Receipts carry `version: "orbit.bq.receipt.v1"`, profile/run, store/runtime
+identity, immutable target/input hashes, random dataset ID, table generations,
+fixed job IDs and submission states, application mapping, and observation time.
+Treat them as evidence; portable copies do not confer mutation authority.
+`intent`, `loading`, `data_ready`, `cleanup_intent`, `cleaned` describe local
+progress. Only `sandbox_data_ready: true` reports data readiness at the last
+successful CLI observation; it is not continuous cloud health.
+
+Pending/ambiguous errors may set `retryable: true`; that permits later
+reconciliation, not blind submission or deletion. Recommended actions are
+read-only local inspection and retain config, instance, profile and run scope.
+Generation/ownership conflicts, missing submitted jobs, malformed records and
+cleanup uncertainty fail closed. Follow the [domain recovery process](./bigquery.md#recovery-and-manual-disposition).
+`GET /api/features/bigquery` is dashboard metadata: configured profiles and
+local receipts with source/freshness/error; it never acquires ADC. It has no
+mutation counterpart.
