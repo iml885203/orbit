@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/iml885203/orbit/internal/bigquery"
 	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/devdb"
 	officialdistribution "github.com/iml885203/orbit/internal/distribution"
@@ -39,10 +40,10 @@ func TestOfficialDistributionDefaults(t *testing.T) {
 
 func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
 	commands := Extensions()[0].Commands()
-	if len(commands) != 2 ||
+	if len(commands) != 3 ||
 		commands[0].Name() != "sqlserver" ||
 		commands[0].Hidden ||
-		commands[1].Name() != "tunnel" {
+		commands[1].Name() != "bq" || commands[2].Name() != "tunnel" {
 		t.Fatalf("SQL Server command surface = %#v", commands)
 	}
 
@@ -50,15 +51,16 @@ func TestOfficialOptionalCommandsFollowSelectedEnvironment(t *testing.T) {
 	if visibility == nil {
 		t.Fatal("official command visibility is not configured")
 	}
-	if got := visibility(nil); got["sqlserver"] || got["tunnel"] {
+	if got := visibility(nil); got["sqlserver"] || got["tunnel"] || got["bq"] {
 		t.Fatalf("optional commands visible without environment: %v", got)
 	}
 
 	cfg := (&config.Config{}).
 		WithExtension("sqlserver", &devdb.SQLServerConfig{}).
-		WithExtension("claim", &tunnel.ClaimConfig{})
+		WithExtension("claim", &tunnel.ClaimConfig{}).
+		WithExtension("bigquery", &bigquery.BQConfig{})
 	got := visibility(cfg)
-	if !got["sqlserver"] || !got["tunnel"] {
+	if !got["sqlserver"] || !got["tunnel"] || !got["bq"] {
 		t.Fatalf("configured optional commands hidden: %v", got)
 	}
 }

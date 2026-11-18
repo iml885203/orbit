@@ -329,13 +329,18 @@ func classify(err error) JSONError {
 				NextCommand: "orbit status --json",
 			}
 		default:
+			retryable := false
+			var retryHint interface{ CLIJSONRetryable() bool }
+			if errors.As(err, &retryHint) {
+				retryable = retryHint.CLIJSONRetryable()
+			}
 			var hintedErr interface{ CLIJSONHint() string }
 			if errors.As(err, &hintedErr) && hintedErr.CLIJSONHint() != "" {
 				return JSONError{
 					Code:      codedErr.ErrorCode(),
 					Message:   msg,
 					Hint:      hintedErr.CLIJSONHint(),
-					Retryable: false,
+					Retryable: retryable,
 				}
 			}
 		}

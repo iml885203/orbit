@@ -1,5 +1,5 @@
 // Package extension defines the compile-time contract between the orbit
-// core and its feature sets (internal/devdb, internal/tunnel). The core
+// core and its feature sets (internal/devdb, internal/bigquery, internal/tunnel). The core
 // never imports an extension; cmd/orbit constructs the registrations and
 // hands them to the core at startup. It is internal: Orbit has no public
 // Go API, so only this module can register an extension. Registration is an explicit

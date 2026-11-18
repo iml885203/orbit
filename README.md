@@ -86,6 +86,7 @@ Core user documentation:
 Optional workflows, inactive unless the environment enables them:
 
 - [SQL Server Database Projects](docs/sql-workflow.md)
+- [BigQuery development and integration tests](docs/bigquery.md)
 - [Tunnel claims](docs/tunnel-claim.md)
 
 For adopters and contributors:

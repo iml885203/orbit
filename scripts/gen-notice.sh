@@ -25,9 +25,17 @@ trap 'rm -f "$tmp"' EXIT
   echo
 } >"$tmp"
 
+# go-licenses can name the same x/sys BSD license by its platform package.
+# Keep attribution stable across the developer host and release builders.
 go run github.com/google/go-licenses@latest report ./cmd/orbit 2>/dev/null |
   sort -t, -k1,1 |
-  awk -F, 'NF>=3 && $1 != "" { printf "- %s — %s\n", $1, $3 }' >>"$tmp"
+  awk -F, 'NF>=3 && $1 != "" {
+    name = $1
+    if (name == "golang.org/x/sys/unix" || name == "golang.org/x/sys/windows") {
+      name = "golang.org/x/sys"
+    }
+    printf "- %s — %s\n", name, $3
+  }' >>"$tmp"
 
 {
   echo

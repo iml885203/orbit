@@ -1,4 +1,6 @@
 // The core imports optional dashboard features through the $ext Vite alias.
+import BigQueryPage from '$lib/bigquery/BigQueryPage.svelte'
+import { refreshBigQuery, resetBigQuery, bigQueryHidden } from '$lib/bigquery/state.svelte'
 import type { Component } from 'svelte'
 import type { RouteDefinition } from 'svelte-spa-router'
 import DevDBPage from '$lib/devdb/DevDBPage.svelte'
@@ -19,11 +21,13 @@ export type ExtNavItem = {
 
 // Nav tabs and routes the core registry spreads after its own.
 export const navItems: ExtNavItem[] = [
+  { path: '/bigquery', label: 'BigQuery', hidden: bigQueryHidden },
   { path: '/devdb', label: 'SQL Server', hidden: dbWorkflowHidden },
   { path: '/tunnel', label: 'Tunnels', hidden: tunnelHidden },
 ]
 
 export const routes: RouteDefinition = {
+  '/bigquery': BigQueryPage,
   '/devdb': DevDBPage,
   '/tunnel': TunnelPage,
 }
@@ -34,6 +38,7 @@ export function onAppMount(): () => void {
   // Early devMeta fetch, in parallel with the core's settings fetch:
   // shrinks the window where db_configured is unknown (the nav tab and
   // DevDB page defer to it, fail-open shows the tab).
+  void refreshBigQuery()
   void refreshDevMeta({ quiet: true })
   return () => cleanups.forEach((fn) => fn())
 }
@@ -44,6 +49,8 @@ export function onDaemonState(_settings: SettingsWire) {}
 // onEnvChanged keeps the DB-workflow gate in sync when the live graph
 // lands on a different env (a switch can add/remove the sqlserver section).
 export function onEnvChanged() {
+  resetBigQuery()
+  void refreshBigQuery()
   void refreshDevMeta({ quiet: true })
 }
 
@@ -51,7 +58,9 @@ export function onEnvChanged() {
 // then refetches the DB-workflow meta in parallel with the core's
 // daemon-state refetch (same early-fetch rationale as onAppMount).
 export function onDaemonReset() {
+  resetBigQuery()
   resetDevState()
+  void refreshBigQuery()
   void refreshDevMeta({ quiet: true })
 }
 

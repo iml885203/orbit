@@ -221,3 +221,7 @@ daemon routes 與 dashboard panels；以下各點適用於 core 本身的變更�
 
 - [docs/configuration.zh-TW.md](configuration.zh-TW.md) —— 完整 YAML schema 參考
 - [docs/tracing.zh-TW.md](tracing.zh-TW.md) —— local OpenTelemetry workflow
+
+## BigQuery
+
+[BigQuery 開發與整合測試](./bigquery.zh-TW.md) 說明選用環境設定、CLI prepare/inspect/list/clean、ADC 身分、只讀 dashboard，以及離線證據與真實 GCP E2E 的差異。`orbit bq` 使用標準 `orbit.cli.v1` JSON envelope；sandbox inspect/list 不連雲端。明確 clean 需 `--yes --app-stopped --restricted-writers`，停止環境不會刪除 dataset。

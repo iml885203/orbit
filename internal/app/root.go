@@ -445,7 +445,7 @@ func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
 	}
 	switch top.Name() {
 	case "down", "restart", "logs", "open", "exec", "query", "topics", "seed",
-		"edge", "service", "sqlserver", "tunnel", "trace", "tracing":
+		"edge", "service", "sqlserver", "tunnel", "bq", "trace", "tracing":
 		return true
 	default:
 		return false

@@ -464,3 +464,30 @@ workflow 的唯一來源。JSON response 帶有 `recommended_actions` 時，agen
 
 `inspect` blocked readiness 與 exit status 的精確關係只維護在英文版
 [Exit Codes](agent-cli.md#exit-codes)。
+
+## BigQuery
+
+[BigQuery 開發與整合測試](./bigquery.zh-TW.md) 說明選用環境設定、CLI prepare/inspect/list/clean、ADC 身分、只讀 dashboard，以及離線證據與真實 GCP E2E 的差異。`orbit bq` 使用標準 `orbit.cli.v1` JSON envelope；sandbox inspect/list 不連雲端。明確 clean 需 `--yes --app-stopped --restricted-writers`，停止環境不會刪除 dataset。
+
+| 指令 | `data` 與證據 |
+| --- | --- |
+| `orbit bq inspect PROFILE --json` | Shared 雲端 metadata：dataset、job project、location、`verified`、`auth_context`、觀測時間與 app mapping；不證明 SQL 或 job 寫入。 |
+| `orbit bq sandbox prepare PROFILE --run KEY --json` | Canonical receipt；intent 存在後，失敗也附證據。檢查 `sandbox_data_ready`、`phase`、`last_error`、`warnings`；`app_runtime` 維持 `unverified`。 |
+| `orbit bq sandbox inspect PROFILE --run KEY --json` | 只讀本地 receipt，不刷新雲端證據。 |
+| `orbit bq sandbox list --json` | 本地 receipt 陣列，包含舊 instance 世代。 |
+| `orbit bq sandbox clean PROFILE --run KEY --yes --app-stopped --restricted-writers --json` | 明確遞迴刪除後的 receipt，或失敗證據；沒有隱含清理。 |
+
+Receipt 的 `version` 為 `orbit.bq.receipt.v1`，包含 profile/run、store/runtime
+身分、不可變 target/input hashes、隨機 dataset ID、逐表世代、固定 job ID 與提交狀態、
+app mapping 及觀測時間。副本只供診斷，不授予 mutation 權威。
+`intent`、`loading`、`data_ready`、`cleanup_intent`、`cleaned` 是本地進度；只有
+`sandbox_data_ready: true` 表示上次成功 CLI 觀測時資料就緒，不代表持續雲端健康。
+
+Pending/ambiguous error 可為 `retryable: true`，代表稍後 reconcile，不代表盲目重送或刪除。
+Recommended actions 只做本地只讀檢查，保留 config、instance、profile、run 範圍。
+世代/ownership 衝突、已提交 job 消失、紀錄損毀或清理不確定都拒絕 mutation；依
+[domain 復原流程](./bigquery.zh-TW.md#復原與人工處置)處理。
+`GET /api/features/bigquery` 提供 configured profiles、本地 receipts、來源、時間與錯誤，
+不取得 ADC，沒有對應 mutation API。
+
+每個追蹤 job 都有明確的 `planned`、`submission_intent`、`terminal` 或 `schema_only` 狀態。缺少狀態是損毀證據，不代表從未提交；即使 dataset 已消失，cleanup 仍須確認已提交 jobs 都 terminal。

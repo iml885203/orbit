@@ -124,3 +124,11 @@ packages:
       - "claim_lifecycle.go"
       - "client_tunnel.go"
       - "tunnel_output.go"
+  - path: "github.com/iml885203/orbit/internal/bigquery"
+    output_path: "ui/src/lib/types/bigquery.gen.ts"
+    include_files:
+      - "config.go"
+      - "receipt.go"
+      - "daemon.go"
+    type_mappings:
+      time.Time: "string"

@@ -1,0 +1,1 @@
+{"fields":[{"name":"customer","type":"STRING","mode":"REQUIRED"},{"name":"amount","type":"INTEGER","mode":"REQUIRED"}]}

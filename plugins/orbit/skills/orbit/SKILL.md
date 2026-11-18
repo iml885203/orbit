@@ -213,6 +213,36 @@ and destructive-operation rules. Deeper references live in the repository's
 - Treat the JSON envelope's final state and actions as authoritative rather
   than inferring success from exit code or transport state.
 
+## BigQuery profiles and test sandboxes
+
+- Discover `orbit bq --help` and inspect the selected YAML's optional `bigquery:`
+  section. Requires Orbit v1.2.0+ with environment schema v3. Do not add GCP
+  requirements to environments that have no BigQuery section.
+- `orbit bq inspect PROFILE --json` reads a shared dataset's cloud metadata using
+  the invoking CLI's ADC. `orbit bq sandbox list --json` and
+  `orbit bq sandbox inspect PROFILE --run RUN_KEY --json` read local evidence only.
+  The dashboard/doctor do not authenticate with GCP.
+- With an authorized test project and explicit job/data project and location,
+  run `orbit bq sandbox prepare PROFILE --run RUN_KEY --json`. Retry that same key
+  on ambiguous/pending results; do not create a new key to hide leaked resources.
+  Changed profile/schema/fixture hashes conflict with the original run.
+- Parse `data.app_config` as JSON and configure the app through its normal
+  settings mechanism. Operator ADC and application ADC are independent. Require
+  a real application/API assertion before reporting E2E success; sandbox data
+  ready does not prove GoogleSQL/IAM/application readiness.
+- `orbit bq sandbox clean PROFILE --run RUN_KEY --yes --app-stopped
+  --restricted-writers --json` recursively deletes the recorded cloud dataset.
+  Run only when the user has authorized test resource disposal and all app and
+  external jobs are stopped. Those flags attest operational conditions; they
+  are not locks. BQ has no generation-conditioned dataset delete.
+- Canonical records survive instance cleanup. Same-name instance recreation and
+  foreign receipt copies do not confer mutation authority. Preserve uncertain
+  evidence and use the documented manual disposition process, never edit a
+  receipt to bypass checks or silently delete the records.
+- Without a real test project/credentials, report live smoke as **SKIP**. Official
+  SDK loopback tests and emulator results do not prove cloud compatibility.
+  Full schema, examples, recovery and verification: `docs/bigquery.md`.
+
 ## Onboarding completion
 
 Before reporting a setup or run onboarding request as successful, require the

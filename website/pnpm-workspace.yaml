@@ -16,3 +16,10 @@ overrides:
   # drives Chrome over CDP, never loading chromium-bidi. Drop this once
   # puppeteer-core ships a chromium-bidi built on zod 4.
   chromium-bidi>zod: 4.6.7
+
+# GitHub withdrew this advisory on 2026-11-18. The registry still reports it;
+# keep every other advisory gated and remove this entry when it catches up.
+# https://github.com/advisories/GHSA-fc5q-39xc-vjpf
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf

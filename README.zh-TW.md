@@ -83,6 +83,7 @@ playback。Dashboard 只綁定 loopback。
 選用 workflows（environment 啟用後才生效）：
 
 - [SQL Server Database Projects](docs/sql-workflow.zh-TW.md)
+- [BigQuery 開發與整合測試](docs/bigquery.zh-TW.md)
 - [Tunnel claims](docs/tunnel-claim.zh-TW.md)
 
 導入者與 contributors：
