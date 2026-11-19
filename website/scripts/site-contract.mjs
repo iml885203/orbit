@@ -68,7 +68,9 @@ if (releaseSegment) assert.match(releaseSegment[1], /^v\d+\.\d+\.\d+$/, 'the tru
 // The Pages workflow fetches tags on purpose, so there the segment is
 // mandatory; elsewhere (ci.yml's tagless checkout, a local clone) it is
 // required only when tags are present.
-const localReleaseTags = execFileSync('git', ['tag', '--list', 'v*'], { cwd: sourceRoot, encoding: 'utf8' }).trim()
+const localReleaseTags = (process.env.ORBIT_SOURCE_RELEASE_TAGS_FILE
+  ? readFileSync(process.env.ORBIT_SOURCE_RELEASE_TAGS_FILE, 'utf8')
+  : execFileSync('git', ['tag', '--list', 'v*'], { cwd: sourceRoot, encoding: 'utf8' })).trim()
 if (localReleaseTags || process.env.GITHUB_WORKFLOW === 'Documentation') {
   assert.ok(releaseSegment, 'the trust line must name the release when the checkout has tags')
 }

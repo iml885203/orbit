@@ -32,7 +32,7 @@ func TestE2E_StaleDaemonMetadataNeverKillsUnrelatedProcess(t *testing.T) {
 	t.Parallel()
 
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-stale-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-stale-")
 	if err != nil {
 		t.Fatal(err)
 	}

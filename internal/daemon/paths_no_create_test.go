@@ -128,7 +128,7 @@ func TestWritersCreateTheHomeThemselves(t *testing.T) {
 	t.Run("unix socket", func(t *testing.T) {
 		// A short base: the socket path has an OS-imposed byte budget that
 		// t.TempDir's name would blow on its own.
-		base, err := os.MkdirTemp("/tmp", "ob")
+		base, err := os.MkdirTemp(os.TempDir(), "ob")
 		if err != nil {
 			t.Fatal(err)
 		}

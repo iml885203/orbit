@@ -17,7 +17,7 @@ esac
 
 attempt=1
 output="$(mktemp)"
-resource_state="$(mktemp -d /tmp/orbit-journey-resources.XXXXXX)"
+resource_state="$(mktemp -d "${ORBIT_TEST_SOCKET_ROOT:-${TMPDIR:-/tmp}}/orbit-journey-resources.XXXXXX")"
 namespace_registry="$resource_state/namespaces"
 : >"$namespace_registry"
 cleanup() {

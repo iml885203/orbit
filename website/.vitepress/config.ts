@@ -132,7 +132,9 @@ function localizedRoute(relativePath: string) {
 // nothing and the homepage omits the version segment.
 function latestReleaseTag() {
   try {
-    const tags = execFileSync('git', ['tag', '--list', 'v*', '--sort=-v:refname'], {
+    const tags = process.env.ORBIT_SOURCE_RELEASE_TAGS_FILE
+      ? readFileSync(process.env.ORBIT_SOURCE_RELEASE_TAGS_FILE, 'utf8')
+      : execFileSync('git', ['tag', '--list', 'v*', '--sort=-v:refname'], {
       cwd: fileURLToPath(new URL('../../', import.meta.url)),
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

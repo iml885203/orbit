@@ -107,7 +107,11 @@ func TestDotnetServiceBuildsDoNotOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, service := range services {
-		want := filepath.Join(filepath.Dir(service.Path), "bin", "Debug", "net8.0", strings.TrimSuffix(filepath.Base(service.Path), ".csproj")+".dll")
+		project, err := filepath.EvalSymlinks(service.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := filepath.Join(filepath.Dir(project), "bin", "Debug", "net8.0", strings.TrimSuffix(filepath.Base(project), ".csproj")+".dll")
 		if !strings.Contains(string(runArgs), want+"\n") {
 			t.Errorf("runtime args %q do not contain quoted target path %q", runArgs, want)
 		}

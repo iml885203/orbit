@@ -57,7 +57,7 @@ func TestWaitForProcessExitHonorsOperationCancellation(t *testing.T) {
 }
 
 func TestCanceledDaemonHealthDoesNotRetireLiveDaemon(t *testing.T) {
-	home, err := os.MkdirTemp("/tmp", "o115-daemon-")
+	home, err := os.MkdirTemp(os.TempDir(), "o115-daemon-")
 	if err != nil {
 		t.Fatal(err)
 	}

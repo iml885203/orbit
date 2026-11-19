@@ -89,7 +89,7 @@ func setupE2E(t *testing.T) *e2eEnv {
 	// macOS unix sockets have a 104-char path limit. t.TempDir() produces
 	// paths like /var/folders/../T/<TestName>12345/001 that easily exceed
 	// this. Use a short stable prefix in /tmp instead.
-	home, err := os.MkdirTemp("/tmp", "orb-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-")
 	if err != nil {
 		t.Fatalf("mkdir home: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestE2E_DaemonRestartRestoresTheWholeEnvironment(t *testing.T) {
 	redisPort := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 
-	home, err := os.MkdirTemp("/tmp", "orb-restart-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-restart-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -681,7 +681,7 @@ func TestE2E_UpdateReconnectsTheRunningEnvironment(t *testing.T) {
 	installedBinary := filepath.Join(installDir, "orbit")
 	copyExecutable(t, binary, installedBinary)
 
-	home, err := os.MkdirTemp("/tmp", "orb-update-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-update-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +870,7 @@ func TestE2E_ServiceDependencyReceivesSelectedRuntimeURL(t *testing.T) {
 	downstreamPreference := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
 	instanceName := "svc-url-" + randHex(3)
-	home, err := os.MkdirTemp("/tmp", "orb-service-url-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-service-url-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1386,7 +1386,7 @@ func readE2EDaemonPID(t *testing.T, home string) int {
 func TestE2E_UpBlockedWhenNoEnvs(t *testing.T) {
 	binary := findOrbitBinary(t)
 
-	home, err := os.MkdirTemp("/tmp", "orb-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-")
 	if err != nil {
 		t.Fatalf("mkdir home: %v", err)
 	}
@@ -1423,7 +1423,7 @@ func TestE2E_UpBlockedWhenNoEnvs(t *testing.T) {
 
 func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-empty-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-empty-")
 	if err != nil {
 		t.Fatalf("mkdir home: %v", err)
 	}
@@ -1963,7 +1963,7 @@ func TestE2E_PortConflictReportsOwnerAndSafeInspection(t *testing.T) {
 	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
 	_ = dashboardListener.Close()
 
-	home, err := os.MkdirTemp("/tmp", "orb-port-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-port-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2100,7 +2100,7 @@ func TestE2E_LiteralSingleServicePortInjectsPORT(t *testing.T) {
 	registerE2ENamespace(t, namespace)
 	servicePort := reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
-	home, err := os.MkdirTemp("/tmp", "orb-literal-port-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-literal-port-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2196,7 +2196,7 @@ func TestE2E_CrashedServiceRecoveryIsLinearAndPreservesHealthyDependency(t *test
 	dashboardPort := dashboardListener.Addr().(*net.TCPAddr).Port
 	_ = dashboardListener.Close()
 
-	home, err := os.MkdirTemp("/tmp", "orb-crash-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-crash-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2472,7 +2472,7 @@ healthRecovered:
 
 func TestE2E_StatusExplainsRootFailureAndBlockedDependent(t *testing.T) {
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-recovery-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-recovery-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2616,7 +2616,7 @@ services:
 
 func TestE2E_InitDoesNotClaimSuccessWhenEnvSyncFails(t *testing.T) {
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-init-failure-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-init-failure-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2882,7 +2882,7 @@ services:
 
 func TestE2E_SwitchReportsSelectedEnvironmentPrerequisites(t *testing.T) {
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-switch-prereq-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-switch-prereq-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2948,7 +2948,7 @@ services:
 
 func TestE2E_SwitchWarnsAboutProjectRuntimeVersionMismatch(t *testing.T) {
 	binary := findOrbitBinary(t)
-	home, err := os.MkdirTemp("/tmp", "orb-switch-version-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-switch-version-")
 	if err != nil {
 		t.Fatal(err)
 	}
