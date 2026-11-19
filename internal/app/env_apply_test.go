@@ -173,11 +173,41 @@ func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stderr = stderrWrite
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
-	ticker := time.NewTicker(5 * time.Millisecond)
-	progress := newLifecycleProgressWithTicker(ctx, os.Stderr, time.Now(), 20*time.Millisecond, ticker.C, ticker.Stop)
-	err = runEnvApplyJSON(ctx, progress)
+	ctx := &envApplyControlledDeadline{done: make(chan struct{}), deadline: time.Now().Add(time.Minute)}
+	ticks := make(chan time.Time, 1)
+	heartbeat := &envApplyHeartbeatWriter{Writer: os.Stderr, observed: make(chan struct{})}
+	progress := newLifecycleProgressWithTicker(ctx, heartbeat, time.Now(), 20*time.Millisecond, ticks, func() {})
+	result := make(chan error, 1)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		result <- runEnvApplyJSON(ctx, progress)
+	}()
+	defer func() {
+		ctx.expire()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("environment apply did not exit after its deadline")
+		}
+	}()
+	select {
+	case <-reconcileStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("environment reconcile request was not dispatched")
+	}
+	ticks <- time.Now().Add(20 * time.Millisecond)
+	select {
+	case <-heartbeat.observed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked reconcile did not emit a heartbeat")
+	}
+	ctx.expire()
+	select {
+	case err = <-result:
+	case <-time.After(5 * time.Second):
+		t.Fatal("environment apply did not report its deadline")
+	}
 	_ = writeEnd.Close()
 	_ = stderrWrite.Close()
 	os.Stdout = previousStdout
@@ -193,7 +223,8 @@ func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if got := string(progressOutput); !strings.HasPrefix(got, "⋯ checking environment\n⋯ applying environment\n") || !strings.Contains(got, "⋯ applying environment (elapsed 0s, about 0s remaining)\n") {
+	lines := strings.Split(strings.TrimSpace(string(progressOutput)), "\n")
+	if got := string(progressOutput); len(lines) != 3 || lines[0] != "⋯ checking environment" || lines[1] != "⋯ applying environment" || !strings.HasPrefix(lines[2], "⋯ applying environment (elapsed ") || !strings.HasSuffix(lines[2], " remaining)") {
 		t.Fatalf("stderr progress did not heartbeat during blocked reconcile: %q", got)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(output))
@@ -221,6 +252,39 @@ func TestEnvApplyBlockedReconcileWritesOneTimeoutHandoffEnvelope(t *testing.T) {
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		t.Fatalf("stdout contained more than one envelope: %v\n%s", err, output)
 	}
+}
+
+type envApplyControlledDeadline struct {
+	done     chan struct{}
+	deadline time.Time
+	once     sync.Once
+}
+
+func (c *envApplyControlledDeadline) Deadline() (time.Time, bool) { return c.deadline, true }
+func (c *envApplyControlledDeadline) Done() <-chan struct{}       { return c.done }
+func (c *envApplyControlledDeadline) Value(any) any               { return nil }
+func (c *envApplyControlledDeadline) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+func (c *envApplyControlledDeadline) expire() { c.once.Do(func() { close(c.done) }) }
+
+type envApplyHeartbeatWriter struct {
+	io.Writer
+	observed chan struct{}
+	once     sync.Once
+}
+
+func (w *envApplyHeartbeatWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	if err == nil && bytes.HasPrefix(p, []byte("⋯ applying environment (elapsed ")) {
+		w.once.Do(func() { close(w.observed) })
+	}
+	return n, err
 }
 
 func TestRunningEnvironmentResourcesPreservesActiveIntent(t *testing.T) {
