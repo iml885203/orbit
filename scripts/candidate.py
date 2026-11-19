@@ -186,16 +186,39 @@ def create(root, expected, record, github_output):
                       'timings': value['timings']}))
 
 
+def remote_artifact_metadata(repository, artifact_id):
+    command = ['gh', 'api', '--include',
+               'repos/' + repository + '/actions/artifacts/' + artifact_id]
+    for attempt in range(3):
+        try:
+            response = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        except subprocess.TimeoutExpired as error:
+            raise ValueError('artifact metadata request exceeded its 10s limit') from error
+        header, separator, body = response.stdout.partition('\n\n')
+        status = re.fullmatch(r'HTTP/\S+ (\d{3})(?: .*)?', header.split('\n', 1)[0])
+        if not separator or not status:
+            raise ValueError('artifact metadata response has no HTTP status and body')
+        code = int(status[1])
+        if code == 200 and response.returncode == 0:
+            metadata = json.loads(body)
+            if not isinstance(metadata, dict):
+                raise ValueError('artifact metadata must be an object')
+            return metadata
+        if code not in (404, 500, 502, 503, 504) or attempt == 2:
+            raise ValueError('artifact metadata read failed with HTTP {} after {} attempt(s)'.format(code, attempt + 1))
+        time.sleep(0.5 * (attempt + 1))
+
+
 def verify_remote(expected, artifact_id, archive_digest):
     if not re.fullmatch(r'[1-9][0-9]*', artifact_id) or not re.fullmatch(r'[0-9a-f]{64}', archive_digest):
         raise ValueError('invalid artifact ID or archive digest')
-    metadata = json.loads(subprocess.check_output(['gh', 'api',
-        'repos/' + expected['repository'] + '/actions/artifacts/' + artifact_id], text=True))
-    if (str(metadata['id']) != artifact_id or metadata['expired']
+    metadata = remote_artifact_metadata(expected['repository'], artifact_id)
+    workflow = metadata.get('workflow_run')
+    if (str(metadata.get('id')) != artifact_id or metadata.get('expired') is not False
             or metadata.get('digest') != 'sha256:' + archive_digest
-            or metadata['name'] != 'orbit-candidate-' + expected['run_id'] + '-' + expected['producer_attempt']
-            or str(metadata['workflow_run']['id']) != expected['run_id']
-            or metadata['workflow_run']['head_sha'] != expected['head_commit']):
+            or metadata.get('name') != 'orbit-candidate-' + expected['run_id'] + '-' + expected['producer_attempt']
+            or not isinstance(workflow, dict) or str(workflow.get('id')) != expected['run_id']
+            or workflow.get('head_sha') != expected['head_commit']):
         raise ValueError('artifact is stale, foreign or does not match the trusted producer output')
     return metadata
 

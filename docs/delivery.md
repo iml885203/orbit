@@ -16,6 +16,14 @@ resuming; the tool never guesses a publication from a nearby run. Use `--help`
 for options. Human output summarizes progress; JSON retains individual jobs,
 attempts, timings and candidate digests.
 
+Artifact metadata reads use the exact selected ID, with at most three GETs.
+Each request has a 10-second limit; retries wait 0.5 then 1 second, only for
+404 or HTTP 500/502/503/504. A 404 can also hide an inaccessible resource; it is
+not proof that metadata will become available. Explicit 401/403, rate limits,
+malformed replies and identity/digest/expiry mismatches fail closed. Timeouts
+fail without retry. These are bounded reads, never replacement uploads or
+publication retries, and the same policy applies to the delivery observer.
+
 ![An approved candidate is built once, tested in parallel, then promoted unchanged](./assets/candidate-delivery.svg)
 
 ## What the workflow proves
