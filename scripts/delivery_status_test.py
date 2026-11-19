@@ -131,6 +131,24 @@ class CandidateIdentityArchive(unittest.TestCase):
                     'size_in_bytes': len(raw), 'digest': 'sha256:' + hashlib.sha256(raw).hexdigest()}
         return raw, metadata
 
+    def test_observer_uses_bounded_exact_artifact_reads_and_keeps_trust_checks(self):
+        run = {'id':10,'head_sha':'a'*40,'path':'.github/workflows/release.yml',
+               'event':'workflow_dispatch','head_branch':'main'}
+        raw, metadata = self.identity()
+        remote = {'id':20,'expired':False,'digest':'sha256:'+'d'*64,
+                  'name':'orbit-candidate-10-1','workflow_run':{'id':10,'head_sha':'a'*40}}
+        def response(status, body):
+            return subprocess.CompletedProcess([],0 if status==200 else 1,
+                stdout='HTTP/2.0 {} Status\n\n'.format(status)+json.dumps(body),stderr='')
+        with mock.patch('delivery_status.pages',return_value=[metadata]), mock.patch('delivery_status.api',return_value=raw), mock.patch('candidate.subprocess.run',side_effect=[response(404,{}),response(200,remote)]) as request, mock.patch('candidate.time.sleep'):
+            value = delivery.tiny_identity('iml885203/orbit',run)
+            self.assertTrue(value['release_producer'])
+            self.assertEqual(value['artifact_id'],'20')
+            self.assertEqual(request.call_count,2)
+        with mock.patch('delivery_status.pages',return_value=[metadata]), mock.patch('delivery_status.api',return_value=raw), mock.patch('candidate.subprocess.run',return_value=response(200,dict(remote,digest='sha256:'+'e'*64))) as request:
+            with self.assertRaises(ValueError):delivery.tiny_identity('iml885203/orbit',run)
+            self.assertEqual(request.call_count,1)
+
     def test_small_identity_is_bound_to_run_and_never_extracts_paths(self):
         run = {'id': 10, 'head_sha': 'a' * 40, 'path': '.github/workflows/release.yml',
                'event': 'workflow_dispatch', 'head_branch': 'main'}

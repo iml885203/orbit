@@ -1,1 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="420" viewBox="0 0 360 420" role="img" aria-labelledby="title desc"><title id="title">Isolated development checks</title><desc id="desc">Edit source, validate a snapshot in task storage, inspect fresh evidence, then commit. Full preflight always runs fresh.</desc><style>text{font:16px system-ui,sans-serif;fill:#153047}.box{fill:#edf5ff;stroke:#527fa7;stroke-width:1.5}.arrow{stroke:#527fa7;stroke-width:2}@media(prefers-color-scheme:dark){text{fill:#e7f0fc}.box{fill:#172c42;stroke:#87b9e6}.arrow{stroke:#87b9e6}}</style><rect class="box" x="20" y="10" width="320" height="70" rx="12"/><text x="180" y="40" text-anchor="middle">Edit source</text><text x="180" y="63" text-anchor="middle">Tracked + new files</text><path class="arrow" d="M180 80v28m-5-5 5 5 5-5" fill="none"/><rect class="box" x="20" y="110" width="320" height="90" rx="12"/><text x="180" y="140" text-anchor="middle">Validate isolated snapshot</text><text x="180" y="166" text-anchor="middle">Task storage: caches + test state</text><text x="180" y="189" text-anchor="middle">Source + tool fingerprints</text><path class="arrow" d="M180 200v28m-5-5 5 5 5-5" fill="none"/><rect class="box" x="20" y="230" width="320" height="80" rx="12"/><text x="180" y="260" text-anchor="middle">Inspect report + logs</text><text x="180" y="287" text-anchor="middle">Failure or changed input → rerun</text><path class="arrow" d="M180 310v28m-5-5 5 5 5-5" fill="none"/><rect class="box" x="20" y="340" width="320" height="70" rx="12"/><text x="180" y="369" text-anchor="middle">Review + commit</text><text x="180" y="394" text-anchor="middle">Full preflight runs fresh</text></svg>
+<svg class="orbit-dev-checks" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 510" role="img" aria-labelledby="checks-title checks-desc">
+<title id="checks-title">Review before the fresh full verification gate</title>
+<desc id="checks-desc">Set acceptance, edit using isolated focused checks, resolve independent review, then validate stable source before committing. Source changes require a fresh full gate.</desc>
+<style>.orbit-dev-checks text{font:15px system-ui,sans-serif;fill:#153047;text-anchor:middle}.orbit-dev-checks .box{fill:#edf5ff;stroke:#527fa7;stroke-width:1.5}.orbit-dev-checks .arrow{stroke:#527fa7;stroke-width:2}@media(prefers-color-scheme:dark){.orbit-dev-checks text{fill:#e7f0fc}.orbit-dev-checks .box{fill:#172c42;stroke:#87b9e6}.orbit-dev-checks .arrow{stroke:#87b9e6}}</style>
+<rect class="box" x="20" y="10" width="320" height="80" rx="10"/>
+<text x="180" y="42">Set acceptance + boundaries</text>
+<text x="180" y="69">One intake, observable evidence</text>
+<path class="arrow" d="M180 90v18m-5-5 5 5 5-5" fill="none"/>
+<rect class="box" x="20" y="110" width="320" height="80" rx="10"/>
+<text x="180" y="142">Edit + focused isolated checks</text>
+<text x="180" y="169">Short sockets, cached dependencies</text>
+<path class="arrow" d="M180 190v18m-5-5 5 5 5-5" fill="none"/>
+<rect class="box" x="20" y="210" width="320" height="80" rx="10"/>
+<text x="180" y="242">Independent review + fixes</text>
+<text x="180" y="269">Repeat affected checks and review</text>
+<path class="arrow" d="M180 290v18m-5-5 5 5 5-5" fill="none"/>
+<rect class="box" x="20" y="310" width="320" height="80" rx="10"/>
+<text x="180" y="342">Fresh full preflight</text>
+<text x="180" y="369">Stable source; inspect fingerprint</text>
+<path class="arrow" d="M180 390v18m-5-5 5 5 5-5" fill="none"/>
+<rect class="box" x="20" y="410" width="320" height="80" rx="10"/>
+<text x="180" y="442">Commit + CI</text>
+<text x="180" y="469">Keep every existing quality gate</text>
+</svg>
