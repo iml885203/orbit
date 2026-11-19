@@ -193,7 +193,10 @@ def remote_artifact_metadata(repository, artifact_id):
         try:
             response = subprocess.run(command, capture_output=True, text=True, timeout=10)
         except subprocess.TimeoutExpired as error:
-            raise ValueError('artifact metadata request exceeded its 10s limit') from error
+            if attempt == 2:
+                raise ValueError('artifact metadata request exceeded its 10s limit after 3 attempts') from error
+            time.sleep(0.5 * (attempt + 1))
+            continue
         header, separator, body = response.stdout.partition('\n\n')
         status = re.fullmatch(r'HTTP/\S+ (\d{3})(?: .*)?', header.split('\n', 1)[0])
         if not separator or not status:

@@ -177,7 +177,7 @@ class RemoteArtifactRead(unittest.TestCase):
             self.assertEqual(request.call_count,3)
             self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
 
-    def test_permanent_statuses_timeout_and_missing_status_fail_without_retry(self):
+    def test_permanent_failures_stop_and_timeout_exhaustion_stays_bounded(self):
         responses = [artifact_response({},code) for code in (401,403,429,422)]
         responses += [subprocess.CompletedProcess([],1,stdout='no headers',stderr='HTTP 404'),
                       subprocess.CompletedProcess([],1,stdout='HTTP/2.0 200 Status\n\n{}',stderr='error')]
@@ -188,8 +188,23 @@ class RemoteArtifactRead(unittest.TestCase):
                 sleep.assert_not_called()
         with mock.patch('candidate.subprocess.run',side_effect=subprocess.TimeoutExpired('gh',10)) as request, mock.patch('candidate.time.sleep') as sleep:
             with self.assertRaisesRegex(ValueError,'10s limit'):self.verify()
-            self.assertEqual(request.call_count,1)
-            sleep.assert_not_called()
+            self.assertEqual(request.call_count,3)
+            self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
+
+    def test_mixed_temporary_failures_share_three_attempts(self):
+        responses = [subprocess.TimeoutExpired('gh',10),artifact_response({},503),
+                     subprocess.TimeoutExpired('gh',10),artifact_response(self.metadata)]
+        with mock.patch('candidate.subprocess.run',side_effect=responses) as request, mock.patch('candidate.time.sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'after 3 attempts'):self.verify()
+            self.assertEqual(request.call_count,3)
+            self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
+
+    def test_timeout_then_matching_response_recovers_with_the_same_budget(self):
+        with mock.patch('candidate.subprocess.run',side_effect=[subprocess.TimeoutExpired('gh',10),artifact_response(self.metadata)]) as request, mock.patch('candidate.time.sleep') as sleep:
+            self.assertEqual(self.verify(),self.metadata)
+            self.assertEqual(request.call_count,2)
+            self.assertTrue(all(call.kwargs['timeout']==10 for call in request.call_args_list))
+            sleep.assert_called_once_with(0.5)
 
     def test_malformed_or_untrusted_success_never_becomes_retry_success(self):
         values = ['invalid JSON',[],{},dict(self.metadata,expired=True),dict(self.metadata,workflow_run=None),

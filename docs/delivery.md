@@ -18,10 +18,10 @@ attempts, timings and candidate digests.
 
 Artifact metadata reads use the exact selected ID, with at most three GETs.
 Each request has a 10-second limit; retries wait 0.5 then 1 second, only for
-404 or HTTP 500/502/503/504. A 404 can also hide an inaccessible resource; it is
+404, HTTP 500/502/503/504, or a request timeout. A 404 can also hide an inaccessible resource; it is
 not proof that metadata will become available. Explicit 401/403, rate limits,
-malformed replies and identity/digest/expiry mismatches fail closed. Timeouts
-fail without retry. These are bounded reads, never replacement uploads or
+malformed replies and identity/digest/expiry mismatches fail closed. Timeouts share the same three-attempt budget; it does not restart.
+These are bounded reads, never replacement uploads or
 publication retries, and the same policy applies to the delivery observer.
 
 ![An approved candidate is built once, tested in parallel, then promoted unchanged](./assets/candidate-delivery.svg)
