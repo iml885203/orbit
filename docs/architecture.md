@@ -146,14 +146,17 @@ are installed even when cancellation arrives during launch.
 
 | Wait | Starts | Budget and result |
 |---|---|---|
-| Group termination | Lifecycle cancellation or explicit stop | Existing configured grace, followed by the platform's escalation policy |
-| Final output | Leader has exited and been reaped | Up to two seconds waiting for stdout/stderr EOF |
+| Group termination | Lifecycle cancellation, explicit stop, or leader exit | Existing configured grace, followed by the platform's escalation policy |
+| Final output | Leader reaped and group termination returned | Up to two seconds waiting for stdout/stderr EOF |
 
-Owned pipes preserve final output before exit reporting. If inherited handles
+On natural leader exit, the manager starts the same owned-group grace and
+escalation if termination has not started; otherwise it joins that owner.
+Readers remain open throughout the configured group grace. Once the leader is
+reaped and group termination returns, the final output window starts. If inherited handles
 keep them open past the output window, Orbit closes its readers and reports
-`ErrOutputDrainTimeout` (trailing output may be incomplete). It then finishes
-owned-group cleanup using the existing grace before retiring ownership and
-reporting exit. The output window is separate from grace; it is not a two-second
+`ErrOutputDrainTimeout` (trailing output may be incomplete). Ownership is retired
+and exit reported after both termination and draining return. The output window
+is separate from grace; it is not a two-second
 limit on the complete shutdown. Output callbacks retain their existing
 requirement to return promptly.
 

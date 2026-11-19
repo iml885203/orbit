@@ -35,10 +35,25 @@ func TestGraceProcessHelper(t *testing.T) {
 		if descendantMode == "" {
 			descendantMode = "uncooperative"
 		}
-		cmd.Env = append(cmd.Env, graceHelperMode+"="+descendantMode)
+		readyReader, readyWriter, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer readyReader.Close()
+		defer readyWriter.Close()
+		cmd.ExtraFiles = []*os.File{readyWriter}
+		cmd.Env = append(cmd.Env, graceHelperMode+"="+descendantMode, "ORBIT_PROCESS_READY_FD=1")
+		if os.Getenv("ORBIT_PROCESS_ESCAPE_GROUP") == "1" {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		_ = readyWriter.Close()
+		var ready [1]byte
+		if _, err := readyReader.Read(ready[:]); err != nil {
 			t.Fatal(err)
 		}
 		fmt.Printf("DESCENDANT=%d\n", cmd.Process.Pid)
@@ -46,6 +61,7 @@ func TestGraceProcessHelper(t *testing.T) {
 	}
 	if mode == "uncooperative" {
 		signal.Ignore(syscall.SIGTERM)
+		graceHelperReady()
 		fmt.Println("READY")
 		time.Sleep(time.Hour)
 		return
@@ -53,6 +69,7 @@ func TestGraceProcessHelper(t *testing.T) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM)
 	defer signal.Stop(signals)
+	graceHelperReady()
 	fmt.Println("READY")
 	<-signals
 	if mode == "cleanup_gate" {
@@ -63,7 +80,7 @@ func TestGraceProcessHelper(t *testing.T) {
 		deadline := time.Now().Add(5 * time.Second)
 		for {
 			if _, err := os.Stat(gate); err == nil {
-				return
+				break
 			}
 			if time.Now().After(deadline) {
 				t.Fatal("cleanup gate did not open")
@@ -259,5 +276,13 @@ func TestPreStartCancellationDoesNotLaunchService(t *testing.T) {
 	err := manager.Start(ctx, "pre-cancel", t.TempDir(), graceHelperCommand(), graceHelperEnvironment("uncooperative"), []string{graceHelperCommand()}, 1)
 	if err == nil || ctx.Err() == nil || started || manager.IsRunning("pre-cancel") {
 		t.Fatalf("pre-start cancellation launched service: error=%v started=%v", err, started)
+	}
+}
+
+func graceHelperReady() {
+	if os.Getenv("ORBIT_PROCESS_READY_FD") == "1" {
+		file := os.NewFile(3, "helper-ready")
+		_, _ = file.Write([]byte{1})
+		_ = file.Close()
 	}
 }

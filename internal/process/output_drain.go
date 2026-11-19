@@ -13,7 +13,8 @@ var ErrOutputDrainTimeout = errors.New("process output drain deadline exceeded; 
 
 // Wait must reap the leader concurrently with reading. Its pipe helpers close
 // readers on exit and can discard buffered final output; our owned readers get
-// a separate post-exit budget so an inherited descriptor cannot stall forever.
+// a separate budget after leader reaping and group termination complete, so
+// inherited descriptors cannot consume the group grace or stall EOF forever.
 func waitForProcessOutput(completed <-chan struct{}, stdout, stderr *os.File) error {
 	timer := time.NewTimer(processOutputDrainTimeout)
 	defer timer.Stop()

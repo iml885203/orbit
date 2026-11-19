@@ -193,11 +193,10 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	// Wait for exit in background
 	go func() {
 		waitErr := cmd.Wait()
+		// Descendants may still flush output after their leader exits. Join the
+		// existing group termination owner before starting the final EOF budget.
+		cleanupErr := mp.stopGroup(grace)
 		drainErr := waitForProcessOutput(outputDone, stdoutPipe, stderrPipe)
-		var cleanupErr error
-		if errors.Is(drainErr, ErrOutputDrainTimeout) {
-			cleanupErr = mp.stopGroup(grace)
-		}
 		mp.mu.Lock()
 		mp.Err = errors.Join(waitErr, drainErr, cleanupErr)
 		mp.mu.Unlock()

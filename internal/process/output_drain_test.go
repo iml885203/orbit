@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -98,7 +100,7 @@ func TestExitReportingDrainsOutputPendingAfterLeaderExit(t *testing.T) {
 	}
 }
 
-func TestInheritedOutputDescriptorHasPostExitDrainDeadline(t *testing.T) {
+func TestInheritedOutputDescriptorClosesAfterGroupCleanup(t *testing.T) {
 	manager := NewManager()
 	manager.CancelGrace = 150 * time.Millisecond
 	exited := make(chan graceExit, 1)
@@ -112,20 +114,16 @@ func TestInheritedOutputDescriptorHasPostExitDrainDeadline(t *testing.T) {
 			_ = platform.KillProcessGroup(pgid, syscall.SIGKILL)
 		}
 	}()
-	start := time.Now()
 	if err := manager.Start(ctx, "inherited", t.TempDir(), graceHelperCommand(), graceHelperEnvironment("inherited_output"), nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case exit := <-exited:
-		if !errors.Is(exit.err, ErrOutputDrainTimeout) {
-			t.Fatalf("incomplete output not classified: %v", exit.err)
+		if exit.err != nil {
+			t.Fatalf("group cleanup failed: %v", exit.err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("inherited output descriptor blocked exit reporting")
-	}
-	if elapsed := time.Since(start); elapsed < processOutputDrainTimeout {
-		t.Fatalf("post-exit drain window not honored: %s", elapsed)
 	}
 	if manager.IsRunning("inherited") {
 		t.Fatal("leader remained tracked after drain deadline")
@@ -133,8 +131,9 @@ func TestInheritedOutputDescriptorHasPostExitDrainDeadline(t *testing.T) {
 	assertOwnedProcessGroupGone(t, pgid)
 }
 
-func TestStopReturnsIncompleteOutputErrorAfterBoundedDrain(t *testing.T) {
+func TestStopJoinsInheritedDescriptorGroupCleanup(t *testing.T) {
 	manager := NewManager()
+	manager.CancelGrace = 150 * time.Millisecond
 	ready := make(chan struct{}, 1)
 	exited := make(chan graceExit, 1)
 	var pid, pgid int
@@ -167,13 +166,13 @@ func TestStopReturnsIncompleteOutputErrorAfterBoundedDrain(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if err := manager.Stop("drain-stop", 3*time.Second); !errors.Is(err, ErrOutputDrainTimeout) {
-		t.Fatalf("stop hid incomplete output: %v", err)
+	if err := manager.Stop("drain-stop", 3*time.Second); err != nil {
+		t.Fatalf("stop failed: %v", err)
 	}
 	select {
 	case exit := <-exited:
-		if !errors.Is(exit.err, ErrOutputDrainTimeout) {
-			t.Fatalf("exit hid incomplete output: %v", exit.err)
+		if exit.err != nil {
+			t.Fatalf("exit failed: %v", exit.err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("missing exit result")
@@ -192,9 +191,15 @@ func assertOwnedProcessGroupGone(t *testing.T, pgid int) {
 	}
 }
 
-func TestDrainTimeoutRetainsOwnershipUntilDescendantGraceFinishes(t *testing.T) {
+func TestDescendantGracePrecedesOutputDrainDeadline(t *testing.T) {
 	manager := NewManager()
-	manager.CancelGrace = 3 * time.Second
+	finalOutput := make(chan struct{}, 1)
+	manager.OnOutput = func(_ string, line string) {
+		if line == "FINAL-OUT" {
+			finalOutput <- struct{}{}
+		}
+	}
+	manager.CancelGrace = 6 * time.Second
 	exited := make(chan graceExit, 1)
 	var pgid int
 	manager.OnStarted = func(name string) { _, pgid, _ = manager.GetProcessInfo(name) }
@@ -231,19 +236,94 @@ func TestDrainTimeoutRetainsOwnershipUntilDescendantGraceFinishes(t *testing.T) 
 		t.Fatal("exit reported before group cleanup finished")
 	default:
 	}
+	time.Sleep(3 * time.Second)
 	if err := os.WriteFile(gate, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case exit := <-exited:
-		if !errors.Is(exit.err, ErrOutputDrainTimeout) {
-			t.Fatalf("drain failure lost: %v", exit.err)
+		if exit.err != nil || !containsExactLine(exit.stderr, "FINAL-ERR") {
+			t.Fatalf("graceful descendant output lost: error=%v stderr=%q", exit.err, exit.stderr)
 		}
 	case <-time.After(4 * time.Second):
 		t.Fatal("graceful group cleanup did not finish")
 	}
+	select {
+	case <-finalOutput:
+	default:
+		t.Fatal("final descendant stdout lost")
+	}
 	assertOwnedProcessGroupGone(t, pgid)
 	if manager.IsRunning("cleanup-owner") {
 		t.Fatal("ownership not retired after group cleanup")
+	}
+}
+
+func TestOutputDrainDeadlineClosesOwnedReaders(t *testing.T) {
+	stdout, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdoutWriter.Close()
+	stderr, stderrWriter, err := os.Pipe()
+	if err != nil {
+		stdout.Close()
+		t.Fatal(err)
+	}
+	defer stderrWriter.Close()
+	completed := make(chan struct{}, 2)
+	for _, reader := range []*os.File{stdout, stderr} {
+		go func() { var b [1]byte; _, _ = reader.Read(b[:]); completed <- struct{}{} }()
+	}
+	start := time.Now()
+	if err := waitForProcessOutput(completed, stdout, stderr); !errors.Is(err, ErrOutputDrainTimeout) {
+		t.Fatalf("missing incomplete output classification: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < processOutputDrainTimeout || elapsed > processOutputDrainTimeout+time.Second {
+		t.Fatalf("unexpected EOF budget: %s", elapsed)
+	}
+}
+
+func TestStopSurfacesEscapedDescriptorDrainTimeout(t *testing.T) {
+	manager := NewManager()
+	manager.CancelGrace = 100 * time.Millisecond
+	descendant := make(chan int, 1)
+	exited := make(chan error, 1)
+	manager.OnOutput = func(_ string, line string) {
+		if value, ok := strings.CutPrefix(line, "DESCENDANT="); ok {
+			pid, err := strconv.Atoi(value)
+			if err == nil {
+				descendant <- pid
+			}
+		}
+	}
+	manager.OnExit = func(_ string, _ int, err error, _ []string) { exited <- err }
+	env := graceHelperEnvironment("inherited_output")
+	env["ORBIT_PROCESS_ESCAPE_GROUP"] = "1"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := manager.Start(ctx, "escaped-output", t.TempDir(), graceHelperCommand(), env, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	select {
+	case pid = <-descendant:
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing owned test descendant")
+	}
+	defer func() { _ = platform.KillProcessGroup(pid, syscall.SIGKILL) }()
+	if err := manager.Stop("escaped-output", time.Second); !errors.Is(err, ErrOutputDrainTimeout) {
+		t.Fatalf("stop lost output failure: %v", err)
+	}
+	select {
+	case err := <-exited:
+		if !errors.Is(err, ErrOutputDrainTimeout) {
+			t.Fatalf("exit lost output failure: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing exit")
+	}
+	if !platform.IsProcessAlive(pid) {
+		t.Fatal("manager terminated a process outside its owned group")
 	}
 }

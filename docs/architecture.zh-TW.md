@@ -135,12 +135,14 @@ owner，確保能回收與回報。
 
 | 等待項目 | 起點 | Budget 與結果 |
 |---|---|---|
-| Group 終止 | Lifecycle 取消或明確 stop | 既有設定的 grace，之後沿用平台的升級終止政策 |
-| 最後輸出 | Leader 已退出且已 reaped | 最多兩秒等待 stdout／stderr EOF |
+| Group 終止 | Lifecycle 取消、明確 stop，或 leader 退出 | 既有設定的 grace，之後沿用平台的升級終止政策 |
+| 最後輸出 | Leader 已 reaped，且 group 終止已返回結果 | 最多兩秒等待 stdout／stderr EOF |
 
-自有 pipes 讓 exit 回報前能保留最後輸出。若 inherited handles 超過輸出窗口仍未
+Leader 自然退出時，若 group 終止尚未開始，manager 會透過同一 owner 啟動既有 grace 與升級終止流程，清理仍存活的 owned group；已開始則等待它返回。
+Readers 在設定的 group grace 期間保持開啟；leader 已 reaped 且 group 終止返回後，
+才開始最後輸出窗口。若 inherited handles 超過輸出窗口仍未
 關閉，Orbit 會關閉自己的 readers，回報 `ErrOutputDrainTimeout`（尾端輸出可能
-不完整），並依既有 grace 完成 owned group 清理，才移除 ownership 與回報 exit。
+不完整）。終止與排空都返回結果後，才移除 ownership 與回報 exit。
 輸出窗口與 grace 分開計算，不是整個 shutdown 的兩秒上限。Output callback
 仍需遵守原有的快速返回要求。
 
