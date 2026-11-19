@@ -33,6 +33,25 @@ orbit source remove env-dev
 environments，錯誤會留在 source 狀態；舊 cache versions 保存在 Orbit 管理的
 空間。`sync --all` 會嘗試全部 sources，任一失敗就以失敗結束。
 
+## 先預覽待套用的更新
+
+```sh
+orbit source sync company --no-apply
+orbit env apply --dry-run
+# 確認影響可以接受後再套用：
+orbit env apply
+```
+
+![預覽只讀取最新設定與執行狀態；套用前會重新計算影響。](./assets/environment-apply-preview.zh-TW.svg)
+
+預覽列出會停止、重啟、從設定移除的資源，以及會啟動的新依賴。
+不相關的已停止資源保持停止。Daemon 層級的變更會顯示完整的停止與恢復；
+沒有 daemon 時，會明確回報沒有運行中的環境，不會啟動 daemon、變更選擇或清除待套用狀態。
+
+結果只是當下快照，不是核准憑證。檔案或執行狀態改變後，請重新預覽；
+真正套用時會重新讀取與計算。具名環境可加 `--instance <name>`。
+Agent 使用 [`--dry-run --json`](./agent-cli.zh-TW.md) 取得結構化結果。
+
 ## 選擇、檢查與移除
 
 ```sh

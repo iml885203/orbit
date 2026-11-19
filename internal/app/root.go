@@ -90,12 +90,16 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
-		scheduleAutomaticUpdateCheck()
+		if !environmentApplyPreviewCommand(executed) {
+			scheduleAutomaticUpdateCheck()
+		}
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
 	showUpdateNotification(executed)
-	scheduleAutomaticUpdateCheck()
+	if !environmentApplyPreviewCommand(executed) {
+		scheduleAutomaticUpdateCheck()
+	}
 }
 
 func newRootCommand() *cobra.Command {
@@ -199,7 +203,9 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 	if err := waitForPendingAutomaticUpdate(cmd); err != nil {
 		return err
 	}
-	showAutomaticUpdateDisclosure(cmd)
+	if !environmentApplyPreviewCommand(cmd) {
+		showAutomaticUpdateDisclosure(cmd)
+	}
 	// Apply saved settings (workspace root, SQL mode) to env for all commands
 	s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	s.ApplyToEnv()
@@ -231,6 +237,9 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 }
 
 func prepareRootEnvironment(cmd *cobra.Command) error {
+	if environmentApplyPreviewCommand(cmd) {
+		return prepareEnvironmentApplyPreviewContext(cmd)
+	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	configFlagGiven = explicitConfig
 	cli.StartCommand = startCommand
@@ -582,6 +591,9 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
+	if environmentApplyPreviewCommand(cmd) {
+		return false
+	}
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Name() == "history" || c.Name() == "uninstall" || c.Name() == "skill" {
 			return false

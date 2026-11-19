@@ -39,6 +39,27 @@ preserve the last valid environments and remain visible in source status.
 Previous cache versions remain in Orbit-owned storage. `sync --all` attempts
 every source and fails if any source fails.
 
+## Preview a pending update
+
+```sh
+orbit source sync company --no-apply
+orbit env apply --dry-run
+# Apply when the impact is acceptable:
+orbit env apply
+```
+
+![Preview reads the latest config and running resources; apply recalculates before changing the environment.](./assets/environment-apply-preview.svg)
+
+Preview lists stops, restarts, removed resources and newly required dependency
+starts. Unrelated stopped resources stay stopped. Daemon-level changes show a
+full stop/restore handoff. Without a daemon, it reports no running environment.
+It does not start a daemon, change selection, or clear pending changes.
+
+The result is a snapshot, not an approval token. If files or runtime state
+change, preview again; apply always reads and calculates afresh. Use
+`--instance <name>` to target a named runtime. Agents use
+[`--dry-run --json`](./agent-cli.md) for the structured contract.
+
 ## Select, inspect, and remove
 
 ```sh

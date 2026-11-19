@@ -50,11 +50,15 @@ func envApplyCmd() *cobra.Command {
 		Short: "Apply a previously deferred environment update",
 		RunE:  runEnvApply,
 	}
+	cmd.Flags().Bool("dry-run", false, "preview runtime impact without applying changes")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum duration for the complete JSON operation; in human output, how long to wait for resources to settle (default 5m)")
 	return cmd
 }
 
 func runEnvApply(cmd *cobra.Command, _ []string) error {
+	if environmentApplyPreviewCommand(cmd) {
+		return runEnvironmentApplyPreview(cmd)
+	}
 	if !cli.JSONOutput {
 		result, err := applyEnvironmentChanges(environmentApplyProgress())
 		if err != nil {

@@ -54,8 +54,10 @@ orbit switch example
 
 ### 環境變更正在等待套用
 
-執行 `orbit env apply`。Orbit 會先驗證更新後的環境，再記住目前運行中的
-資源、套用更新並恢復這些資源；原本已停止的資源仍會保持停止。
+先用 `orbit env apply --dry-run` 預覽，再執行 `orbit env apply`。
+流程見[預覽待套用更新](./environment-sources.zh-TW.md#先預覽待套用的更新)。
+Orbit 會先驗證更新後的環境；未變更的資源保持原行程或容器，變更的資源與依賴它的資源會重啟。
+不相關的已停止資源保持停止；新需要的依賴可能啟動。Daemon 層級變更會交接並恢復原本運行中的資源。
 
 若想先下載團隊更新、暫時不中斷目前環境，可使用
 `orbit source sync <name> --no-apply`，準備好後再套用。
