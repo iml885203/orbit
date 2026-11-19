@@ -1502,9 +1502,12 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 		t.Fatalf("recommended actions = %+v", envelope.RecommendedActions)
 	}
 
-	conflictOutput, err := command(ctx, "up", "api", "--infra", "--json").CombinedOutput()
+	conflictCommand := command(ctx, "up", "api", "--infra", "--json")
+	var conflictDiagnostics bytes.Buffer
+	conflictCommand.Stderr = &conflictDiagnostics
+	conflictOutput, err := conflictCommand.Output()
 	if err == nil {
-		t.Fatalf("conflicting selectors succeeded:\n%s", conflictOutput)
+		t.Fatalf("conflicting selectors succeeded:\n%s\nstderr:\n%s", conflictOutput, conflictDiagnostics.String())
 	}
 	conflict := parseE2EEnvelope(t, string(conflictOutput))
 	if conflict.Error == nil || conflict.Error.Code != "invalid_argument" {
@@ -1514,7 +1517,9 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 		t.Fatalf("conflicting selector actions = %+v, want none", conflict.RecommendedActions)
 	}
 
-	unknownOutput, err := command(ctx, "up", "--group", "typo", "--json").CombinedOutput()
+	unknownCommand := command(ctx, "up", "--group", "typo", "--json")
+	unknownCommand.Stderr = os.Stderr
+	unknownOutput, err := unknownCommand.Output()
 	if err == nil {
 		t.Fatalf("unknown group succeeded:\n%s", unknownOutput)
 	}
@@ -1536,7 +1541,9 @@ func TestE2E_UpEmptyEnvironmentCompletesImmediately(t *testing.T) {
 	for _, args := range unknownResourceCommands {
 		t.Run(strings.Join(args[:len(args)-1], "_"), func(t *testing.T) {
 			started := time.Now()
-			output, err := command(ctx, args...).CombinedOutput()
+			jsonCommand := command(ctx, args...)
+			jsonCommand.Stderr = os.Stderr
+			output, err := jsonCommand.Output()
 			if err == nil {
 				t.Fatalf("unknown resource succeeded:\n%s", output)
 			}
@@ -1653,9 +1660,12 @@ func TestE2E_DaemonBackedCommandsChooseSetupOrStartupWithoutTransportDetails(t *
 			}
 
 			jsonArgs := append(append([]string{}, args...), "--json")
-			output, err := command(emptyDir, jsonArgs...).CombinedOutput()
+			jsonCommand := command(emptyDir, jsonArgs...)
+			var diagnostics bytes.Buffer
+			jsonCommand.Stderr = &diagnostics
+			output, err := jsonCommand.Output()
 			if err == nil {
-				t.Fatalf("%v --json unexpectedly succeeded:\n%s", args, output)
+				t.Fatalf("%v --json unexpectedly succeeded:\n%s\nstderr:\n%s", args, output, diagnostics.String())
 			}
 			envelope := parseE2EEnvelope(t, string(output))
 			if envelope.Error == nil ||
