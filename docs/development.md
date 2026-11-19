@@ -98,6 +98,8 @@ the exact base commit and rejects expansion. `make lint` remains the stricter
 all-findings view; existing debt is not a clean lint result.
 
 For candidate verification and restart recovery, see [Verify and resume a delivery](delivery.md).
+For an optional issue timeline covering development, tests and review, see
+[Measure one development issue](development-measurement.md).
 The full gate also checks GitHub workflow semantics with a pinned actionlint.
 
 Release numbering and compatibility promises are documented in

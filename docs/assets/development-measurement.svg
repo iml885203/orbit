@@ -1,0 +1,24 @@
+<svg class="orbit-flow-guide" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 400" role="img" aria-labelledby="flow-guide-title flow-guide-desc">
+  <title id="flow-guide-title">Measure one issue with recorded evidence</title>
+  <desc id="flow-guide-desc">Earlier discussion is unobserved. Agent phase windows, local validation and GitHub job evidence feed one timeline. Parallel phases overlap and are not added to elapsed time.</desc>
+  <style>.orbit-flow-guide text{font:14px system-ui;fill:#17314b;text-anchor:middle}.orbit-flow-guide .box{fill:#eef4fa;stroke:#526579}.orbit-flow-guide .line{stroke:#526579;fill:none}@media(prefers-color-scheme:dark){.orbit-flow-guide text{fill:#e8f1fc}.orbit-flow-guide .box{fill:#1a3049;stroke:#afbed1}.orbit-flow-guide .line{stroke:#afbed1}}</style>
+  <text x="180" y="26">Earlier discussion: unobserved</text>
+  <rect class="box" x="30" y="46" width="300" height="60" rx="8"/>
+  <text x="180" y="71">Start issue implementation intake</text>
+  <text x="180" y="92">Record phases, actors and source</text>
+  <path class="line" d="M180 106v20M60 126h240M60 126v16M180 126v16M300 126v16"/>
+  <rect class="box" x="7" y="142" width="108" height="64" rx="8"/>
+  <text x="61" y="168">Agent phases</text><text x="61" y="190">and review</text>
+  <rect class="box" x="126" y="142" width="108" height="64" rx="8"/>
+  <text x="180" y="168">Validation</text><text x="180" y="190">execution</text>
+  <rect class="box" x="245" y="142" width="108" height="64" rx="8"/>
+  <text x="299" y="168">GitHub jobs</text><text x="299" y="190">and queues</text>
+  <path class="line" d="M61 206v20h238v-20M180 226v20"/>
+  <rect class="box" x="30" y="246" width="300" height="60" rx="8"/>
+  <text x="180" y="271">One issue journal in task storage</text>
+  <text x="180" y="292">Resume and preserve observed history</text>
+  <path class="line" d="M180 306v20"/>
+  <rect class="box" x="30" y="326" width="300" height="60" rx="8"/>
+  <text x="180" y="351">Perfetto + SVG + interval summary</text>
+  <text x="180" y="372">Elapsed windows ≠ active work</text>
+</svg>

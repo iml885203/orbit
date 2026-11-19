@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+import datetime
 import hashlib
 import json
 import os
@@ -131,6 +132,7 @@ def stop_process(process):
 
 def run_stage(command, cwd, env, log, timeout):
     started = time.monotonic()
+    started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     with log.open("wb") as output:
         process = subprocess.Popen(command, cwd=cwd, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, start_new_session=os.name != "nt")
@@ -140,6 +142,7 @@ def run_stage(command, cwd, env, log, timeout):
             stop_process(process)
             raise
     return {"command": command, "seconds": round(time.monotonic() - started, 3),
+            "started_at": started_at, "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "exit_code": code, "log": log.name}
 
 
@@ -199,6 +202,7 @@ def validate_workspace(source, workspace):
 
 
 def check(source, workspace, mode, packages, jobs, timeout, reuse):
+    invoked_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     source, workspace = validate_workspace(source, workspace)
     if os.name == "nt" and mode != "go":
         raise ValueError("Windows Beta supports Go checks here; use WSL or CI for full/UI/docs checks")
@@ -236,6 +240,7 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
         report = json.loads(report_path.read_text())
         if report.get("status") == "passed" and report.get("inputs") == inputs:
             report["reused"] = True
+            report["invoked_at"] = invoked_at
             return report
     run = workspace / "runs" / uuid.uuid4().hex
     snapshot = run / "source"
@@ -245,7 +250,8 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
     release_tags = run / "release-tags.txt"
     release_tags.write_text(tags)
     report = {"schema": SCHEMA, "inputs": inputs, "status": "running", "stages": [], "run": run.name,
-              "reused": False, "commit_authority": False}
+              "reused": False, "commit_authority": False, "invoked_at": invoked_at,
+              "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     write_json(report_path, report)
     started = time.monotonic()
     try:
@@ -294,6 +300,7 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
     finally:
         report["commit_authority"] = mode == "full" and report["status"] == "passed"
         report["seconds"] = round(time.monotonic() - started, 3)
+        report["completed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         write_json(report_path, report)
         write_json(run / "report.json", report)
     return report

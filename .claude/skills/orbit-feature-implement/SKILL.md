@@ -68,6 +68,13 @@ Create a focused Conventional Commit that references the issue only after the Co
 
 ## Delivery checkpoints
 
+When measuring an issue, start the optional [phase journal](../../../docs/development-measurement.md)
+at implementation intake and retain each span ID. Record independent reviewers
+on separate tracks, explicit waits and rework reasons, and import validation /
+delivery evidence after state changes. Resume the same journal after a restart;
+never reconstruct earlier discussion or missing review times as observed work.
+The resulting windows are not active coding time and do not replace any gate.
+
 Use the repository-owned [delivery observer](../../../docs/delivery.md) after
 state changes and before resuming after a timeout or restart. Supply exact
 PR/run/tag selectors and the allocated task workspace. Read live job results,
