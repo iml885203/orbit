@@ -75,6 +75,14 @@ sys.exit(0 if Path('subject.txt').read_text()=='pass' else 2)
             dev_check.check(self.source, self.workspace, "full", [], 1, 30, True)
         self.assertFalse(self.proof.exists())
 
+    def test_enabling_live_tests_invalidates_reuse_without_exposing_configuration(self):
+        self.run_check()
+        with mock.patch.dict(os.environ, {"ORBIT_D1_LIVE": "1", "ORBIT_E2E_SQL": "private-target-token"}):
+            result = self.run_check(reuse=True)
+        self.assertFalse(result["reused"])
+        self.assertEqual(self.proof.read_text().count("run"), 2)
+        self.assertNotIn("private-target-token", __import__('json').dumps(result))
+
     def test_changed_tool_invalidates_success(self):
         self.run_check()
         self.executable("go", "print('go version go1.26.12 fixture')")
@@ -207,6 +215,15 @@ time.sleep(300)
                     os.kill(int(self.proof.read_text()), signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+
+    def test_permission_error_distinguishes_zombies_from_running_group(self):
+        with mock.patch("dev_check.os.killpg", side_effect=PermissionError):
+            with mock.patch("dev_check.subprocess.check_output", return_value="123 Z\n456 S\n"):
+                self.assertFalse(dev_check.process_group_running(123))
+                self.assertTrue(dev_check.process_group_running(456))
+            with mock.patch("dev_check.subprocess.check_output", side_effect=subprocess.CalledProcessError(1, 'ps')):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    dev_check.process_group_running(123)
 
     def test_timeout_stops_owned_command(self):
         with self.assertRaises(subprocess.TimeoutExpired):

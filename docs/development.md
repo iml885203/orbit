@@ -68,7 +68,7 @@ Use `python3 scripts/dev_check.py --help` for modes, timeouts and JSON reports.
 `go`, `ui` and `docs` are edit-loop checks. `full` runs the existing complete
 `make preflight`; run it fresh before **every commit**, after the last edit.
 Full checks never reuse a previous success. Narrow checks accept `--reuse`
-only when source, Git tags, tools, options and relevant environment match.
+only when source, Git tags, tools, options and inherited environment match.
 Changes during a run invalidate its success. This is local evidence, not
 release approval or a substitute for CI.
 

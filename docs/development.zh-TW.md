@@ -60,7 +60,7 @@ make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
 模式與參數以 `python3 scripts/dev_check.py --help` 為準。
 `go`、`ui`、`docs` 用於編輯迴圈；`full` 執行完整 `make preflight`，每次
 commit 前、最後一次修改後都必須重新跑。完整檢查不能重用；快速檢查只有在
-來源、Git tags、工具、選項與相關環境相符時，才可用 `--reuse` 重用成功結果。
+來源、Git tags、工具、選項與繼承環境相符時，才可用 `--reuse` 重用成功結果。
 執行期間來源改變會使結果失效。這是本機證據，發布仍須通過 CI 與交付門檻。
 
 報告與各階段 log 留在 workspace 的 `reports/` 與 `runs/`。

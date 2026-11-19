@@ -91,26 +91,41 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def process_group_running(group):
+    try:
+        os.killpg(group, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        states = subprocess.check_output(["ps", "-axo", "pgid=,stat="], text=True, timeout=5)
+        return any(parts[0] == str(group) and not parts[1].startswith("Z")
+                   for line in states.splitlines() if len(parts := line.split()) >= 2)
+
+
 def stop_process(process):
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True)
     else:
         try:
             os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
+            if process_group_running(process.pid):
+                raise
+            process.wait(timeout=5)
             return
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             process.poll()
-            try:
-                os.killpg(process.pid, 0)
-            except ProcessLookupError:
+            if not process_group_running(process.pid):
+                process.wait(timeout=5)
                 return
             time.sleep(0.05)
         try:
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        except (ProcessLookupError, PermissionError):
+            if process_group_running(process.pid):
+                raise
     process.wait(timeout=5)
 
 
@@ -205,11 +220,10 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
         tools["go"] = tool_identity("go", ["version"])
     if mode != "go":
         tools.update(node=tool_identity("node", ["--version"]), pnpm=tool_identity("pnpm", ["--version"]))
-    relevant = {key: value for key, value in os.environ.items()
-                if key.startswith(("GO", "CGO", "NODE", "PNPM", "npm_config_")) or key in ("CI", "TZ", "LANG", "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")}
+    inherited = dict(os.environ)
     inputs = {"source": identity, "commit": git(source, "rev-parse", "HEAD").decode().strip(),
               "tags": hashlib.sha256(tags.encode()).hexdigest(), "tools": tools,
-              "environment": hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest(),
+              "environment": hashlib.sha256(json.dumps(inherited, sort_keys=True).encode()).hexdigest(),
               "mode": mode, "packages": packages, "jobs": jobs, "timeout": timeout}
     key = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     report_path = workspace / "reports" / (key + ".json")
