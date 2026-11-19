@@ -120,6 +120,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(downCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(inspectCmd())
+	rootCmd.AddCommand(operationCmd())
 	rootCmd.AddCommand(restartCmd())
 	rootCmd.AddCommand(logsCmd())
 	rootCmd.AddCommand(openCmd())
@@ -233,6 +234,9 @@ func prepareRootEnvironment(cmd *cobra.Command) error {
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	configFlagGiven = explicitConfig
 	cli.StartCommand = startCommand
+	if cmd.Name() == "operation" && cmd.Parent() == cmd.Root() {
+		return nil
+	}
 	configContextKind = ""
 	if daemonContextKind != "" {
 		configContextKind = daemonContextKind
@@ -331,11 +335,13 @@ func isDaemonRestartCommand(cmd *cobra.Command) bool {
 	return cmd.Name() == "restart" && cmd.Parent() != nil && cmd.Parent().Name() == "daemon"
 }
 
-// contextualizeDaemonUnavailable keeps every daemon-backed command on the
-// same recovery path. Before setup the user must initialize; with a selected
-// project or environment, starting it is the next step. The underlying socket
-// error is an implementation detail on both paths.
+// Unavailable diagnostic history cannot be recovered by provisioning a runtime.
+// Other daemon-backed commands retain the setup/start recovery path.
 func contextualizeDaemonUnavailable(err error) error {
+	var query operationQueryError
+	if errors.As(err, &query) {
+		return err
+	}
 	if !errors.Is(err, daemon.ErrDaemonUnreachable) {
 		return err
 	}
@@ -558,7 +564,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
+	case "init", "switch", "status", "inspect", "operation", "doctor", "down", "logs", "open",
 		"version", "update", "uninstall", "skill", "history", "settings", "trace", "tracing", "instance", "source":
 		return false
 	case "env":

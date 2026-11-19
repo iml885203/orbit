@@ -96,11 +96,22 @@ dispatch 成功後，仍要等待 readiness。
 JSON 模式的進度只寫 stderr。Human 模式在 pipe 或無色彩輸出時，也會顯示 phase、
 resource 狀態變化與 elapsed heartbeat。`orbit down --timeout 30s` 限制觀測時間。
 逾時或 Ctrl-C 不會撤銷 daemon 已接受的工作：保留 operation ID，先執行
-`orbit status --json` 再決定是否修改。舊 daemon 沒有 operation ID 時，會退回
+`orbit operation <id> --json` 再決定是否修改。沒有 ID 時先讀 `orbit status --json`。
+舊 daemon 沒有 operation ID 時，會退回
 舊的狀態等待，並明確提示無法取得確定的 operation 結果。
 
 Human `up --timeout` 沿用 readiness budget，包含失敗 logs 取證。準備階段仍可
 取消。JSON `up` 與 `env apply` 沿用包含準備階段的整個指令 budget。
+
+查詢時保留原指令的 `--instance` 與明確指定的 `--config` flags。
+`orbit operation <id> --json` 只讀取紀錄，不會啟動 daemon、建立 instance、
+載入目前的專案 config、套用環境變更或恢復更新交易。Config 已變更或刪除，
+仍可讀取原本的 context。
+
+查詢成功回傳 `ok: true` 並以零結束，即使 `data.state` 是 `failed`。
+原工作的結果請看 state、`error`、`code`、`cleanup` 與 `warnings`。
+查詢失敗才回 `ok: false` 與非零結束；紀錄不可用不能證明成功。Human 輸出也會
+區分兩者；accepted／running 結果會建議再次查詢同一個 ID。
 
 Daemon 的 `GET /api/operations/{id}` 回傳 `kind`、`state`（`accepted`、
 `running`、`succeeded`、`failed`）、`phase`、目標 resources、`epoch`、

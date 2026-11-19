@@ -193,8 +193,10 @@ sudo chown -R $(whoami) ~/.orbit
 
 ### A lifecycle command is waiting or observation ended
 
-Read the printed operation ID and phase, then run `orbit status --json` from
-the same project and instance. A slow stop can still be using its configured
+Read the printed operation ID and phase, then run `orbit operation <id> --json`
+with the same instance and explicit config flags. Without an ID, use
+`orbit status --json`. A successful lookup can report a failed operation; inspect
+`data.state` and cleanup warnings. History disappears when the daemon restarts. A slow stop can still be using its configured
 shutdown grace period. Piped output includes elapsed heartbeats, so silence
 does not have to hide an accepted operation.
 
