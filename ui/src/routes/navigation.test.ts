@@ -24,6 +24,9 @@ describe('primary navigation', () => {
       spansPerMin: 0,
       lastReceivedUnixMs: 0,
       spansDropped: 0,
+      retainedBytes: 0,
+      byteLimit: 64 << 20,
+      tracesEvicted: 0,
     }
     expect(tracingItem?.hidden?.()).toBe(true)
 
@@ -51,6 +54,9 @@ describe('primary navigation', () => {
       spansPerMin: 0,
       lastReceivedUnixMs: 0,
       spansDropped: 0,
+      retainedBytes: 0,
+      byteLimit: 64 << 20,
+      tracesEvicted: 0,
     }
     expect(tracingItem?.hidden?.()).toBe(false)
   })

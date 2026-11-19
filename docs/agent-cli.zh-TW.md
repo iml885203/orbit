@@ -350,6 +350,11 @@ Tracing 預設開啟；只有在使用中的 env 明確設 `tracing.enabled: fal
 （見 [tracing.zh-TW.md](tracing.zh-TW.md)）。用 `orbit tracing status --json` 查
 receiver 的即時狀態。
 
+`data.retainedBytes` 與 `data.byteLimit` 表示 trace 保留資料的估計容量；
+`data.tracesEvicted` 記錄整條 trace 淘汰數。`data.spansDropped` 記錄被拒絕的
+span，不包含被拒絕的 HTTP export 或已淘汰的 trace。輸入與保留上限見
+[tracing.zh-TW.md](tracing.zh-TW.md)。
+
 ```bash
 orbit trace --json             # 近期 trace；--limit N 控制筆數
 orbit trace --search item/1 --json   # span 名稱或 attribute 值含該文字的 trace

@@ -170,11 +170,7 @@ func (s *Server) traceLogs(traceID string, services []string) []TraceLogLine {
 	}
 	lines := []TraceLogLine{}
 	for _, svc := range services {
-		buf := s.app.Logs.GetBuffer(svc)
-		if buf == nil {
-			continue
-		}
-		for _, line := range buf.Lines() {
+		for _, line := range s.app.Logs.GetLines(svc) {
 			if re.MatchString(line) {
 				lines = append(lines, TraceLogLine{Service: svc, Line: line})
 			}

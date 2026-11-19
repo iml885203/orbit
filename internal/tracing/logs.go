@@ -3,6 +3,7 @@ package tracing
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -71,16 +72,32 @@ func (l *LogStore) Ingest(records []LogRecord) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, rec := range records {
-		rec.Body = truncateLogValue(rec.Body)
-		for k, v := range rec.Attributes {
-			rec.Attributes[k] = truncateLogValue(v)
+		rec.Body = strings.Clone(truncateLogValue(rec.Body))
+		rec.SeverityText = strings.Clone(truncateLogValue(rec.SeverityText))
+		rec.Scope = strings.Clone(truncateLogValue(rec.Scope))
+		if len(rec.Service) > maxTraceIdentityBytes || len(rec.TraceID) > maxTraceIdentityBytes || len(rec.SpanID) > maxTraceIdentityBytes {
+			continue
 		}
+		rec.Service = strings.Clone(rec.Service)
+		rec.TraceID = strings.Clone(rec.TraceID)
+		rec.SpanID = strings.Clone(rec.SpanID)
+		if len(rec.Attributes) > maxLogAttributes {
+			rec.Attributes = nil
+		}
+		attrs := make(map[string]string, len(rec.Attributes))
+		for k, v := range rec.Attributes {
+			if len(k) > maxLogValueBytes {
+				continue
+			}
+			attrs[strings.Clone(k)] = strings.Clone(truncateLogValue(v))
+		}
+		rec.Attributes = attrs
 		l.lastSeq++
 		rec.Seq = l.lastSeq
 		l.records = append(l.records, rec)
 		l.bytes += logRecordBytes(&rec)
+		l.evictLocked()
 	}
-	l.evictLocked()
 }
 
 // evictLocked drops the oldest records until both ceilings hold. Evicted
@@ -132,7 +149,9 @@ func (l *LogStore) Query(limit int, f LogFilter) LogPage {
 			page.HasMore = true
 			return false
 		}
-		page.Logs = append(page.Logs, *r)
+		copy := *r
+		copy.Attributes = maps.Clone(r.Attributes)
+		page.Logs = append(page.Logs, copy)
 		return true
 	}
 	if f.HasSince {

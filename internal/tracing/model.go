@@ -81,10 +81,11 @@ type TracingStatus struct {
 	TotalSpans         int64  `json:"totalSpans"`
 	SpansPerMin        int    `json:"spansPerMin"`
 	LastReceivedUnixMs int64  `json:"lastReceivedUnixMs"` // 0 = never
-	// SpansDropped counts spans rejected by the ingest ceilings (oversized
-	// body, per-trace span cap, or attribute-bytes cap). Non-zero means the
-	// store is shedding load, not that nothing is arriving.
-	SpansDropped int64 `json:"spansDropped"`
+	// SpansDropped excludes rejected exports (413) and whole-trace evictions.
+	SpansDropped  int64 `json:"spansDropped"`
+	RetainedBytes int   `json:"retainedBytes"`
+	ByteLimit     int   `json:"byteLimit"`
+	TracesEvicted int64 `json:"tracesEvicted"`
 }
 
 // LogRecord is one OTLP log record. Seq is assigned by Orbit on ingest and

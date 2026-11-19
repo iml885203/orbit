@@ -93,11 +93,12 @@ export interface TracingStatus {
   spansPerMin: number /* int */;
   lastReceivedUnixMs: number /* int64 */; // 0 = never
   /**
-   * SpansDropped counts spans rejected by the ingest ceilings (oversized
-   * body, per-trace span cap, or attribute-bytes cap). Non-zero means the
-   * store is shedding load, not that nothing is arriving.
+   * SpansDropped excludes rejected exports (413) and whole-trace evictions.
    */
   spansDropped: number /* int64 */;
+  retainedBytes: number /* int */;
+  byteLimit: number /* int */;
+  tracesEvicted: number /* int64 */;
 }
 /**
  * LogRecord is one OTLP log record. Seq is assigned by Orbit on ingest and

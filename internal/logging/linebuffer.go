@@ -25,19 +25,17 @@ type LineBuffer struct {
 // Lines are passed WITHOUT the trailing newline; a trailing \r (CRLF) is
 // also stripped. A nil emit is treated as discard.
 func NewLineBuffer(emit func(line string)) *LineBuffer {
-	if emit == nil {
-		emit = func(string) {}
-	}
-	return &LineBuffer{emit: emit}
+	return NewBoundedLineBuffer(maxLogLineBytes, emit)
 }
 
 // NewBoundedLineBuffer emits oversized lines in UTF-8-safe chunks with an
 // explicit continuation marker. maxBytes bounds chunk content (at least one
 // UTF-8 rune); the marker is additional. Flush still emits trailing content.
 func NewBoundedLineBuffer(maxBytes int, emit func(string)) *LineBuffer {
-	buffer := NewLineBuffer(emit)
-	buffer.maxBytes = max(maxBytes, utf8.UTFMax)
-	return buffer
+	if emit == nil {
+		emit = func(string) {}
+	}
+	return &LineBuffer{emit: emit, maxBytes: max(maxBytes, utf8.UTFMax)}
 }
 
 const continuedLineMarker = " [line continues]"
