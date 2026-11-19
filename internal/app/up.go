@@ -84,7 +84,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	printProjectEnvironmentContext()
 
-	client, err := daemon.EnsureDaemonWithContext(configFile, groups, environmentContextKind(configFile))
+	client, err := daemon.EnsureDaemonWithOperationContext(operationContext, configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
@@ -120,7 +120,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		printUpSuccessNextStep(nil, nil)
 		return nil
 	}
-	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
+	return waitForUpHealthyContext(cmd.Context(), client, resp.AffectedResources, upCompletionMessage(args))
 }
 
 func upCompletionMessage(args []string) string {
@@ -371,6 +371,9 @@ func pollLoopContext(
 				continue
 			}
 			done, err := onTick(now, status)
+			if ctx.Err() != nil {
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -415,6 +418,12 @@ type waitOptions struct {
 // wrapping; the caller controls filter / commit / done / terminal
 // condition through waitOptions.
 func runProgressWait(client *daemon.Client, opts waitOptions) error {
+	ctx, stopSignals := lifecycleSignalContext(context.Background())
+	defer stopSignals()
+	return runProgressWaitContext(ctx, client, opts)
+}
+
+func runProgressWaitContext(ctx context.Context, client *daemon.Client, opts waitOptions) error {
 	var renderer progressRenderer
 	if isTerminal() {
 		renderer = newLiveRenderer(os.Stdout)
@@ -426,7 +435,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 	done := make(map[string]bool)
 	frame := 0
 
-	err := pollLoop(client, timeout, opts.waitingFor,
+	err := pollLoopContext(ctx, client, timeout, opts.waitingFor,
 		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
 			frame++
 			watched := make([]daemon.ResourceStatus, 0, len(status.Resources))
@@ -506,9 +515,18 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 }
 
 func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string) error {
+	return waitForUpHealthyContext(context.Background(), client, serviceNames, completionMessage)
+}
+
+func waitForUpHealthyContext(parent context.Context, client *daemon.Client, serviceNames []string, completionMessage string) error {
+	ctx, stopSignals := lifecycleSignalContext(parent)
+	defer stopSignals()
+	ctx, cancel := lifecycleOperationContext(ctx)
+	defer cancel()
+	client = client.WithContext(ctx)
 	watch := watchSet(serviceNames)
 	announced := map[string]bool{}
-	return runProgressWait(client, waitOptions{
+	return runProgressWaitContext(ctx, client, waitOptions{
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,

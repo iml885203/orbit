@@ -65,7 +65,7 @@ func TestNonTerminalStopWaitReportsStoppingBeforeCompletion(t *testing.T) {
 
 func TestDownExposesWaitTimeout(t *testing.T) {
 	flag := downCmd().Flags().Lookup("timeout")
-	if flag == nil || flag.DefValue != "0s" {
+	if flag == nil || flag.DefValue != "0s" || strings.Contains(flag.Usage, "daemon") {
 		t.Fatalf("down timeout flag=%v", flag)
 	}
 }
@@ -342,7 +342,7 @@ func TestHumanDownCancellationDetachesWithoutSuccess(t *testing.T) {
 }
 
 func TestRootLifecycleDeadlineBoundsDaemonPrecheck(t *testing.T) {
-	for _, command := range []string{"down", "restart"} {
+	for _, command := range []string{"down", "restart", "up", "env apply", "human-up"} {
 		for _, blocked := range []string{"/api/health", "/api/status"} {
 			t.Run(command+blocked, func(t *testing.T) {
 				previousFlag, previousKind, previousInstance, previousTimeout := configFlagGiven, configContextKind, instanceName, timeout
@@ -360,7 +360,7 @@ func TestRootLifecycleDeadlineBoundsDaemonPrecheck(t *testing.T) {
 				}
 				var mutations atomic.Int32
 				serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == http.MethodPost && (r.URL.Path == "/api/down" || strings.HasPrefix(r.URL.Path, "/api/restart/")) {
+					if r.Method == http.MethodPost && r.URL.Path != "/api/history/cli-event" {
 						mutations.Add(1)
 					}
 					if r.URL.Path == blocked {
@@ -383,13 +383,28 @@ func TestRootLifecycleDeadlineBoundsDaemonPrecheck(t *testing.T) {
 				defer restore()
 				path := configFile
 				root := newRootCommand()
-				args := []string{"--config", path, "--json", command, "--timeout", "150ms"}
+				args := []string{"--config", path}
+				if command != "human-up" {
+					args = append(args, "--json")
+				}
+				if command == "human-up" {
+					args = append(args, "up")
+				} else {
+					args = append(args, strings.Fields(command)...)
+				}
+				args = append(args, "--timeout", "150ms")
 				if command == "restart" {
 					args = append(args, "api")
 				}
 				root.SetArgs(args)
 				started := time.Now()
-				err := root.ExecuteContext(t.Context())
+				ctx := t.Context()
+				if command == "human-up" {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
+					defer cancel()
+				}
+				err := root.ExecuteContext(ctx)
 				if !errors.Is(err, cli.ErrTimeout) {
 					t.Fatalf("error=%v", err)
 				}
@@ -432,5 +447,72 @@ func TestLifecycleCleanupWarningsPreserveTerminalResult(t *testing.T) {
 				t.Fatalf("success overclaimed cleanup: %s", out)
 			}
 		})
+	}
+}
+
+func TestHumanUpFailureEvidenceRespectsObservationContext(t *testing.T) {
+	for _, dependency := range []bool{false, true} {
+		for _, canceled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dependency=%t/canceled=%t", dependency, canceled), func(t *testing.T) {
+				prepareLifecycleProgressTest(t)
+				previousTimeout := timeout
+				t.Cleanup(func() { timeout = previousTimeout })
+				timeout = 150 * time.Millisecond
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				entered := make(chan struct{})
+				requestCanceled := make(chan struct{})
+				serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/api/status":
+						resources := []daemon.ResourceStatus{{Name: "api", State: "degraded", StateReason: "controlled failure"}}
+						if dependency {
+							resources = []daemon.ResourceStatus{{Name: "api", State: "pending", PendingDependencies: []string{"db"}}, {Name: "db", State: "degraded", StateReason: "controlled failure"}}
+						}
+						daemon.WriteJSON(w, http.StatusOK, daemon.StatusResponse{Resources: resources})
+					case "/api/logs/api", "/api/logs/db":
+						close(entered)
+						select {
+						case <-r.Context().Done():
+							close(requestCanceled)
+						case <-time.After(500 * time.Millisecond):
+							daemon.WriteJSON(w, http.StatusOK, daemon.LogsResponse{})
+						}
+					default:
+						http.NotFound(w, r)
+					}
+				})
+				if canceled {
+					go func() {
+						select {
+						case <-entered:
+							cancel()
+						case <-ctx.Done():
+						}
+					}()
+				}
+				started := time.Now()
+				var err error
+				if canceled {
+					err = waitForUpHealthyContext(ctx, daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
+				} else {
+					err = waitForUpHealthy(daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
+				}
+				if elapsed := time.Since(started); elapsed > 350*time.Millisecond {
+					t.Fatalf("failure evidence blocked observation: %s", elapsed)
+				}
+				if canceled && err != nil {
+					t.Fatalf("cancellation did not detach: %v", err)
+				}
+				if !canceled && !errors.Is(err, cli.ErrTimeout) {
+					t.Fatalf("deadline returned service error: %v", err)
+				}
+				select {
+				case <-requestCanceled:
+				case <-time.After(time.Second):
+					t.Fatal("evidence HTTP request was not canceled")
+				}
+			})
+		}
 	}
 }

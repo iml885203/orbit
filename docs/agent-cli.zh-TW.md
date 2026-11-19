@@ -99,6 +99,9 @@ resource 狀態變化與 elapsed heartbeat。`orbit down --timeout 30s` 限制�
 `orbit status --json` 再決定是否修改。舊 daemon 沒有 operation ID 時，會退回
 舊的狀態等待，並明確提示無法取得確定的 operation 結果。
 
+Human `up --timeout` 沿用 readiness budget，包含失敗 logs 取證。準備階段仍可
+取消。JSON `up` 與 `env apply` 沿用包含準備階段的整個指令 budget。
+
 Daemon 的 `GET /api/operations/{id}` 回傳 `kind`、`state`（`accepted`、
 `running`、`succeeded`、`failed`）、`phase`、目標 resources、`epoch`、
 `generation`、`config_path`、可省略的 `instance`，以及 `accepted_at`、

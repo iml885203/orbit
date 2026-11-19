@@ -265,7 +265,7 @@ func prepareRootEnvironment(cmd *cobra.Command) error {
 func guardRootDaemon(cmd *cobra.Command, scoped bool) error {
 	requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
 	requiresReconcile := commandRequiresReconciledDaemon(cmd)
-	if !requiresMatch && !requiresReconcile {
+	if !requiresMatch && !requiresReconcile && !scoped {
 		return nil
 	}
 	client := daemon.NewClient(daemon.DefaultSocketPath())
@@ -274,12 +274,12 @@ func guardRootDaemon(cmd *cobra.Command, scoped bool) error {
 		defer cancel()
 		client = client.WithContext(requestContext)
 	}
-	if client.Health() != nil {
-		return nil
+	if err := client.Health(); err != nil {
+		return rootDaemonPrecheckError(cmd, scoped, err)
 	}
 	status, err := client.Status()
 	if err != nil {
-		return nil
+		return rootDaemonPrecheckError(cmd, scoped, err)
 	}
 	if requiresMatch {
 		if err := guardRootDaemonConfig(status); err != nil {
@@ -297,6 +297,19 @@ func guardRootDaemon(cmd *cobra.Command, scoped bool) error {
 		return nil
 	}
 	return checkCurrentDaemonVersion(version)
+}
+
+func rootDaemonPrecheckError(cmd *cobra.Command, scoped bool, err error) error {
+	if !scoped {
+		return nil
+	}
+	if cmd.Context().Err() != nil {
+		return lifecycleOperationError(cmd.Context(), err, false)
+	}
+	if errors.Is(err, daemon.ErrDaemonTimeout) {
+		return fmt.Errorf("checking daemon before lifecycle request: %w", err)
+	}
+	return nil
 }
 
 func guardRootDaemonConfig(status *daemon.StatusResponse) error {
@@ -780,7 +793,7 @@ Orbit remains ready for the next 'orbit up'.`,
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "stop specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "stop only infrastructure containers")
-	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum time to observe stopping (default 5m); accepted daemon work continues after detaching")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum time to observe stopping (default 5m); accepted work continues after detaching")
 	return cmd
 }
 

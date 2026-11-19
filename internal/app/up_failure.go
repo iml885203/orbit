@@ -81,7 +81,7 @@ func recentLogTailWithProgress(progress *lifecycleProgress, client *daemon.Clien
 		return nil
 	}
 	progress.Phase(phaseCollectingFailureEvidence)
-	response, err := client.Logs(name, maxTailLines)
+	response, err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Logs(name, maxTailLines)
 	if err != nil || response == nil {
 		return nil
 	}
@@ -97,7 +97,7 @@ func recentLogEvidenceWithProgress(progress *lifecycleProgress, client *daemon.C
 		return ""
 	}
 	progress.Phase(phaseCollectingFailureEvidence)
-	response, err := client.Logs(name, 20)
+	response, err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Logs(name, 20)
 	if err != nil || response == nil {
 		return ""
 	}

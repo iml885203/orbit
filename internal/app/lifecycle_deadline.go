@@ -62,11 +62,17 @@ func lifecycleCommandHasBudget(cmd *cobra.Command) bool {
 }
 
 func prepareLifecycleCommandContext(cmd *cobra.Command) bool {
-	if !lifecycleCommandHasBudget(cmd) {
+	hasBudget := lifecycleCommandHasBudget(cmd)
+	humanUp := cmd.Name() == "up" && cmd.Parent() == cmd.Root()
+	humanApply := cmd.Name() == "apply" && cmd.Parent() != nil && cmd.Parent().Name() == "env"
+	if !hasBudget && !humanUp && !humanApply {
 		return false
 	}
 	ctx, stopSignals := lifecycleSignalContext(cmd.Context())
-	ctx, cancelDeadline := lifecycleOperationContext(ctx)
+	var cancelDeadline context.CancelFunc = func() {}
+	if hasBudget {
+		ctx, cancelDeadline = lifecycleOperationContext(ctx)
+	}
 	scope := &lifecycleCommandScope{started: time.Now(), cancelDeadline: cancelDeadline, stopSignals: stopSignals}
 	ctx = context.WithValue(ctx, lifecycleCommandScopeKey{}, scope)
 	cmd.Root().SetContext(ctx)

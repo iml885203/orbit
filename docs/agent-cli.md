@@ -117,6 +117,10 @@ accepted daemon work: preserve the operation ID and run `orbit status --json`
 before another mutation. An older daemon without operation IDs uses the legacy
 state wait and explicitly reports that a definitive operation result is absent.
 
+Human `up --timeout` retains its readiness budget, including failure-log
+collection. Preparation remains cancellable. JSON `up` and `env apply` retain
+their whole-command budget, including preparation.
+
 The daemon's `GET /api/operations/{id}` returns the recorded `kind`, `state`
 (`accepted`, `running`, `succeeded`, `failed`), `phase`, target resources,
 `epoch`, `generation`, `config_path`, optional `instance`, and timestamps
