@@ -58,7 +58,7 @@ func TestE2E_DotnetServiceStartsInBuildAndWatchModes(t *testing.T) {
 	registerE2ENamespace(t, namespace)
 	builtPort, watchedPort := reserveLocalPort(t), reserveLocalPort(t)
 	dashboardPort := reserveLocalPort(t)
-	home, err := os.MkdirTemp("/tmp", "orb-dotnet-")
+	home, err := os.MkdirTemp(os.TempDir(), "orb-dotnet-")
 	if err != nil {
 		t.Fatal(err)
 	}

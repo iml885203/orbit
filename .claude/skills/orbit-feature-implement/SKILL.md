@@ -43,7 +43,7 @@ Do not weaken, skip, or delete meaningful tests merely to make the gate pass.
 Before every commit and after every material review or CI fix:
 
 1. Walk the complete Definition of Done checklist; do not reproduce or shorten it in this skill.
-2. Run `make preflight`, plus `make lint` when the touched area warrants the stricter lint pass.
+2. Run `make preflight` fresh on the final source. Prefer `make check-full CHECK_WORKSPACE=PATH` with the task workspace allocated under the repository storage policy; it runs the same full gate in an isolated snapshot and retains fingerprinted logs. Narrow/reused checks do not authorize a commit. See [development.md](../../../docs/development.md#isolated-checks) for recovery and lint-baseline reductions. Run `make lint-new`, plus `make lint` when the touched area warrants the stricter lint pass.
 3. Inspect the final diff for secrets, debug artifacts, accidental user changes, and anything outside the issue's authorized scope.
 
 If the gate fails, fix the cause and run the whole gate again before committing.

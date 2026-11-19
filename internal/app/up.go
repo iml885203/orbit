@@ -105,7 +105,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		Groups:    groups,
 	}
 
-	client, resp, appliedChanges, err := startWithEnvironmentConvergence(
+	client, resp, _, err := startWithEnvironmentConvergence(
 		client,
 		req,
 		appliedChanges,

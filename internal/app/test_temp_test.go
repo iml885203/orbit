@@ -1,15 +1,10 @@
 package app
 
-import (
-	"os"
-	"runtime"
-)
+import "os"
 
-// shortTestTempRoot keeps Unix socket fixtures below macOS's path limit while
-// using the native temporary directory on platforms where /tmp does not exist.
 func shortTestTempRoot() string {
-	if runtime.GOOS == "darwin" {
-		return "/tmp"
+	if root := os.Getenv("ORBIT_TEST_SOCKET_ROOT"); root != "" {
+		return root
 	}
 	return os.TempDir()
 }

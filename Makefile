@@ -12,6 +12,9 @@ LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_
 # Go package tests and Vitest run together in `make test`. Capping Go's
 # package fan-out avoids both runners oversubscribing the same machine.
 GO_TEST_PARALLELISM ?= 4
+GO_TEST_PACKAGES ?= ./...
+CHECK_JOBS ?= 4
+CHECK_WORKSPACE ?= $(ORBIT_DEV_WORKSPACE)
 
 distribution-metadata:
 	@go run ./internal/distribution/cmd/metadata
@@ -49,7 +52,7 @@ test:
 	$(MAKE) -j2 test-go test-ui-unit
 
 test-go:
-	go test -p $(GO_TEST_PARALLELISM) ./...
+	go test -p $(GO_TEST_PARALLELISM) $(GO_TEST_PACKAGES)
 
 test-ui:
 	$(MAKE) test-ui-unit
@@ -76,8 +79,8 @@ test-journeys: build
 	artifact_root="$(CURDIR)/artifacts/installed-user-journeys"; \
 	rm -rf "$$artifact_root"; \
 	mkdir -p "$$artifact_root"; \
-	instance_base="$$(mktemp -d /tmp/orbit-journeys.XXXXXX)"; \
-	resource_state="$$(mktemp -d /tmp/orbit-journey-resources.XXXXXX)"; \
+	instance_base="$$(mktemp -d "$${ORBIT_TEST_SOCKET_ROOT:-$${TMPDIR:-/tmp}}/orbit-journeys.XXXXXX")"; \
+	resource_state="$$(mktemp -d "$${ORBIT_TEST_SOCKET_ROOT:-$${TMPDIR:-/tmp}}/orbit-journey-resources.XXXXXX")"; \
 	namespace_registry="$$resource_state/namespaces"; \
 	: >"$$namespace_registry"; \
 	cleanup() { \
@@ -242,9 +245,10 @@ dev:
 preflight:
 	pnpm --dir ui install --frozen-lockfile
 	$(MAKE) ui
-	$(MAKE) -j4 test-go test-ui-check test-ui-lint test-ui-unit
+	$(MAKE) -j$(CHECK_JOBS) test-go test-ui-check test-ui-lint test-ui-unit
 	go build ./...
 	go vet ./...
+	$(MAKE) test-dev-workflow
 	$(MAKE) test-install
 	$(MAKE) test-docs
 	$(MAKE) docs-site-check
@@ -252,3 +256,14 @@ preflight:
 	$(MAKE) test-release-security
 	$(MAKE) verify-types
 	@echo "preflight OK - matches the CI gate"
+
+.PHONY: check-go check-ui check-docs check-full test-dev-workflow
+check-go check-ui check-docs check-full:
+	python3 scripts/dev_check.py $(patsubst check-%,%,$@) --workspace "$(CHECK_WORKSPACE)" --jobs "$(CHECK_JOBS)"
+
+test-dev-workflow:
+	python3 -m unittest discover -s scripts -p '*_test.py'
+
+.PHONY: lint-new
+lint-new:
+	python3 scripts/lint_gate.py $(if $(LINT_BASE_REF),--base-ref $(LINT_BASE_REF))

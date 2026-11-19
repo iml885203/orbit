@@ -10,7 +10,7 @@ if [ ! -x "$orbit_bin" ]; then
   exit 1
 fi
 
-test_root="$(mktemp -d /tmp/orbit-runtime.XXXXXX)"
+test_root="$(mktemp -d "${ORBIT_TEST_SOCKET_ROOT:-${TMPDIR:-/tmp}}/orbit-runtime.XXXXXX")"
 export ORBIT_HOME="$test_root/home"
 instance_base="${ORBIT_INSTANCE_BASE_HOME:-$ORBIT_HOME}"
 instance_name="runtime-adoption-$$"

@@ -20,19 +20,19 @@ write_fake_binary() {
 write_fake_binary
 printf 'keep me\n' >"$orbit_home/settings.json"
 
-HOME="$test_home" PATH="$install_dir:$PATH" \
+HOME="$test_home" ORBIT_HOME="$orbit_home" PATH="$install_dir:$PATH" \
   bash "$repo_root/scripts/uninstall.sh" >/dev/null
 test -x "$install_dir/orbit"
 test -f "$orbit_home/settings.json"
 
-HOME="$test_home" PATH="$install_dir:$PATH" \
+HOME="$test_home" ORBIT_HOME="$orbit_home" PATH="$install_dir:$PATH" \
   bash "$repo_root/scripts/uninstall.sh" --yes >/dev/null
 test ! -e "$install_dir/orbit"
 test ! -e "$install_dir/orbit.prev"
 test -f "$orbit_home/settings.json"
 
 write_fake_binary
-HOME="$test_home" PATH="$install_dir:$PATH" \
+HOME="$test_home" ORBIT_HOME="$orbit_home" PATH="$install_dir:$PATH" \
   bash "$repo_root/scripts/uninstall.sh" --yes --purge >/dev/null
 test ! -e "$install_dir/orbit"
 test ! -e "$orbit_home"

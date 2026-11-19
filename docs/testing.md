@@ -105,3 +105,7 @@ intentionally compete for the same installation path.
 When a test is flaky or slow, first ask whether it belongs at that level. Move
 it to a stronger boundary if isolated mocks caused the fragility; move it out
 of the inner loop only when the real dependency is inherently expensive.
+
+## Isolated edit-loop and commit checks
+
+Use the [development check runner](development.md#isolated-checks) to keep source snapshots, generated output and test state in a task workspace. Narrow checks aid iteration; every commit still requires a fresh full preflight. The runner records source/tool fingerprints, command outcomes and durations, and rejects stale successful results.

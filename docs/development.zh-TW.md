@@ -8,7 +8,7 @@
 
 ### 測試尚未發布的 main
 
-需要 `go.mod` 指定的 Go 版本、Node.js 22+ 與 pnpm 10+：
+需要 `go.mod` 指定的 Go 版本、Node.js 22+、pnpm 10+、Python 3.9+ 與 Make：
 
 ```bash
 git clone https://github.com/iml885203/orbit.git
@@ -42,6 +42,47 @@ make setup         # Install git hooks
 `make test`，commit 前再跑一次 `make preflight`。不要每修一點就發布；
 先把同一個使用者結果相關的修改集中起來，整體 review release candidate，
 再發布一個版本。
+
+### 隔離驗證
+
+用既有儲存政策建立一個 task workspace，編輯期間沿用同一路徑。
+檢查會複製目前修改與未被忽略的新檔案，把依賴、產物、測試狀態與紀錄留在
+workspace；短 socket 別名會在結束後移除。檢查不使用已安裝的 Orbit 或 daemon。
+測試仍需要可用連接埠；Docker journeys 另外依其前置條件執行。
+
+```bash
+python3 scripts/dev_check.py go --workspace /path/to/task --package ./internal/engine
+make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
+```
+
+![修改來源後驗證隔離快照，檢視證據再 commit](./assets/development-checks.svg)
+
+模式與參數以 `python3 scripts/dev_check.py --help` 為準。
+`go`、`ui`、`docs` 用於編輯迴圈；`full` 執行完整 `make preflight`，每次
+commit 前、最後一次修改後都必須重新跑。完整檢查不能重用；快速檢查只有在
+來源、Git tags、工具、選項與繼承環境相符時，才可用 `--reuse` 重用成功結果。
+執行期間來源改變會使結果失效。這是本機證據，發布仍須通過 CI 與交付門檻。
+
+報告與各階段 log 留在 workspace 的 `reports/` 與 `runs/`。
+失敗、逾時、取消都不能重用；先看 log、修正後重跑。同一個 workspace 只能
+同時跑一個檢查；process 結束會釋放鎖。機器異常重啟後，先確認沒有殘留測試
+process。整個 task 結束時，依儲存政策釋放 workspace。
+`--storage-helper PATH` 可執行 `PATH create orbit-validation` 分配空間；
+分配失敗就停止，不會改用其他目錄。
+
+Go 模式需要 Python 3.9+、Make 與 Go；其他模式還需要 Node 與 pnpm。
+Windows Beta 支援 Go 模式；full/UI/docs 使用 WSL 或 CI。
+macOS 會偵測標準安裝的 Chrome，其他環境沿用 Playwright setup。
+外部 Go workspace、overlay/modfile flags 與自訂 UI distribution override
+不適用這個入口，會直接拒絕，請使用自己的驗證流程。
+
+### 不新增 Go lint 債務
+
+安裝 `.golangci-lint-version` 指定版本後執行 `make lint-new`。
+它用完整 Linux/amd64 finding 比對 `.golangci-baseline.json`，不以總數抵銷。
+修好舊問題後，跑 `python3 scripts/lint_gate.py --ratchet`，將減少的基準與
+程式一起 review。CI 會比對精確 base commit，拒絕擴大基準。
+`make lint` 仍顯示所有問題；保留舊債不代表 lint 已經全綠。
 
 Release 編號與相容性承諾請見[版本與相容性](versioning.zh-TW.md)。
 

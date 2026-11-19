@@ -1,0 +1,2074 @@
+{
+  "schema": "orbit.lint-baseline.v1",
+  "target": "linux/amd64",
+  "tool_version": "2.12.2",
+  "source_commit": "60898d25dcc5cf8c63475ae5dcaa8be2e690358f",
+  "config_sha256": "4de9a6f94d01c71801afa41dad32cce8a9eeabe176543b9b51c50adab0213a81",
+  "enabled_linters": [
+    "bodyclose",
+    "errcheck",
+    "errorlint",
+    "funlen",
+    "gocognit",
+    "gocritic",
+    "godox",
+    "gofmt",
+    "govet",
+    "iface",
+    "ineffassign",
+    "interfacebloat",
+    "misspell",
+    "nestif",
+    "prealloc",
+    "revive",
+    "sqlclosecheck",
+    "staticcheck",
+    "typecheck",
+    "unused"
+  ],
+  "entries": [
+    {
+      "path": "internal/app/init_json_test.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating commands with capacity len(envelope.RecommendedActions)",
+      "scope": "func TestFailedFirstSyncRetriesInitWithTheSourceAndKeepsAuthSteps(t *testing.T) {",
+      "source": "var commands []string",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor_hosttools_test.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating names with capacity len(tools)",
+      "scope": "func TestDirectNodeServiceUsesWorkspacePackageManager(t *testing.T) {",
+      "source": "var names []string",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor_hosttools_test.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating names with capacity len(tools)",
+      "scope": "func TestRequiredHostTools_OnlyReportsSelectedEnvironment(t *testing.T) {",
+      "source": "var names []string",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/command_flag_error.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating parts with capacity 1 + len(corrected)",
+      "scope": "func correctedFlagCommand(args []string, requested, suggestion string) string {",
+      "source": "parts := []string{\"orbit\"}",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/handlers_tunnel.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating ports with capacity len(tm.tunnels)",
+      "scope": "func (tm *TunnelManager) ReleaseAllOnShutdown() {",
+      "source": "var ports []int",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish_run_test.go",
+      "rule": "prealloc",
+      "message": "Consider preallocating targets with capacity 3",
+      "scope": "func TestValidatePublishArtifacts_ChecksEveryProjectBeforePublish(t *testing.T) {",
+      "source": "targets := []publishTargetRef{",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/engine/dotnet.go",
+      "rule": "errcheck",
+      "message": "Error return value of `f.Close` is not checked",
+      "scope": "func readDotnetTargetFramework(projectPath string) (string, error) {",
+      "source": "defer f.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/release.go",
+      "rule": "errcheck",
+      "message": "Error return value of `file.Close` is not checked",
+      "scope": "func checksumFor(path, assetName string) (string, error) {",
+      "source": "defer file.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/release.go",
+      "rule": "errcheck",
+      "message": "Error return value of `file.Close` is not checked",
+      "scope": "func fileSHA256(path string) (string, error) {",
+      "source": "defer file.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  %s: %s (%s)\\n\", directory.Path, directory.Action, directory.State)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  %s: %s\\n\", directory.Path, directory.Reason)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  %s: %s\\n\", directory.Path, skillActionDone[directory.Action])",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  Claude Code plugin: %s (%s)\\n\", plugin.Action, strings.Join(plugin.Commands, \"; \"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  Claude Code plugin: %s (%s)\\n\", plugin.Reason, strings.Join(plugin.Commands, \"; \"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"  Claude Code plugin: %s\\n\", plugin.Reason)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintf(w, \"Preview only. Run '%s' to apply.\\n\", applyCommand)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printNoLogRecords(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"No log records \u2014 the OTLP receiver did not start (wanted port %d). See 'orbit tracing status'.\\n\", st.OTLPPort)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"  reason: %s\\n\", st.ReceiverError)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"No traces \u2014 the trace receiver did not start (wanted port %d).\\n\", st.OTLPPort)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"No traces captured yet \u2014 receiver healthy on port %d. Generate some traffic against a running service.\\n\", st.ActualPort)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTraceCells(w io.Writer, clock, dur, status, services, root string) {",
+      "source": "fmt.Fprintf(w, \"%s  %s  %s  %s  %s\\n\",",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"%d span(s) dropped by ingest ceilings\", st.SpansDropped))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"%d trace(s), %d span(s) total, %d span(s)/min\", st.TraceCount, st.TotalSpans, st.SpansPerMin))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"(wanted %d; moved after a port conflict)\", st.OTLPPort))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"reason: %s\", st.ReceiverError))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintf(w, \"%s\\n\", cli.Red.Sprintf(\"tracing: on but the receiver is DOWN (wanted port %d)\", st.OTLPPort))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderTraceLogRecords(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprint(\"(no OTLP log records carry this trace id)\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderTraceLogRecords(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"(log records unavailable: %v)\", err))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderTraceLogs(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"  %s %s\\n\", cli.Faint.Sprint(l.Service), l.Line)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderTraceLogs(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprint(\"(no log lines carry this trace id \u2014 they may have aged out of the log buffer)\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderTraceLogs(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"  %s\\n\", cli.Faint.Sprintf(\"(trace logs unavailable: %v)\", err))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderWaterfall(w io.Writer, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"\u2502%s\u2502 %s   %s\\n\", bar, dur, label)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func renderWaterfall(w io.Writer, t *tracing.Trace) {",
+      "source": "fmt.Fprintf(w, \"\u2502%s\u2502 %s %s %s\\n\", cli.Red.Sprint(bar), dur, cli.Red.Sprint(\"\u2717\"), label)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintf(w, \"  binary artifact: %s\\n\", artifact)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintf(w, \"  user data: %s\\n\", artifact)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintf(w, \"  user data: %s\\n\", data.UserData)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printUninstallResult(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintf(w, \"User data preserved at %s.\\n\", data.UserData)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func printUninstallResult(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintf(w, \"User data removed from %s.\\n\", data.UserData)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func publishOne(client *daemon.Client, opts sqlpublish.Opts, baselineOnCreate bool, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"%s Published %s in %.1fs\\n\", cli.Green.Sprint(\"\u2713\"), dbName, float64(res.DurationMs)/1000)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func publishOne(client *daemon.Client, opts sqlpublish.Opts, baselineOnCreate bool, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"%s Reset preparation for %s could not complete: %v\\n\", cli.Yellow.Sprint(\"!\"), dbName, err)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func publishOne(client *daemon.Client, opts sqlpublish.Opts, baselineOnCreate bool, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"Publishing %s from %s \u2192 %s:%d\\n\", dbName, opts.SQLProj, opts.Host, opts.Port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func publishSequentially(client *daemon.Client, base sqlpublish.Opts, targets []publishTargetRef, failVerb string, baselineOnCreate bool, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"\\n[%d/%d] %s\\n\", i+1, len(targets), t.DB)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runBoundedPublish(targets []publishTargetRef, concurrency int, failVerb string, out io.Writer, work func(publishTargetRef) (string, error)) error {",
+      "source": "fmt.Fprintf(out, \"\\n[%d/%d] %s %s\\n%s\", done, len(targets), status, t.DB, output)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"Publishing %d databases \u2192 %s:%d\\n\", len(targets), base.Host, base.Port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"Publishing %s (%d databases) \u2192 %s:%d\\n\", scope, len(targets), base.Host, base.Port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"\\n%s Published %d databases in %s\\n\", cli.Green.Sprint(\"\u2713\"), len(targets), scope)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runPublishTargets(client *daemon.Client, targets []publishTargetRef, scope string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"\\n%s Published all %d databases\\n\", cli.Green.Sprint(\"\u2713\"), len(targets))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/diff.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[diff] %d source file(s) changed since last publish \u2014 run with analyze for database impact\\n\", len(res.FileChanges))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/diff.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[diff] result not cached (next identical diff pays the engine again): %v\\n\", cacheErr)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/diff.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[diff] state unchanged since last engine diff \u2014 replaying its result\\n\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/diff.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func Diff(ctx context.Context, opts Opts, out io.Writer) (DiffResult, ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[diff] unchanged since last publish\\n\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/diff.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func runReportAction(ctx context.Context, opts Opts, dacpac, action, outputPath string, out io.Writer) (ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[diff] unresolved references \u2014 retrying with composite objects\\n\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func buildDacpac(ctx context.Context, opts Opts, out io.Writer) (string, string, ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[build] reused cached dacpac (project unchanged)\\n\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func publishWithCompositeRetry(ctx context.Context, opts Opts, dacpac string, out io.Writer) (ErrorCode, error) {",
+      "source": "fmt.Fprintf(out, \"[publish] unresolved references \u2014 retrying with composite objects\\n\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/publish.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func restoreSuppliedDacpacs(opts Opts, out io.Writer) (string, error) {",
+      "source": "fmt.Fprintf(out, \"[artifact] %s (%d bytes, modified %s)\\n\", entry.Name(), info.Size(), info.ModTime().Format(time.RFC3339))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/publish_state.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func recordPublishStateBestEffort(ctx context.Context, opts Opts, expectedFingerprint string, out io.Writer) {",
+      "source": "fmt.Fprintf(out, \"[state] publish state not recorded (next diff runs the full engine): %v\\n\", err)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/publish_state.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func selfHealChurn(db string, st publishState, churned []sourceFile, fingerprint string, out io.Writer) {",
+      "source": "fmt.Fprintf(out, \"[diff] mtime-churn record refresh failed (harmless, next diff re-hashes): %v\\n\", err)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func DropDatabase(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] dropping %s\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RefreshBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] clean state ready for %s\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RefreshBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] saving clean state for %s\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RefreshBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] warning: temporary clean state %s was not removed: %v\\n\", tmp, err)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func Reset(ctx context.Context, opts Opts, allowRecreate bool, out io.Writer) Result {",
+      "source": "fmt.Fprintf(out, \"[reset] preparing %s from scratch (all current data is discarded)\\n\", opts.DB)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RevertToBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] %s restored\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RevertToBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] disconnecting clients of %s\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func RevertToBaseline(ctx context.Context, opts Opts, db string, out io.Writer) error {",
+      "source": "fmt.Fprintf(out, \"[reset] restoring the clean state for %s\\n\", db)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/source_fingerprint.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func fingerprintFiles(files []sourceFile, db string) string {",
+      "source": "fmt.Fprintf(h, \"%s\\x00%s:%s\\x00\", f.Abs,",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/source_fingerprint.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func fingerprintFiles(files []sourceFile, db string) string {",
+      "source": "fmt.Fprintf(h, \"db=%s\\x00tool=%s\\x00\", db, toolFingerprint())",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) connected(paths []string, port int, background bool) {",
+      "source": "fmt.Fprintf(out.writer, \"%s: %s \u2192 localhost:%d\\n\", state, strings.Join(paths, \" \"), port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) connected(paths []string, port int, background bool) {",
+      "source": "fmt.Fprintf(out.writer, \"Stop with: orbit tunnel release --to %d\\n\", port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) globalClaims(claims []GlobalClaimView) {",
+      "source": "fmt.Fprintf(out.writer, \"%s owner=%s%s\\n\", claim.PathPrefix, claim.Owner, suffix)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) releaseSummary(port, released int, gateway string) {",
+      "source": "fmt.Fprintf(out.writer, \"No claims for localhost:%d.\\n\", port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) releaseSummary(port, released int, gateway string) {",
+      "source": "fmt.Fprintf(out.writer, \"Released %d claim(s) for localhost:%d.\\n\", released, port)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) released(paths []string, port int) {",
+      "source": "fmt.Fprintf(out.writer, \"Released: %s\\n\", strings.Join(paths, \" \"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) request(line AccessLine) {",
+      "source": "fmt.Fprintf(out.writer, \"\u2192 %s %s  %d  %s\\n\", line.Method, line.Path, line.Status, duration)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) request(line AccessLine) {",
+      "source": "fmt.Fprintf(out.writer, \"\u2192 %s %s  %d  <1ms\\n\", line.Method, line.Path, line.Status)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintf` is not checked",
+      "scope": "func (out *tunnelOutput) tunnels(state TunnelListResponse) {",
+      "source": "fmt.Fprintf(out.writer, \"%s \u2192 localhost:%d  %s\\n\", strings.Join(claim.Paths, \",\"), claim.LocalPort, claim.Status)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintln(w, \"  Claude Code plugin: installed; it loads in the next Claude Code session\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintln(w, \"  Claude Code plugin: uninstalled\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintln(w, \"Orbit agent skill plan:\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/skill.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printSkillResult(w io.Writer, data skillData, applyCommand string) {",
+      "source": "fmt.Fprintln(w, \"Orbit agent skill:\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printLogRecordPage(w io.Writer, page *tracing.LogPage, f tracing.LogFilter) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printLogRecordPage(w io.Writer, page *tracing.LogPage, f tracing.LogFilter) {",
+      "source": "fmt.Fprintln(w, cli.Faint.Sprint(footer))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printLogRecords(w io.Writer, newestFirst []tracing.LogRecord, indent string) {",
+      "source": "fmt.Fprintln(w, indent+\"    \"+ex)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printLogRecords(w io.Writer, newestFirst []tracing.LogRecord, indent string) {",
+      "source": "fmt.Fprintln(w, line)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoLogRecords(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"No log records \u2014 tracing is turned off for this env.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/trace_logs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoLogRecords(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"No log records received yet. A service sends them only when its OpenTelemetry logging exporter is set up; its stdout stays in 'orbit logs <resource>'.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"  Free the port or set a different `tracing.otlp_port`, then 'orbit down && orbit up'.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"It is on by default; remove the `tracing:\\n  enabled: false` from the env YAML (then 'orbit down && orbit up') to re-enable.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"No traces \u2014 tracing is turned off for this env.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printNoTraces(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, \"No traces captured yet.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printTraceList(w io.Writer, traces []tracing.TraceSummary, hiddenHealth int) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printTraceList(w io.Writer, traces []tracing.TraceSummary, hiddenHealth int) {",
+      "source": "fmt.Fprintln(w, cli.Faint.Sprint(footer))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, cli.Faint.Sprint(\"tracing: off for this env (enabled: false)\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printTracingStatus(w io.Writer, st *tracing.TracingStatus) {",
+      "source": "fmt.Fprintln(w, cli.Green.Sprintf(\"tracing: healthy \u2014 receiver on 127.0.0.1:%d\", st.ActualPort))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func renderTraceLogRecords(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func renderTraceLogRecords(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintln(w, cli.Bold.Sprint(\"log records for this trace:\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func renderTraceLogs(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func renderTraceLogs(w io.Writer, client *daemon.Client, t *tracing.Trace) {",
+      "source": "fmt.Fprintln(w, cli.Bold.Sprint(\"logs for this trace:\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func renderWaterfall(w io.Writer, t *tracing.Trace) {",
+      "source": "fmt.Fprintln(w, cli.Bold.Sprint(header))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"  Docker images and project workspaces\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"Preview only. Run 'orbit uninstall --yes' to apply.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"This will preserve:\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallPlan(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"This will remove:\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallResult(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"Docker images and project workspaces were preserved.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallResult(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"Orbit uninstalled.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/uninstall.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func printUninstallResult(w io.Writer, data uninstallData) {",
+      "source": "fmt.Fprintln(w, \"Orbit will finish removing its binary after this command exits.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func (out *tunnelOutput) connected(paths []string, port int, background bool) {",
+      "source": "fmt.Fprintln(out.writer, \"Waiting for requests\u2026 (Ctrl+C to release)\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func (out *tunnelOutput) globalClaims(claims []GlobalClaimView) {",
+      "source": "fmt.Fprintln(out.writer, \"No active claims.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "errcheck",
+      "message": "Error return value of `fmt.Fprintln` is not checked",
+      "scope": "func (out *tunnelOutput) tunnels(state TunnelListResponse) {",
+      "source": "fmt.Fprintln(out.writer, \"No active claims. Use --all to include others.\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/replace.go",
+      "rule": "errcheck",
+      "message": "Error return value of `in.Close` is not checked",
+      "scope": "func copyFile(source, destination string, mode os.FileMode) error {",
+      "source": "defer in.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/release.go",
+      "rule": "errcheck",
+      "message": "Error return value of `os.RemoveAll` is not checked",
+      "scope": "func (c Checker) downloadAndVerify(ctx context.Context, installationID, targetVersion, assetName, assetURL, checksumURL string, evidence *VerificationRecord) (string, error) {",
+      "source": "defer os.RemoveAll(tempDir)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/selfupdate.go",
+      "rule": "errcheck",
+      "message": "Error return value of `os.Remove` is not checked",
+      "scope": "func runSelfUpdate(ctx context.Context) error {",
+      "source": "defer os.Remove(scriptPath)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/replace.go",
+      "rule": "errcheck",
+      "message": "Error return value of `os.Remove` is not checked",
+      "scope": "func ReplaceCandidate(launchPath string, candidate *VerifiedCandidate) (string, error) {",
+      "source": "defer os.Remove(tempPath)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/release.go",
+      "rule": "errcheck",
+      "message": "Error return value of `resp.Body.Close` is not checked",
+      "scope": "func (c Checker) download(ctx context.Context, url, destination string) error {",
+      "source": "defer resp.Body.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/autoupdate/release.go",
+      "rule": "errcheck",
+      "message": "Error return value of `resp.Body.Close` is not checked",
+      "scope": "func (c Checker) fetchRelease(ctx context.Context) (githubRelease, error) {",
+      "source": "defer resp.Body.Close()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/envs.go",
+      "rule": "errcheck",
+      "message": "Error return value of `s.UpdateConfig` is not checked",
+      "scope": "func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {",
+      "source": "s.UpdateConfig(func(tx extension.ConfigTx) error {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/process/manager.go",
+      "rule": "funlen",
+      "message": "Function 'Start' is too long (# > 120)",
+      "scope": "func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[string]string, preStart []string, epoch int) error {",
+      "source": "func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[string]string, preStart []string, epoch int) error {",
+      "metric": 141,
+      "count": 1
+    },
+    {
+      "path": "internal/config/validate.go",
+      "rule": "funlen",
+      "message": "Function 'Validate' is too long (# > 120)",
+      "scope": "func Validate(cfg *Config) error {",
+      "source": "func Validate(cfg *Config) error {",
+      "metric": 157,
+      "count": 1
+    },
+    {
+      "path": "internal/cli/json_contract.go",
+      "rule": "funlen",
+      "message": "Function 'classify' has too many statements (# > 100)",
+      "scope": "func classify(err error) JSONError {",
+      "source": "func classify(err error) JSONError {",
+      "metric": 121,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/envs.go",
+      "rule": "funlen",
+      "message": "Function 'handleEnvSwitch' is too long (# > 120)",
+      "scope": "func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {",
+      "source": "func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {",
+      "metric": 156,
+      "count": 1
+    },
+    {
+      "path": "internal/engine/orchestrator_events.go",
+      "rule": "funlen",
+      "message": "Function 'handleEvent' is too long (# > 120)",
+      "scope": "func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {",
+      "source": "func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {",
+      "metric": 130,
+      "count": 1
+    },
+    {
+      "path": "internal/app/daemon_cmd.go",
+      "rule": "funlen",
+      "message": "Function 'runDaemon' is too long (# > 120)",
+      "scope": "func runDaemon(_ *cobra.Command, _ []string) error {",
+      "source": "func runDaemon(_ *cobra.Command, _ []string) error {",
+      "metric": 145,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "funlen",
+      "message": "Function 'runStatus' is too long (# > 120)",
+      "scope": "func runStatus(cmd *cobra.Command, _ []string) error {",
+      "source": "func runStatus(cmd *cobra.Command, _ []string) error {",
+      "metric": 206,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "funlen",
+      "message": "Function 'writeStatusJSON' is too long (# > 120)",
+      "scope": "func writeStatusJSON(",
+      "source": "func writeStatusJSON(",
+      "metric": 138,
+      "count": 1
+    },
+    {
+      "path": "internal/engine/orchestrator_events.go",
+      "rule": "staticcheck",
+      "message": "QF1001: could apply De Morgan's law",
+      "scope": "func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {",
+      "source": "if evt.Message != \"\" && !(errors.Is(evt.Err, context.Canceled) && info.StateReason != \"\") {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsync/git.go",
+      "rule": "staticcheck",
+      "message": "QF1001: could apply De Morgan's law",
+      "scope": "func displayURL(raw string) string {",
+      "source": "if parsed.User == nil && !(remote && (parsed.RawQuery != \"\" || parsed.ForceQuery)) {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/releasepolicy/workflow_test.go",
+      "rule": "staticcheck",
+      "message": "QF1001: could apply De Morgan's law",
+      "scope": "func validatePackageSyncSecurity(contents []byte) error {",
+      "source": "if verifyIndex < 0 || tokenIndex < 0 || dispatchIndex < 0 || !(verifyIndex < tokenIndex && tokenIndex < dispatchIndex) {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/dockerctx/client.go",
+      "rule": "staticcheck",
+      "message": "SA1019: client.WithAPIVersionNegotiation is deprecated: API-version negotiation is now enabled by default and this options is now a no-op.",
+      "scope": "func NewClient() (*client.Client, error) {",
+      "source": "opts := []client.Opt{client.WithAPIVersionNegotiation()}",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol.go",
+      "rule": "staticcheck",
+      "message": "SA1019: http2.Transport is deprecated: Use [http.Transport] instead. ",
+      "scope": "func (t *protocolTransport) close() {",
+      "source": "if transport, ok := t.h2c.(*http2.Transport); ok {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol.go",
+      "rule": "staticcheck",
+      "message": "SA1019: http2.Transport is deprecated: Use [http.Transport] instead. ",
+      "scope": "func newProtocolTransport(ctx context.Context, https http.RoundTripper, timeout time.Duration) *protocolTransport {",
+      "source": "h2c: &http2.Transport{",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol.go",
+      "rule": "staticcheck",
+      "message": "SA1019: transport.CloseIdleConnections is deprecated: Use [http.Transport.CloseIdleConnections] instead. ",
+      "scope": "func (t *protocolTransport) close() {",
+      "source": "transport.CloseIdleConnections()",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol.go",
+      "rule": "staticcheck",
+      "message": "SA4006: this value of ctx is never used",
+      "scope": "func (t *protocolTransport) discover(origin string, req *http.Request, discovery *protocolDiscovery) {",
+      "source": "ctx := t.ctx",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/daemon_cmd.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func restartDaemonPreservingResourcesWithIntent(configPath string, explicitConfig bool, report func(string)) (daemonRestartResult, error) {",
+      "source": "return result, fmt.Errorf(\"Orbit restarted, but running resources could not be restored: %w\", err)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/selfupdate.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func runRollback() error {",
+      "source": "return fmt.Errorf(\"Orbit was rolled back, but the running environment could not be restored: %w\", restartErr)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/selfupdate.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func runSelfUpdate(ctx context.Context) error {",
+      "source": "return fmt.Errorf(",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/selfupdate.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func runSelfUpdate(ctx context.Context) error {",
+      "source": "return fmt.Errorf(\"Orbit was updated, but the running environment could not be restored: %w\", restartErr)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func (s Source) Validate() error {",
+      "source": "return errors.New(\"Git source cannot have a local path\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "staticcheck",
+      "message": "ST1005: error strings should not be capitalized",
+      "scope": "func (s Source) Validate() error {",
+      "source": "return errors.New(\"Git source requires a URL\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/init.go",
+      "rule": "nestif",
+      "message": "`if source.Location() == \"\"` has complex nested blocks (complexity: #)",
+      "scope": "func runInit(cmd *cobra.Command, _ []string) error {",
+      "source": "if source.Location() == \"\" {",
+      "metric": 30,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/handlers_env_reconcile_test.go",
+      "rule": "gocritic",
+      "message": "appendAssign: append result not assigned to the same slice",
+      "scope": "func TestHandleEnvironmentReconcileAddsResourceWithoutInterruptingRunningState(t *testing.T) {",
+      "source": "updated := append(original, []byte(\"  worker:\\n    command: worker\\n\")...)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/init.go",
+      "rule": "gocognit",
+      "message": "cognitive complexity # of func `runInit` is high (> 100)",
+      "scope": "func runInit(cmd *cobra.Command, _ []string) error {",
+      "source": "func runInit(cmd *cobra.Command, _ []string) error {",
+      "metric": 106,
+      "count": 1
+    },
+    {
+      "path": "internal/health/recover_test.go",
+      "rule": "errorlint",
+      "message": "comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error",
+      "scope": "func TestRecoverHealthy_CancelledContextStopsProbing(t *testing.T) {",
+      "source": "if err := <-done; err != context.Canceled {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/recover_test.go",
+      "rule": "errorlint",
+      "message": "comparing with != will fail on wrapped errors. Use errors.Is to check for a specific error",
+      "scope": "func TestRecoverHealthy_FlagsWhileRunning_ClearsOnExit(t *testing.T) {",
+      "source": "if err := <-done; err != context.Canceled {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/sqlpublish/snapshot.go",
+      "rule": "errorlint",
+      "message": "comparing with == will fail on wrapped errors. Use errors.Is to check for a specific error",
+      "scope": "func BaselineExists(ctx context.Context, opts Opts, db string) (bool, error) {",
+      "source": "if err == sql.ErrNoRows {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor_service_commands_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \".venv/bin/python\" contains a path separator",
+      "scope": "func TestHostEnvironmentChecksBlockMissingCommandAndPreStartExecutables(t *testing.T) {",
+      "source": "failed[0].Message != \"executable not found: \"+filepath.Join(project, \".venv/bin/python\") ||",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/instance/runtime_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \"/tmp/orbit\" contains a path separator",
+      "scope": "func TestResolveProvidesStableIsolatedRuntime(t *testing.T) {",
+      "source": "if got.Home != filepath.Join(\"/tmp/orbit\", \"instances\", \"checkout-a\") {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/project_context_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \"/workspace\" contains a path separator",
+      "scope": "func TestProjectContextInactiveOffersOneSafeAction(t *testing.T) {",
+      "source": "filepath.Join(\"/workspace\", \"shop-a\", projectConfigName),",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/project_context_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \"/workspace\" contains a path separator",
+      "scope": "func TestProjectContextInactiveOffersOneSafeAction(t *testing.T) {",
+      "source": "filepath.Join(\"/workspace\", \"shop-b\", projectConfigName),",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_projects_split_layout_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \"schema.platform/PlatformDB/PlatformDB.sqlproj\" contains a path separator",
+      "scope": "func TestAllProjects_ResolvesAgainstWorkspaceNotConfigLocation(t *testing.T) {",
+      "source": "want := filepath.Join(workspace, \"schema.platform/PlatformDB/PlatformDB.sqlproj\")",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor_service_commands_test.go",
+      "rule": "gocritic",
+      "message": "filepathJoin: \"scripts/prepare\" contains a path separator",
+      "scope": "func TestHostEnvironmentChecksBlockMissingCommandAndPreStartExecutables(t *testing.T) {",
+      "source": "failed[1].Message != \"executable not found: \"+filepath.Join(project, \"scripts/prepare\") {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/env.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func runEnvList(_ *cobra.Command, _ []string) error {",
+      "source": "if source.LastSyncError != \"\" {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/inspect.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func printInspectHuman(data inspectJSONData) {",
+      "source": "if data.Daemon.Running {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/inspect.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func runInspect(cmd *cobra.Command, _ []string) error {",
+      "source": "if daemon.CheckConfigMatch(configFile, status.ConfigPath) == nil {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func runStatus(cmd *cobra.Command, _ []string) error {",
+      "source": "if dstatus.ContextMismatch {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func writeStatusJSON(",
+      "source": "if len(recoveryActions) > 0 {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func writeStatusJSON(",
+      "source": "if setup.SelectionRequired {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []DoctorCheck {",
+      "source": "if pathVariable == \"WORKSPACE_ROOT\" || pathUsesWorkspaceRoot(path, workspaceRoot) {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/doctor.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func ServiceWorkingDirectoryChecks(cfg *config.Config, selected []string) []DoctorCheck {",
+      "source": "if unresolved {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/runtime_versions.go",
+      "rule": "gocritic",
+      "message": "ifElseChain: rewrite if-else to switch statement",
+      "scope": "func evaluateRuntimeRequirements(tool HostToolCheck, binaryPath, installed, baseMessage string) DoctorCheck {",
+      "source": "if !comparable {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/container/manager_test.go",
+      "rule": "govet",
+      "message": "inline: Call of client.NewClientWithOpts should be inlined",
+      "scope": "func TestPollerDebouncesDockerOutageAndReportsItOnce(t *testing.T) {",
+      "source": "cli, err := client.NewClientWithOpts(client.WithHost(\"tcp://127.0.0.1:1\"))",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/dockerctx/client.go",
+      "rule": "govet",
+      "message": "inline: Call of client.NewClientWithOpts should be inlined",
+      "scope": "func NewClient() (*client.Client, error) {",
+      "source": "return client.NewClientWithOpts(opts...)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/daemon_version.go",
+      "rule": "gocritic",
+      "message": "nilValReturn: returned expr is always nil; replace version with nil",
+      "scope": "func mergeInvokedOrbitVersion(version *daemon.VersionResponse, invoked, executable string) *daemon.VersionResponse {",
+      "source": "return version",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "errorlint",
+      "message": "non-wrapping format verb for fmt.Errorf. Use `%w` to format errors",
+      "scope": "func runUpdateWorker(operation, launchPath, stagedPath, installationID, transactionID string, parentPID int) error {",
+      "source": "startErr = fmt.Errorf(\"%w; binary rollback failed: %v\", startErr, rollbackErr)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "errorlint",
+      "message": "non-wrapping format verb for fmt.Errorf. Use `%w` to format errors",
+      "scope": "func runUpdateWorker(operation, launchPath, stagedPath, installationID, transactionID string, parentPID int) error {",
+      "source": "verifyErr = fmt.Errorf(\"target verification failed: %w; rollback failed: %v\", verifyErr, restoreErr)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/envs.go",
+      "rule": "errorlint",
+      "message": "non-wrapping format verb for fmt.Errorf. Use `%w` to format errors",
+      "scope": "func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {",
+      "source": "err = fmt.Errorf(\"%w (restoring previous environment selection: %v)\", err, restoreErr)",
+      "metric": null,
+      "count": 2
+    },
+    {
+      "path": "internal/tracing/logs.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 136 bytes (consider pointers or indexing)",
+      "scope": "func (l *LogStore) Ingest(records []LogRecord) {",
+      "source": "for _, rec := range records {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/logs_test.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 136 bytes (consider pointers or indexing)",
+      "scope": "func seqs(page LogPage, base int64) []int64 {",
+      "source": "for i, r := range page.Logs {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func automaticApplyEligible(state autoupdate.State) bool {",
+      "source": "for _, runtimeState := range state.Runtimes {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func drainRegisteredRuntimes(state autoupdate.State, allowRunning bool) (map[string]drainedRuntime, error) {",
+      "source": "for identity, runtimeState := range state.Runtimes {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func hasUnregisteredDiscoverableRuntime(state autoupdate.State) bool {",
+      "source": "for _, runtimeState := range state.Runtimes {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/up.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func announceRecovering(snapshots map[string]progressSnapshot, announced map[string]bool) {",
+      "source": "for name, s := range snapshots {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/up_progress.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func diffProgressAtInterval(prev, curr map[string]progressSnapshot, now time.Time, interval time.Duration) []progressEvent {",
+      "source": "for name, c := range curr {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/up_render.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 144 bytes (consider pointers or indexing)",
+      "scope": "func inPlaceNames(snapshots map[string]progressSnapshot) []string {",
+      "source": "for name, s := range snapshots {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func hasUnregisteredDiscoverableRuntime(state autoupdate.State) bool {",
+      "source": "for _, summary := range instances {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/instance.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func runInstanceList(_ *cobra.Command, _ []string) error {",
+      "source": "for _, item := range instances {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/traces.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func spanDepths(spans []tracing.Span) map[string]int {",
+      "source": "for _, sp := range spans {",
+      "metric": null,
+      "count": 2
+    },
+    {
+      "path": "internal/tracing/filter.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func matchesSpans(spans map[string]Span, needle string) bool {",
+      "source": "for _, sp := range spans {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/tracing.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func (s *Store) Ingest(spans []Span) {",
+      "source": "for _, sp := range spans {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/tracing.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 160 bytes (consider pointers or indexing)",
+      "scope": "func sortedSpans(acc *traceAccum) []Span {",
+      "source": "for _, sp := range acc.spans {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/environment_selection.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func readEnvironmentSelection() environmentSelection {",
+      "source": "for _, source := range registry.List() {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/source.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func sourceListCmd() *cobra.Command {",
+      "source": "for _, source := range sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/source.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func synchronizeSources(registry *envsource.Registry, sources []envsource.Source, dry bool) ([]sourceSyncRecord, []error) {",
+      "source": "for _, source := range sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/envs.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func (s *Server) handleEnvs(w http.ResponseWriter, r *http.Request) {",
+      "source": "for _, source := range registry.List() {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemonsrv/handlers_sources.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func syncAllEnvironmentSources(registry *envsource.Registry) error {",
+      "source": "for _, source := range registry.List() {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func (r *Registry) Get(name string) (Source, error) {",
+      "source": "for _, source := range r.Sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func (r *Registry) Remove(name string) (Source, error) {",
+      "source": "for i, source := range r.Sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func (r *Registry) SourceForPath(orbitHome, path string) (Source, string, bool) {",
+      "source": "for _, source := range r.List() {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/envsource/registry.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
+      "scope": "func (r *Registry) validateSnapshot() error {",
+      "source": "for _, source := range r.Sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/env.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 176 bytes (consider pointers or indexing)",
+      "scope": "func runEnvList(_ *cobra.Command, _ []string) error {",
+      "source": "for _, source := range selection.Sources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 184 bytes (consider pointers or indexing)",
+      "scope": "func drainRegisteredRuntimes(state autoupdate.State, allowRunning bool) (map[string]drainedRuntime, error) {",
+      "source": "for identity, snapshot := range snapshots {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 184 bytes (consider pointers or indexing)",
+      "scope": "func reconnectDrainedRuntimes(launchPath string, snapshots map[string]drainedRuntime) {",
+      "source": "for _, snapshot := range snapshots {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 184 bytes (consider pointers or indexing)",
+      "scope": "func runUpdateWorker(operation, launchPath, stagedPath, installationID, transactionID string, parentPID int) error {",
+      "source": "for identity, snapshot := range snapshots {",
+      "metric": null,
+      "count": 2
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 184 bytes (consider pointers or indexing)",
+      "scope": "func stopTargetRuntimes(snapshots map[string]drainedRuntime, transactionID string) {",
+      "source": "for _, snapshot := range snapshots {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/container/instance_isolation.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 216 bytes (consider pointers or indexing)",
+      "scope": "func PurgeNamespace(ctx context.Context, namespace string) error {",
+      "source": "for _, network := range networks.Items {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/container/manager.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 216 bytes (consider pointers or indexing)",
+      "scope": "func (m *Manager) EnsureNetwork(ctx context.Context) error {",
+      "source": "for _, network := range networks.Items {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/container/instance_isolation.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 248 bytes (consider pointers or indexing)",
+      "scope": "func PurgeNamespace(ctx context.Context, namespace string) error {",
+      "source": "for _, item := range containers.Items {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 336 bytes (consider pointers or indexing)",
+      "scope": "func decorateReleaseUpdate(update *autoupdate.Summary, resources []jsonService) {",
+      "source": "for _, resource := range resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 336 bytes (consider pointers or indexing)",
+      "scope": "func statusHasStoppedResources(resources []jsonService) bool {",
+      "source": "for _, resource := range resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 336 bytes (consider pointers or indexing)",
+      "scope": "func statusPrimaryOpenAction(resources []jsonService) (cli.JSONAction, bool) {",
+      "source": "for _, resource := range resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/autoupdate.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func automaticApplyEligible(state autoupdate.State) bool {",
+      "source": "for _, resource := range status.Resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/instance.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func describeInstanceResources(item *instance.Summary) {",
+      "source": "for _, resource := range status.Resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/lifecycle.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func lifecycleDownImpactActions(status *daemon.StatusResponse, impacted []string) []cli.JSONAction {",
+      "source": "for _, resource := range status.Resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/lifecycle.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func lifecycleDownImpacts(status *daemon.StatusResponse, stopped []string) []string {",
+      "source": "for _, resource := range status.Resources {",
+      "metric": null,
+      "count": 2
+    },
+    {
+      "path": "internal/app/lifecycle_selection.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func lifecycleResourceNames(status *daemon.StatusResponse) []string {",
+      "source": "for _, resource := range status.Resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func sortedResourceNames(running map[string]daemon.ResourceStatus, kind daemon.ResourceKind) []string {",
+      "source": "for name, resource := range running {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func statusDependencyBlocker(service daemon.ResourceStatus, running map[string]daemon.ResourceStatus) *daemon.ResourceStatus {",
+      "source": "for _, candidate := range running {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func statusPrimaryOpenableResource(resources map[string]daemon.ResourceStatus) *daemon.ResourceStatus {",
+      "source": "for _, resource := range resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func statusRecoveryTargets(running map[string]daemon.ResourceStatus) []string {",
+      "source": "for _, service := range running {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/status.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func writeStatusJSON(",
+      "source": "for name, resource := range running {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/devdb/db_workflow.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 344 bytes (consider pointers or indexing)",
+      "scope": "func publishConnOptsFromClient(client *daemon.Client, dbName string) (sqlpublish.Opts, error) {",
+      "source": "for _, service := range status.Resources {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/engine/app.go",
+      "rule": "gocritic",
+      "message": "rangeValCopy: each iteration copies 376 bytes (consider pointers or indexing)",
+      "scope": "func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Poller {",
+      "source": "for _, svc := range orch.GetAllServices() {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestCancelledDiscoveryLeaderDoesNotCancelWaiter(t *testing.T) {",
+      "source": "_, err := transport.RoundTrip(req)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestDiscoveryTimeoutDoesNotStartFallback(t *testing.T) {",
+      "source": "_, err := transport.RoundTrip(req)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/health/http_protocol_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestLifecycleCancellationStopsLeaderAndWaiters(t *testing.T) {",
+      "source": "_, err := transport.RoundTrip(req)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/logs_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestOTLPLogReceiver(t *testing.T) {",
+      "source": "resp := postLogs(t, srv.URL, tc.contentType, tc.body, tc.gzipped)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/logs_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestOTLPLogReceiverKeepsTheFirstAttributesUpToTheCap(t *testing.T) {",
+      "source": "postLogs(t, srv.URL, \"application/x-protobuf\", body, false)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/logs_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestOTLPLogReceiverRejectsBadRequests(t *testing.T) {",
+      "source": "if resp := postLogs(t, srv.URL, \"application/x-protobuf\", []byte{0xff, 0xff}, false); resp.StatusCode != http.StatusBadRequest {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tracing/logs_test.go",
+      "rule": "bodyclose",
+      "message": "response body must be closed",
+      "scope": "func TestOTLPLogReceiverRejectsBadRequests(t *testing.T) {",
+      "source": "if resp := postLogs(t, srv.URL, \"application/x-protobuf\", huge, false); resp.StatusCode != http.StatusRequestEntityTooLarge {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/app/inspect_json_test.go",
+      "rule": "errorlint",
+      "message": "type assertion on error will fail on wrapped errors. Use errors.As to check for specific errors",
+      "scope": "func TestInspectRejectsPretendResourceTargetWithOneCorrectedCommand(t *testing.T) {",
+      "source": "targetErr, ok := err.(inspectTargetError)",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/tunnel/tunnel_output.go",
+      "rule": "gocritic",
+      "message": "unlambda: replace `func(cmd *cobra.Command, err error) error {\n\treturn renderTunnelCommandError(cmd, err)\n}` with `renderTunnelCommandError`",
+      "scope": "func bindTunnelFlagErrors(cmd *cobra.Command) {",
+      "source": "cmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemon/host.go",
+      "rule": "iface",
+      "message": "unused: interface 'ContainerOps' is declared but not used within the package",
+      "scope": "type ContainerOps interface {",
+      "source": "type ContainerOps interface {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemon/host.go",
+      "rule": "iface",
+      "message": "unused: interface 'DoctorRegistrar' is declared but not used within the package",
+      "scope": "type DoctorRegistrar interface {",
+      "source": "type DoctorRegistrar interface {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemon/host.go",
+      "rule": "iface",
+      "message": "unused: interface 'ResourceRegistrar' is declared but not used within the package",
+      "scope": "type ResourceRegistrar interface {",
+      "source": "type ResourceRegistrar interface {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemon/host.go",
+      "rule": "iface",
+      "message": "unused: interface 'ServiceRestarter' is declared but not used within the package",
+      "scope": "type ServiceRestarter interface {",
+      "source": "type ServiceRestarter interface {",
+      "metric": null,
+      "count": 1
+    },
+    {
+      "path": "internal/daemon/host.go",
+      "rule": "iface",
+      "message": "unused: interface 'SettingsHookRegistrar' is declared but not used within the package",
+      "scope": "type SettingsHookRegistrar interface {",
+      "source": "type SettingsHookRegistrar interface {",
+      "metric": null,
+      "count": 1
+    }
+  ]
+}

@@ -8,7 +8,7 @@ Build Orbit from source, run tests, or maintain a custom distribution.
 
 ### Testing unreleased main
 
-Requires the Go version in `go.mod`, Node.js 22+, and pnpm 10+:
+Requires the Go version in `go.mod`, Node.js 22+, pnpm 10+, Python 3.9+, and Make:
 
 ```bash
 git clone https://github.com/iml885203/orbit.git
@@ -45,6 +45,57 @@ sociable test while editing, `make test` after a coherent product slice,
 and `make preflight` once before committing it. Do not create a release for
 each fix. Accumulate related fixes behind one user outcome, review the release
 candidate as a whole, then publish one version.
+
+### Isolated checks
+
+Keep build output and test state outside the checkout. Allocate one task
+workspace with your storage policy, then reuse that path while editing:
+
+```bash
+python3 scripts/dev_check.py go --workspace /path/to/task --package ./internal/engine
+make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
+```
+
+![Edit source, verify an isolated snapshot, inspect evidence, then commit](./assets/development-checks.svg)
+
+The runner copies tracked and non-ignored new files, including local edits.
+It keeps dependencies, generated files, logs, caches and runtime homes in the
+workspace. A short temporary socket alias points there and is removed on exit.
+Your installed Orbit and daemon are not part of these checks. Tests still need
+available local ports; run Docker journeys separately with their prerequisites.
+
+Use `python3 scripts/dev_check.py --help` for modes, timeouts and JSON reports.
+`go`, `ui` and `docs` are edit-loop checks. `full` runs the existing complete
+`make preflight`; run it fresh before **every commit**, after the last edit.
+Full checks never reuse a previous success. Narrow checks accept `--reuse`
+only when source, Git tags, tools, options and inherited environment match.
+Changes during a run invalidate its success. This is local evidence, not
+release approval or a substitute for CI.
+
+Reports and stage logs remain under `reports/` and `runs/` in the workspace.
+A failure, timeout or cancellation never becomes a reusable success; inspect
+the log and rerun after fixing it. Only one check owns a workspace at a time.
+Interrupted processes release the lock; after a machine crash inspect any
+remaining test processes before rerunning. Release the workspace using your
+storage policy when the whole task ends. `--storage-helper PATH` can allocate
+it with `PATH create orbit-validation`; allocation errors stop without fallback.
+
+Python 3.9+, Make and Go are required for Go mode; other modes also need Node
+and pnpm. Windows Beta supports Go mode with those tools; use WSL or CI for
+full/UI/docs. Standard macOS Chrome is detected for website checks; otherwise
+the existing Playwright setup applies. External Go workspaces, overlay/modfile
+flags and custom UI distribution overrides need their own verification workflow
+and are rejected by this runner.
+
+### Prevent new Go lint debt
+
+Install the version in `.golangci-lint-version`, then run `make lint-new`.
+It checks the complete Linux/amd64 inventory against
+`.golangci-baseline.json`; removing an old finding cannot offset a new one.
+After fixing legacy debt, run `python3 scripts/lint_gate.py --ratchet` and
+review the baseline reduction with the code. CI compares that inventory with
+the exact base commit and rejects expansion. `make lint` remains the stricter
+all-findings view; existing debt is not a clean lint result.
 
 Release numbering and compatibility promises are documented in
 [Versioning and compatibility](versioning.md).

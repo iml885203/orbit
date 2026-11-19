@@ -18,7 +18,7 @@ chmod +x "$test_root/bin/pnpm"
 
 run_make() {
   : >"$test_root/calls"
-  PATH="$test_root/bin:$PATH" PNPM_CALLS="$test_root/calls" \
+  PATH="$test_root/bin:$PATH" PNPM_CALLS="$test_root/calls" PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH= \
     make --no-print-directory -s -C "$repo_root" "$@"
 }
 
