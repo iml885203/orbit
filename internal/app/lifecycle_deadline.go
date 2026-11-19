@@ -50,6 +50,9 @@ type lifecycleCommandScope struct {
 }
 
 func lifecycleCommandHasBudget(cmd *cobra.Command) bool {
+	if environmentApplyPreviewCommand(cmd) {
+		return false
+	}
 	if cmd.Parent() == cmd.Root() {
 		switch cmd.Name() {
 		case "down", "restart":
@@ -62,6 +65,9 @@ func lifecycleCommandHasBudget(cmd *cobra.Command) bool {
 }
 
 func prepareLifecycleCommandContext(cmd *cobra.Command) bool {
+	if environmentApplyPreviewCommand(cmd) {
+		return false
+	}
 	hasBudget := lifecycleCommandHasBudget(cmd)
 	humanUp := cmd.Name() == "up" && cmd.Parent() == cmd.Root()
 	humanApply := cmd.Name() == "apply" && cmd.Parent() != nil && cmd.Parent().Name() == "env"

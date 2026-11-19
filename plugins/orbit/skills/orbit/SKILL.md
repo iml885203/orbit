@@ -192,8 +192,11 @@ and destructive-operation rules. Deeper references live in the repository's
   Environment values need `--show-secrets`; key names are always listed.
 - After editing the active config, normal `orbit up --json` validates before
   interruption, restores resources that were running, then performs the
-  requested startup selection. Use `orbit env apply --json` when the edit must
-  apply without starting any resource that was already stopped.
+  requested startup selection. Use `orbit env apply --dry-run --json` to inspect stops, restarts, removals,
+  newly required dependency starts and daemon handoff before applying. It is
+  read-only and honors `--instance`. Treat it as a snapshot; apply recalculates.
+  Use `orbit env apply --json` to apply without starting unrelated stopped
+  resources; newly required dependencies can start.
 
 ## Diagnostics
 

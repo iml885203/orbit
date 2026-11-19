@@ -57,10 +57,11 @@ orbit switch example
 
 ### Environment changes are waiting to be applied
 
-Run `orbit env apply`. Orbit validates the updated environment before stopping
+Preview with `orbit env apply --dry-run`, then run `orbit env apply`.
+See [previewing a pending update](./environment-sources.md#preview-a-pending-update).
+Orbit validates the updated environment before stopping
 anything. Unchanged resources keep their current process or container; changed
-resources and their dependents restart. Resources that were already stopped
-remain stopped. Daemon-level changes use a full handoff and restore the running
+resources and their dependents restart. Unrelated stopped resources remain stopped; newly required dependencies can start. Daemon-level changes use a full handoff and restore the running
 resources afterward.
 
 If you want to download a team update without interrupting the current

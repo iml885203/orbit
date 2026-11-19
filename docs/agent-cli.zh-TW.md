@@ -551,3 +551,30 @@ Recommended actions 只做本地只讀檢查，保留 config、instance、profil
 不取得 ADC，沒有對應 mutation API。
 
 每個追蹤 job 都有明確的 `planned`、`submission_intent`、`terminal` 或 `schema_only` 狀態。缺少狀態是損毀證據，不代表從未提交；即使 dataset 已消失，cleanup 仍須確認已提交 jobs 都 terminal。
+
+
+## 環境套用影響預覽
+
+`orbit env apply --dry-run --json` 的 operation 是 `env_apply_preview`，沿用
+`orbit.cli.v1` envelope。此唯讀指令不啟動 daemon、不套用更新，也不等待或恢復自動更新 transaction。
+
+`data` 包含 `daemon_running`、`changes_pending`、`restart_required`、
+`observed_at`（UTC）、`pid`（有 daemon 時）、`generation`、`context`、
+`target_fingerprint`（有 daemon 時），以及六個永遠為陣列的欄位：
+`stop_resources`、`restart_resources`、`removed_resources`、`started_dependencies`、
+`unavailable_resources`、`affected_resources`。名稱陣列排序穩定；空集合是 `[]`。
+
+`removed_resources` 是從設定移除的資源，即使原本已停止也會列出。
+`stop_resources` 只列出受影響且正在執行的資源；`restart_resources` 是會重啟或恢復的資源。
+`affected_resources` 包含重啟目標的依賴 closure；`started_dependencies` 只列目前未執行、
+這次需要啟動的依賴。`unavailable_resources` 是原本執行中、但新設定已移除的資源。
+Daemon 交接會明列完整停止與恢復的影響，不會把空的局部計畫當成沒有中斷。
+
+Context、daemon generation、觀測時間與有效設定的 SHA-256 fingerprint 用來辨識快照；
+不輸出原始設定值，也不能用它直接執行舊計畫。真正 apply 仍會驗證、重新載入並重新計算。
+檔案編輯但有效設定相同時，可能 `changes_pending: true` 且資源陣列為空。
+沒有 daemon 時仍驗證設定，但回傳 `daemon_running: false`、空陣列，不建立 runtime 檔案。
+錯誤 context 或無效設定會失敗且不套用。可用 `--instance` 指定具名 runtime。
+此唯讀指令不記錄 CLI history、不遷移來源、不顯示持久化的更新告知或排程背景更新。
+
+預覽沿用真正 apply 對待套用檔案／graph 的判定，包含 mtime／size 快速路徑。僅改 process environment substitution 或共用 extension data，不會被追蹤為待套用更新；有效設定 fingerprint 可能改變，但沒有 apply transition。

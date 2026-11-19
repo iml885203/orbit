@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -344,5 +345,23 @@ func TestBusyDaemonIsNotClassifiedAsUnreachable(t *testing.T) {
 	}
 	if !errors.Is(err, ErrDaemonTimeout) {
 		t.Errorf("expected ErrDaemonTimeout, got: %v", err)
+	}
+}
+
+func TestPreviewEnvironmentResolvesRelativeConfigBeforeIPC(t *testing.T) {
+	relative := filepath.Join("envs", "nested config.yaml")
+	want, err := filepath.Abs(relative)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := stubDaemon(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/env/preview" || r.URL.Query().Get("config_path") != want {
+			t.Errorf("preview request=%s %s; want absolute config %s", r.Method, r.URL.String(), want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"daemon_running":true,"stop_resources":[],"restart_resources":[]}`)
+	}))
+	if _, err := c.PreviewEnvironment(relative); err != nil {
+		t.Fatal(err)
 	}
 }

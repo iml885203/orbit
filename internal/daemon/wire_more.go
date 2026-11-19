@@ -100,6 +100,24 @@ type EnvironmentSwitchResponse struct {
 	RunningResources     []string            `json:"running_resources,omitempty"`
 }
 
+// EnvironmentApplyPreview describes one observation, never an executable plan.
+type EnvironmentApplyPreview struct {
+	DaemonRunning        bool               `json:"daemon_running"`
+	ChangesPending       bool               `json:"changes_pending"`
+	RestartRequired      bool               `json:"restart_required"`
+	ObservedAt           time.Time          `json:"observed_at"`
+	PID                  int                `json:"pid,omitempty"`
+	Generation           uint64             `json:"generation"`
+	Context              EnvironmentContext `json:"context"`
+	TargetFingerprint    string             `json:"target_fingerprint,omitempty"`
+	StopResources        []string           `json:"stop_resources"`
+	RestartResources     []string           `json:"restart_resources"`
+	RemovedResources     []string           `json:"removed_resources"`
+	StartedDependencies  []string           `json:"started_dependencies"`
+	UnavailableResources []string           `json:"unavailable_resources"`
+	AffectedResources    []string           `json:"affected_resources"`
+}
+
 type EnvironmentReconcileResponse struct {
 	OK                   bool     `json:"ok,omitempty"`
 	Error                string   `json:"error,omitempty"`

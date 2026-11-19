@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -255,6 +256,21 @@ func (c *Client) StopSelection(req DownRequest) (*APIResponse, error) {
 // DownAndWait stops every service and container before returning.
 func (c *Client) DownAndWait() (*APIResponse, error) {
 	return c.postJSON("/api/down", DownRequest{Wait: true})
+}
+
+func (c *Client) PreviewEnvironment(configPath string) (*EnvironmentApplyPreview, error) {
+	if configPath != "" {
+		absolute, err := filepath.Abs(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolving preview configuration: %w", err)
+		}
+		configPath = absolute
+	}
+	var result EnvironmentApplyPreview
+	if err := c.GetDecode("/api/env/preview?config_path="+url.QueryEscape(configPath), &result); err != nil {
+		return nil, fmt.Errorf("previewing environment: %w", err)
+	}
+	return &result, nil
 }
 
 func (c *Client) ReconcileEnvironment() (*EnvironmentReconcileResponse, error) {
