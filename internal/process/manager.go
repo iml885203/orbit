@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -100,6 +101,9 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	}
 
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	// The lifecycle watcher owns termination of the whole process group;
+	// CommandContext's default leader kill would bypass its grace window.
+	cmd.Cancel = nil
 	cmd.Dir = dir
 
 	cmd.Env = commandEnvironment(env)
@@ -107,20 +111,29 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	// KEY: Set process group so we can kill the entire tree
 	platform.SetProcessGroup(cmd)
 
-	stdoutPipe, err := cmd.StdoutPipe()
+	stdoutPipe, stdoutWriter, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("stdout pipe for %q: %w", name, err)
 	}
-	stderrPipe, err := cmd.StderrPipe()
+	defer func() { _ = stdoutWriter.Close() }()
+	stderrPipe, stderrWriter, err := os.Pipe()
 	if err != nil {
+		_ = stdoutPipe.Close()
 		return fmt.Errorf("stderr pipe for %q: %w", name, err)
 	}
+	defer func() { _ = stderrWriter.Close() }()
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 
 	m.narrate(name, fmt.Sprintf("starting process (cmd=%q, dir=%q)", command, dir))
 	if err := cmd.Start(); err != nil {
+		_ = stdoutPipe.Close()
+		_ = stderrPipe.Close()
 		m.narrate(name, "ERROR: "+err.Error())
 		return fmt.Errorf("starting %q (cmd=%q dir=%q): %w", name, command, dir, err)
 	}
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
 	slog.Info("started", "component", "process", "name", name, "pid", cmd.Process.Pid, "cmd", command, "dir", dir)
 	m.narrate(name, fmt.Sprintf("started (pid=%d)", cmd.Process.Pid))
 
@@ -155,9 +168,6 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 	if grace <= 0 {
 		grace = defaultCancelGrace
 	}
-	// exec.CommandContext only SIGKILLs the leader, which leaves forked
-	// grandchildren orphaned. Killing the whole group on cancel is what
-	// shuts down the tree.
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -166,34 +176,30 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		}
 	}()
 
-	// Surface a cancellation that arrived mid-fork as a synchronous error
-	// so the caller doesn't see nil and assume success. The watcher above
-	// still handles the actual kill.
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("start %q aborted: %w", name, err)
-	}
-
 	// Keep stderr scoped to this process generation. The combined log remains
 	// the user-facing stream; the separate buffer exists only so failure
 	// summaries do not guess causality from ordinary stdout traffic.
 	stderr := logging.NewRingBuffer(20)
-	var outputWG sync.WaitGroup
-	outputWG.Add(2)
+	outputDone := make(chan struct{}, 2)
 	go func() {
-		defer outputWG.Done()
+		defer func() { _ = stdoutPipe.Close(); outputDone <- struct{}{} }()
 		m.streamOutput(name, stdoutPipe, nil)
 	}()
 	go func() {
-		defer outputWG.Done()
+		defer func() { _ = stderrPipe.Close(); outputDone <- struct{}{} }()
 		m.streamOutput(name, stderrPipe, stderr.Write)
 	}()
 
 	// Wait for exit in background
 	go func() {
+		waitErr := cmd.Wait()
+		// Descendants may still flush output after their leader exits. Join the
+		// existing group termination owner before starting the final EOF budget.
+		cleanupErr := mp.stopGroup(grace)
+		drainErr := waitForProcessOutput(outputDone, stdoutPipe, stderrPipe)
 		mp.mu.Lock()
-		mp.Err = cmd.Wait()
+		mp.Err = errors.Join(waitErr, drainErr, cleanupErr)
 		mp.mu.Unlock()
-		outputWG.Wait()
 
 		if mp.Err != nil {
 			slog.Warn("exited", "component", "process", "name", name, "err", mp.Err)
@@ -222,6 +228,9 @@ func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[
 		}
 	}()
 
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("start %q aborted: %w", name, err)
+	}
 	return nil
 }
 
@@ -343,6 +352,12 @@ func (m *Manager) Stop(name string, gracePeriod time.Duration) error {
 	// Wait for the process to finish
 	select {
 	case <-mp.Done:
+		mp.mu.Lock()
+		exitErr := mp.Err
+		mp.mu.Unlock()
+		if errors.Is(exitErr, ErrOutputDrainTimeout) {
+			return exitErr
+		}
 	case <-time.After(gracePeriod + 2*time.Second):
 		return fmt.Errorf("process %q did not exit after kill", name)
 	}
