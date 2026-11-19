@@ -121,6 +121,34 @@ transaction while mutations wait for replacement or rollback to finish.
 Delayed apply revalidates the local staged bytes without a GitHub request, so an
 already verified update can apply offline.
 
+#### Notices while you work
+
+After a successful interactive `up`, `down`, `restart`, or `status`, Orbit can
+show a short update notice on stderr. Your command completes first. The notice
+reads local state; it does not wait for a release check or an update to finish.
+
+| Notice | What happens next |
+|---|---|
+| Verified and ready | Keep working. Direct installations apply at the existing safe boundary, once every product environment is idle. `orbit update` applies immediately and restores prior running intent. |
+| Available through Homebrew or Scoop | Run the package-manager command shown. Orbit does not replace a package-managed binary. |
+| Updated or rolled back | The invoked binary matches a completed successful Orbit transaction. |
+| Check failed | Your command succeeded. Background discovery will retry. |
+| Apply failed or environments only partly restored | Follow the recovery action shown; inspect resources before retrying. |
+
+An unchanged pending or failure notice appears at most once per day per
+installation. A meaningful state change can appear sooner; a completed
+successful transaction is announced once. Receipt storage is best effort:
+a crash or write failure can skip or repeat a notice. Busy notification locks
+are skipped rather than waited on.
+
+Notices are omitted when automatic updates are off, in CI, with `--json`, when
+stdout or stderr is redirected, after failed commands, and during streaming or
+passthrough commands. Existing setup, context and daemon-restart guidance takes
+priority in `status`. Explicit `orbit update` reports its own result. A notice
+after `down` does not mean a later background replacement has already finished.
+
+#### Update verification and preferences
+
 The verifier bootstraps GitHub's trust repository from the root embedded in the
 Orbit build, refreshes TUF metadata when its one-day cache expires, and fails the
 check closed when current trusted material cannot be obtained. Root rotation is

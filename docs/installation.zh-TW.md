@@ -108,6 +108,30 @@ running intent。Mutation 等待 replacement 或 rollback 時，read-only
 延後套用只重新驗證本機 staged bytes，不會要求 GitHub request，因此已驗證的
 更新可在離線狀態套用。
 
+#### 使用過程中的提醒
+
+互動執行 `up`、`down`、`restart` 或 `status` 成功後，Orbit 可在 stderr 顯示
+簡短更新提醒。原本指令會先完成；提醒只讀本機狀態，不等待網路檢查或更新完成。
+
+| 提醒 | 接下來怎麼做 |
+|---|---|
+| 已驗證，準備好更新 | 可以繼續工作。直接安裝版會等所有 product environment 都 idle，沿用既有安全條件套用。`orbit update` 可立即套用並恢復先前執行意圖。 |
+| Homebrew 或 Scoop 有新版 | 執行提醒中的套件管理器指令；Orbit 不自行替換套件管理器安裝的 binary。 |
+| 已更新或已回復 | 目前執行的 binary 與 Orbit 已成功完成的 transaction 相符。 |
+| 檢查失敗 | 原本指令仍成功，背景檢查會重試。 |
+| 套用失敗，或部分環境未恢復 | 按提醒中的復原方式處理；重試前先檢查 resources。 |
+
+同一 installation 的相同待處理或失敗狀態，每天最多提醒一次；狀態有實質改變可
+提早提醒，成功完成的 transaction 只提醒一次。提醒紀錄是 best effort：crash 或
+寫入失敗可能略過或重複提醒。通知鎖忙碌時直接略過，不等待鎖。
+
+關閉自動更新、CI、`--json`、stdout 或 stderr 轉向、指令失敗，以及 streaming／
+passthrough 指令都不顯示這些提醒。`status` 既有的 setup、context 和 daemon
+重啟指引優先；明確執行 `orbit update` 則由該指令自行回報結果。
+`down` 之後出現提醒，不代表稍後的背景替換已完成。
+
+#### 更新驗證與偏好設定
+
 Verifier 以 Orbit build 內嵌的 root 啟動 GitHub trust repository，TUF metadata
 cache 超過一天後會 refresh；無法取得目前可信材料時，本次檢查會 fail closed。
 Root rotation 只能透過 TUF 接受。Candidate 完成 staging 後，apply 使用已記錄的

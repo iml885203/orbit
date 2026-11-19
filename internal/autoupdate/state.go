@@ -210,6 +210,17 @@ func BeginTransaction(launchPath, operation, target string) (State, error) {
 	})
 }
 
+func TryRecordApplyEligibility(launchPath string, eligible bool) (State, error) {
+	return updateWithLockTimeout(launchPath, 0, func(next *State) error {
+		next.ApplyEligible = eligible
+		next.DeferReason = ""
+		if !eligible {
+			next.DeferReason = "resources_running"
+		}
+		return nil
+	})
+}
+
 func RecordRuntimeOutcome(launchPath, transactionID, identity string, outcome RuntimeOutcome) (State, error) {
 	return Update(launchPath, func(state *State) error {
 		if state.Transaction == nil || state.Transaction.FinishedAt != nil || state.Transaction.ID != transactionID {
@@ -361,12 +372,16 @@ func Save(state State) error {
 }
 
 func Update(launchPath string, change func(*State) error) (State, error) {
+	return updateWithLockTimeout(launchPath, 5*time.Second, change)
+}
+
+func updateWithLockTimeout(launchPath string, timeout time.Duration, change func(*State) error) (State, error) {
 	id, stable, err := InstallationID(launchPath)
 	if err != nil {
 		return State{}, err
 	}
 	var result State
-	err = withRegistryLock(func(reg *registry) error {
+	err = withRegistryLockTimeout(timeout, func(reg *registry) error {
 		state, ok := reg.Installations[id]
 		if !ok {
 			state = State{InstallationID: id, LaunchPath: stable, Owner: Owner(launchPath), Policy: PolicyAutomatic, Runtimes: map[string]Runtime{}}
@@ -412,6 +427,10 @@ func loadRegistry() (registry, error) {
 }
 
 func withRegistryLock(change func(*registry) error) error {
+	return withRegistryLockTimeout(5*time.Second, change)
+}
+
+func withRegistryLockTimeout(timeout time.Duration, change func(*registry) error) error {
 	dir, err := GlobalDir()
 	if err != nil {
 		return err
@@ -419,7 +438,7 @@ func withRegistryLock(change func(*registry) error) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create update state directory: %w", err)
 	}
-	unlock, err := acquireLock(filepath.Join(dir, "update-registry.lock"), 5*time.Second)
+	unlock, err := acquireLock(filepath.Join(dir, "update-registry.lock"), timeout)
 	if err != nil {
 		return err
 	}
