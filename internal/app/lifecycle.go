@@ -20,6 +20,11 @@ const downBeforeSetupMessage = "Nothing is running because Orbit is not set up y
 
 type lifecycleJSONOptions struct {
 	Operation          string
+	OperationID        string
+	OperationState     string
+	Cleanup            string
+	Warnings           []string
+	ElapsedMS          int64
 	Message            string
 	RequestedResources []string
 	RelatedResources   []string
@@ -39,6 +44,11 @@ type lifecycleEnvironmentChangesJSON struct {
 
 type lifecycleJSONData struct {
 	Operation          string                           `json:"operation"`
+	OperationID        string                           `json:"operation_id,omitempty"`
+	OperationState     string                           `json:"operation_state,omitempty"`
+	Cleanup            string                           `json:"cleanup,omitempty"`
+	Warnings           []string                         `json:"warnings,omitempty"`
+	ElapsedMS          int64                            `json:"elapsed_ms,omitempty"`
 	Message            string                           `json:"message,omitempty"`
 	RequestedResources []string                         `json:"requested_resources"`
 	InfraOnly          bool                             `json:"infra_only,omitempty"`
@@ -80,6 +90,11 @@ func buildLifecycleJSONData(opts lifecycleJSONOptions) lifecycleJSONData {
 	}
 	result := lifecycleJSONData{
 		Operation:          opts.Operation,
+		OperationID:        opts.OperationID,
+		OperationState:     opts.OperationState,
+		Cleanup:            opts.Cleanup,
+		Warnings:           append([]string(nil), opts.Warnings...),
+		ElapsedMS:          opts.ElapsedMS,
 		Message:            opts.Message,
 		RequestedResources: requestedResources,
 		InfraOnly:          opts.InfraOnly,
@@ -488,30 +503,11 @@ func waitForLifecycleJSONContextWithProgress(ctx context.Context, client *daemon
 	return waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx, client.WithContext(ctx), names, wantState, nil, true, progress)
 }
 
-func waitForLifecycleRestartHealthyJSON(client *daemon.Client, names []string) (*daemon.StatusResponse, error) {
-	return waitForLifecycleJSONOrPastWithTerminal(client, names, "healthy", nil, true)
-}
-
-func waitForLifecycleJSONOrPast(client *daemon.Client, names []string, wantState string, pastState func(string) bool) (*daemon.StatusResponse, error) {
-	return waitForLifecycleJSONOrPastWithTerminal(client, names, wantState, pastState, true)
-}
-
-func waitForLifecycleJSONOrPastWithTerminal(client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
-	budget := effectiveTimeout(timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), budget)
-	defer cancel()
-	status, err := waitForLifecycleJSONOrPastWithTerminalContext(ctx, client.WithContext(ctx), names, wantState, pastState, failStopped)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status, newWaitTimeoutError(fmt.Sprintf("resources to become %s", wantState), timeout, budget, budget)
-	}
-	return status, err
-}
-
-func waitForLifecycleJSONOrPastWithTerminalContext(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool) (*daemon.StatusResponse, error) {
-	return waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx, client, names, wantState, pastState, failStopped, nil)
-}
-
 func waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool, progress *lifecycleProgress) (*daemon.StatusResponse, error) {
+	return waitForLifecycleJSONTargetContextProgress(ctx, client, names, wantState, pastState, failStopped, progress, nil)
+}
+
+func waitForLifecycleJSONTargetContextProgress(ctx context.Context, client *daemon.Client, names []string, wantState string, pastState func(string) bool, failStopped bool, progress *lifecycleProgress, target *daemon.StatusResponse) (*daemon.StatusResponse, error) {
 	if len(names) == 0 {
 		return client.Status()
 	}
@@ -534,8 +530,16 @@ func waitForLifecycleJSONOrPastWithTerminalContextProgress(ctx context.Context, 
 		case <-ctx.Done():
 			return last, ctx.Err()
 		case now := <-ticker.C:
-			status, err := client.Status()
+			requestContext, cancel := context.WithTimeout(ctx, lifecycleStatusRequestTimeout)
+			status, err := client.WithContext(requestContext).Status()
+			cancel()
 			if err != nil {
+				if ctx.Err() != nil {
+					return last, ctx.Err()
+				}
+				return last, err
+			}
+			if err := validateLifecycleStatusTarget(status, target); err != nil {
 				return last, err
 			}
 			last = status
@@ -590,20 +594,16 @@ func lifecycleStopFailedError(status *daemon.StatusResponse, names []string, pre
 	return nil
 }
 
-func waitForLifecycleRestartObserved(client *daemon.Client, name string, priorRestartCount *int) (*daemon.StatusResponse, error) {
-	budget := effectiveTimeout(timeout)
-	started := time.Now()
-	deadline := time.After(budget)
+func waitForLifecycleRestartObservedContext(ctx context.Context, client *daemon.Client, name string, priorRestartCount *int) (*daemon.StatusResponse, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	var last *daemon.StatusResponse
 	for {
 		select {
-		case <-deadline:
-			return last, newWaitTimeoutError(
-				fmt.Sprintf("%s restart to begin", name), timeout, budget, time.Since(started))
+		case <-ctx.Done():
+			return last, ctx.Err()
 		case <-ticker.C:
-			status, err := client.Status()
+			status, err := client.WithContext(ctx).Status()
 			if err != nil {
 				return last, err
 			}

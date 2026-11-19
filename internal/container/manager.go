@@ -522,32 +522,30 @@ func (m *Manager) streamLogs(ctx context.Context, name, containerID string) {
 	stderrLB.Flush()
 }
 
-// Stop stops and removes a container along with any sidecars labelled as its
-// children. Sidecar removal failures are logged but do not fail the parent
-// stop — leaving a stale UI container is preferable to surfacing a stop error
-// to lifecycle pollers.
 func (m *Manager) Stop(ctx context.Context, name string) error {
-	m.stopSidecars(ctx, name)
+	sidecarErr := m.stopSidecars(ctx, name)
 	containerName := m.ContainerName(name)
 	timeout := 10
 	m.narrate(name, fmt.Sprintf("stopping container %s (timeout %ds)", containerName, timeout))
+	var stopErr error
 	if _, err := m.cli.ContainerStop(ctx, containerName, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
+		stopErr = fmt.Errorf("stop container %s: %w", containerName, err)
 		m.narrate(name, "stop error: "+err.Error())
 	}
 	if err := m.removeContainer(ctx, containerName); err != nil {
 		if cerrdefs.IsNotFound(err) {
-			return nil
+			return errors.Join(sidecarErr, stopErr)
 		}
 		m.narrate(name, "ERROR: "+err.Error())
-		return err
+		return errors.Join(sidecarErr, stopErr, fmt.Errorf("remove container %s: %w", containerName, err))
 	}
 	m.narrate(name, "removed container "+containerName)
-	return nil
+	return errors.Join(sidecarErr, stopErr)
 }
 
 // stopSidecars removes any containers labelled as sidecars of the given parent
 // service in this namespace.
-func (m *Manager) stopSidecars(ctx context.Context, parentName string) {
+func (m *Manager) stopSidecars(ctx context.Context, parentName string) error {
 	list, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
 		All: true,
 		Filters: make(client.Filters).
@@ -556,21 +554,32 @@ func (m *Manager) stopSidecars(ctx context.Context, parentName string) {
 	})
 	if err != nil {
 		m.narrate(parentName, "sidecar list error: "+err.Error())
-		return
+		return fmt.Errorf("list sidecars for %s: %w", parentName, err)
 	}
 	timeout := 10
+	var failures []error
 	for i := range list.Items {
 		if !m.matchesNamespace(list.Items[i].Labels) {
 			continue
 		}
 		scName := list.Items[i].Labels[labelService]
 		m.narrate(parentName, "stopping sidecar "+scName)
-		_, _ = m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout})
+		if _, err := m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
+			failures = append(failures, fmt.Errorf("stop sidecar %s: %w", scName, err))
+		}
 		if err := m.removeContainer(ctx, list.Items[i].ID); err != nil && !cerrdefs.IsNotFound(err) {
 			m.narrate(parentName, "sidecar remove error: "+err.Error())
+			failures = append(failures, fmt.Errorf("remove sidecar %s: %w", scName, err))
 		}
 	}
+	return errors.Join(failures...)
 }
+
+// SweepUnavailableError means namespace inspection could not reach Docker.
+type SweepUnavailableError struct{ Err error }
+
+func (e *SweepUnavailableError) Error() string { return e.Err.Error() }
+func (e *SweepUnavailableError) Unwrap() error { return e.Err }
 
 // StopAll stops all orbit-managed containers in this Manager's namespace.
 func (m *Manager) StopAll(ctx context.Context) error {
@@ -579,17 +588,25 @@ func (m *Manager) StopAll(ctx context.Context) error {
 		Filters: make(client.Filters).Add("label", labelManaged+"=true"),
 	})
 	if err != nil {
+		if ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && client.IsErrConnectionFailed(err) {
+			return &SweepUnavailableError{Err: err}
+		}
 		return err
 	}
+	var failures []error
 	for i := range list.Items {
 		if !m.matchesNamespace(list.Items[i].Labels) {
 			continue
 		}
 		timeout := 10
-		_, _ = m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout})
-		_ = m.removeContainer(ctx, list.Items[i].ID)
+		if _, err := m.cli.ContainerStop(ctx, list.Items[i].ID, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
+			failures = append(failures, fmt.Errorf("sweep stop %s: %w", list.Items[i].ID, err))
+		}
+		if err := m.removeContainer(ctx, list.Items[i].ID); err != nil && !cerrdefs.IsNotFound(err) {
+			failures = append(failures, fmt.Errorf("sweep remove %s: %w", list.Items[i].ID, err))
+		}
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 // PublishedPorts returns the host ports that this Manager's running

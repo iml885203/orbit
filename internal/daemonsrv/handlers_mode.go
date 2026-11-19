@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/iml885203/orbit/internal/config"
 )
 
 func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +50,9 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	if req.Mode == "container" {
 		kind = "container"
 	}
+	s.snapshotMu.Lock()
 	s.app.Orchestrator.SetServiceKind(name, kind)
+	s.snapshotMu.Unlock()
 
 	s.startEnvironmentBackground(generation, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -59,4 +63,14 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("%s switching to %s mode", name, req.Mode)})
+}
+
+func runtimeServiceMode(cfg *config.Config, name, kind string) string {
+	if !isDualDefined(cfg, name) {
+		return ""
+	}
+	if kind == "container" {
+		return "container"
+	}
+	return "dev"
 }

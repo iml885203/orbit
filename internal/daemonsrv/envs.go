@@ -173,6 +173,7 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 	previousSelection := ReadCurrentEnv()
 	previousContext := s.environmentContext()
 	previousCfg := s.holder.Load()
+	previousStale := s.engineStale.Load()
 
 	// Stop everything before swapping config — including containers.
 	// Two envs may share container names but differ in image / ports /
@@ -184,7 +185,10 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		stopped = s.runningCount()
 	}
 	if stopped > 0 {
-		s.app.StopAllServices()
+		if err := s.app.StopAllServices(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, EnvironmentSwitchResponse{Error: fmt.Sprintf("stop current environment: %v", err)})
+			return
+		}
 	}
 	restoreRunning := func() {
 		if s.app != nil && len(runningResources) > 0 {
@@ -210,7 +214,12 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return fmt.Errorf("load: %w", err)
 		}
-		tx.Store(finalCfg)
+		publication := prepareEnvironmentPath(target, "managed", true)
+		s.snapshotMu.Lock()
+		s.holder.Store(finalCfg)
+		s.publishEnvironmentPath(publication)
+		s.engineStale.Store(true)
+		s.snapshotMu.Unlock()
 		return nil
 	})
 	if err != nil {
@@ -221,14 +230,17 @@ func (s *Server) handleEnvSwitch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
 	}
-	s.SetEnvironmentContext(target, "managed")
 
 	if err := s.restartLauncher(target, "managed"); err != nil {
 		s.UpdateConfig(func(tx extension.ConfigTx) error {
-			tx.Store(previousCfg)
+			publication := prepareEnvironmentPath(previousPath, previousContext.Kind, true)
+			s.snapshotMu.Lock()
+			s.holder.Store(previousCfg)
+			s.publishEnvironmentPath(publication)
+			s.engineStale.Store(previousStale)
+			s.snapshotMu.Unlock()
 			return nil
 		})
-		s.SetEnvironmentContext(previousPath, previousContext.Kind)
 		if restoreErr := restoreManagedSelection(previousSelection); restoreErr != nil {
 			err = fmt.Errorf("%w (restoring previous environment selection: %v)", err, restoreErr)
 		}

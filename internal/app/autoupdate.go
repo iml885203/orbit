@@ -142,6 +142,9 @@ func waitForPendingAutomaticUpdate(cmd *cobra.Command) error {
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
+		if ctx := cmd.Context(); ctx != nil && ctx.Err() != nil {
+			return lifecycleOperationError(ctx, ctx.Err(), false)
+		}
 		state, loadErr := autoupdate.Load(launchPath)
 		if loadErr != nil {
 			return loadErr

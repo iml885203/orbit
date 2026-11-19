@@ -143,8 +143,8 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	s.environmentTransitionMu.RLock()
-	defer s.environmentTransitionMu.RUnlock()
+	s.snapshotMu.RLock()
+	defer s.snapshotMu.RUnlock()
 
 	envName := s.currentEnvName()
 	if envQuery := r.URL.Query().Get("env"); envQuery != "" && envQuery != envName {
@@ -244,6 +244,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.BlockedBy = st.BlockedBy
 			n.PortConflict = graphPortConflict(st.PortConflict)
 			n.LogsAvailable = st.LogsAvailable
+			n.Mode = st.Mode
 			n.Ports = st.Ports
 			n.URL = st.URL
 			n.Health = st.HealthProgress

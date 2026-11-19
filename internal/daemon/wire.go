@@ -35,8 +35,9 @@ type StatusResponse struct {
 	// changes on every restart, so clients can detect when their cached
 	// env-derived state belongs to a previous daemon. Milliseconds (not
 	// nanoseconds) keeps the value safely within JS Number precision.
-	Epoch     int64            `json:"epoch"`
-	Resources []ResourceStatus `json:"resources"`
+	Epoch      int64            `json:"epoch"`
+	Generation uint64           `json:"generation"`
+	Resources  []ResourceStatus `json:"resources"`
 	// ConfigPath identifies the environment loaded by the running daemon.
 	// CLI clients compare it with their selected config before combining
 	// local config with daemon state.
@@ -184,9 +185,12 @@ type LogsResponse struct {
 
 // APIResponse is a generic API response wrapper.
 type APIResponse struct {
-	OK      bool   `json:"ok,omitempty"`
-	Message string `json:"message,omitempty"`
-	Error   string `json:"error,omitempty"`
+	OperationID string   `json:"operation_id,omitempty"`
+	Cleanup     string   `json:"cleanup,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
+	OK          bool     `json:"ok,omitempty"`
+	Message     string   `json:"message,omitempty"`
+	Error       string   `json:"error,omitempty"`
 	// AffectedResources identifies the resources accepted by a lifecycle
 	// request, including dependencies selected by the daemon.
 	AffectedResources []string `json:"affected_resources,omitempty"`

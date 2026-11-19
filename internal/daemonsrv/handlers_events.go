@@ -174,8 +174,8 @@ func (s *Server) fanInLogs(ctx context.Context, out chan<- Event) {
 // sendStatus helper so the events fan-in can use it without holding an
 // sseWriter.
 func (s *Server) buildStatusResponse() StatusResponse {
-	s.environmentTransitionMu.RLock()
-	defer s.environmentTransitionMu.RUnlock()
+	s.snapshotMu.RLock()
+	defer s.snapshotMu.RUnlock()
 	tracked := map[string]ResourceStatus{}
 	services := s.app.Orchestrator.GetAllServices()
 	// One immutable snapshot for the whole assembly.
@@ -202,6 +202,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		tracked[svc.Name] = ResourceStatus{
 			Name:                 svc.Name,
 			Kind:                 ResourceKind(svc.Kind),
+			Mode:                 runtimeServiceMode(cfg, svc.Name, svc.Kind),
 			Role:                 getResourceRole(cfg, svc.Name, svc.Kind),
 			State:                svc.State.String(),
 			StateReason:          svc.StateReason,
@@ -223,7 +224,7 @@ func (s *Server) buildStatusResponse() StatusResponse {
 		}
 	}
 	stale, staleReason := s.configStale()
-	resp := StatusResponse{Epoch: s.epoch(), Resources: make([]ResourceStatus, 0),
+	resp := StatusResponse{Epoch: s.epoch(), Generation: s.environmentGeneration.Load(), Resources: make([]ResourceStatus, 0),
 		ConfigPath:  s.ConfigPath(),
 		Context:     s.environmentContext(),
 		Instance:    s.instanceName,

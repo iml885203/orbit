@@ -91,6 +91,7 @@ func TestHandleDownWait_ReturnsAfterStopCompletes(t *testing.T) {
 		Containers: map[string]*config.Container{},
 	}
 	srv := newTestServer(t, cfg)
+	srv.app.Orchestrator.MarkServiceHealthy("svc")
 
 	released := make(chan struct{})
 	srv.app.Orchestrator.OnStopProcess = func(name string) error {
@@ -121,7 +122,7 @@ func TestHandleDownWait_ReturnsAfterStopCompletes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "stopped all services and containers") {
+	if !strings.Contains(w.Body.String(), "stopped configured resources") {
 		t.Fatalf("body = %q, want completion message", w.Body.String())
 	}
 }

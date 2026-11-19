@@ -3,11 +3,17 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/iml885203/orbit/internal/dockerctx"
 	"github.com/moby/moby/client"
+)
+
+const (
+	dockerObservationRequestTimeout = 2 * time.Second
+	dockerObservationCycleTimeout   = 10 * time.Second
 )
 
 // ContainerState represents a snapshot of a container's Docker state.
@@ -26,13 +32,15 @@ type ContainerState struct {
 // Poller periodically polls Docker for the state of orbit-managed containers
 // in a given namespace and reports drift via a callback.
 type Poller struct {
-	cli       *client.Client
-	interval  time.Duration
-	namespace string
+	cli            *client.Client
+	interval       time.Duration
+	namespace      string
+	requestTimeout time.Duration
+	cycleTimeout   time.Duration
 
 	// OnDrift is called when a container's state changes unexpectedly.
 	OnDrift func(name string, state ContainerState)
-	// OnStateUpdate is called on every poll with the states Docker listed at
+	// OnStateUpdate is called after a complete successful poll with the states Docker listed at
 	// listedAt. The list is taken before the per-container inspects, so the
 	// states can be older than lifecycle changes made while the poll ran.
 	OnStateUpdate func(listedAt time.Time, states map[string]ContainerState)
@@ -57,10 +65,12 @@ func NewPoller(cli *client.Client, namespace string, interval time.Duration) *Po
 		cli = c
 	}
 	return &Poller{
-		cli:        cli,
-		interval:   interval,
-		namespace:  namespace,
-		lastStates: make(map[string]ContainerState),
+		cli:            cli,
+		interval:       interval,
+		namespace:      namespace,
+		lastStates:     make(map[string]ContainerState),
+		requestTimeout: dockerObservationRequestTimeout,
+		cycleTimeout:   dockerObservationCycleTimeout,
 	}
 }
 
@@ -81,23 +91,22 @@ func (p *Poller) Run(ctx context.Context) {
 
 func (p *Poller) poll(ctx context.Context) {
 	if p.cli == nil {
-		p.recordFailure(errors.New("Docker client is unavailable"))
+		p.observationFailed(ctx, errors.New("docker client is unavailable"))
 		return
 	}
+	cycleCtx, cancelCycle := context.WithTimeout(ctx, p.cycleTimeout)
+	defer cancelCycle()
 	listedAt := time.Now()
-	containers, err := p.cli.ContainerList(ctx, client.ContainerListOptions{
+	listCtx, cancelList := context.WithTimeout(cycleCtx, p.requestTimeout)
+	containers, err := p.cli.ContainerList(listCtx, client.ContainerListOptions{
 		All:     true,
 		Filters: make(client.Filters).Add("label", labelManaged+"=true"),
 	})
+	cancelList()
 	if err != nil {
-		p.recordFailure(err)
+		p.observationFailed(ctx, fmt.Errorf("listing containers: %w", err))
 		return
 	}
-	if p.unavailable {
-		slog.Info("Docker connection restored", "component", "poller")
-	}
-	p.consecutiveFailures = 0
-	p.unavailable = false
 
 	current := make(map[string]ContainerState)
 	for i := range containers.Items {
@@ -114,13 +123,16 @@ func (p *Poller) poll(ctx context.Context) {
 			Status:  string(containers.Items[i].State),
 			Running: containers.Items[i].State == "running",
 		}
+		inspectCtx, cancelInspect := context.WithTimeout(cycleCtx, p.requestTimeout)
 		inspect, inspectErr := p.cli.ContainerInspect(
-			ctx,
+			inspectCtx,
 			containers.Items[i].ID,
 			client.ContainerInspectOptions{},
 		)
+		cancelInspect()
 		if inspectErr != nil {
-			slog.Warn("Docker inspect error", "component", "poller", "name", name, "err", inspectErr)
+			p.observationFailed(ctx, fmt.Errorf("inspecting container %q: %w", name, inspectErr))
+			return
 		} else if inspect.Container.State != nil {
 			// ContainerList and ContainerInspect are separate Docker API calls.
 			// A container can move from created to running between them, so the
@@ -135,8 +147,17 @@ func (p *Poller) poll(ctx context.Context) {
 			}
 		}
 		current[name] = state
-
-		// Detect drift: was running, now not
+	}
+	if err := cycleCtx.Err(); err != nil {
+		p.observationFailed(ctx, err)
+		return
+	}
+	if p.unavailable {
+		slog.Info("Docker connection restored", "component", "poller")
+	}
+	p.consecutiveFailures = 0
+	p.unavailable = false
+	for name, state := range current {
 		if prev, existed := p.lastStates[name]; existed {
 			if prev.Running && !state.Running {
 				if p.OnDrift != nil {
@@ -151,6 +172,12 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 
 	p.lastStates = current
+}
+
+func (p *Poller) observationFailed(parent context.Context, err error) {
+	if parent.Err() == nil {
+		p.recordFailure(err)
+	}
 }
 
 func (p *Poller) recordFailure(err error) {

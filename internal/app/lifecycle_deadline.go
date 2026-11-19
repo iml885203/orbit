@@ -7,6 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/iml885203/orbit/internal/cli"
 )
@@ -36,4 +39,55 @@ func lifecycleOperationError(ctx context.Context, err error, reconcileDispatched
 	default:
 		return err
 	}
+}
+
+type lifecycleCommandScopeKey struct{}
+
+type lifecycleCommandScope struct {
+	started        time.Time
+	cancelDeadline context.CancelFunc
+	stopSignals    context.CancelFunc
+}
+
+func lifecycleCommandHasBudget(cmd *cobra.Command) bool {
+	if cmd.Parent() == cmd.Root() {
+		switch cmd.Name() {
+		case "down", "restart":
+			return true
+		case "up":
+			return cli.JSONOutput
+		}
+	}
+	return cli.JSONOutput && cmd.Name() == "apply" && cmd.Parent() != nil && cmd.Parent().Name() == "env"
+}
+
+func prepareLifecycleCommandContext(cmd *cobra.Command) bool {
+	if !lifecycleCommandHasBudget(cmd) {
+		return false
+	}
+	ctx, stopSignals := lifecycleSignalContext(cmd.Context())
+	ctx, cancelDeadline := lifecycleOperationContext(ctx)
+	scope := &lifecycleCommandScope{started: time.Now(), cancelDeadline: cancelDeadline, stopSignals: stopSignals}
+	ctx = context.WithValue(ctx, lifecycleCommandScopeKey{}, scope)
+	cmd.Root().SetContext(ctx)
+	cmd.SetContext(ctx)
+	return true
+}
+
+func closeLifecycleCommand(cmd *cobra.Command) {
+	if cmd == nil || cmd.Context() == nil {
+		return
+	}
+	scope, _ := cmd.Context().Value(lifecycleCommandScopeKey{}).(*lifecycleCommandScope)
+	if scope != nil {
+		scope.cancelDeadline()
+		scope.stopSignals()
+	}
+}
+
+func lifecycleCommandStarted(ctx context.Context) time.Time {
+	if scope, _ := ctx.Value(lifecycleCommandScopeKey{}).(*lifecycleCommandScope); scope != nil {
+		return scope.started
+	}
+	return time.Now()
 }

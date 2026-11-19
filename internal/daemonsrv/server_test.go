@@ -25,11 +25,19 @@ import (
 // stick to the former.
 func newTestServer(t *testing.T, cfg *config.Config) *Server {
 	t.Helper()
+	return newTestServerAtDockerHost(t, cfg, "tcp://127.0.0.1:1")
+}
+
+func newTestServerAtDockerHost(t *testing.T, cfg *config.Config, host string) *Server {
+	t.Helper()
+	if cfg.Settings.ShutdownTimeout == 0 {
+		cfg.Settings.ShutdownTimeout = config.DefaultShutdownTimeout
+	}
 	// Isolate OrbitDir() so handlers that persist into it (e.g. the env-switch
 	// "current" pointer) never touch the real ~/.orbit / %LOCALAPPDATA%\orbit.
 	// Setting HOME is not enough on Windows, where OrbitDir prefers LOCALAPPDATA.
 	t.Setenv("ORBIT_HOME", t.TempDir())
-	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
+	t.Setenv("DOCKER_HOST", host)
 	app, err := engine.NewApp(cfg, nil, nil, "orbit-test")
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
