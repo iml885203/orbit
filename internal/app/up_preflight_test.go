@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -96,6 +97,7 @@ func TestPreflightBlocksUnsatisfiedPythonRequirementsWithSetupAction(t *testing.
 }
 
 func TestPreflightCoalescesSharedNodePackagesIntoOneSetupAction(t *testing.T) {
+	installPreflightNodeToolFixtures(t)
 	project := t.TempDir()
 	manifest := `{"packageManager":"pnpm@10.0.0","dependencies":{"fastify":"5.0.0"}}`
 	if err := os.WriteFile(filepath.Join(project, "package.json"), []byte(manifest), 0o644); err != nil {
@@ -144,4 +146,37 @@ func TestInfrastructurePreflightIgnoresHostProjectRequirements(t *testing.T) {
 	if err := preflightOrAbort(true, nil); err != nil {
 		t.Fatalf("infra-only blocked by host project: %v", err)
 	}
+}
+
+func installPreflightNodeToolFixtures(t *testing.T) {
+	t.Helper()
+	directory := t.TempDir()
+	source := filepath.Join(directory, "version_tool.go")
+	program := `package main
+import ("fmt"; "os"; "path/filepath"; "strings")
+func main() {
+ if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-v") { os.Exit(2) }
+ if strings.HasPrefix(filepath.Base(os.Args[0]), "pnpm") { fmt.Println("10.0.0") } else { fmt.Println("v22.4.1") }
+}
+`
+	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	extension := ""
+	if runtime.GOOS == "windows" {
+		extension = ".exe"
+	}
+	node := filepath.Join(directory, "node"+extension)
+	command := exec.Command("go", "build", "-o", node, source)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build preflight tool fixture: %v\n%s", err, output)
+	}
+	contents, err := os.ReadFile(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "pnpm"+extension), contents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
