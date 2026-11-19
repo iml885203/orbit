@@ -38,7 +38,9 @@ Freeze a release batch in this order:
 3. Choose the next version and update `VERSION`. Do not create the Orbit tag
    yet.
 4. Prepare and review the user-facing release notes.
-5. Run the candidate and platform gates, then manually approve publication.
+5. Explicitly approve the release workflow on current main. It builds one
+   candidate inventory, tests those exact bytes on native and SQL runners,
+   and promotes them without rebuilding. See [delivery evidence](delivery.md).
    The release workflow creates the Orbit tag only after every gate passes, so
    a failed candidate never leaves a release tag behind. GitHub locks the tag
    and complete asset set when the release is published, then emits an

@@ -70,7 +70,11 @@ The release gate owns these installed-user behaviors:
 
 Linux CI owns the complete Go and UI suites. The platform matrix compiles the
 full codebase, runs the packages with OS-specific implementations, exercises
-the native installer lifecycle, and drives one clean-user binary smoke test.
+the native installer lifecycle, and drives clean-user and automatic-update
+scenarios against a verified candidate. Relevant PRs run that matrix early;
+release native and SQL jobs consume the same candidate inventory, which is
+promoted without rebuilding. See [delivery evidence](delivery.md) for trust,
+actual job states and restart recovery.
 Do not duplicate every database-neutral domain test across all six runners;
 those tests cannot gain platform confidence from another operating system.
 

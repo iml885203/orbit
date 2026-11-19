@@ -44,6 +44,10 @@ Discover commands with `orbit --help`; the agent-facing JSON contract is in [doc
 - If `orbit up` errors about missing envs, run `orbit init` or `orbit source sync`.
 - `orbit up` auto-starts the daemon; no separate `orbit daemon start` needed.
 
+## Delivery recovery
+
+Before retrying delivery after a timeout or restart, read live evidence with `scripts/delivery_status.py` in the allocated task workspace. Use exact PR/run/tag selectors; agent-reported reviews are not GitHub review authority. Existing publication means verify and resume unfinished steps, not publish again. See [delivery.md](docs/delivery.md).
+
 ## Code review
 
 - `/orbit-review` — review unstaged + staged changes

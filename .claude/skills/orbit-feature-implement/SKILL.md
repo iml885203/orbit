@@ -66,6 +66,23 @@ Create a focused Conventional Commit that references the issue only after the Co
 4. Address every substantiated sub-agent finding. Re-run focused tests and the Completion gate, commit, push, and ask for another independent pass when changes are material.
 5. Check GitHub review threads and requested changes. Resolve actionable feedback with code and tests; do not mark unresolved feedback as resolved merely to unblock merging.
 
+## Delivery checkpoints
+
+Use the repository-owned [delivery observer](../../../docs/delivery.md) after
+state changes and before resuming after a timeout or restart. Supply exact
+PR/run/tag selectors and the allocated task workspace. Read live job results,
+including retained successful jobs from the same run when only failed jobs
+were rerun. Treat missing, failed or unexpectedly skipped evidence as incomplete;
+do not accept a green workflow aggregate alone. Agent review notes remain
+reported evidence, separate from GitHub reviews.
+
+The observer does not authorize mutations. Existing user authorization still
+applies; before retrying an ambiguous merge or publication, reconcile the live
+identity/state and perform only work that remains. A published immutable release
+must be verified and its unfinished verification/package steps resumed, never
+rebuilt or replaced. Release promotion uses the approved workflow's tested
+candidate; a PR artifact cannot be promoted as release authority.
+
 ## CI and merge gate
 
 Monitor the PR's required checks with structured CLI output where available. Do not merge while checks are pending, failing, skipped unexpectedly, or stale relative to the latest commit.

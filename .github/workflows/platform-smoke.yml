@@ -3,12 +3,40 @@ name: Platform smoke
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        type: string
+        default: v0.0.0-platform-smoke
+      artifact-id:
+        type: string
+        default: ''
+      archive-digest:
+        type: string
+        default: ''
+      manifest-sha256:
+        type: string
+        default: ''
+      producer-attempt:
+        type: string
+        default: ''
+      workflow-ref:
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  produce:
+    if: ${{ !inputs.artifact-id }}
+    uses: ./.github/workflows/candidate.yml
+    with:
+      version: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
+
   native:
+    needs: produce
+    if: ${{ !cancelled() && (inputs.artifact-id != '' || needs.produce.result == 'success') }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
@@ -18,40 +46,72 @@ jobs:
         include:
           - name: macOS arm64
             runner: macos-15
+            target: darwin/arm64
             windows: false
           - name: macOS amd64
             runner: macos-15-intel
+            target: darwin/amd64
             windows: false
           - name: Linux amd64
             runner: ubuntu-24.04
+            target: linux/amd64
             windows: false
           - name: Linux arm64
             runner: ubuntu-24.04-arm
+            target: linux/arm64
             windows: false
           - name: Windows amd64 Beta
             runner: windows-2025
+            target: windows/amd64
             windows: true
           - name: Windows arm64 Beta
             runner: windows-11-arm
+            target: windows/arm64
             windows: true
     env:
-      ORBIT_SMOKE_VERSION: v0.0.0-platform-smoke
+      ORBIT_SMOKE_VERSION: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
+      CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CANDIDATE_ARTIFACT_ID: ${{ inputs.artifact-id || needs.produce.outputs.artifact-id }}
+      CANDIDATE_ARCHIVE_DIGEST: ${{ inputs.archive-digest || needs.produce.outputs.archive-digest }}
+      CANDIDATE_MANIFEST_SHA: ${{ inputs.manifest-sha256 || needs.produce.outputs.manifest-sha256 }}
+      CANDIDATE_PRODUCER_ATTEMPT: ${{ inputs.producer-attempt || needs.produce.outputs.producer-attempt }}
+      CANDIDATE_WORKFLOW_REF: ${{ inputs.workflow-ref || needs.produce.outputs.workflow-ref }}
+      CANDIDATE_TARGET: ${{ matrix.target }}
+      GH_TOKEN: ${{ github.token }}
+      ORBIT_UPDATE_BACKGROUND: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          version: 11.8.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+          python-version: '3.13'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
-      - name: Build dashboard
-        run: pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build
+          artifact-ids: ${{ env.CANDIDATE_ARTIFACT_ID }}
+          path: ${{ runner.temp }}/candidate
+      - name: Isolate candidate runtime state
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'orbit-candidate-home'
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('ORBIT_HOME=' + str(root) + '\nORBIT_UPDATE_HOME=' + str(root / 'updates') + '\n')
+              for name in ('TMPDIR', 'TMP', 'TEMP', 'GOTMPDIR', 'ORBIT_TEST_SOCKET_ROOT'):
+                  output.write(name + '=' + os.environ['RUNNER_TEMP'] + '\n')
+          PYCODE
+      - name: Verify and install exact candidate bytes
+        shell: bash
+        run: >-
+          python scripts/candidate.py consume
+          --directory "$RUNNER_TEMP/candidate" --version "$ORBIT_SMOKE_VERSION"
+          --producer-attempt "$CANDIDATE_PRODUCER_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --target "$CANDIDATE_TARGET"
       - name: Compile the full native codebase
         run: go build ./...
       - name: Run OS-specific native tests
@@ -64,21 +124,17 @@ jobs:
         if: ${{ matrix.windows }}
         shell: pwsh
         run: ./scripts/test-install.ps1
-      - name: Build and smoke Unix binary
+      - name: Smoke the verified Unix candidate
         if: ${{ !matrix.windows }}
         shell: bash
         run: |
-          mkdir -p bin
-          go build -ldflags "-s -w -X main.version=${ORBIT_SMOKE_VERSION}" -o bin/orbit ./cmd/orbit
           ORBIT_BIN="$PWD/bin/orbit" go test -tags=platformsmoke -run 'TestPlatformSmoke(CleanUserJourney|AutomaticUpdateWorker)' -v ./internal/app
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        if: ${{ startsWith(matrix.runner, 'macos') }}
+        if: ${{ !matrix.windows }}
         with:
           dotnet-version: 8.0.x
-      # Linux runs this journey on every pull request (ci.yml); macOS runs it
-      # here, where dotnet watch and the build gate meet a different OS.
       - name: Start a .NET service in build and watch modes
-        if: ${{ startsWith(matrix.runner, 'macos') }}
+        if: ${{ !matrix.windows }}
         shell: bash
         env:
           ORBIT_E2E_REQUIRE_DOTNET: "1"
@@ -102,12 +158,10 @@ jobs:
           ORBIT_HOME="$test_root/home" "$test_root/bin/orbit" uninstall --yes --purge
           test ! -e "$test_root/bin/orbit"
           test ! -e "$test_root/home"
-      - name: Build and smoke Windows binary
+      - name: Smoke the verified Windows candidate
         if: ${{ matrix.windows }}
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force bin | Out-Null
-          go build -ldflags "-s -w -X main.version=$env:ORBIT_SMOKE_VERSION" -o bin/orbit.exe ./cmd/orbit
           $env:ORBIT_BIN = "$PWD\bin\orbit.exe"
           go test -tags=platformsmoke -run 'TestPlatformSmoke(CleanUserJourney|AutomaticUpdateWorker)' -v ./internal/app
       - name: Exercise native Windows uninstall command
@@ -153,3 +207,20 @@ jobs:
           }
           if (Test-Path $orbitHome) { throw "user data was not purged" }
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $testRoot
+      - name: Bind successful native scenarios to the tested bytes
+        shell: bash
+        run: >-
+          python scripts/candidate.py receipt
+          --directory "$RUNNER_TEMP/candidate" --version "$ORBIT_SMOKE_VERSION"
+          --producer-attempt "$CANDIDATE_PRODUCER_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --target "$CANDIDATE_TARGET"
+          --receipts "$RUNNER_TEMP/native-receipts"
+      - name: Upload native receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: native-evidence-${{ env.CANDIDATE_ARTIFACT_ID }}-${{ matrix.runner }}
+          path: ${{ runner.temp }}/native-receipts
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30

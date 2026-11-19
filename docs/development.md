@@ -97,6 +97,9 @@ review the baseline reduction with the code. CI compares that inventory with
 the exact base commit and rejects expansion. `make lint` remains the stricter
 all-findings view; existing debt is not a clean lint result.
 
+For candidate verification and restart recovery, see [Verify and resume a delivery](delivery.md).
+The full gate also checks GitHub workflow semantics with a pinned actionlint.
+
 Release numbering and compatibility promises are documented in
 [Versioning and compatibility](versioning.md).
 
