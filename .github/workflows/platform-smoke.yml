@@ -101,6 +101,8 @@ jobs:
           root = Path(os.environ['RUNNER_TEMP']) / 'orbit-candidate-home'
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write('ORBIT_HOME=' + str(root) + '\nORBIT_UPDATE_HOME=' + str(root / 'updates') + '\n')
+              for name in ('TMPDIR', 'TMP', 'TEMP', 'GOTMPDIR', 'ORBIT_TEST_SOCKET_ROOT'):
+                  output.write(name + '=' + os.environ['RUNNER_TEMP'] + '\n')
           PYCODE
       - name: Verify and install exact candidate bytes
         shell: bash

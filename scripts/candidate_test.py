@@ -1,4 +1,3 @@
-import copy
 import json
 import os
 from pathlib import Path
@@ -118,6 +117,19 @@ class CandidateTrust(unittest.TestCase):
         path.unlink()
         with self.assertRaises(ValueError):
             candidate.verify_receipts(root, self.value, self.digest, '20', '10')
+
+    def test_cli_display_version_accepts_build_time_with_an_exact_tag(self):
+        binary = self.directory / 'dist/orbit-linux-amd64'
+        with mock.patch.dict(os.environ, {'RUNNER_TEMP': str(self.root)}):
+            for reported in (self.expected['version'], self.expected['version'] + ' (2026-11-19 09:30:00 +0000)'):
+                envelope = {'schema_version': 'orbit.cli.v1', 'ok': True, 'data': {'version': reported}}
+                with mock.patch('candidate.subprocess.check_output', return_value=json.dumps(envelope)):
+                    candidate.verify_binary(binary, self.value, 'linux/amd64')
+            for reported in (self.expected['version'] + '0 (time)', '', None, 'other'):
+                envelope = {'schema_version': 'orbit.cli.v1', 'ok': True, 'data': {'version': reported}}
+                with mock.patch('candidate.subprocess.check_output', return_value=json.dumps(envelope)):
+                    with self.assertRaises(ValueError):
+                        candidate.verify_binary(binary, self.value, 'linux/amd64')
 
     def test_artifact_api_identity_expiration_and_digest_fail_closed(self):
         metadata = {'id': 20, 'expired': False, 'digest': 'sha256:' + 'd' * 64, 'name': 'orbit-candidate-10-2',

@@ -220,7 +220,9 @@ def verify_binary(binary, value, target):
     home = Path(os.environ['RUNNER_TEMP']) / 'candidate-version-home'
     env = dict(os.environ, ORBIT_HOME=str(home), ORBIT_UPDATE_HOME=str(home / 'updates'), ORBIT_UPDATE_BACKGROUND='1')
     version = json.loads(subprocess.check_output([str(binary.resolve()), 'version', '--json'], env=env, text=True))
-    if version.get('schema_version') != 'orbit.cli.v1' or not version.get('ok') or version['data']['version'] != value['version']:
+    reported = version.get('data', {}).get('version')
+    if (version.get('schema_version') != 'orbit.cli.v1' or not version.get('ok')
+            or not isinstance(reported, str) or reported.split(maxsplit=1)[:1] != [value['version']]):
         raise ValueError('executed candidate reports the wrong version')
 
 
