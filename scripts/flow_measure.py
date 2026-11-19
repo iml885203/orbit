@@ -217,6 +217,9 @@ def import_delivery(journal, report):
             if job.get('conclusion') == 'skipped':
                 note(journal, identifier + ':skipped', 'GitHub skipped: ' + job['name'])
                 continue
+            if job.get('status') in ('queued', 'waiting', 'pending', 'requested'):
+                note(journal, identifier + ':queued', 'GitHub waiting for admission: ' + job['name'])
+                continue
             started, finished, queued = (job.get(k) for k in ('started_at', 'completed_at', 'created_at'))
             if not started:
                 note(journal, identifier + ':pending-time', 'GitHub start time unavailable: ' + job['name'])

@@ -83,6 +83,21 @@ class FlowEvidenceTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             flow.import_delivery(value, incompatible)
 
+    def test_queued_start_placeholder_can_change_when_runner_actually_starts(self):
+        value, queued = journal(), checkpoint()
+        queued['pr_ci']['jobs'][0].update(status='queued', started_at=at(1), completed_at=None)
+        flow.import_delivery(value, queued)
+        self.assertEqual(len([s for s in flow.validate(value).values() if s['stage'] == 'ci']), 0)
+        running = checkpoint()
+        running['pr_ci']['jobs'][0].update(status='in_progress', completed_at=None)
+        flow.import_delivery(value, running)
+        finished = checkpoint()
+        finished['pr_ci']['jobs'][0]['status'] = 'completed'
+        flow.import_delivery(value, finished)
+        executions = [s for s in flow.validate(value).values() if s['stage'] == 'ci']
+        self.assertEqual(len(executions), 1)
+        self.assertEqual(executions[0]['at'], at(3))
+
     def test_foreign_issue_or_repository_rejected(self):
         for field, wrong in [('repository', 'other/repo'), ('issues', [{'number': 294}])]:
             report = checkpoint()

@@ -86,6 +86,8 @@ or absence of work. GitHub queue time is job admission waiting, not CPU time.
 Wall clocks must agree; inconsistent timestamps are rejected, not corrected by
 guessing. Earlier requirements discussion and unobserved failed attempts remain
 unknown. A single issue is a pilot sample, not a productivity or speedup claim.
+Queued GitHub jobs can carry a placeholder start time. They remain notes until
+the job runs; the actual start then defines execution and admission-queue time.
 
 ## Event contract
 

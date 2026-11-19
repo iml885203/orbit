@@ -76,6 +76,8 @@ python3 scripts/flow_measure.py --workspace "$FLOW_WORKSPACE" export
 成功，也不代表期間沒有工作。GitHub 排隊時間是 job 等候執行，不是 CPU
 時間。時間不一致會被拒絕，不猜測校正。原始需求討論與未觀測到的失敗
 attempt 仍是未知；單張試跑不能用來宣稱生產力或固定加速幅度。
+GitHub 排隊中的 job 可能帶暫存開始時間。此時只保留註記，等實際執行
+後，再以真正開始時間建立執行與排隊區間。
 
 ## 事件契約
 
