@@ -1,16 +1,17 @@
 package engine
 
 import (
-	"bufio"
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/iml885203/orbit/internal/logging"
 )
 
 type dotnetBuildGate struct {
@@ -47,25 +48,16 @@ func (a *App) buildDotnetProject(ctx context.Context, name, dir, project string,
 	build := exec.CommandContext(ctx, "dotnet", "build", project, "-v", "minimal")
 	build.Dir = dir
 	build.Env = environment
-	stdout, err := build.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("dotnet build pipe failed: %w", err)
-	}
-	stderr, err := build.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("dotnet build pipe failed: %w", err)
-	}
-	if err := build.Start(); err != nil {
-		return fmt.Errorf("dotnet build start failed: %w", err)
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(io.MultiReader(stdout, stderr))
-		for scanner.Scan() {
-			a.Logs.Write(name, scanner.Text())
-		}
-	}()
-	if err := build.Wait(); err != nil {
+	const maxBuildLineBytes = 64 * 1024
+	stdout := logging.NewBoundedLineBuffer(maxBuildLineBytes, func(line string) { a.Logs.Write(name, line) })
+	stderr := logging.NewBoundedLineBuffer(maxBuildLineBytes, func(line string) { a.Logs.Write(name, line) })
+	defer stdout.Flush()
+	defer stderr.Flush()
+	build.Stdout = stdout
+	build.Stderr = stderr
+	// Compiler descendants can retain output handles after the build exits.
+	build.WaitDelay = 2 * time.Second
+	if err := build.Run(); err != nil {
 		return fmt.Errorf("dotnet build failed: %w", err)
 	}
 	return nil

@@ -69,6 +69,12 @@ Events never mutate state directly — they are dispatched to the orchestrator w
 
 `POST /api/up` returns as soon as startup is *dispatched* (`handlers_service.go` calls `StartServices` then responds), not after everything is healthy — the CLI/dashboard watch convergence over the SSE status stream. Services are launched as soon as their declared dependencies reach `Healthy`. The DAG itself doesn't block — independent services start in parallel, except that non-watch .NET service builds share one context-aware admission gate. Their runtime processes still start independently as soon as each serialized build completes.
 
+Build stdout and stderr are drained concurrently. Diagnostics exceeding 64 KiB
+are emitted in UTF-8-safe chunks marked as continuing; partial output does not
+grow without a bound. Compiler descendants retaining output handles after exit
+have a two-second drain window, after which the build reports an error instead
+of holding the admission gate indefinitely. This is not a total build timeout.
+
 The response identifies the exact daemon-resolved resource set, including
 transitive dependencies and group filtering. The CLI waits only for that set.
 When the set is empty, `up` is an explicit successful no-op and returns
