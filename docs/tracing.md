@@ -35,11 +35,23 @@ it, and restores the resources that were already running.
 See [configuration.md](configuration.md#tracing) for the knobs (`otlp_port`,
 `max_traces`).
 
-Traces live in an in-memory ring buffer (default 1000) and are dropped on
-`orbit down` — this is a local dev aid, not a retention store. Ingest is bounded
-on three axes so a busy service can't grow memory without limit: the trace count
-(`max_traces`), spans per trace, and attribute bytes per span. Spans shed by
-these ceilings are counted and reported by `orbit tracing status`.
+Traces live in memory (default 1000 traces) and are cleared by `orbit down`.
+The oldest whole trace is evicted when either the count or approximate 64 MiB
+retention budget is reached. This budget covers retained data, not process RSS.
+Each trace holds at most 2000 spans. Re-exporting a span replaces its previous
+value rather than consuming another slot.
+
+| Input | Limit and result |
+|---|---|
+| One traces/logs export | 8 MiB compressed and decoded; excess returns HTTP 413 before ingestion |
+| Trace name, status message, kind/status | 16 KiB content; UTF-8-safe truncation with `…[truncated]` |
+| Trace/span/parent IDs and service name | 1 KiB each; an oversized identity rejects the span rather than merging different identities |
+| Span attributes | 16 KiB total and 128 attributes; an oversized set is omitted |
+
+`orbit tracing status --json` reports retained bytes, the budget, whole-trace
+evictions and rejected spans. Body rejections are HTTP 413, not an invented
+span count. The per-minute rate uses fixed one-second buckets and expires while
+idle. These fixed limits require no YAML changes.
 
 If the configured port is already taken, Orbit auto-advances to the next free
 port (unless you pinned `otlp_port`, in which case a conflict is reported rather
@@ -125,11 +137,27 @@ one trace, and `orbit logs <resource>` is unchanged and still shows the
 resource's stdout. Flags, the JSON page and `--since` paging are in
 [agent-cli.md](agent-cli.md#log-records).
 
-Records live in one in-memory ring shared by every service and are dropped on
-`orbit down`. The ring is bounded by record count and by bytes, evicting the
-oldest records past either bound. Very long body and attribute values are
-truncated, and attributes past the OpenTelemetry default count limit are
-dropped.
+Records share one in-memory ring: at most 10,000 records and approximately
+32 MiB, with oldest records evicted first. `orbit down` clears it. Body,
+severity, scope and attribute values retain at most 16 KiB content plus a
+`…[truncated]` marker. Identity fields use the same 1 KiB rejection limit as
+spans. Attribute keys over 16 KiB are omitted; at most 128 attributes survive
+export conversion (direct ingest sets over that count are omitted).
+
+## Stdout history
+
+Stdout keeps the same log/history and follow formats. Very long lines are emitted
+in 64 KiB content chunks with ` [line continues]`; a huge line written directly
+to history is truncated with ` [line truncated]`. Markers are additional bytes.
+This keeps draining producers even when a line never ends.
+
+History keeps at most 1000 lines and 1 MiB per service, and 16 MiB across services.
+It retains at most 128 service names of up to 256 bytes; longer names are rejected.
+The oldest lines go first within a service; aggregate pressure evicts the least
+recently written service's whole history. Follow continues delivering new output
+when older history is evicted. Internal retention counters distinguish eviction,
+truncation and rejected service lines. Capture durable logs separately when you
+need a complete history.
 
 ## Logs ↔ traces
 

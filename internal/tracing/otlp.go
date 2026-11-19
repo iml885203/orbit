@@ -124,7 +124,11 @@ func readBody(r *http.Request) ([]byte, error) {
 		defer func() { _ = gz.Close() }()
 		reader = gz
 	}
-	return io.ReadAll(reader)
+	body, err := io.ReadAll(io.LimitReader(reader, maxOTLPBodyBytes+1))
+	if len(body) > maxOTLPBodyBytes {
+		return nil, &http.MaxBytesError{Limit: maxOTLPBodyBytes}
+	}
+	return body, err
 }
 
 // spansFromExport flattens an OTLP export request into Orbit spans, carrying

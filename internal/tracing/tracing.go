@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -17,17 +18,20 @@ import (
 // misses an intermediate update still gets the trace on its next poll. See
 // .claude/rules/go-event-loop.md.
 type Store struct {
-	mu      sync.RWMutex
-	max     int
-	order   []string               // traceIDs in first-seen order (oldest first)
-	byID    map[string]*traceAccum // traceID -> accumulating spans
-	subs    map[int]chan TraceSummary
-	nextSub int
+	mu            sync.RWMutex
+	max           int
+	maxBytes      int
+	retainedBytes int
+	tracesEvicted int64
+	order         []string               // traceIDs in first-seen order (oldest first)
+	byID          map[string]*traceAccum // traceID -> accumulating spans
+	subs          map[int]chan TraceSummary
+	nextSub       int
 
 	totalSpans   int64
 	spansDropped int64
 	lastReceived time.Time
-	recentSpans  []time.Time // span receive times within the rate window
+	recentSpans  [60]spanRateBucket
 
 	// Receiver health, written once by the daemon after it attempts to bind
 	// the OTLP listener (see Store.SetReceiver). Guarded by mu like the rest.
@@ -49,9 +53,8 @@ type Store struct {
 type traceAccum struct {
 	firstSeen time.Time
 	spans     map[string]Span // spanID -> span (last write wins; dedupes re-exports)
+	bytes     int
 }
-
-const rateWindow = time.Minute
 
 // Ingest ceilings. always_on sampling (the local-dev default) means a busy
 // service can push unbounded spans into a single trace and unbounded attribute
@@ -76,10 +79,11 @@ func NewStore(max int) *Store {
 		max = 1
 	}
 	return &Store{
-		max:  max,
-		byID: make(map[string]*traceAccum),
-		subs: make(map[int]chan TraceSummary),
-		logs: NewLogStore(maxLogRecords, maxLogBytes),
+		max:      max,
+		maxBytes: maxTraceBytes,
+		byID:     make(map[string]*traceAccum),
+		subs:     make(map[int]chan TraceSummary),
+		logs:     NewLogStore(maxLogRecords, maxLogBytes),
 	}
 }
 
@@ -104,9 +108,20 @@ func (s *Store) Ingest(spans []Span) {
 		if sp.TraceID == "" || sp.SpanID == "" {
 			continue
 		}
+		sp, valid := retainedSpan(sp)
+		if !valid {
+			s.spansDropped++
+			continue
+		}
+		spanBytes := retainedSpanBytes(sp)
+		if spanBytes+traceOverhead+len(sp.TraceID) > s.maxBytes {
+			s.spansDropped++
+			continue
+		}
 		acc, ok := s.byID[sp.TraceID]
 		if !ok {
-			acc = &traceAccum{firstSeen: now, spans: make(map[string]Span)}
+			acc = &traceAccum{firstSeen: now, spans: make(map[string]Span), bytes: traceOverhead + len(sp.TraceID)}
+			s.retainedBytes += acc.bytes
 			s.byID[sp.TraceID] = acc
 			s.order = append(s.order, sp.TraceID)
 		}
@@ -117,19 +132,21 @@ func (s *Store) Ingest(spans []Span) {
 			s.spansDropped++
 			continue
 		}
-		// Per-span attribute-bytes cap: drop the attribute set whole rather
-		// than the span, so the span still shows in the waterfall.
-		if attrBytes(sp.Attributes) > maxAttrBytesPerSpan {
-			sp.Attributes = nil
+		previous := 0
+		if old, exists := acc.spans[sp.SpanID]; exists {
+			previous = retainedSpanBytes(old)
 		}
+		acc.bytes += spanBytes - previous
+		s.retainedBytes += spanBytes - previous
 		acc.spans[sp.SpanID] = sp
 		touched[sp.TraceID] = struct{}{}
 		accepted++
+		s.evictLocked(touched)
 	}
 	s.totalSpans += int64(accepted)
 	s.lastReceived = now
 	s.recordRate(now, accepted)
-	s.evictLocked()
+	s.evictLocked(touched)
 
 	// Build summaries for touched traces that survived eviction, then notify
 	// outside the spans loop so each trace is sent at most once.
@@ -155,29 +172,40 @@ func attrBytes(attrs map[string]string) int {
 	return n
 }
 
-// recordRate appends span receive times and prunes outside the rate window.
-// Caller holds mu.
+type spanRateBucket struct {
+	second int64
+	count  int
+}
+
 func (s *Store) recordRate(now time.Time, n int) {
-	cutoff := now.Add(-rateWindow)
-	for i := 0; i < n; i++ {
-		s.recentSpans = append(s.recentSpans, now)
+	second := now.Unix()
+	bucket := &s.recentSpans[second%int64(len(s.recentSpans))]
+	if bucket.second != second {
+		*bucket = spanRateBucket{second: second}
 	}
-	keep := 0
-	for _, t := range s.recentSpans {
-		if t.After(cutoff) {
-			s.recentSpans[keep] = t
-			keep++
+	bucket.count += n
+}
+
+func (s *Store) spansPerMinute(now time.Time) int {
+	total := 0
+	for _, bucket := range &s.recentSpans {
+		if bucket.second > now.Unix()-60 && bucket.second <= now.Unix() {
+			total += bucket.count
 		}
 	}
-	s.recentSpans = s.recentSpans[:keep]
+	return total
 }
 
 // evictLocked drops oldest traces until within capacity. Caller holds mu.
-func (s *Store) evictLocked() {
-	for len(s.order) > s.max {
+func (s *Store) evictLocked(touched map[string]struct{}) {
+	for len(s.order) > 0 && (len(s.order) > s.max || s.retainedBytes > s.maxBytes) {
 		oldest := s.order[0]
+		s.order[0] = ""
 		s.order = s.order[1:]
+		s.retainedBytes -= s.byID[oldest].bytes
+		s.tracesEvicted++
 		delete(s.byID, oldest)
+		delete(touched, oldest)
 	}
 }
 
@@ -243,6 +271,9 @@ func (s *Store) Get(id string) (Trace, bool) {
 		return Trace{}, false
 	}
 	spans := sortedSpans(acc)
+	for i := range spans {
+		spans[i].Attributes = maps.Clone(spans[i].Attributes)
+	}
 	sum := summarizeSorted(id, acc, spans, rule)
 	return Trace{
 		TraceID:       sum.TraceID,
@@ -310,7 +341,10 @@ func (s *Store) Stats() TracingStatus {
 		ReceiverError:      s.receiverErr,
 		TraceCount:         len(s.order),
 		TotalSpans:         s.totalSpans,
-		SpansPerMin:        len(s.recentSpans),
+		SpansPerMin:        s.spansPerMinute(time.Now()),
+		RetainedBytes:      s.retainedBytes,
+		ByteLimit:          s.maxBytes,
+		TracesEvicted:      s.tracesEvicted,
 		LastReceivedUnixMs: lastMs,
 		SpansDropped:       s.spansDropped,
 	}

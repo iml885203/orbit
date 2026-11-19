@@ -79,6 +79,7 @@ packages:
     output_path: "ui/src/lib/types/tracing.gen.ts"
     exclude_files:
       - "tracing.go"
+      - "trace_budget.go"
       - "logs.go"
       - "otlp.go"
       - "filter.go"

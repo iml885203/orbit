@@ -211,8 +211,7 @@ func resourceLastRestart(svc *engine.ServiceInfo) *ResourceRestart {
 }
 
 func resourceLogsAvailable(logs *logging.Multiplexer, name string) bool {
-	buffer := logs.GetBuffer(name)
-	return buffer != nil && buffer.Count() > 0
+	return logs.HasLogs(name)
 }
 
 func resourceExitCode(svc *engine.ServiceInfo) *int {

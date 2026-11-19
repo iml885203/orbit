@@ -496,6 +496,11 @@ Tracing is on by default; it is off only when the active env sets an explicit
 `tracing.enabled: false` (see [tracing.md](tracing.md)). Check the live receiver
 state with `orbit tracing status --json`.
 
+Its `data.retainedBytes` and `data.byteLimit` describe approximate trace retention;
+`data.tracesEvicted` counts whole-trace evictions. `data.spansDropped` counts
+rejected spans, excluding rejected HTTP exports and evicted traces. Retention
+and input limits are owned by [tracing.md](tracing.md).
+
 ```bash
 orbit trace --json             # recent traces; --limit N caps the count
 orbit trace --search item/1 --json   # traces whose span names or attribute values contain the text

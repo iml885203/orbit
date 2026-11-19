@@ -34,11 +34,20 @@ Orbit 會在中斷既有環境前先驗證修改，接著套用並恢復原先�
 參數（`otlp_port`、`max_traces`）見
 [configuration.zh-TW.md](configuration.zh-TW.md#tracing)。
 
-Trace 存在 in-memory ring buffer（預設 1000 條），`orbit down` 即清空 ——
-這是本地開發輔助，不是長期保存。Ingest 在三個維度上有上限，讓忙碌的 service
-不會無限撐大記憶體：trace 數（`max_traces`）、每條 trace 的 span 數、每個 span
-的 attribute bytes。被這些上限丟棄的 span 會被計數，並由 `orbit tracing status`
-回報。
+Trace 保存在記憶體中（預設 1000 條），`orbit down` 即清空。超過條數或約
+64 MiB 保留容量時，會淘汰最舊的整條 trace。這是保留資料的估計值，不是 process
+RSS 上限。每條 trace 最多 2000 個 span；重送相同 span 會取代舊值，不另占一筆。
+
+| 輸入 | 上限與結果 |
+|---|---|
+| 一次 traces／logs export | 壓縮前後各 8 MiB；超量在寫入前回 HTTP 413 |
+| Trace 名稱、狀態訊息、kind／status | 16 KiB 內容；依 UTF-8 邊界截斷並加 `…[truncated]` |
+| Trace／span／parent ID 與 service 名稱 | 各 1 KiB；超長身分會拒絕該 span，避免截斷後混淆不同身分 |
+| Span attributes | 總計 16 KiB、最多 128 個；超量時省略整組 |
+
+`orbit tracing status --json` 會回報保留 bytes、容量、整條 trace 淘汰數與被拒絕
+的 span 數。Body 拒絕以 HTTP 413 表示，不推算尚未解碼的 span 數。每分鐘速率
+使用固定的一秒計數桶，閒置時也會過期。這些固定上限不需要修改 YAML。
 
 如果設定的 port 已被佔用，Orbit 會自動往下找下一個空的 port（除非你有釘死
 `otlp_port`，這時衝突會被回報而不是靜默換 port）。`orbit tracing status` 會顯示
@@ -115,9 +124,23 @@ metrics 會被接受後丟棄。
 record；`orbit logs <resource>` 不變，仍然顯示 resource 的 stdout。Flag、JSON
 頁面與 `--since` 分頁見 [agent-cli.md](agent-cli.md#log-records)。
 
-所有 service 共用一個 in-memory ring，`orbit down` 即清空。Ring 同時以筆數和
-bytes 設上限，超過任一上限就淘汰最舊的 record。過長的 body 或 attribute 值會
-被截斷，超過 OpenTelemetry 預設數量上限的 attribute 會被丟棄。
+所有 service 共用一個 in-memory ring：最多 10,000 筆、約 32 MiB，超量先淘汰
+最舊 record。`orbit down` 即清空。Body、severity、scope 和 attribute 值各保留
+16 KiB 內容，超長加上 `…[truncated]`。身分欄位沿用 span 的 1 KiB 拒絕上限。
+超過 16 KiB 的 attribute key 會省略；export 轉換最多保留 128 個 attributes
+（直接 ingest 超過此數量時省略整組）。
+
+## Stdout 歷史
+
+Stdout 沿用既有 log／history 與 follow 格式。超長行切成 64 KiB 內容的片段，
+加上 ` [line continues]`；直接寫入歷史的巨大單行則截斷並加
+` [line truncated]`。標記另計 bytes。即使輸出一直沒有換行，也會持續讀取。
+
+每個 service 最多保留 1000 行、1 MiB，所有 service 合計 16 MiB。最多保留
+128 個 service 名稱，每個最多 256 bytes；更長的名稱會被拒絕。單一 service
+先淘汰最舊行；總容量不足時，淘汰最久沒有寫入的 service 整份歷史。舊歷史被
+淘汰後，follow 仍接收新輸出。內部保留計數器分別記錄淘汰、截斷與被拒絕的
+service 行數。需要完整歷史時，請另行保存長期日誌。
 
 ## Logs ↔ traces
 
