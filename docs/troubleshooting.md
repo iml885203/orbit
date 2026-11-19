@@ -191,6 +191,23 @@ sudo chown -R $(whoami) ~/.orbit
 
 ## CLI
 
+### A lifecycle command is waiting or observation ended
+
+Read the printed operation ID and phase, then run `orbit status --json` from
+the same project and instance. A slow stop can still be using its configured
+shutdown grace period. Piped output includes elapsed heartbeats, so silence
+does not have to hide an accepted operation.
+
+`orbit down --timeout 30s` bounds how long the CLI observes. Ctrl-C detaches;
+neither action rolls back accepted daemon work. Inspect current status before
+retrying. A failed operation reports stop or cleanup errors even when tracked
+resources already appear stopped. For Docker observation failures, use
+`orbit doctor` and restore Docker access; polling recovers automatically.
+Host-only stopping can succeed without Docker. If `cleanup` is `unavailable`,
+the warning means orphan container cleanup was not verified.
+See [lifecycle observation](agent-cli.md#lifecycle-observation) for result and
+missing-history semantics.
+
 ### `orbit exec` complains the container name doesn't exist
 Orbit's default naming is `orbit-<service>`. If you set `ORBIT_NAMESPACE=foo`, the name becomes `foo-<service>`. Check `docker ps --format '{{.Names}}'`.
 

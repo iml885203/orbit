@@ -166,6 +166,15 @@ and destructive-operation rules. Deeper references live in the repository's
   lifecycle changes; `up` and `down` use the same selection modes.
 - Use `orbit up --infra --json` only when the user explicitly wants
   containers without host services.
+- A canceled or timed-out lifecycle wait may leave accepted daemon work running.
+  Read `orbit status --json` before retrying; do not infer rollback or dispatch
+  the same action again just because observation ended. Use timeout flags only
+  when the installed command's `--help` lists them.
+- Check whole-down cleanup evidence when the response provides it:
+  `cleanup: "unavailable"` means configured host resources stopped but orphan
+  container cleanup was not verified. Report that warning and use `orbit doctor`;
+  do not describe the namespace as fully clean. An older response without cleanup
+  evidence also cannot prove orphan cleanup.
 - Use `orbit instance list --json` to discover named runtimes and their actual
   endpoints. Named-instance ports may differ from the declarations.
 - Use `orbit source sync [<name>] --json` to refresh shared configuration and

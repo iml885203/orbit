@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,10 +25,12 @@ const UpdateTransactionEnv = "ORBIT_UPDATE_TRANSACTION"
 
 // Client is a thin HTTP client that communicates with the daemon via unix socket.
 type Client struct {
-	http          *http.Client
-	socketPath    string
-	ctx           context.Context
-	transactionID string
+	http               *http.Client
+	socketPath         string
+	ctx                context.Context
+	transactionID      string
+	expectedEpoch      int64
+	expectedGeneration *uint64
 }
 
 // NewClient creates a new daemon client.
@@ -45,7 +48,9 @@ func (c *Client) WithContext(ctx context.Context) *Client {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return &Client{http: c.http, socketPath: c.socketPath, ctx: ctx, transactionID: c.transactionID}
+	clone := *c
+	clone.ctx = ctx
+	return &clone
 }
 
 // ErrDaemonUnreachable indicates the daemon socket is unreachable or not
@@ -93,6 +98,10 @@ func (c *Client) get(rawURL string) (*http.Response, error) {
 }
 
 func (c *Client) do(req *http.Request) (*http.Response, error) {
+	if c.expectedGeneration != nil {
+		req.Header.Set(ExpectedEpochHeader, strconv.FormatInt(c.expectedEpoch, 10))
+		req.Header.Set(ExpectedGenerationHeader, strconv.FormatUint(*c.expectedGeneration, 10))
+	}
 	if c.transactionID != "" {
 		req.Header.Set(UpdateTransactionHeader, c.transactionID)
 	}
@@ -320,11 +329,9 @@ func ReadAPIError(resp *http.Response) error {
 // FastClone returns a client on the same socket with tight timeouts, for
 // best-effort notifications that must never block the caller.
 func FastClone(c *Client, timeout time.Duration) *Client {
-	return &Client{
-		http:       SocketHTTPClientWithTimeout(c.socketPath, timeout, timeout),
-		socketPath: c.socketPath,
-		ctx:        c.ctx,
-	}
+	clone := *c
+	clone.http = SocketHTTPClientWithTimeout(c.socketPath, timeout, timeout)
+	return &clone
 }
 
 // PostJSON posts body to path and decodes the APIResponse — the exported

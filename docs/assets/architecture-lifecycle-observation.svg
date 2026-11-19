@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 660" role="img" aria-labelledby="title desc">
+  <title id="title">Lifecycle work and observation</title>
+  <desc id="desc">The daemon acknowledges an accepted operation, serializes lifecycle work, and records success or failure. Independent bounded status and operation requests keep observers responsive. Canceling an observer detaches it without canceling accepted daemon work.</desc>
+  <style>
+    .canvas{fill:#f6f8fa}.node{fill:#fff;stroke:#d0d7de}.label{fill:#1f2328}.detail{fill:#59636e}.edge{stroke:#0969da;fill:none;stroke-width:2}.arrow{fill:#0969da}
+    text{font-family:system-ui,sans-serif;text-anchor:middle;font-size:22px}
+    .detail{font-size:18px}
+    @media(prefers-color-scheme:dark){.canvas{fill:#161b22}.node{fill:#1c2128;stroke:#30363d}.label{fill:#e6edf3}.detail{fill:#a4aeba}.edge{stroke:#58a6ff}.arrow{fill:#58a6ff}}
+  </style>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0 0 10 5 0 10Z"/></marker></defs>
+  <rect class="canvas" width="400" height="660" rx="12"/>
+  <rect class="node" x="16" y="16" width="368" height="104" rx="10"/>
+  <text class="label" x="200" y="56">Accepted operation</text>
+  <text class="detail" x="200" y="88">Prompt ACK + operation ID</text>
+  <path class="edge" d="M200 120V156" marker-end="url(#arrow)"/>
+  <rect class="node" x="16" y="164" width="368" height="104" rx="10"/>
+  <text class="label" x="200" y="204">Serialized daemon work</text>
+  <text class="detail" x="200" y="236">Keep generation protection</text>
+  <path class="edge" d="M200 268V304" marker-end="url(#arrow)"/>
+  <rect class="node" x="16" y="312" width="368" height="104" rx="10"/>
+  <text class="label" x="200" y="352">Explicit terminal result</text>
+  <text class="detail" x="200" y="384">Succeeded or failed + error</text>
+  <rect class="node" x="16" y="466" width="368" height="174" rx="10"/>
+  <text class="label" x="200" y="506">Independent observation</text>
+  <text class="detail" x="200" y="542">Status + operation queries</text>
+  <text class="detail" x="200" y="574">Bounded requests and deadlines</text>
+  <text class="detail" x="200" y="610">Cancel observer = detach</text>
+</svg>

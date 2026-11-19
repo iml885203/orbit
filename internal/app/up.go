@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/iml885203/orbit/internal/cli"
@@ -86,7 +84,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	printProjectEnvironmentContext()
 
-	client, err := daemon.EnsureDaemonWithContext(configFile, groups, environmentContextKind(configFile))
+	client, err := daemon.EnsureDaemonWithOperationContext(operationContext, configFile, groups, environmentContextKind(configFile))
 	if err != nil {
 		return renderDaemonStartError(err)
 	}
@@ -122,7 +120,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		printUpSuccessNextStep(nil, nil)
 		return nil
 	}
-	return waitForUpHealthy(client, resp.AffectedResources, upCompletionMessage(args))
+	return waitForUpHealthyContext(cmd.Context(), client, resp.AffectedResources, upCompletionMessage(args))
 }
 
 func upCompletionMessage(args []string) string {
@@ -297,62 +295,85 @@ func validateUpResourceNames(client *daemon.Client, names []string) error {
 	return nil
 }
 
-// pollLoop runs an onTick callback every 2s with the latest status snapshot
-// until onTick returns done=true, returns an error, the timeout fires, or
-// the user sends SIGINT/SIGTERM (treated as detach, not failure).
-// Caller-owned state (reported maps, snapshots, etc.) is captured via the
-// onTick closure — pollLoop holds none of it.
+const lifecycleStatusRequestTimeout = 2 * time.Second
+
 func pollLoop(
 	client *daemon.Client,
 	timeoutDur time.Duration,
 	waitingFor string,
-	onTick func(t time.Time, status *daemon.StatusResponse) (done bool, err error),
+	onTick func(time.Time, *daemon.StatusResponse) (bool, error),
 ) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	go func() {
+	parent, stopSignals := lifecycleSignalContext(context.Background())
+	defer stopSignals()
+	return pollLoopContext(parent, client, timeoutDur, waitingFor, onTick)
+}
+
+type lifecycleStatusObservation struct {
+	status *daemon.StatusResponse
+	err    error
+}
+
+func observeLifecycleStatuses(ctx context.Context, client *daemon.Client, out chan<- lifecycleStatusObservation) {
+	for {
+		requestContext, cancel := context.WithTimeout(ctx, lifecycleStatusRequestTimeout)
+		status, err := client.WithContext(requestContext).Status()
+		cancel()
 		select {
-		case <-sigCh:
-			cancel()
+		case out <- lifecycleStatusObservation{status: status, err: err}:
 		case <-ctx.Done():
+			return
 		}
-	}()
+		timer := time.NewTimer(2 * time.Second)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+}
 
-	const frameInterval = 100 * time.Millisecond
-	const pollInterval = 2 * time.Second
-	frame := time.NewTicker(frameInterval)
-	defer frame.Stop()
+func pollLoopContext(
+	parent context.Context,
+	client *daemon.Client,
+	timeoutDur time.Duration,
+	waitingFor string,
+	onTick func(time.Time, *daemon.StatusResponse) (bool, error),
+) error {
 	budget := effectiveTimeout(timeoutDur)
+	ctx, cancel := context.WithTimeout(parent, budget)
+	observations := make(chan lifecycleStatusObservation, 1)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		observeLifecycleStatuses(ctx, client, observations)
+	}()
+	defer func() { cancel(); <-finished }()
+	frame := time.NewTicker(100 * time.Millisecond)
+	defer frame.Stop()
 	started := time.Now()
-	deadline := time.After(budget)
-
-	var lastPoll time.Time
 	var status *daemon.StatusResponse
-
 	for {
 		select {
 		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return newWaitTimeoutError(waitingFor, timeoutDur, budget, time.Since(started))
+			}
 			fmt.Println()
 			_, _ = cli.Faint.Println("Detached. Daemon is still running — use 'orbit status' to check progress.")
 			return nil
-		case <-deadline:
-			return newWaitTimeoutError(waitingFor, timeoutDur, budget, time.Since(started))
-		case t := <-frame.C:
-			// Poll only every pollInterval; the frame ticker still fires
-			// every 100ms so the caller can animate (spinner, seconds).
-			if t.Sub(lastPoll) >= pollInterval || status == nil {
-				if s, err := client.Status(); err == nil {
-					status = s
-					lastPoll = t
-				}
+		case observation := <-observations:
+			if observation.err == nil {
+				status = observation.status
 			}
+		case now := <-frame.C:
 			if status == nil {
 				continue
 			}
-			done, err := onTick(t, status)
+			done, err := onTick(now, status)
+			if ctx.Err() != nil {
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -397,6 +418,12 @@ type waitOptions struct {
 // wrapping; the caller controls filter / commit / done / terminal
 // condition through waitOptions.
 func runProgressWait(client *daemon.Client, opts waitOptions) error {
+	ctx, stopSignals := lifecycleSignalContext(context.Background())
+	defer stopSignals()
+	return runProgressWaitContext(ctx, client, opts)
+}
+
+func runProgressWaitContext(ctx context.Context, client *daemon.Client, opts waitOptions) error {
 	var renderer progressRenderer
 	if isTerminal() {
 		renderer = newLiveRenderer(os.Stdout)
@@ -408,7 +435,7 @@ func runProgressWait(client *daemon.Client, opts waitOptions) error {
 	done := make(map[string]bool)
 	frame := 0
 
-	err := pollLoop(client, timeout, opts.waitingFor,
+	err := pollLoopContext(ctx, client, timeout, opts.waitingFor,
 		func(t time.Time, status *daemon.StatusResponse) (bool, error) {
 			frame++
 			watched := make([]daemon.ResourceStatus, 0, len(status.Resources))
@@ -488,9 +515,18 @@ func announceRecovering(snapshots map[string]progressSnapshot, announced map[str
 }
 
 func waitForUpHealthy(client *daemon.Client, serviceNames []string, completionMessage string) error {
+	return waitForUpHealthyContext(context.Background(), client, serviceNames, completionMessage)
+}
+
+func waitForUpHealthyContext(parent context.Context, client *daemon.Client, serviceNames []string, completionMessage string) error {
+	ctx, stopSignals := lifecycleSignalContext(parent)
+	defer stopSignals()
+	ctx, cancel := lifecycleOperationContext(ctx)
+	defer cancel()
+	client = client.WithContext(ctx)
 	watch := watchSet(serviceNames)
 	announced := map[string]bool{}
-	return runProgressWait(client, waitOptions{
+	return runProgressWaitContext(ctx, client, waitOptions{
 		filter:     watchFilter(watch),
 		commit:     commitOnHealthyOrDegraded,
 		doneOn:     doneOnHealthy,
@@ -530,50 +566,6 @@ func printUpSuccessNextStep(resourceNames []string, status *daemon.StatusRespons
 	_, _ = cli.Faint.Println("  Dashboard: orbit open")
 }
 
-func waitForServicesHealthy(client *daemon.Client, serviceNames []string) error {
-	if len(serviceNames) == 0 {
-		return nil
-	}
-	watch := watchSet(serviceNames)
-	announced := map[string]bool{}
-	return runProgressWait(client, waitOptions{
-		filter:     watchFilter(watch),
-		commit:     commitOnHealthyOrDegraded,
-		doneOn:     doneOnHealthy,
-		waitingFor: "requested resources to become healthy",
-		onTick: func(snapshots map[string]progressSnapshot, done map[string]bool, status *daemon.StatusResponse) (bool, error) {
-			announceRecovering(snapshots, announced)
-			for name := range watch {
-				if done[name] {
-					continue
-				}
-				s, ok := snapshots[name]
-				if !ok {
-					continue
-				}
-				if err := blockedDependencyError(client, status, name, s); err != nil {
-					return false, err
-				}
-				if s.state == "stopped" {
-					return false, fmt.Errorf("%s stopped before becoming healthy", name)
-				}
-				if s.state == "degraded" && !s.recovering {
-					return false, serviceStartError(name, s, recentLogEvidence(client, name))
-				}
-			}
-			if len(done) == len(watch) {
-				if len(serviceNames) == 1 {
-					fmt.Printf("%s is healthy.\n", serviceNames[0])
-				} else {
-					fmt.Println("Requested resources are healthy.")
-				}
-				return true, nil
-			}
-			return false, nil
-		},
-	})
-}
-
 // waitForServicesStopped polls until every service in serviceNames has
 // reached the "stopped" state. When acceptPastStop is true (used by
 // restart), services that are already past stopping (pending/starting/
@@ -598,7 +590,7 @@ func waitForServicesStopped(client *daemon.Client, serviceNames []string, accept
 	opts := waitOptions{
 		filter: watchFilter(watch),
 		commit: func(e progressEvent) bool {
-			return (e.kind == eventTransition && e.to == "stopped") || isStopFailure(e)
+			return e.kind == eventHeartbeat || (e.kind == eventTransition && (e.to == "stopping" || e.to == "stopped")) || isStopFailure(e)
 		},
 		doneOn: func(e progressEvent) bool {
 			if isStopFailure(e) {

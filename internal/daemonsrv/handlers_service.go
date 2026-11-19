@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,8 +25,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // and container, merging tracked orchestrator state with config-only
 // entries so stopped services still appear.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s.environmentTransitionMu.RLock()
-	defer s.environmentTransitionMu.RUnlock()
+	s.snapshotMu.RLock()
+	defer s.snapshotMu.RUnlock()
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -35,6 +34,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	stale, staleReason := s.configStale()
 	resp := StatusResponse{
 		Epoch:             s.epoch(),
+		Generation:        s.environmentGeneration.Load(),
 		Resources:         statuses,
 		ConfigPath:        s.ConfigPath(),
 		Context:           s.environmentContext(),
@@ -72,10 +72,7 @@ func (s *Server) computeStatuses(cfg *config.Config) []ResourceStatus {
 		}
 		lastRestart := resourceLastRestart(svc)
 		sidecars := getSidecarInfos(cfg, svc.Name, svc.Kind)
-		mode := ""
-		if isDualDefined(cfg, svc.Name) {
-			mode = s.settings.GetServiceMode(svc.Name)
-		}
+		mode := runtimeServiceMode(cfg, svc.Name, svc.Kind)
 		image := getContainerImage(cfg, svc.Name, svc.Kind)
 		hp := healthProgressInfo(s.app.HealthChecker.Progress(svc.Name))
 		pendingDependencies := make([]string, 0, len(svc.PendingDeps))
@@ -423,7 +420,9 @@ func (s *Server) resolveExplicitServices(services []string) ([]string, error) {
 }
 
 func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
-	s.environmentTransitionMu.Lock()
+	if !s.beginLifecycleRequest(w, r) {
+		return
+	}
 	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
@@ -462,10 +461,20 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Wait {
-		s.app.StopAllServices()
+		result := APIResponse{OK: true, Message: "stopped configured resources"}
+		if err := s.app.StopAllServices(func(phase string) {
+			if cleanup, warnings := lifecycleCleanupResult(phase); cleanup != "" {
+				result.Cleanup, result.Warnings = cleanup, warnings
+			}
+		}); err != nil {
+			result.OK, result.Message = false, ""
+			result.Error, result.Code = err.Error(), "lifecycle_failed"
+			writeJSON(w, http.StatusInternalServerError, result)
+			return
+		}
 		s.PersistState()
 		s.stateFile.Remove()
-		writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: "stopped all services and containers"})
+		writeJSON(w, http.StatusOK, result)
 		return
 	}
 
@@ -484,11 +493,17 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, APIResponse{Error: err.Error(), Code: code})
 			return
 		}
-		s.startEnvironmentBackground(generation, func() {
-			s.app.StopServices(names)
+		operation, err := s.acceptLifecycle(r, "stop", names, func(string) error {
+			err := s.app.StopServices(names)
 			s.PersistState()
+			return err
 		})
+		if err != nil {
+			lifecycleAcceptanceError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, APIResponse{
+			OperationID:       operation.ID,
 			OK:                true,
 			Message:           downStopMessage(req, names),
 			AffectedResources: names,
@@ -500,12 +515,24 @@ func (s *Server) handleDown(w http.ResponseWriter, r *http.Request) {
 	// StopService lifecycle. Status pollers (orbit down's progress
 	// renderer) see real stopping → stopped transitions instead of a
 	// sudden state jump at the end.
-	s.startEnvironmentBackground(generation, func() {
-		s.app.StopAllServices()
+	names := make([]string, 0)
+	resources := s.app.Orchestrator.GetAllServices()
+	for i := range resources {
+		names = append(names, resources[i].Name)
+	}
+	operation, err := s.acceptLifecycle(r, "down", names, func(id string) error {
+		err := s.app.StopAllServices(func(phase string) { s.lifecycle.phase(id, phase) })
 		s.PersistState()
-		s.stateFile.Remove()
+		if err == nil {
+			s.stateFile.Remove()
+		}
+		return err
 	})
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: "stopping all services and containers"})
+	if err != nil {
+		lifecycleAcceptanceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{OK: true, OperationID: operation.ID, Message: "stopping configured resources and checking namespace containers", AffectedResources: names})
 }
 
 func downRequestHasSelection(req DownRequest) bool {
@@ -581,12 +608,13 @@ func downStopMessage(req DownRequest, affected []string) string {
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
-	s.environmentTransitionMu.Lock()
+	if !s.beginLifecycleRequest(w, r) {
+		return
+	}
 	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/stop/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
@@ -597,25 +625,28 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.startEnvironmentBackground(generation, func() {
+	operation, err := s.acceptLifecycle(r, "stop", []string{name}, func(string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), s.holder.Load().Settings.ShutdownTimeout)
 		defer cancel()
-		if err := s.app.StopService(ctx, name); err != nil {
-			slog.Error("stop failed", "component", "stop", "name", name, "err", err)
-		}
+		err := s.app.StopService(ctx, name)
 		s.PersistState()
+		return err
 	})
-
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("stopping %s", name)})
+	if err != nil {
+		lifecycleAcceptanceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{OK: true, OperationID: operation.ID, AffectedResources: []string{name}, Message: fmt.Sprintf("stopping %s", name)})
 }
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
-	s.environmentTransitionMu.Lock()
+	if !s.beginLifecycleRequest(w, r) {
+		return
+	}
 	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/restart/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "resource name required"})
@@ -626,18 +657,19 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.startEnvironmentBackground(generation, func() {
-		// RestartService's ctx covers only the stop phase (start is
-		// driven by the orchestrator event loop afterwards), so reuse
-		// the same ShutdownTimeout handleStop and handleDown use rather
-		// than picking an arbitrary longer deadline.
+	operation, err := s.acceptLifecycle(r, "restart", []string{name}, func(id string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), s.holder.Load().Settings.ShutdownTimeout)
 		defer cancel()
-		if err := s.app.RestartService(ctx, name); err != nil {
-			slog.Error("restart failed", "component", "restart", "name", name, "err", err)
+		err := s.app.RestartService(ctx, name)
+		if err == nil {
+			s.lifecycle.phase(id, "starting")
 		}
 		s.PersistState()
+		return err
 	})
-
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("restarting %s", name)})
+	if err != nil {
+		lifecycleAcceptanceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{OK: true, OperationID: operation.ID, AffectedResources: []string{name}, Message: fmt.Sprintf("restarting %s", name)})
 }

@@ -178,6 +178,20 @@ sudo chown -R $(whoami) ~/.orbit
 
 ## CLI
 
+### Lifecycle 指令還在等待，或觀測已結束
+
+先看輸出的 operation ID 與 phase，再從同一專案、同一 instance 執行
+`orbit status --json`。停止緩慢可能仍在使用設定的 shutdown 緩衝時間。
+Pipe 輸出也會有 elapsed heartbeat，讓已接受的工作有持續可見的進度。
+
+`orbit down --timeout 30s` 限制 CLI 的觀測時間；Ctrl-C 則 detach。兩者都不會
+撤銷 daemon 已接受的工作，重送前請先檢查目前狀態。即使 tracked resources
+已顯示 stopped，失敗的 operation 仍會回報 stop 或清理錯誤。Docker 觀測失敗時，
+用 `orbit doctor` 排查並恢復 Docker 存取，polling 會自動恢復。
+只有 host resources 時，不需要 Docker 也能停止；但 `cleanup: "unavailable"`
+的警告表示 orphan container 清理尚未驗證。結果與歷史紀錄
+遺失的語意見 [lifecycle 觀測](agent-cli.zh-TW.md#lifecycle-觀測)。
+
 ### `orbit exec` 抱怨 container 名字不存在
 Orbit 預設命名是 `orbit-<service>`。如果你設了 `ORBIT_NAMESPACE=foo`，名字會變成 `foo-<service>`。可以用 `docker ps --format '{{.Names}}'` 確認。
 

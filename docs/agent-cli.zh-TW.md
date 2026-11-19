@@ -82,6 +82,50 @@ heartbeat。Agent 應以最終 envelope 做決策，不應解析 stderr 文字�
 若在解析前把 stderr 合併進 stdout，progress 行會破壞 JSON。請分開 redirect，或在
 只需要 envelope 時捨棄 stderr。
 
+### Lifecycle 觀測
+
+`down` 與 `restart` 會立即確認已接受的工作。可取得 operation 時，最終 JSON
+data 另含 `operation_id`、`operation_state` 與 `elapsed_ms`。Elapsed 計算
+本次指令的觀測時間，包含準備階段；daemon 另有接受時間戳。即使所有 tracked
+resources 都已顯示 stopped，operation 仍可能回報清理失敗。Restart 的 stop／start
+dispatch 成功後，仍要等待 readiness。
+`operation_state: "unknown"` 表示尚未觀察到結果，不代表 daemon 失敗或成功。
+若接受工作後尚未觀察到 snapshot，`resources` 會是空陣列，不把指令前的 snapshot
+當成最終狀態。
+
+JSON 模式的進度只寫 stderr。Human 模式在 pipe 或無色彩輸出時，也會顯示 phase、
+resource 狀態變化與 elapsed heartbeat。`orbit down --timeout 30s` 限制觀測時間。
+逾時或 Ctrl-C 不會撤銷 daemon 已接受的工作：保留 operation ID，先執行
+`orbit status --json` 再決定是否修改。舊 daemon 沒有 operation ID 時，會退回
+舊的狀態等待，並明確提示無法取得確定的 operation 結果。
+
+Human `up --timeout` 沿用 readiness budget，包含失敗 logs 取證。準備階段仍可
+取消。JSON `up` 與 `env apply` 沿用包含準備階段的整個指令 budget。
+
+Daemon 的 `GET /api/operations/{id}` 回傳 `kind`、`state`（`accepted`、
+`running`、`succeeded`、`failed`）、`phase`、目標 resources、`epoch`、
+`generation`、`config_path`、可省略的 `instance`，以及 `accepted_at`、
+`started_at`、`finished_at` 時間戳。失敗另含 `error` 與 `code`；whole-down
+以 `cleanup` 記錄 `succeeded`、`failed` 或 `unavailable`，需要時附上數量
+受限的 `warnings`；CLI 也會暴露 `data.cleanup` 與 `data.warnings`。沒有預期
+Docker resources 時，Docker transport 不可用仍可成功停止設定中的 host resources，
+但 orphan 清理尚未驗證。`operation_state: "succeeded"` 搭配
+`cleanup: "unavailable"` **不能證明 namespace 已清乾淨**。權限、API、或已找到
+container 的清理失敗，仍會使 operation 失敗。
+同步 `POST /api/down` 的 `wait: true` response 也保留相同的 `cleanup` 與
+`warnings` 證據。
+
+此診斷歷史最多
+128 筆，先淘汰已結束紀錄；最多接受 32 筆尚未結束的工作。找不到 ID 時回
+`operation_not_found`，不代表成功，也不表示可以直接重送。
+
+Status 在 `epoch` 之外也包含 `generation`。新 CLI 以
+`X-Orbit-Expected-Epoch` 與 `X-Orbit-Expected-Generation` headers 固定目標。
+已有 transition 執行時回 `operation_busy`；過期目標在修改前以
+`environment_changed` 拒絕。無效的 header 組合回 `invalid_environment_precondition`。
+既有 client 可以省略 headers。收到這些錯誤時，先讀 status 再重試。
+鎖與觀測的邊界見 [architecture.zh-TW.md](architecture.zh-TW.md#lifecycle-工作與觀測)。
+
 ## Error Shape
 
 結構化錯誤使用以下形狀：

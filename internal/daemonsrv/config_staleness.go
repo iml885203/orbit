@@ -50,24 +50,20 @@ func fileStamp(path string) (hash string, mtime time.Time, size int64, ok bool) 
 	return hex.EncodeToString(sum[:]), info.ModTime(), info.Size(), true
 }
 
-// recordConfigBaselineLocked snapshots the just-loaded config file. Caller
-// must hold s.pathMu (write) — SetConfigPath is the single choke point.
-func (s *Server) recordConfigBaselineLocked(path string) {
+func loadConfigBaseline(path string) configBaseline {
 	paths, err := config.InheritanceFiles(path)
 	if err != nil {
-		s.baseline = configBaseline{}
-		return
+		return configBaseline{}
 	}
 	files := make(map[string]configFileBaseline, len(paths))
 	for _, referencedPath := range paths {
 		hash, mtime, size, ok := fileStamp(referencedPath)
 		if !ok {
-			s.baseline = configBaseline{}
-			return
+			return configBaseline{}
 		}
 		files[referencedPath] = configFileBaseline{hash: hash, mtime: mtime, size: size}
 	}
-	s.baseline = configBaseline{fromCurrent: path == ReadCurrentEnv(), files: files}
+	return configBaseline{fromCurrent: path == ReadCurrentEnv(), files: files}
 }
 
 // fileEdited reports whether the config file's bytes changed since the

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,6 +82,22 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 			break
 		}
 	}
+	rootCmd := newRootCommand()
+	err := rootCmd.Execute()
+	closeLifecycleCommand(rootCmd)
+	if err != nil {
+		err = contextualizeUnknownFlag(rootCmd, err)
+		err = contextualizeDaemonUnavailable(err)
+		printExecutionError(os.Stderr, err)
+		finalizeCLIHistory(err)
+		scheduleAutomaticUpdateCheck()
+		os.Exit(1)
+	}
+	finalizeCLIHistory(nil)
+	scheduleAutomaticUpdateCheck()
+}
+
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "orbit",
 		Short:   "Local development orchestration tool",
@@ -95,118 +112,9 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "config file path (overrides project config and current env)")
 	rootCmd.PersistentFlags().BoolVar(&cli.JSONOutput, "json", false, "output in JSON format")
 	rootCmd.PersistentFlags().StringVar(&instanceName, "instance", "", "target or create an isolated named runtime")
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		// A command with DisableFlagParsing (exec) never lets cobra
-		// intercept -h/--help, so a help request would run the daemon
-		// gates below and could fail for reasons unrelated to help.
-		// Only the leading argument counts: later flags belong to the
-		// command being passed through.
-		if cmd.DisableFlagParsing && len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-			return pflag.ErrHelp
-		}
-		// `orbit --help` never reaches this hook because cobra short-circuits
-		// on the help flag, but `orbit help` and `orbit completion` are real
-		// commands and would hit the setup gate below. Both only read the
-		// command tree, so gating them leaves a fresh install unable to
-		// discover anything.
-		if isCommandTreeQuery(cmd) {
-			return nil
-		}
-		if strings.HasPrefix(cmd.Name(), "__update-") {
-			configureAutomaticUpdateInstallation()
-			return nil
-		}
-		if instanceName != "" {
-			if _, err := instance.Activate(instanceName); err != nil {
-				return cli.NewInvalidArgumentError(err.Error())
-			}
-		}
-		configureAutomaticUpdateInstallation()
-		if err := waitForPendingAutomaticUpdate(cmd); err != nil {
-			return err
-		}
-		showAutomaticUpdateDisclosure(cmd)
-		// Apply saved settings (workspace root, SQL mode) to env for all commands
-		s := daemon.LoadSettings(daemon.DefaultSettingsPath())
-		s.ApplyToEnv()
+	rootCmd.PersistentPreRunE = prepareRootCommand
 
-		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
-		configFlagGiven = explicitConfig
-		cli.StartCommand = startCommand
-		configContextKind = ""
-		if daemonContextKind != "" {
-			configContextKind = daemonContextKind
-		} else if explicitConfig {
-			configContextKind = "explicit"
-		}
-		if configFile == "" {
-			configFile = resolveConfigFile()
-		}
-		if err := applySourceWorkspace(configFile); err != nil {
-			return err
-		}
-		if configContextKind == "" {
-			configContextKind = inferredEnvironmentContextKind(configFile)
-		}
-		selection := readEnvironmentSelection()
-		if commandRequiresAvailableEnvironment(cmd) {
-			if setupRequired(selection, configFile) {
-				_, daemonAlive := daemon.IsDaemonRunning()
-				if !daemonAlive || !isDaemonRestartCommand(cmd) {
-					return setupRequiredError{}
-				}
-			}
-			if environmentSelectionBlocksConfig(selection, configFile) {
-				return newEnvironmentSelectionRequiredError(selection)
-			}
-		}
-		requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
-		requiresReconcile := commandRequiresReconciledDaemon(cmd)
-		if requiresMatch || requiresReconcile {
-			client := daemon.NewClient(daemon.DefaultSocketPath())
-			if client.Health() == nil {
-				if status, err := client.Status(); err == nil {
-					if requiresMatch {
-						if shouldResumeDetachedProject(explicitConfig, configFile, status.ConfigPath, status.Context.Kind) {
-							configFile = status.ConfigPath
-						}
-						if mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath); mismatch != nil {
-							if environmentContextKind(configFile) == "project" {
-								return projectContextInactive(configFile, status.ConfigPath)
-							}
-							return mismatch
-						}
-					}
-					if requiresReconcile {
-						if stale := daemon.CheckEnvironmentReconciled(status); stale != nil {
-							return stale
-						}
-						if version, versionErr := currentDaemonVersion(client); versionErr == nil {
-							if update := checkCurrentDaemonVersion(version); update != nil {
-								return update
-							}
-						}
-					}
-				}
-			}
-		}
-		if shouldRecordCLI(cmd) {
-			cliHistID = history.NewID()
-			cliHistAt = time.Now()
-			cliHistCmd = commandString()
-			postCLIHistoryEvent(history.Record{
-				ID:        cliHistID,
-				Timestamp: cliHistAt,
-				Source:    history.SourceCLI,
-				Command:   cliHistCmd,
-				Summary:   cliHistCmd,
-				HasCLI:    true,
-				Status:    history.StatusPending,
-			})
-		}
-		return nil
-	}
-
+	rootCmd.PersistentPostRun = func(cmd *cobra.Command, _ []string) { closeLifecycleCommand(cmd) }
 	rootCmd.AddCommand(upCmd())
 	rootCmd.AddCommand(downCmd())
 	rootCmd.AddCommand(statusCmd())
@@ -245,16 +153,177 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 	configureContextualRootHelp(rootCmd)
 	rejectUnknownSubcommands(rootCmd)
 
-	if err := rootCmd.Execute(); err != nil {
-		err = contextualizeUnknownFlag(rootCmd, err)
-		err = contextualizeDaemonUnavailable(err)
-		printExecutionError(os.Stderr, err)
-		finalizeCLIHistory(err)
-		scheduleAutomaticUpdateCheck()
-		os.Exit(1)
+	return rootCmd
+}
+
+func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
+	// A command with DisableFlagParsing (exec) never lets cobra
+	// intercept -h/--help, so a help request would run the daemon
+	// gates below and could fail for reasons unrelated to help.
+	// Only the leading argument counts: later flags belong to the
+	// command being passed through.
+	if cmd.DisableFlagParsing && len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		return pflag.ErrHelp
 	}
-	finalizeCLIHistory(nil)
-	scheduleAutomaticUpdateCheck()
+	// `orbit --help` never reaches this hook because cobra short-circuits
+	// on the help flag, but `orbit help` and `orbit completion` are real
+	// commands and would hit the setup gate below. Both only read the
+	// command tree, so gating them leaves a fresh install unable to
+	// discover anything.
+	if isCommandTreeQuery(cmd) {
+		return nil
+	}
+	if strings.HasPrefix(cmd.Name(), "__update-") {
+		configureAutomaticUpdateInstallation()
+		return nil
+	}
+	scoped := prepareLifecycleCommandContext(cmd)
+	defer func() {
+		if err != nil {
+			closeLifecycleCommand(cmd)
+		}
+	}()
+	if scoped {
+		progress := lifecycleObservationProgress(cmd.Context(), lifecycleCommandStarted(cmd.Context()))
+		defer progress.Close()
+		progress.Phase("preparing lifecycle command")
+	}
+	if instanceName != "" {
+		if _, err := instance.Activate(instanceName); err != nil {
+			return cli.NewInvalidArgumentError(err.Error())
+		}
+	}
+	configureAutomaticUpdateInstallation()
+	if err := waitForPendingAutomaticUpdate(cmd); err != nil {
+		return err
+	}
+	showAutomaticUpdateDisclosure(cmd)
+	// Apply saved settings (workspace root, SQL mode) to env for all commands
+	s := daemon.LoadSettings(daemon.DefaultSettingsPath())
+	s.ApplyToEnv()
+
+	if err := prepareRootEnvironment(cmd); err != nil {
+		return err
+	}
+	if err := guardRootDaemon(cmd, scoped); err != nil {
+		return err
+	}
+	if scoped && cmd.Context().Err() != nil {
+		return lifecycleOperationError(cmd.Context(), cmd.Context().Err(), false)
+	}
+	if shouldRecordCLI(cmd) {
+		cliHistID = history.NewID()
+		cliHistAt = time.Now()
+		cliHistCmd = commandString()
+		postCLIHistoryEventContext(cmd.Context(), history.Record{
+			ID:        cliHistID,
+			Timestamp: cliHistAt,
+			Source:    history.SourceCLI,
+			Command:   cliHistCmd,
+			Summary:   cliHistCmd,
+			HasCLI:    true,
+			Status:    history.StatusPending,
+		})
+	}
+	return nil
+}
+
+func prepareRootEnvironment(cmd *cobra.Command) error {
+	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
+	configFlagGiven = explicitConfig
+	cli.StartCommand = startCommand
+	configContextKind = ""
+	if daemonContextKind != "" {
+		configContextKind = daemonContextKind
+	} else if explicitConfig {
+		configContextKind = "explicit"
+	}
+	if configFile == "" {
+		configFile = resolveConfigFile()
+	}
+	if err := applySourceWorkspace(configFile); err != nil {
+		return err
+	}
+	if configContextKind == "" {
+		configContextKind = inferredEnvironmentContextKind(configFile)
+	}
+	selection := readEnvironmentSelection()
+	if commandRequiresAvailableEnvironment(cmd) {
+		if setupRequired(selection, configFile) {
+			_, daemonAlive := daemon.IsDaemonRunning()
+			if !daemonAlive || !isDaemonRestartCommand(cmd) {
+				return setupRequiredError{}
+			}
+		}
+		if environmentSelectionBlocksConfig(selection, configFile) {
+			return newEnvironmentSelectionRequiredError(selection)
+		}
+	}
+	return nil
+}
+
+func guardRootDaemon(cmd *cobra.Command, scoped bool) error {
+	requiresMatch := commandRequiresMatchingDaemonConfig(cmd)
+	requiresReconcile := commandRequiresReconciledDaemon(cmd)
+	if !requiresMatch && !requiresReconcile && !scoped {
+		return nil
+	}
+	client := daemon.NewClient(daemon.DefaultSocketPath())
+	if scoped {
+		requestContext, cancel := context.WithTimeout(cmd.Context(), lifecycleStatusRequestTimeout)
+		defer cancel()
+		client = client.WithContext(requestContext)
+	}
+	if err := client.Health(); err != nil {
+		return rootDaemonPrecheckError(cmd, scoped, err)
+	}
+	status, err := client.Status()
+	if err != nil {
+		return rootDaemonPrecheckError(cmd, scoped, err)
+	}
+	if requiresMatch {
+		if err := guardRootDaemonConfig(status); err != nil {
+			return err
+		}
+	}
+	if !requiresReconcile {
+		return nil
+	}
+	if stale := daemon.CheckEnvironmentReconciled(status); stale != nil {
+		return stale
+	}
+	version, err := currentDaemonVersion(client)
+	if err != nil {
+		return nil
+	}
+	return checkCurrentDaemonVersion(version)
+}
+
+func rootDaemonPrecheckError(cmd *cobra.Command, scoped bool, err error) error {
+	if !scoped {
+		return nil
+	}
+	if cmd.Context().Err() != nil {
+		return lifecycleOperationError(cmd.Context(), err, false)
+	}
+	if errors.Is(err, daemon.ErrDaemonTimeout) {
+		return fmt.Errorf("checking daemon before lifecycle request: %w", err)
+	}
+	return nil
+}
+
+func guardRootDaemonConfig(status *daemon.StatusResponse) error {
+	if shouldResumeDetachedProject(configFlagGiven, configFile, status.ConfigPath, status.Context.Kind) {
+		configFile = status.ConfigPath
+	}
+	mismatch := daemon.CheckConfigMatch(configFile, status.ConfigPath)
+	if mismatch == nil {
+		return nil
+	}
+	if environmentContextKind(configFile) == "project" {
+		return projectContextInactive(configFile, status.ConfigPath)
+	}
+	return mismatch
 }
 
 func isDaemonRestartCommand(cmd *cobra.Command) bool {
@@ -724,6 +793,7 @@ Orbit remains ready for the next 'orbit up'.`,
 	}
 	cmd.Flags().StringSliceVar(&groups, "group", nil, "stop specific groups (comma-separated)")
 	cmd.Flags().BoolVar(&infraOnly, "infra", false, "stop only infrastructure containers")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "maximum time to observe stopping (default 5m); accepted work continues after detaching")
 	return cmd
 }
 
@@ -818,16 +888,29 @@ func daemonCmd() *cobra.Command {
 // Command implementations
 // ============================================================
 
-func runDown(_ *cobra.Command, args []string) error {
+func runDown(cmd *cobra.Command, args []string) error {
 	if err := validateLifecycleSelection(args, groups, infraOnly); err != nil {
 		return err
 	}
 	if err := validateConfiguredLifecycleSelection(configFile, args, groups, "down"); err != nil {
 		return err
 	}
-	client := daemon.NewClient(daemon.DefaultSocketPath())
-	adoptedOrphans := false
-	if err := client.Health(); err != nil {
+	started := lifecycleCommandStarted(cmd.Context())
+	ctx, stopSignals := lifecycleSignalContext(cmd.Context())
+	defer stopSignals()
+	ctx, cancel := lifecycleOperationContext(ctx)
+	defer cancel()
+	progress := lifecycleObservationProgress(ctx, started)
+	defer progress.Close()
+	progress.Phase(phaseCheckingEnvironment)
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
+	if err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Health(); err != nil {
+		if ctx.Err() != nil {
+			return lifecycleOperationError(ctx, ctx.Err(), false)
+		}
+		if errors.Is(err, daemon.ErrDaemonTimeout) {
+			return fmt.Errorf("checking daemon health: %w", err)
+		}
 		orphaned, orphanErr := reconcilableResourcesExist(configFile)
 		if orphanErr != nil || !orphaned {
 			message := downAlreadyStoppedMessage
@@ -838,60 +921,55 @@ func runDown(_ *cobra.Command, args []string) error {
 			}
 			return writeDownShortCircuit(message, actions, nil)
 		}
-		reconciled, ensureErr := daemon.EnsureDaemon(configFile, nil)
+		reconciled, ensureErr := daemon.EnsureDaemonWithOperationContext(ctx, configFile, nil, environmentContextKind(configFile))
 		if ensureErr != nil {
 			return renderDaemonStartError(ensureErr)
 		}
-		client = reconciled
-		adoptedOrphans = true
+		client = reconciled.WithContext(ctx)
 	}
 	// Snapshot the full service+container list BEFORE issuing Down —
 	// containers may be removed by the time we poll, leaving us with no
 	// list to track progress against.
-	status, err := client.Status()
+	status, err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Status()
 	if err != nil {
+		if ctx.Err() != nil {
+			return lifecycleOperationError(ctx, err, false)
+		}
 		return fmt.Errorf("status: %w", err)
 	}
+	client = client.WithEnvironment(status.Epoch, status.Generation)
 	if len(args) > 0 || len(groups) > 0 || infraOnly {
-		return runStopSelection(client, status, args)
+		return runStopSelection(ctx, client, status, args, progress, started)
 	}
 	names := make([]string, 0, len(status.Resources))
 	for i := range status.Resources {
 		names = append(names, status.Resources[i].Name)
 	}
 
-	if !adoptedOrphans && !anyResourceActive(status) {
-		return writeDownShortCircuit(downAlreadyStoppedMessage, lifecycleDownSuccessActions(), status)
+	if anyResourceActive(status) {
+		progress.Phase("requesting resource stop")
+	} else {
+		progress.Phase("verifying cleanup for stopped resources")
 	}
-
-	if cli.JSONOutput {
-		_, err := client.Down(false)
-		if err != nil {
-			return fmt.Errorf("down failed: %w", err)
+	response, err := client.Down(false)
+	if err != nil {
+		if ctx.Err() != nil {
+			return lifecycleObservationContextError(ctx, "", started)
 		}
-		finalStatus, err := waitForLifecycleJSON(client, names, "stopped")
-		if err != nil {
-			return err
-		}
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:          "down",
-			Message:            downCompletionMessage,
-			RequestedResources: names,
-			FinalStatus:        finalStatus,
-		}), lifecycleDownSuccessActions())
-	}
-
-	if _, err := client.Down(false); err != nil {
 		return fmt.Errorf("down failed: %w", err)
 	}
-	if err := waitForServicesStopped(client, names, false); err != nil {
-		return err
+	announceLifecycleAcceptance(response, progress)
+	result, err := waitForAcceptedLifecycle(ctx, client, status, response, names, progress, started)
+	if ctx.Err() != nil {
+		err = lifecycleObservationContextError(ctx, response.OperationID, started)
 	}
-	fmt.Println(downCompletionMessage)
-	return nil
+	progress.Close()
+	return finishLifecycleObservation(result, response, started, err, lifecycleJSONOptions{
+		Operation: "down", Message: downCompletionMessage, RequestedResources: names,
+	}, lifecycleDownSuccessActions())
 }
 
-func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, names []string) error {
+func runStopSelection(ctx context.Context, client *daemon.Client, status *daemon.StatusResponse, names []string, progress *lifecycleProgress, started time.Time) error {
 	for index, name := range names {
 		if lifecycleResourceExists(status, name) {
 			continue
@@ -902,6 +980,7 @@ func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, name
 			return "orbit down " + strings.Join(corrected, " ")
 		})
 	}
+	progress.Phase("requesting selected resource stop")
 	resp, err := client.StopSelection(daemon.DownRequest{
 		Resources: names,
 		Groups:    groups,
@@ -922,85 +1001,83 @@ func runStopSelection(client *daemon.Client, status *daemon.StatusResponse, name
 		fmt.Println(resp.Message)
 		return nil
 	}
-	if cli.JSONOutput {
-		finalStatus, err := waitForLifecycleJSON(client, affected, "stopped")
-		if err != nil {
-			return cli.WithJSONActions(err, lifecycleRecommendedActions(affected))
-		}
-		impacted := lifecycleDownImpacts(finalStatus, affected)
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:          "down",
-			Message:            lifecycleDownResultMessage(resp.Message, impacted),
-			RequestedResources: affected,
-			RelatedResources:   impacted,
-			InfraOnly:          infraOnly,
-			FinalStatus:        finalStatus,
-		}), lifecycleDownImpactActions(finalStatus, impacted))
+	announceLifecycleAcceptance(resp, progress)
+	result, err := waitForAcceptedLifecycle(ctx, client, status, resp, affected, progress, started)
+	if ctx.Err() != nil {
+		err = lifecycleObservationContextError(ctx, resp.OperationID, started)
 	}
-	fmt.Println(resp.Message)
-	if err := waitForServicesStopped(client, affected, false); err != nil {
-		return err
+	progress.Close()
+	impacted := lifecycleDownImpacts(result.Status, affected)
+	if err == nil && !cli.JSONOutput {
+		printLifecycleDownImpacts(result.Status, impacted)
 	}
-	finalStatus, err := client.Status()
-	if err != nil {
-		return fmt.Errorf("status after down: %w", err)
-	}
-	printLifecycleDownImpacts(finalStatus, lifecycleDownImpacts(finalStatus, affected))
-	return nil
+	return finishLifecycleObservation(result, resp, started, err, lifecycleJSONOptions{
+		Operation: "down", Message: lifecycleDownResultMessage(resp.Message, impacted), RequestedResources: affected, RelatedResources: impacted, InfraOnly: infraOnly,
+	}, lifecycleDownImpactActions(result.Status, impacted))
 }
 
-func runRestart(_ *cobra.Command, args []string) error {
+func runRestart(cmd *cobra.Command, args []string) error {
 	if err := validateConfiguredCommandResources(configFile, args, func(_ int, suggestion string) string {
 		return "orbit restart " + suggestion
 	}); err != nil {
 		return err
 	}
-	client, err := daemon.Dial(daemon.DefaultSocketPath())
-	if err != nil {
+	started := lifecycleCommandStarted(cmd.Context())
+	ctx, stopSignals := lifecycleSignalContext(cmd.Context())
+	defer stopSignals()
+	ctx, cancel := lifecycleOperationContext(ctx)
+	defer cancel()
+	progress := lifecycleObservationProgress(ctx, started)
+	defer progress.Close()
+	progress.Phase(phaseCheckingEnvironment)
+	client := daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx)
+	if err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Health(); err != nil {
+		if ctx.Err() != nil {
+			return lifecycleOperationError(ctx, ctx.Err(), false)
+		}
+		if errors.Is(err, daemon.ErrDaemonTimeout) {
+			return fmt.Errorf("checking daemon health: %w", err)
+		}
 		return cli.NewOrbitNotRunningError()
 	}
-
 	name := args[0]
-	status, err := client.Status()
+	status, err := daemon.FastClone(client, lifecycleStatusRequestTimeout).Status()
 	if err != nil {
+		if ctx.Err() != nil {
+			return lifecycleOperationError(ctx, err, false)
+		}
 		return fmt.Errorf("status: %w", err)
 	}
+	client = client.WithEnvironment(status.Epoch, status.Generation)
 	if !lifecycleResourceExists(status, name) {
-		return newResourceNameError(status, name, func(suggestion string) string {
-			return "orbit restart " + suggestion
-		})
+		return newResourceNameError(status, name, func(suggestion string) string { return "orbit restart " + suggestion })
 	}
-	if cli.JSONOutput {
-		priorRestartCount := lifecycleRestartCount(status, name)
-		resp, err := client.Restart(name)
-		if err != nil {
-			return fmt.Errorf("restart failed: %w", err)
+	priorRestartCount := lifecycleRestartCount(status, name)
+	progress.Phase("requesting resource restart")
+	response, err := client.Restart(name)
+	if err != nil {
+		if ctx.Err() != nil {
+			return lifecycleObservationContextError(ctx, "", started)
 		}
-		if observedStatus, err := waitForLifecycleRestartObserved(client, name, priorRestartCount); err != nil {
-			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, observedStatus))
-		}
-		if stoppedStatus, err := waitForLifecycleJSONOrPast(client, []string{name}, "stopped", lifecycleRestartPastStopState); err != nil {
-			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, stoppedStatus))
-		}
-		finalStatus, err := waitForLifecycleRestartHealthyJSON(client, []string{name})
-		if err != nil {
-			return cli.WithJSONReplacementActions(err, lifecycleRecommendedActionsForStatus([]string{name}, finalStatus))
-		}
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLifecycleJSONData(lifecycleJSONOptions{
-			Operation:          "restart",
-			Message:            resp.Message,
-			RequestedResources: []string{name},
-			FinalStatus:        finalStatus,
-		}), nil)
-	}
-
-	if _, err := client.Restart(name); err != nil {
 		return fmt.Errorf("restart failed: %w", err)
 	}
-	if err := waitForServicesStopped(client, []string{name}, true); err != nil {
-		return err
+	announceLifecycleAcceptance(response, progress)
+	result := lifecycleObservationResult{Status: status}
+	if response.OperationID != "" {
+		result, err = waitForAcceptedLifecycle(ctx, client, status, response, []string{name}, progress, started)
+	} else {
+		progress.Phase("waiting for legacy daemon restart")
+		result.Status, err = waitForLifecycleRestartObservedContext(ctx, client, name, priorRestartCount)
 	}
-	return waitForServicesHealthy(client, []string{name})
+	if err == nil {
+		progress.Phase(phaseWaitingForReadiness)
+		result.Status, err = waitForLifecycleJSONTargetContextProgress(ctx, client.WithContext(ctx), []string{name}, "healthy", nil, true, progress, status)
+	}
+	if ctx.Err() != nil {
+		err = lifecycleObservationContextError(ctx, response.OperationID, started)
+	}
+	progress.Close()
+	return finishLifecycleObservation(result, response, started, err, lifecycleJSONOptions{Operation: "restart", Message: response.Message, RequestedResources: []string{name}}, nil)
 }
 
 func runLogs(_ *cobra.Command, args []string) error {

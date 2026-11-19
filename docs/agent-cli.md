@@ -97,6 +97,56 @@ Merging `stderr` into `stdout` before parsing will break: progress lines are
 not JSON. Redirect them separately, or discard `stderr` if only the envelope
 matters.
 
+### Lifecycle observation
+
+`down` and `restart` acknowledge accepted work promptly. Their final JSON data
+adds `operation_id`, `operation_state` and `elapsed_ms` when an operation is
+available. Elapsed time measures this command's observation, including
+preparation; daemon acceptance has its own timestamp. An operation failure can
+be reported even if all tracked resources already look stopped. Restart still
+waits for readiness after its stop/start dispatch succeeds.
+`operation_state: "unknown"` means the result could not be observed; it is not
+a daemon failure or success.
+If no post-acceptance snapshot was observed, `resources` is empty rather than
+presenting a pre-command snapshot as the final state.
+
+Progress stays on stderr in JSON mode. Human output also reports phases,
+resource changes and elapsed heartbeats when output is piped or color is off.
+`orbit down --timeout 30s` bounds observation. A timeout or Ctrl-C does not undo
+accepted daemon work: preserve the operation ID and run `orbit status --json`
+before another mutation. An older daemon without operation IDs uses the legacy
+state wait and explicitly reports that a definitive operation result is absent.
+
+Human `up --timeout` retains its readiness budget, including failure-log
+collection. Preparation remains cancellable. JSON `up` and `env apply` retain
+their whole-command budget, including preparation.
+
+The daemon's `GET /api/operations/{id}` returns the recorded `kind`, `state`
+(`accepted`, `running`, `succeeded`, `failed`), `phase`, target resources,
+`epoch`, `generation`, `config_path`, optional `instance`, and timestamps
+`accepted_at`, `started_at`, `finished_at`. Failed results include `error`
+and `code`; whole-down records `cleanup` as `succeeded`, `failed` or
+`unavailable`, with bounded `warnings` when needed. The CLI also exposes
+`data.cleanup` and `data.warnings`. With no expected Docker resources, an
+unavailable Docker transport can leave configured host resources successfully
+stopped while orphan cleanup remains unverified. A succeeded operation with
+`cleanup: "unavailable"` does **not** prove the namespace is clean. Permission,
+API and discovered-container cleanup failures still fail the operation.
+The synchronous `POST /api/down` request with `wait: true` carries the same
+`cleanup` and `warnings` evidence in its response.
+
+This is bounded diagnostic history: at most 128 records, with
+terminal records evicted first and at most 32 active operations. A missing ID
+returns `operation_not_found`; it does not establish success or authorize retry.
+
+Status includes `generation` alongside `epoch`. New CLI lifecycle requests pin
+these through `X-Orbit-Expected-Epoch` and `X-Orbit-Expected-Generation` headers.
+Concurrent transitions return `operation_busy`; stale targets are rejected
+before mutation with `environment_changed`. Invalid header pairs return
+`invalid_environment_precondition`. Existing clients may omit the headers. Read status before
+retrying these errors. The locking and observer boundary is described in
+[architecture.md](architecture.md#lifecycle-work-and-observation).
+
 ## Error Shape
 
 Structured errors use this shape:

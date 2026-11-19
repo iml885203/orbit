@@ -12,7 +12,7 @@ to extend Orbit.
 
 Three things to hold in your head:
 
-1. **The daemon is the brain.** It owns all state. The CLI is stateless — it opens the socket, makes one request, prints, exits. The dashboard is the same API over TCP plus SSE streams.
+1. **The daemon is the brain.** It owns all state. The CLI is stateless — it submits requests over the socket, observes results, then exits. The dashboard is the same API over TCP plus SSE streams.
 2. **The orchestrator is event-driven.** A single goroutine consumes events (`HealthOK`, `ProcessExited`, `ContainerDrift`, …) and applies state transitions synchronously. Containers and dev processes share the same state machine — only the supervision mechanics differ.
 3. **Dependencies are a DAG, not a sequence.** Services start as soon as their `depends_on` targets reach `Healthy`; independent branches run in parallel.
 
@@ -80,6 +80,28 @@ transitive dependencies and group filtering. The CLI waits only for that set.
 When the set is empty, `up` is an explicit successful no-op and returns
 immediately instead of entering a health timeout.
 
+## Lifecycle work and observation
+
+![Accepted lifecycle work runs serially while independent status and operation queries remain responsive. Canceling a CLI observer detaches it.](./assets/architecture-lifecycle-observation.svg)
+
+Environment mutations remain serialized. A separate short snapshot lock protects
+the published config/runtime view; it is not held across stopping resources,
+source refresh or other slow work. Read-only status and SSE can observe progress
+without entering the mutation queue. Epoch and generation checks still prevent
+queued work from acting on a replacement environment.
+
+Status, SSE and graph mode labels come from the same captured orchestrator kind.
+Persisted mode settings represent intent until that runtime view is published;
+disk persistence stays outside the snapshot lock.
+
+Asynchronous down, targeted stop and restart have bounded identity/result records. Completion
+comes from the operation result, including stop and sweep errors, rather than
+requiring an observer to catch an intermediate resource state. CLI request
+deadlines and cancellation govern observation; detaching an observer does not
+revoke daemon work that was already accepted.
+Synchronous reconcile and `Down.Wait` keep their response-based result. Other
+config transitions retain their existing RPCs while read-only requests stay responsive.
+
 ## Container supervision vs process supervision
 
 | | Container | Process |
@@ -97,6 +119,12 @@ claims without turning a brief transport hiccup into user-visible churn.
 `status` identifies Docker as the root cause and leads to `orbit doctor`.
 Orbit keeps polling and restores resource truth automatically when Docker
 returns; restarting Orbit or each container is not part of the recovery model.
+
+Each Docker observation request has a two-second deadline; a complete cycle
+has a ten-second budget. Cycles remain serial. Failed or timed-out cycles
+publish no partial snapshot and retain the last complete observation until a
+successful cycle replaces it. Two failed cycles activate the unavailable state
+described above.
 
 ## Cross-platform process groups
 
@@ -185,7 +213,7 @@ All HTTP handlers live in `internal/daemonsrv/*.go` by concern:
 | `envs.go` / `envs_dir.go` | Env list / current |
 | `doctor.go` | Health diagnostics |
 
-The daemon owns all shared state. CLI commands are stateless — they open the socket, make one request, print, exit.
+The daemon owns all shared state. CLI commands are stateless — they submit requests over the socket, observe results, then exit.
 
 ### Resource snapshot contract
 

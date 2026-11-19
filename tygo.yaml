@@ -75,6 +75,7 @@ packages:
       # (clients see event:/data: text); it also collides with dbstate.Event
       # in the barrel.
       - "handlers_events.go"
+      - "lifecycle_operations.go"
   - path: "github.com/iml885203/orbit/internal/tracing"
     output_path: "ui/src/lib/types/tracing.gen.ts"
     exclude_files:

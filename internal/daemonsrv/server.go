@@ -36,6 +36,8 @@ type Server struct {
 	holder                  *config.Holder
 	configWriteMu           sync.Mutex
 	environmentTransitionMu sync.RWMutex
+	snapshotMu              sync.RWMutex
+	lifecycle               lifecycleOperations
 	updateAdmissionMu       sync.RWMutex
 	environmentGeneration   atomic.Uint64
 	background              sync.WaitGroup
@@ -190,6 +192,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancel context.CancelFunc) 
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/up", s.handleUp)
+	mux.HandleFunc("/api/operations/", s.handleLifecycleOperation)
 	mux.HandleFunc("/api/down", s.handleDown)
 	mux.HandleFunc("/api/stop/", s.handleStop)
 	mux.HandleFunc("/api/restart/", s.handleRestart)
@@ -436,14 +439,41 @@ func (s *Server) epoch() int64 {
 	return s.startedAt.UnixMilli()
 }
 
-// SetConfigPath stores the config path in the server for state persistence.
-func (s *Server) SetConfigPath(path string) {
+type environmentPathPublication struct {
+	path        string
+	kind        string
+	identity    string
+	baseline    configBaseline
+	replaceKind bool
+}
+
+func prepareEnvironmentPath(path, kind string, replaceKind bool) environmentPathPublication {
+	identity := canonicalEnvironmentPath(path)
+	if kind == "managed" {
+		if managed, ok := managedEnvironmentIdentity(path); ok {
+			identity = managed
+		}
+	}
+	return environmentPathPublication{path: path, kind: kind, identity: identity, baseline: loadConfigBaseline(path), replaceKind: replaceKind}
+}
+
+func (s *Server) publishEnvironmentPath(publication environmentPathPublication) {
 	s.pathMu.Lock()
-	s.configPath = path
-	s.environmentContextIdentity = canonicalEnvironmentPath(path)
-	s.recordConfigBaselineLocked(path)
+	s.configPath = publication.path
+	s.environmentContextIdentity = publication.identity
+	if publication.replaceKind {
+		s.environmentContextKind = publication.kind
+	}
+	s.baseline = publication.baseline
 	s.pathMu.Unlock()
 	s.environmentGeneration.Add(1)
+}
+
+func (s *Server) SetConfigPath(path string) {
+	publication := prepareEnvironmentPath(path, "", false)
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+	s.publishEnvironmentPath(publication)
 }
 
 func (s *Server) ConfigPath() string {
@@ -453,19 +483,10 @@ func (s *Server) ConfigPath() string {
 }
 
 func (s *Server) SetEnvironmentContext(path, kind string) {
-	identity := canonicalEnvironmentPath(path)
-	if kind == "managed" {
-		if managedIdentity, ok := managedEnvironmentIdentity(path); ok {
-			identity = managedIdentity
-		}
-	}
-	s.pathMu.Lock()
-	s.configPath = path
-	s.environmentContextKind = kind
-	s.environmentContextIdentity = identity
-	s.recordConfigBaselineLocked(path)
-	s.pathMu.Unlock()
-	s.environmentGeneration.Add(1)
+	publication := prepareEnvironmentPath(path, kind, true)
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+	s.publishEnvironmentPath(publication)
 }
 
 func (s *Server) environmentContext() EnvironmentContext {

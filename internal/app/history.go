@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -125,7 +126,11 @@ func historyGaps(c *daemon.Client) ([]gaps.Gap, error) {
 // invocation. Tight timeouts and a swallowed error: recording history
 // must never block or fail the command itself.
 func postCLIHistoryEvent(rec history.Record) {
-	fast := daemon.FastClone(daemon.NewClient(daemon.DefaultSocketPath()), 200*time.Millisecond)
+	postCLIHistoryEventContext(context.Background(), rec)
+}
+
+func postCLIHistoryEventContext(ctx context.Context, rec history.Record) {
+	fast := daemon.FastClone(daemon.NewClient(daemon.DefaultSocketPath()).WithContext(ctx), 200*time.Millisecond)
 	if _, err := fast.PostJSON("/api/history/cli-event", rec); err != nil {
 		slog.Debug("failed to post history event", "error", err)
 	}

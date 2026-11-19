@@ -11,7 +11,7 @@
 
 三個要先記在腦袋裡的概念:
 
-1. **daemon 是大腦。** 所有 state 都由它持有。CLI 是 stateless 的 —— 打開 socket、送一次 request、印出結果、結束。dashboard 走的是同一套 API，只是改用 TCP 加上 SSE stream。
+1. **daemon 是大腦。** 所有 state 都由它持有。CLI 是 stateless 的 —— 透過 socket 送出 request、觀察結果，再結束。dashboard 走的是同一套 API，只是改用 TCP 加上 SSE stream。
 2. **orchestrator 是 event-driven。** 單一 goroutine 從 buffered channel 消費事件(`HealthOK`、`ProcessExited`、`ContainerDrift`、…)，同步套用 state transition。container 與 dev process 共用同一套 state machine，只有 supervision 機制不同。
 3. **相依關係是 DAG，不是序列。** Service 只要 `depends_on` 的目標進入 `Healthy` 就會啟動;互不相依的分支會並行跑。
 
@@ -77,6 +77,24 @@ Build 的 stdout 與 stderr 同時排空。超過 64 KiB 的診斷行會切成�
 篩選結果；CLI 只等待這個集合。集合為空時，`up` 是明確且成功的 no-op，
 會立即返回，不會進入 health timeout。
 
+## Lifecycle 工作與觀測
+
+![Daemon 依序執行已接受的 lifecycle 工作，獨立的 status 與 operation 查詢仍可回應；取消 CLI 觀測只會 detach。](./assets/architecture-lifecycle-observation.svg)
+
+環境修改仍依序執行。另一把短暫的 snapshot lock 保護已發布的 config／runtime
+視圖，不會跨越停止 resource、source refresh 等耗時工作。唯讀 status 與 SSE
+因此可持續觀察進度，不必排在修改佇列後面。Epoch 與 generation 檢查仍保留，
+避免排隊的工作作用到已被替換的環境。
+
+Status、SSE 與 graph 的 mode 標示來自同一份 orchestrator kind snapshot。
+已保存的 mode 設定在 runtime 視圖發布前代表意圖；磁碟保存不持有 snapshot lock。
+
+非同步 down、指定目標的 stop 與 restart 使用有數量上限的身分與結果紀錄。完成與否取決於
+operation 結果，包含 stop 與 sweep 錯誤，不依賴觀測者剛好看見中間狀態。
+CLI request deadline 與取消控制的是觀測；detach 不會撤銷 daemon 已接受的工作。
+同步 reconcile 與 `Down.Wait` 沿用 response 作為結果。其他 config transition
+保留既有 RPC，唯讀 request 也能持續回應。
+
 ## Container supervision vs process supervision
 
 | | Container | Process |
@@ -93,6 +111,10 @@ Docker API 連續失敗兩次後，Orbit 才會撤回先前的 healthy 判斷，
 transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker 才是根因並導向
 `orbit doctor`。Orbit 會持續輪詢，Docker 恢復後自動修正 resource 狀態；使用者
 不需要重啟 Orbit，也不需要逐一重啟 container。
+
+每次 Docker 觀測 request 最多兩秒，整輪最多十秒，各輪仍依序執行。失敗或
+逾時的一輪不發布不完整 snapshot，保留上一份完整觀測，直到下一輪完整成功。
+連續兩輪失敗時，才啟用上述 unavailable 狀態。
 
 ## Cross-platform process groups
 
@@ -176,7 +198,7 @@ state layout、port persistence 與 cleanup semantics 定義於
 | `envs.go` / `envs_dir.go` | Env 列表 / 當前 env |
 | `doctor.go` | Health 診斷 |
 
-Daemon 持有所有共享 state。CLI 指令是 stateless 的 —— 開 socket、送一次 request、印出、結束。
+Daemon 持有所有共享 state。CLI 指令是 stateless 的 —— 透過 socket 送出 request、觀察結果，再結束。
 
 ### Resource snapshot 契約
 

@@ -60,14 +60,17 @@ func (s *Server) applyEnvironmentConfig(tx extension.ConfigTx, running map[strin
 		response.RestartRequired = true
 		return nil
 	}
-	if err := s.app.StopServicesForConfig(plan.Stop); err != nil {
+	if err := s.app.StopServices(plan.Stop); err != nil {
 		return err
 	}
 
 	detached := s.settings.GetDetachedEdges(s.currentEnvName())
+	publication := prepareEnvironmentPath(s.ConfigPath(), "", false)
+	s.snapshotMu.Lock()
 	s.app.Orchestrator.ApplyConfig(cfg, detached, serviceModes)
-	s.SetConfigPath(s.ConfigPath())
+	s.publishEnvironmentPath(publication)
 	s.engineStale.Store(false)
+	s.snapshotMu.Unlock()
 	for _, name := range plan.Removed {
 		if running[name] {
 			response.UnavailableResources = append(response.UnavailableResources, name)

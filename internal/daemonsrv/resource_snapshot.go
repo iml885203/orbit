@@ -14,8 +14,8 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	s.environmentTransitionMu.RLock()
-	defer s.environmentTransitionMu.RUnlock()
+	s.snapshotMu.RLock()
+	defer s.snapshotMu.RUnlock()
 
 	// One immutable snapshot for the whole aggregation — published
 	// configs are never mutated, so no lock is needed.

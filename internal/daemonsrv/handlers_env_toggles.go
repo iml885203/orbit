@@ -23,8 +23,8 @@ type EnvToggleInfo struct {
 func (srv *Server) handleEnvToggles(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		srv.environmentTransitionMu.RLock()
-		defer srv.environmentTransitionMu.RUnlock()
+		srv.snapshotMu.RLock()
+		defer srv.snapshotMu.RUnlock()
 		toggles := []EnvToggleInfo{}
 		cfg := srv.holder.Load()
 		for svcName, svc := range cfg.Services {

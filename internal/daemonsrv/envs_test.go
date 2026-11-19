@@ -452,7 +452,7 @@ func TestHandleEnvSwitchRollsBackWhenRestartCannotLaunch(t *testing.T) {
 		}
 	}
 
-	srv := newTestServer(t, &config.Config{Containers: map[string]*config.Container{
+	srv := newLifecycleDockerServer(t, &config.Config{Containers: map[string]*config.Container{
 		"redis": {Name: "redis", Image: "redis:7"},
 	}})
 	srv.SetConfigPath(current)

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/iml885203/orbit/internal/config"
@@ -23,6 +24,7 @@ import (
 
 // App wires together all components and manages the full lifecycle.
 type App struct {
+	dockerResourcesKnown atomic.Bool
 	// Holder publishes the immutable config snapshots shared with the
 	// daemon (Server.holder is the same object). Operations Load() once
 	// each; construction-time scalars (CancelGrace, poller interval) are
@@ -149,6 +151,7 @@ func processFailureEvidence(exitErr error, stderr []string) string {
 
 func (a *App) wireContainerCallbacks(mgr *container.Manager) {
 	a.Orchestrator.OnStartContainer = func(ctx context.Context, name string, generation int, c *config.Container) error {
+		a.dockerResourcesKnown.Store(true)
 		slog.Info("starting container", "component", "orbit", "name", name)
 		runtime, err := mgr.Start(ctx, name, c)
 		if err != nil {
@@ -165,6 +168,7 @@ func (a *App) wireContainerCallbacks(mgr *container.Manager) {
 		return nil
 	}
 	a.Orchestrator.OnStopContainer = func(ctx context.Context, name string) error {
+		a.dockerResourcesKnown.Store(true)
 		return mgr.Stop(ctx, name)
 	}
 }
@@ -395,6 +399,7 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 	}
 	poller.OnStateUpdate = func(listedAt time.Time, states map[string]container.ContainerState) {
 		for name, state := range states {
+			a.dockerResourcesKnown.Store(true)
 			restart := orch.OnContainerObserved(name, ContainerObservation{
 				ID:        state.ID,
 				Running:   state.Running,
@@ -479,28 +484,14 @@ func (a *App) StopServicesOnly() {
 		}
 		names = append(names, services[i].Name)
 	}
-	a.StopServices(names)
+	if err := a.StopServices(names); err != nil {
+		slog.Error("stop services during daemon shutdown", "component", "engine", "err", err)
+	}
 }
 
 // StopServices gives every selected resource its own shutdown deadline so one
 // slow process cannot consume the budget of otherwise independent resources.
-func (a *App) StopServices(names []string) {
-	var wg sync.WaitGroup
-	for _, name := range names {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), a.Holder.Load().Settings.ShutdownTimeout)
-			defer cancel()
-			if err := a.StopService(ctx, name); err != nil {
-				slog.Error("stop failed", "component", "stop-selected", "name", name, "err", err)
-			}
-		}(name)
-	}
-	wg.Wait()
-}
-
-func (a *App) StopServicesForConfig(names []string) error {
+func (a *App) StopServices(names []string) error {
 	var wg sync.WaitGroup
 	errs := make(chan error, len(names))
 	for _, name := range names {
@@ -557,24 +548,53 @@ func (a *App) StopService(ctx context.Context, name string) error {
 // ShutdownTimeout, so a slow service does not steal budget from
 // services that would otherwise stop quickly. Blocks until every
 // goroutine returns.
-func (a *App) StopAllServices() {
+func (a *App) StopAllServices(onPhase ...func(string)) error {
 	services := a.Orchestrator.GetAllServices()
 	names := make([]string, 0, len(services))
 	for i := range services {
-		names = append(names, services[i].Name)
+		if services[i].State != StateStopped {
+			names = append(names, services[i].Name)
+		}
 	}
-	a.StopServices(names)
+	stopErr := a.StopServices(names)
+	expectedDocker := a.dockerResourcesKnown.Load()
+	for i := range services {
+		if services[i].Kind == "container" {
+			expectedDocker = true
+			a.dockerResourcesKnown.Store(true)
+			break
+		}
+	}
 
 	// Safety net: sweep any orbit-managed containers in this namespace that
 	// the orchestrator does not track (e.g. orphaned sidecars from a prior
 	// daemon run, or a parent that was already gone when its sidecar was
 	// created). Without this, `orbit down` can leave UI containers like
 	// dbgate / kafka-ui running.
+	if len(onPhase) > 0 && onPhase[0] != nil {
+		onPhase[0]("sweeping")
+	}
 	sweepCtx, cancel := context.WithTimeout(context.Background(), a.Holder.Load().Settings.ShutdownTimeout)
 	defer cancel()
-	if err := a.ContainerMgr.StopAll(sweepCtx); err != nil {
-		slog.Warn("container sweep failed", "component", "stop-all", "err", err)
+	sweepErr := a.ContainerMgr.StopAll(sweepCtx)
+	var unavailable *container.SweepUnavailableError
+	if !expectedDocker && sweepCtx.Err() == nil && errors.As(sweepErr, &unavailable) {
+		if len(onPhase) > 0 && onPhase[0] != nil {
+			onPhase[0]("sweep_unavailable")
+		}
+		return stopErr
 	}
+	if sweepErr != nil {
+		sweepErr = fmt.Errorf("container sweep: %w", sweepErr)
+	}
+	if len(onPhase) > 0 && onPhase[0] != nil {
+		if sweepErr == nil {
+			onPhase[0]("sweep_succeeded")
+		} else {
+			onPhase[0]("sweep_failed")
+		}
+	}
+	return errors.Join(stopErr, sweepErr)
 }
 
 // RestartService restarts a single service or container.
