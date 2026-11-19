@@ -103,6 +103,10 @@ func classifyRecovery(err error) JSONError {
 		if actions := replacement.CLIJSONReplacementActions(); len(actions) > 0 {
 			classified.NextCommand = actions[0].Command
 		}
+		var hinted interface{ CLIJSONHint() string }
+		if errors.As(err, &hinted) && hinted.CLIJSONHint() != "" {
+			classified.Hint = hinted.CLIJSONHint()
+		}
 	}
 	return classified
 }

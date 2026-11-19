@@ -180,8 +180,10 @@ sudo chown -R $(whoami) ~/.orbit
 
 ### Lifecycle 指令還在等待，或觀測已結束
 
-先看輸出的 operation ID 與 phase，再從同一專案、同一 instance 執行
-`orbit status --json`。停止緩慢可能仍在使用設定的 shutdown 緩衝時間。
+先看輸出的 operation ID 與 phase，再帶相同的 instance 與明確指定的 config flags
+執行 `orbit operation <id> --json`。沒有 ID 時，使用 `orbit status --json`。
+查詢成功仍可能得到失敗的 operation，請檢查 `data.state` 與清理警告；daemon
+重新啟動後歷史會消失。停止緩慢可能仍在使用設定的 shutdown 緩衝時間。
 Pipe 輸出也會有 elapsed heartbeat，讓已接受的工作有持續可見的進度。
 
 `orbit down --timeout 30s` 限制 CLI 的觀測時間；Ctrl-C 則 detach。兩者都不會

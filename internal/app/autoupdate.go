@@ -206,7 +206,7 @@ func updateMutationCommand(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "status", "inspect", "logs", "doctor", "version", "history", "open", "help", "completion", "skill":
+	case "status", "inspect", "operation", "logs", "doctor", "version", "history", "open", "help", "completion", "skill":
 		return false
 	case "settings":
 		return cmd.Name() != "list"

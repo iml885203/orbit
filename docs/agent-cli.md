@@ -113,13 +113,25 @@ presenting a pre-command snapshot as the final state.
 Progress stays on stderr in JSON mode. Human output also reports phases,
 resource changes and elapsed heartbeats when output is piped or color is off.
 `orbit down --timeout 30s` bounds observation. A timeout or Ctrl-C does not undo
-accepted daemon work: preserve the operation ID and run `orbit status --json`
-before another mutation. An older daemon without operation IDs uses the legacy
+accepted daemon work: preserve the operation ID and run `orbit operation <id> --json`
+before another mutation. Without an ID, inspect `orbit status --json`. An older daemon without operation IDs uses the legacy
 state wait and explicitly reports that a definitive operation result is absent.
 
 Human `up --timeout` retains its readiness budget, including failure-log
 collection. Preparation remains cancellable. JSON `up` and `env apply` retain
 their whole-command budget, including preparation.
+
+Query with the same `--instance` and explicit `--config` flags used by the
+original command. `orbit operation <id> --json` is read-only: it does not start
+a daemon, create an instance, load the current project config, apply pending
+environment changes or recover an update transaction. A changed or deleted
+config does not prevent reading the original context.
+
+A successful lookup returns `ok: true` and exits zero even when
+`data.state` is `failed`. Inspect that state, `error`, `code`, `cleanup` and
+`warnings` for the original outcome. Lookup failures return `ok: false` and a
+nonzero exit; unavailable history never proves success. Human output makes the
+same distinction. Accepted/running results recommend querying the same ID again.
 
 The daemon's `GET /api/operations/{id}` returns the recorded `kind`, `state`
 (`accepted`, `running`, `succeeded`, `failed`), `phase`, target resources,
