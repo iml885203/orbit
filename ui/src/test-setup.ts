@@ -40,6 +40,11 @@ if (typeof Element !== 'undefined' && !Element.prototype.animate) {
     }) as unknown as Animation
 }
 
+// jsdom has no layout scrolling; trace-log highlighting still invokes this DOM API.
+if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => {}
+}
+
 // jsdom doesn't implement ResizeObserver; the trace waterfall (and other
 // size-aware components) construct one on mount. A no-op keeps them mountable.
 if (typeof globalThis.ResizeObserver === 'undefined') {

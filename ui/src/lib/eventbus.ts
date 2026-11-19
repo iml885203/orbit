@@ -5,7 +5,7 @@
 
 type Handler = (data: unknown) => void
 
-const listeners = new Map<string, Set<Handler>>()
+const listeners = new Map<string, Map<Handler, number>>()
 // attached tracks which event types currently have a live EventSource listener
 // bound. A type can re-enter listeners after going to zero subscribers, and
 // without this guard each re-entry would addEventListener again — multiplying
@@ -19,7 +19,9 @@ let refCount = 0
 function attach(type: string) {
   if (!source || attached.has(type)) return
   attached.add(type)
-  source.addEventListener(type, (e) => {
+  const connection = source
+  connection.addEventListener(type, (e) => {
+    if (source !== connection) return
     const ls = listeners.get(type)
     if (!ls || !ls.size) return
     let parsed: unknown
@@ -29,19 +31,24 @@ function attach(type: string) {
       console.error('[eventbus] parse failed', type, err)
       return
     }
-    for (const fn of ls) fn(parsed)
+    for (const fn of ls.keys()) fn(parsed)
   })
 }
 
 function connect() {
-  source = new EventSource('/api/events')
+  clearTimeout(reconnectTimer)
+  reconnectTimer = undefined
+  if (source || refCount === 0) return
+  const connection = new EventSource('/api/events')
+  source = connection
   attached.clear()
-  source.onerror = () => {
-    source?.close()
+  connection.onerror = () => {
+    if (source !== connection) return
+    connection.close()
     source = null
     attached.clear()
     for (const fn of disconnectListeners) fn()
-    if (refCount > 0) reconnectTimer = setTimeout(connect, 3000)
+    if (refCount > 0 && !source) reconnectTimer = setTimeout(connect, 3000)
   }
   for (const type of listeners.keys()) attach(type)
 }
@@ -54,20 +61,25 @@ function connect() {
 export function subscribe(type: string, handler: Handler): () => void {
   let ls = listeners.get(type)
   if (!ls) {
-    ls = new Set()
+    ls = new Map()
     listeners.set(type, ls)
   }
-  ls.add(handler)
+  ls.set(handler, (ls.get(handler) ?? 0) + 1)
   refCount++
   if (!source) {
     connect()
   } else {
     attach(type)
   }
+  let subscribed = true
   return () => {
+    if (!subscribed) return
+    subscribed = false
     const set = listeners.get(type)
     if (!set || !set.has(handler)) return
-    set.delete(handler)
+    const count = set.get(handler)!
+    if (count === 1) set.delete(handler)
+    else set.set(handler, count - 1)
     if (!set.size) listeners.delete(type)
     refCount--
     if (refCount === 0) {

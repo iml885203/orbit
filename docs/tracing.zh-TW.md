@@ -96,6 +96,9 @@ path 等於該資源的 `health_check.path`，就算 health 流量。`orbit trac
   - **Play on graph** 在 Services graph 上重播這個 request：每個 hop 依序
     亮起，失敗的服務以紅色脈動標示。可用播放列逐步前進。
 
+Trace 詳情會合併密集的即時更新，依序刷新。切換 trace 或關閉視窗時會取消
+尚未完成的請求；較晚回來的舊結果不會覆蓋另一條 trace 或其 logs。
+
 在 Services graph 上，**Live** 開關會讓最近載有 trace 的 edge 跑流動光點 ——
 一種「系統正在動」的氛圍視圖，與單一 trace 的重播是分開的。
 

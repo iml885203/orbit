@@ -75,13 +75,14 @@ export async function fetchTraces(limit = 200): Promise<TraceSummary[]> {
 // a transport error. The caller distinguishes "expired" via the boolean in the
 // result so the detail page can show the right empty state; transport errors
 // are surfaced via toast (per svelte-error-surface).
-export async function fetchTrace(traceId: string): Promise<{ trace: Trace | null; gone: boolean }> {
+export async function fetchTrace(traceId: string, signal?: AbortSignal): Promise<{ trace: Trace | null; gone: boolean }> {
   try {
-    const res = await fetch(`/api/traces/${encodeURIComponent(traceId)}`)
+    const res = await fetch(`/api/traces/${encodeURIComponent(traceId)}`, { signal })
     if (res.ok) return { trace: await res.json(), gone: false }
     if (res.status === 404) return { trace: null, gone: true }
     toast('trace unavailable')
   } catch (e) {
+    if (signal?.aborted) return { trace: null, gone: false }
     toast('trace unavailable')
     console.error('fetchTrace:', e)
   }
@@ -109,15 +110,16 @@ export async function fetchTracingStatus(): Promise<TracingStatus | null> {
 // joined server-side by the daemon (GET /api/traces/{id}/logs) — one
 // implementation of the exact-id join shared with the CLI. See the daemon's
 // traceLogs for the join contract and its log-ring-buffer ceiling.
-export async function fetchTraceLogs(traceId: string): Promise<string[]> {
+export async function fetchTraceLogs(traceId: string, signal?: AbortSignal): Promise<string[]> {
   try {
-    const res = await fetch(`/api/traces/${encodeURIComponent(traceId)}/logs`)
+    const res = await fetch(`/api/traces/${encodeURIComponent(traceId)}/logs`, { signal })
     if (res.ok) {
       const data: TraceLogsResponse = await res.json()
       return (data.lines ?? []).map((l) => `[${l.service}] ${l.line}`)
     }
     if (res.status !== 404) toast('trace logs unavailable')
   } catch (e) {
+    if (signal?.aborted) return []
     toast('trace logs unavailable')
     console.error('fetchTraceLogs:', e)
   }
