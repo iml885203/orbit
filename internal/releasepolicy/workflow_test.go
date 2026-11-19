@@ -16,6 +16,8 @@ var pinnedAction = regexp.MustCompile(`^[^./][^@]*@[0-9a-f]{40}$`)
 func TestReleaseTrustClosurePinsExternalActions(t *testing.T) {
 	for _, name := range []string{
 		"release.yml",
+		"candidate.yml",
+		"ci.yml",
 		"platform-smoke.yml",
 		"sqlserver-smoke.yml",
 		"sync-homebrew.yml",

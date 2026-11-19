@@ -33,8 +33,10 @@ Release batch 依照下列順序 freeze：
 2. 一次 review 相較於前一版的完整使用者差異。
 3. 決定下一個版本並更新 `VERSION`；此時先不要建立 Orbit tag。
 4. 準備並 review 對使用者說明的 release notes。
-5. 執行 candidate 與 platform gates，再手動 approve 發布。Release workflow
-   只會在所有 gate 通過後建立 Orbit tag，失敗的 candidate 不會留下 release
+5. 明確核准 current main 的 release workflow。它建立一份 candidate，讓 native
+   與 SQL runners 測試同一份 bytes，再直接提升，不重新 build；請見
+   [交付證據](delivery.zh-TW.md)。Release workflow 只會在所有 gate 通過後
+   建立 Orbit tag，失敗的 candidate 不會留下 release
    tag。GitHub 會在 release 發布時鎖定 tag 與完整 asset set，並產生涵蓋其 digest
    與 target commit 的 immutable-release attestation。
 6. Workflow 會先驗證 release attestation 與每個發布 asset，才允許更新 package

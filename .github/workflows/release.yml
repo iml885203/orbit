@@ -18,6 +18,7 @@ on:
 
 permissions:
   checks: read
+  actions: read
   contents: read
 
 jobs:
@@ -72,21 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           main_commit="$(git rev-parse origin/main)"
-          successful_gates="$(
-            gh api "repos/$GITHUB_REPOSITORY/commits/$main_commit/check-runs" \
-              --jq '[.check_runs[]
-                | select(
-                    (.name == "preflight" or .name == "installed-user-journeys")
-                    and .conclusion == "success"
-                  )
-                | .name]
-                | unique
-                | length'
-          )"
-          if [ "$successful_gates" != "2" ]; then
-            echo "main must pass CI preflight and installed-user-journeys before release" >&2
-            exit 1
-          fi
+          python3 scripts/delivery_status.py --require-main-ci --commit "$main_commit"
       - name: Verify pinned demo evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -98,16 +85,36 @@ jobs:
           # against whatever EnvRepoRef points at, not this release's tag.
           ./scripts/verify-pinned-demo-evidence.sh
 
-  platform-smoke:
+  candidate:
     needs: approval
+    uses: ./.github/workflows/candidate.yml
+    with:
+      version: ${{ inputs.tag }}
+
+  platform-smoke:
+    needs: candidate
     uses: ./.github/workflows/platform-smoke.yml
+    with:
+      version: ${{ inputs.tag }}
+      artifact-id: ${{ needs.candidate.outputs.artifact-id }}
+      archive-digest: ${{ needs.candidate.outputs.archive-digest }}
+      manifest-sha256: ${{ needs.candidate.outputs.manifest-sha256 }}
+      producer-attempt: ${{ needs.candidate.outputs.producer-attempt }}
+      workflow-ref: ${{ needs.candidate.outputs.workflow-ref }}
 
   sqlserver-smoke:
-    needs: approval
+    needs: candidate
     uses: ./.github/workflows/sqlserver-smoke.yml
+    with:
+      version: ${{ inputs.tag }}
+      artifact-id: ${{ needs.candidate.outputs.artifact-id }}
+      archive-digest: ${{ needs.candidate.outputs.archive-digest }}
+      manifest-sha256: ${{ needs.candidate.outputs.manifest-sha256 }}
+      producer-attempt: ${{ needs.candidate.outputs.producer-attempt }}
+      workflow-ref: ${{ needs.candidate.outputs.workflow-ref }}
 
   release:
-    needs: [approval, platform-smoke, sqlserver-smoke]
+    needs: [approval, candidate, platform-smoke, sqlserver-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -125,67 +132,69 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: 11.8.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
       - name: Verify candidate metadata
         env:
           RELEASE_VERSION: ${{ inputs.tag }}
         run: ./scripts/verify-release-candidate.sh "$RELEASE_VERSION"
-      - name: Build embedded dashboard
-        run: pnpm --dir ui run build
-      - name: Build release assets
-        env:
-          RELEASE_VERSION: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          mkdir -p dist
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
-            goos="${target%/*}"
-            goarch="${target#*/}"
-            output="dist/orbit-${goos}-${goarch}"
-            if [ "$goos" = windows ]; then output="${output}.exe"; fi
-            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
-              -ldflags "-s -w -X main.version=${RELEASE_VERSION} -X main.buildTime=${build_time}" \
-              -o "$output" ./cmd/orbit
-            go version -m "$output" | grep -F "vcs.revision=$GITHUB_SHA"
-          done
-      - name: Generate release SBOM
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          path: .
-          format: spdx-json
-          output-file: dist/orbit.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
-      - name: Create and verify checksums
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum orbit-* > checksums.txt)
-          (cd dist && sha256sum --check checksums.txt)
+          artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/candidate
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: native-evidence-${{ needs.candidate.outputs.artifact-id }}-*
+          path: ${{ runner.temp }}/native-receipts
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: sqlserver-evidence-${{ needs.candidate.outputs.artifact-id }}
+          path: ${{ runner.temp }}/sqlserver-receipts
+          merge-multiple: true
+      - name: Promote the verified inventory without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_VERSION: ${{ inputs.tag }}
+          CANDIDATE_HEAD_SHA: ${{ github.sha }}
+          CANDIDATE_ARTIFACT_ID: ${{ needs.candidate.outputs.artifact-id }}
+          CANDIDATE_ARCHIVE_DIGEST: ${{ needs.candidate.outputs.archive-digest }}
+          CANDIDATE_MANIFEST_SHA: ${{ needs.candidate.outputs.manifest-sha256 }}
+          CANDIDATE_PRODUCER_ATTEMPT: ${{ needs.candidate.outputs.producer-attempt }}
+          CANDIDATE_WORKFLOW_REF: ${{ needs.candidate.outputs.workflow-ref }}
+        run: >-
+          python3 scripts/candidate.py promote
+          --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION"
+          --producer-attempt "$CANDIDATE_PRODUCER_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --receipts "$RUNNER_TEMP/native-receipts"
+          --sql-receipts "$RUNNER_TEMP/sqlserver-receipts"
       - name: Verify complete release inventory
         uses: ./.github/actions/verify-orbit-release
         with:
           mode: local
           asset-directory: dist
+      - name: Reconcile any already accepted publication
+        id: publication-state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.tag }}
+          CANDIDATE_MANIFEST_SHA: ${{ needs.candidate.outputs.manifest-sha256 }}
+        run: >-
+          python3 scripts/delivery_status.py --probe-publication
+          --tag "$RELEASE_VERSION" --candidate-directory "$RUNNER_TEMP/candidate"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --github-output "$GITHUB_OUTPUT"
       - name: Attest build provenance
-        if: ${{ github.event.repository.visibility == 'public' }}
+        if: ${{ github.event.repository.visibility == 'public' && steps.publication-state.outputs.accepted-existing != 'true' }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: dist/checksums.txt
       - name: Attest release SBOM
-        if: ${{ github.event.repository.visibility == 'public' }}
+        if: ${{ github.event.repository.visibility == 'public' && steps.publication-state.outputs.accepted-existing != 'true' }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: dist/checksums.txt
           sbom-path: dist/orbit.spdx.json
       - name: Publish GitHub release
+        if: steps.publication-state.outputs.accepted-existing != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.tag }}
@@ -197,6 +206,7 @@ jobs:
             echo "main moved from candidate $GITHUB_SHA to $main_commit during release" >&2
             exit 1
           fi
+          python3 scripts/delivery_status.py --require-main-ci --commit "$main_commit"
           release_title="Orbit $RELEASE_VERSION"
           prerelease_flag=()
           if [[ "$RELEASE_VERSION" == *-* ]]; then

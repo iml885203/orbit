@@ -3,12 +3,40 @@ name: SQL Server smoke
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        type: string
+        default: v0.0.0-platform-smoke
+      artifact-id:
+        type: string
+        default: ''
+      archive-digest:
+        type: string
+        default: ''
+      manifest-sha256:
+        type: string
+        default: ''
+      producer-attempt:
+        type: string
+        default: ''
+      workflow-ref:
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  produce:
+    if: ${{ !inputs.artifact-id }}
+    uses: ./.github/workflows/candidate.yml
+    with:
+      version: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
+
   live-workflow:
+    needs: produce
+    if: ${{ !cancelled() && (inputs.artifact-id != '' || needs.produce.result == 'success') }}
     # Names the layer it actually covers. The publish engine's own tests run
     # against a real SQL Server here; the CLI that resolves targets and
     # credentials before calling that engine has no coverage in this gate —
@@ -24,6 +52,15 @@ jobs:
     timeout-minutes: 15
     env:
       ORBIT_SQL_E2E_PASSWORD: Orbit-E2E-Only_2026!
+      CANDIDATE_VERSION: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
+      CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CANDIDATE_ARTIFACT_ID: ${{ inputs.artifact-id || needs.produce.outputs.artifact-id }}
+      CANDIDATE_ARCHIVE_DIGEST: ${{ inputs.archive-digest || needs.produce.outputs.archive-digest }}
+      CANDIDATE_MANIFEST_SHA: ${{ inputs.manifest-sha256 || needs.produce.outputs.manifest-sha256 }}
+      CANDIDATE_PRODUCER_ATTEMPT: ${{ inputs.producer-attempt || needs.produce.outputs.producer-attempt }}
+      CANDIDATE_WORKFLOW_REF: ${{ inputs.workflow-ref || needs.produce.outputs.workflow-ref }}
+      GH_TOKEN: ${{ github.token }}
+      ORBIT_UPDATE_BACKGROUND: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -33,21 +70,29 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
-      # The dashboard is embedded with //go:embed all:dist, so cmd/orbit does
-      # not compile without it — this smoke exercises only the CLI, but the
-      # binary still cannot be built without the UI toolchain.
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: 11.8.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
       - name: Install sqlpackage
         run: dotnet tool install --global microsoft.sqlpackage
-      - name: Build Orbit
-        run: make build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          artifact-ids: ${{ env.CANDIDATE_ARTIFACT_ID }}
+          path: ${{ runner.temp }}/candidate
+      - name: Isolate candidate runtime state
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'orbit-candidate-home'
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('ORBIT_HOME=' + str(root) + '\nORBIT_UPDATE_HOME=' + str(root / 'updates') + '\n')
+          PYCODE
+      - name: Verify and install the Linux candidate
+        run: >-
+          python3 scripts/candidate.py consume
+          --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION"
+          --producer-attempt "$CANDIDATE_PRODUCER_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --target linux/amd64
       - name: Start cold SQL Server through Orbit readiness
         run: |
           set -euo pipefail
@@ -85,3 +130,19 @@ jobs:
       - name: Remove isolated SQL Server
         if: always()
         run: ./bin/orbit instance clean sql-smoke --json || true
+      - name: Bind live SQL evidence to candidate bytes
+        run: >-
+          python3 scripts/candidate.py receipt
+          --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION"
+          --producer-attempt "$CANDIDATE_PRODUCER_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --target linux/amd64
+          --suite sqlserver --receipts "$RUNNER_TEMP/sqlserver-receipts"
+      - name: Upload SQL receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sqlserver-evidence-${{ env.CANDIDATE_ARTIFACT_ID }}
+          path: ${{ runner.temp }}/sqlserver-receipts
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30

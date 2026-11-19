@@ -1,0 +1,102 @@
+name: Candidate inventory
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    outputs:
+      artifact-id:
+        value: ${{ jobs.produce.outputs.artifact-id }}
+      archive-digest:
+        value: ${{ jobs.produce.outputs.archive-digest }}
+      manifest-sha256:
+        value: ${{ jobs.produce.outputs.manifest-sha256 }}
+      producer-attempt:
+        value: ${{ jobs.produce.outputs.producer-attempt }}
+      workflow-ref:
+        value: ${{ jobs.produce.outputs.workflow-ref }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  produce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      archive-digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest-sha256: ${{ steps.manifest.outputs.manifest-sha256 }}
+      producer-attempt: ${{ steps.manifest.outputs.producer-attempt }}
+      workflow-ref: ${{ steps.manifest.outputs.workflow-ref }}
+    env:
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            .github/workflows/candidate.yml
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Build one dashboard and six candidate executables
+        run: python3 scripts/candidate.py build --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION" --record "$RUNNER_TEMP/candidate-build.json"
+      - name: Generate candidate SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: ${{ runner.temp }}/candidate/dist/orbit.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Bind exact inventory and source identity
+        id: manifest
+        run: python3 scripts/candidate.py create --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION" --record "$RUNNER_TEMP/candidate-build.json" --github-output "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/verify-orbit-release
+        with:
+          mode: local
+          asset-directory: ${{ runner.temp }}/candidate/dist
+      - name: Upload candidate bytes
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: orbit-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record uploaded producer identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          CANDIDATE_ARCHIVE_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          CANDIDATE_MANIFEST_SHA: ${{ steps.manifest.outputs.manifest-sha256 }}
+          CANDIDATE_WORKFLOW_REF: ${{ steps.manifest.outputs.workflow-ref }}
+        run: >-
+          python3 scripts/candidate.py identity
+          --directory "$RUNNER_TEMP/candidate" --version "$CANDIDATE_VERSION"
+          --producer-attempt "$GITHUB_RUN_ATTEMPT" --workflow-ref "$CANDIDATE_WORKFLOW_REF"
+          --artifact-id "$CANDIDATE_ARTIFACT_ID" --archive-digest "$CANDIDATE_ARCHIVE_DIGEST"
+          --manifest-sha256 "$CANDIDATE_MANIFEST_SHA" --record "$RUNNER_TEMP/candidate-identity.json"
+      - name: Upload concise identity and timing evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: orbit-candidate-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/candidate-identity.json
+          if-no-files-found: error
+          retention-days: 30

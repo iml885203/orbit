@@ -86,7 +86,8 @@ def validate_base(root, baseline, reference):
         raise ValueError("a PR cannot disable existing lint checks through the baseline")
 
 
-def run(root):
+def run(root, directory=None):
+    directory = (directory or root).resolve()
     pinned = (root / ".golangci-lint-version").read_text().strip().lstrip("v")
     version = subprocess.check_output(["golangci-lint", "version"], text=True)
     match = re.search(r"\bversion (\S+)", version)
@@ -96,7 +97,7 @@ def run(root):
         output = Path(temporary) / "findings.json"
         env = dict(os.environ, GOOS="linux", GOARCH="amd64", CGO_ENABLED="0",
                    GOLANGCI_LINT_CACHE=str(Path(temporary) / "cache"))
-        if not (root / "cmd/orbit/dist").exists() and "-overlay" not in env.get("GOFLAGS", ""):
+        if directory == root and not (root / "cmd/orbit/dist").exists() and "-overlay" not in env.get("GOFLAGS", ""):
             fixture = Path(temporary) / "index.html"
             fixture.write_text("<title>Go lint embed fixture</title>")
             overlay = Path(temporary) / "overlay.json"
@@ -104,8 +105,9 @@ def run(root):
             env["GOFLAGS"] = env.get("GOFLAGS", "") + " " + shlex.quote("-overlay=" + str(overlay))
         process = subprocess.run(["golangci-lint", "run", "--issues-exit-code=0",
                                   "--max-issues-per-linter=0", "--max-same-issues=0",
+                                  "--path-mode=abs", "--config=" + str(root / ".golangci.yml"),
                                   "--output.json.path=" + str(output), "./..."],
-                                 cwd=root, env=env, capture_output=True, text=True)
+                                 cwd=directory, env=env, capture_output=True, text=True)
         if process.returncode:
             raise ValueError("golangci-lint could not complete: " + process.stderr[-4000:])
         return json.loads(output.read_text())
@@ -128,6 +130,9 @@ def main():
         if args.base_ref:
             validate_base(root, baseline, args.base_ref)
         raw = run(root)
+        for module in sorted(root.glob("tools/*/go.mod")):
+            extra = run(root, module.parent)
+            raw["Issues"] = (raw.get("Issues") or []) + (extra.get("Issues") or [])
         enabled = sorted(x["Name"] for x in raw["Report"]["Linters"] if x.get("Enabled"))
         if not set(baseline["enabled_linters"]).issubset(enabled):
             raise ValueError("legacy lint checks were disabled")

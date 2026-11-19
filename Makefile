@@ -248,7 +248,7 @@ preflight:
 	$(MAKE) -j$(CHECK_JOBS) test-go test-ui-check test-ui-lint test-ui-unit
 	go build ./...
 	go vet ./...
-	$(MAKE) test-dev-workflow
+	$(MAKE) test-dev-workflow test-workflows
 	$(MAKE) test-install
 	$(MAKE) test-docs
 	$(MAKE) docs-site-check
@@ -267,3 +267,7 @@ test-dev-workflow:
 .PHONY: lint-new
 lint-new:
 	python3 scripts/lint_gate.py $(if $(LINT_BASE_REF),--base-ref $(LINT_BASE_REF))
+
+.PHONY: test-workflows
+test-workflows:
+	cd tools/workflowlint && go test ./... && go run . ../..

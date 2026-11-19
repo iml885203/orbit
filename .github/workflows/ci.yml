@@ -8,12 +8,73 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  native-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.impact.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Classify source impact conservatively
+        id: impact
+        env:
+          IMPACT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$IMPACT_BASE" ] && [ "$IMPACT_BASE" != "0000000000000000000000000000000000000000" ]; then
+            python3 scripts/native_impact.py --base "$IMPACT_BASE" --github-output "$GITHUB_OUTPUT"
+          else
+            python3 scripts/native_impact.py --github-output "$GITHUB_OUTPUT"
+          fi
+
+  candidate:
+    needs: native-impact
+    if: needs.native-impact.outputs.required == 'true'
+    uses: ./.github/workflows/candidate.yml
+    with:
+      version: v0.0.0-platform-smoke
+
+  native:
+    needs: [native-impact, candidate]
+    if: needs.native-impact.outputs.required == 'true'
+    uses: ./.github/workflows/platform-smoke.yml
+    with:
+      version: v0.0.0-platform-smoke
+      artifact-id: ${{ needs.candidate.outputs.artifact-id }}
+      archive-digest: ${{ needs.candidate.outputs.archive-digest }}
+      manifest-sha256: ${{ needs.candidate.outputs.manifest-sha256 }}
+      producer-attempt: ${{ needs.candidate.outputs.producer-attempt }}
+      workflow-ref: ${{ needs.candidate.outputs.workflow-ref }}
+
+  native-gate:
+    needs: [native-impact, candidate, native]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require native success or an explicit documentation-only no-op
+        env:
+          IMPACT_RESULT: ${{ needs.native-impact.result }}
+          NATIVE_REQUIRED: ${{ needs.native-impact.outputs.required }}
+          CANDIDATE_RESULT: ${{ needs.candidate.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          set -euo pipefail
+          test "$IMPACT_RESULT" = success
+          case "$NATIVE_REQUIRED" in
+            true) test "$CANDIDATE_RESULT" = success; test "$NATIVE_RESULT" = success ;;
+            false) test "$CANDIDATE_RESULT" = skipped; test "$NATIVE_RESULT" = skipped; echo 'Native checks: documented no-op for pure documentation' ;;
+            *) echo 'Missing impact evidence' >&2; exit 1 ;;
+          esac
+
   go-lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -25,6 +86,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/workflowlint/go.sum
       - uses: golangci/golangci-lint-action@db9de0fc1a667e1a49d2291a1a042dff081d78f6 # v9
         with:
           version-file: .golangci-lint-version
@@ -43,15 +107,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v6
+          cache-dependency-path: |
+            go.sum
+            tools/workflowlint/go.sum
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.8.0
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -68,15 +135,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.8.0
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -98,15 +165,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.8.0
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -117,7 +184,7 @@ jobs:
         run: make test-journeys
       - name: Upload installed-user journey diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installed-user-journey-diagnostics-${{ github.run_attempt }}
           path: artifacts/installed-user-journeys
@@ -125,23 +192,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
 
-  # A real .NET service in build and watch modes (#247). Non-blocking while it
-  # proves stable on Linux runners: dotnet's first-use setup raced there when
-  # two services started at once. Make it blocking once it stays green.
   dotnet-journey:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.8.0
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
