@@ -121,7 +121,7 @@ func (c Checker) CheckDue(launchPath string) (bool, error) {
 
 func (c Checker) ClaimBackgroundCheck(launchPath string) (bool, error) {
 	claimed := false
-	_, err := Update(launchPath, func(state *State) error {
+	_, err := updateWithLockTimeout(launchPath, 0, func(state *State) error {
 		if state.Policy == PolicyOff || strings.TrimSpace(c.Channel.ReleaseAPIURL) == "" {
 			return nil
 		}
@@ -219,11 +219,19 @@ func (s *State) settleAt(installed string) {
 // write only delays settling, so it is not reported: this read still gets the
 // settled view and the next read retries the write.
 func ReconcileInstalled(launchPath, installed string) (State, error) {
+	return reconcileInstalled(launchPath, installed, 5*time.Second)
+}
+
+func TryReconcileInstalled(launchPath, installed string) (State, error) {
+	return reconcileInstalled(launchPath, installed, 0)
+}
+
+func reconcileInstalled(launchPath, installed string, lockTimeout time.Duration) (State, error) {
 	state, err := Load(launchPath)
 	if err != nil || !state.announcesSatisfiedTarget(installed) {
 		return state, err
 	}
-	if written, err := Update(launchPath, func(state *State) error {
+	if written, err := updateWithLockTimeout(launchPath, lockTimeout, func(state *State) error {
 		if state.announcesSatisfiedTarget(installed) {
 			state.settleAt(installed)
 		}

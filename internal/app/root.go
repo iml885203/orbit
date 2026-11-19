@@ -83,7 +83,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		}
 	}
 	rootCmd := newRootCommand()
-	err := rootCmd.Execute()
+	executed, err := rootCmd.ExecuteC()
 	closeLifecycleCommand(rootCmd)
 	if err != nil {
 		err = contextualizeUnknownFlag(rootCmd, err)
@@ -94,6 +94,7 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
+	showUpdateNotification(executed)
 	scheduleAutomaticUpdateCheck()
 }
 

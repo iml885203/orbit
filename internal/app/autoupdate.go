@@ -227,7 +227,7 @@ func scheduleAutomaticUpdateCheck() {
 	if err != nil {
 		return
 	}
-	if state, stateErr := autoupdate.ReconcileInstalled(launchPath, buildVersion()); stateErr == nil &&
+	if state, stateErr := autoupdate.TryReconcileInstalled(launchPath, buildVersion()); stateErr == nil &&
 		state.Policy == autoupdate.PolicyAutomatic && state.Owner == autoupdate.OwnerDirect &&
 		state.Phase == "ready" && state.StagedBinary != "" {
 		state = recordAutomaticApplyEligibility(state)
@@ -310,15 +310,9 @@ func discoverableDefaultRuntimeSockets() []string {
 
 func recordAutomaticApplyEligibility(state autoupdate.State) autoupdate.State {
 	eligible := automaticApplyEligible(state)
-	updated, err := autoupdate.Update(state.LaunchPath, func(next *autoupdate.State) error {
-		next.ApplyEligible = eligible
-		next.DeferReason = ""
-		if !eligible {
-			next.DeferReason = "resources_running"
-		}
-		return nil
-	})
+	updated, err := autoupdate.TryRecordApplyEligibility(state.LaunchPath, eligible)
 	if err != nil {
+		state.ApplyEligible = false
 		return state
 	}
 	return updated

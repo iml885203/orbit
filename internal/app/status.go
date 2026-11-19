@@ -85,6 +85,9 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	setup := statusSetupState{Selection: activeEnvironmentSelectionWithKind(selection, configFile, dstatus.Context.Kind)}
+	if dstatus.UpdateAvailable || dstatus.ContextMismatch || dstatus.ConfigStale || cfgErr != nil || environmentSelectionBlocksConfig(selection, configFile) {
+		suppressUpdateNotification(cmd)
+	}
 	if dstatus.ContextMismatch {
 		setup.Selection.ContextSwitchRequired = true
 		setup.Selection.RunningName = dstatus.RunningEnvironment
