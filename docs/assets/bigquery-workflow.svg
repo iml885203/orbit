@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="654" viewBox="0 0 400 654" role="img" aria-labelledby="title desc">
+<title id="title">BigQuery test data workflow</title><desc id="desc">Orbit prepares data. The test harness configures the app and checks results. Stop all writers and establish cleanup conditions before explicit deletion.</desc>
+<style>
+.canvas{fill:#f6f8fa}.node{fill:#fff;stroke:#c7ced7;stroke-width:1.5}.label{fill:#1f2328}.detail{fill:#465264}.line{stroke:#0969da;stroke-width:2;fill:none}.arrow{fill:#0969da}
+text{font-family:system-ui,sans-serif;text-anchor:middle}.label{font-size:22px;font-weight:600}.detail{font-size:20px}
+@media(prefers-color-scheme:dark){.canvas{fill:#161b22}.node{fill:#1c2128;stroke:#566272}.label{fill:#e6edf3}.detail{fill:#b9c5d4}.line{stroke:#58a6ff}.arrow{fill:#58a6ff}}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" class="arrow"/></marker></defs><rect width="400" height="654" rx="16" class="canvas"/>
+<rect x="14" y="14" width="372" height="134" rx="12" class="node"/><text x="200" y="50" class="label">1. Prepare a dataset</text>
+<text x="200" y="90" class="detail">Orbit applies schema</text>
+<text x="200" y="119" class="detail">and loads fixtures</text>
+<path d="M200 151v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="178" width="372" height="134" rx="12" class="node"/><text x="200" y="214" class="label">2. Configure and start the app</text>
+<text x="200" y="254" class="detail">Use app_config</text>
+<text x="200" y="283" class="detail">and the app’s credentials</text>
+<path d="M200 315v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="342" width="372" height="134" rx="12" class="node"/><text x="200" y="378" class="label">3. Run your tests</text>
+<text x="200" y="418" class="detail">Call the app API</text>
+<text x="200" y="447" class="detail">and assert actual results</text>
+<path d="M200 479v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="506" width="372" height="134" rx="12" class="node"/><text x="200" y="542" class="label">4. Stop writers, then clean up</text>
+<text x="200" y="582" class="detail">Confirm all jobs ended</text>
+<text x="200" y="611" class="detail">and cleanup conditions hold</text>
+</svg>

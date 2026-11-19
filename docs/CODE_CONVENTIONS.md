@@ -295,10 +295,19 @@ calls to walk through before each commit:
 
 - **Leave no dead weight.** If a change obsoletes a file, a doc, or a
   paragraph, delete it in the same commit. Nothing is kept "just in case".
-- **Docs read simply — and cheaply.** Write documentation to be understood
-  on first read: short sentences, concrete commands, no filler. Avoid docs
-  that must track feature changes; when one is genuinely needed, keep a
-  single authoritative copy and point every other location at it.
+- **Docs read simply — and cheaply.** Start with the reader's task and expected
+  result. Use plain language, short sentences and concrete commands; explain
+  unfamiliar terms and omit filler. Separate the shortest working path from
+  recovery and reference details. Keep safety conditions beside the action they
+  govern. Avoid docs that must track feature changes; when one is needed, keep
+  a single authoritative copy and link to it elsewhere.
+- **Explain visually.** Combine concise prose with useful illustrations. Use a
+  diagram for workflows, relationships, or state transitions when it makes them
+  easier to understand; avoid decorative or redundant images. Every new or
+  redrawn diagram must be a checked-in SVG, with readable labels, a descriptive
+  title, and meaningful alt text. Do not use Mermaid, ASCII art, or raster images
+  for diagrams. Screenshots may remain raster images. Check diagrams at narrow
+  widths and in the site's light and dark themes.
 - **Explanation is a refactoring signal.** The urge to write a doc or comment
   that explains code means the code should be restructured first (§3).
 - **The code states its intent.** A feature is done only after a

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="654" viewBox="0 0 400 654" role="img" aria-labelledby="title desc">
+<title id="title">BigQuery 測試資料流程</title><desc id="desc">Orbit 準備資料，測試程式設定 app 並驗證結果；停止所有 writer 並確認前提後才明確清理。</desc>
+<style>
+.canvas{fill:#f6f8fa}.node{fill:#fff;stroke:#c7ced7;stroke-width:1.5}.label{fill:#1f2328}.detail{fill:#465264}.line{stroke:#0969da;stroke-width:2;fill:none}.arrow{fill:#0969da}
+text{font-family:system-ui,sans-serif;text-anchor:middle}.label{font-size:22px;font-weight:600}.detail{font-size:20px}
+@media(prefers-color-scheme:dark){.canvas{fill:#161b22}.node{fill:#1c2128;stroke:#566272}.label{fill:#e6edf3}.detail{fill:#b9c5d4}.line{stroke:#58a6ff}.arrow{fill:#58a6ff}}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" class="arrow"/></marker></defs><rect width="400" height="654" rx="16" class="canvas"/>
+<rect x="14" y="14" width="372" height="134" rx="12" class="node"/><text x="200" y="50" class="label">1. 準備 dataset</text>
+<text x="200" y="90" class="detail">Orbit 建立 schema</text>
+<text x="200" y="119" class="detail">並載入 fixture</text>
+<path d="M200 151v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="178" width="372" height="134" rx="12" class="node"/><text x="200" y="214" class="label">2. 設定並啟動 app</text>
+<text x="200" y="254" class="detail">帶入 app_config</text>
+<text x="200" y="283" class="detail">使用 app 自己的憑證</text>
+<path d="M200 315v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="342" width="372" height="134" rx="12" class="node"/><text x="200" y="378" class="label">3. 執行測試</text>
+<text x="200" y="418" class="detail">呼叫 app API</text>
+<text x="200" y="447" class="detail">斷言實際查詢結果</text>
+<path d="M200 479v23" class="line" marker-end="url(#arrow)"/>
+<rect x="14" y="506" width="372" height="134" rx="12" class="node"/><text x="200" y="542" class="label">4. 停止 writer，再明確清理</text>
+<text x="200" y="582" class="detail">確認所有 job 結束</text>
+<text x="200" y="611" class="detail">及清理前提後才 clean</text>
+</svg>

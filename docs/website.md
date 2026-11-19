@@ -40,6 +40,9 @@ make docs-site-preview
 
 ## Content and navigation
 
+Follow the [documentation readability and SVG diagram requirements](./CODE_CONVENTIONS.md).
+Keep entry-point guides short and link to recovery and reference pages for detail.
+
 Edit the existing Markdown owner for a product contract. The website reads
 those files directly and adds navigation, responsive presentation, code
 highlighting, stable heading links, and local full-site search. Update

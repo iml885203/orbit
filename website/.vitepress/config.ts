@@ -30,11 +30,21 @@ const englishSidebar = [
       { text: 'Team adoption', link: '/docs/team-adoption' },
       { text: 'Environment sources', link: '/docs/environment-sources' },
       { text: 'Instances', link: '/docs/instances' },
-      { text: 'SQL Projects', link: '/docs/sql-workflow' },
-      { text: 'BigQuery', link: '/docs/bigquery' },
       { text: 'E2E testing', link: '/docs/e2e-testing' },
       { text: 'Integrations', link: '/docs/integrations' },
       { text: 'Troubleshooting', link: '/docs/troubleshooting' },
+    ],
+  },
+  {
+    text: 'Extensions',
+    items: [
+      { text: 'Overview', link: '/docs/extensions' },
+      { text: 'SQL Server', link: '/docs/sql-workflow' },
+      { text: 'BigQuery', items: [
+        { text: 'Get started', link: '/docs/bigquery' },
+        { text: 'Testing and recovery', link: '/docs/bigquery-testing' },
+      ] },
+      { text: 'Callback Tunnel', link: '/docs/tunnel-claim' },
     ],
   },
   {
@@ -45,7 +55,6 @@ const englishSidebar = [
       { text: 'Benchmarks', link: '/docs/benchmarks' },
       { text: 'Configuration', link: '/docs/configuration' },
       { text: 'Tracing', link: '/docs/tracing' },
-      { text: 'Tunnel claims', link: '/docs/tunnel-claim' },
       { text: 'Agent CLI contract', link: '/docs/agent-cli' },
       { text: 'Architecture', link: '/docs/architecture' },
       { text: 'Versioning', link: '/docs/versioning' },
@@ -72,11 +81,21 @@ const traditionalChineseSidebar = [
       { text: '團隊導入', link: '/zh-TW/docs/team-adoption' },
       { text: '環境來源', link: '/zh-TW/docs/environment-sources' },
       { text: 'Instances', link: '/zh-TW/docs/instances' },
-      { text: 'SQL Projects', link: '/zh-TW/docs/sql-workflow' },
-      { text: 'BigQuery', link: '/zh-TW/docs/bigquery' },
       { text: 'E2E 測試', link: '/zh-TW/docs/e2e-testing' },
       { text: '整合', link: '/zh-TW/docs/integrations' },
       { text: '疑難排解', link: '/zh-TW/docs/troubleshooting' },
+    ],
+  },
+  {
+    text: '擴充功能',
+    items: [
+      { text: '概覽', link: '/zh-TW/docs/extensions' },
+      { text: 'SQL Server', link: '/zh-TW/docs/sql-workflow' },
+      { text: 'BigQuery', items: [
+        { text: '入門', link: '/zh-TW/docs/bigquery' },
+        { text: '測試與復原', link: '/zh-TW/docs/bigquery-testing' },
+      ] },
+      { text: 'Callback Tunnel', link: '/zh-TW/docs/tunnel-claim' },
     ],
   },
   {
@@ -87,7 +106,6 @@ const traditionalChineseSidebar = [
       { text: '效能實測', link: '/zh-TW/docs/benchmarks' },
       { text: '設定參考', link: '/zh-TW/docs/configuration' },
       { text: 'Tracing', link: '/zh-TW/docs/tracing' },
-      { text: 'Tunnel claims', link: '/zh-TW/docs/tunnel-claim' },
       { text: 'Agent CLI contract', link: '/zh-TW/docs/agent-cli' },
       { text: '架構', link: '/zh-TW/docs/architecture' },
       { text: '版本與相容性', link: '/zh-TW/docs/versioning' },

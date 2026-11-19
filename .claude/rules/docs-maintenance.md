@@ -23,3 +23,17 @@ never go stale.
 **Exception**: low-churn conceptual documents (architecture, philosophy,
 adoption guides) may stay bilingual — they change when ideas change, not
 when features do.
+
+## Reader experience
+
+Follow the documentation requirements in
+[Code conventions §19](../../docs/CODE_CONVENTIONS.md).
+Use plain language and a task-first introduction with an expected result. Keep
+quick starts separate from recovery and detailed reference material, while
+keeping safety prerequisites beside the relevant command.
+
+Combine text and useful illustrations to explain workflows and relationships.
+All new or redrawn diagrams must use checked-in SVG files, with descriptive
+titles and meaningful image alt text. Mermaid, ASCII diagrams and raster
+renderings of diagrams are not allowed. Screenshots may use raster formats.
+Verify labels remain readable on narrow screens and in light and dark themes.

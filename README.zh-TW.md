@@ -80,7 +80,7 @@ playback。Dashboard 只綁定 loopback。
 - [疑難排解](docs/troubleshooting.zh-TW.md)
 - [版本與相容性](docs/versioning.zh-TW.md)
 
-選用 workflows（environment 啟用後才生效）：
+[擴充功能](docs/extensions.zh-TW.md)（environment 啟用後才生效）：
 
 - [SQL Server Database Projects](docs/sql-workflow.zh-TW.md)
 - [BigQuery 開發與整合測試](docs/bigquery.zh-TW.md)

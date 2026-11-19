@@ -83,7 +83,7 @@ Core user documentation:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Versioning and compatibility](docs/versioning.md)
 
-Optional workflows, inactive unless the environment enables them:
+[Extensions](docs/extensions.md), inactive unless the environment enables them:
 
 - [SQL Server Database Projects](docs/sql-workflow.md)
 - [BigQuery development and integration tests](docs/bigquery.md)
