@@ -3,6 +3,7 @@ package logging
 import (
 	"bytes"
 	"sync"
+	"unicode/utf8"
 )
 
 // LineBuffer is an io.Writer that accumulates bytes until a newline is seen,
@@ -14,9 +15,10 @@ import (
 // Flush when the stream ends (EOF / process exit) to emit any final line
 // that lacked a trailing newline.
 type LineBuffer struct {
-	mu   sync.Mutex
-	buf  bytes.Buffer
-	emit func(line string)
+	mu       sync.Mutex
+	buf      bytes.Buffer
+	emit     func(line string)
+	maxBytes int
 }
 
 // NewLineBuffer creates a LineBuffer that calls emit for every complete line.
@@ -29,6 +31,17 @@ func NewLineBuffer(emit func(line string)) *LineBuffer {
 	return &LineBuffer{emit: emit}
 }
 
+// NewBoundedLineBuffer emits oversized lines in UTF-8-safe chunks with an
+// explicit continuation marker. maxBytes bounds chunk content (at least one
+// UTF-8 rune); the marker is additional. Flush still emits trailing content.
+func NewBoundedLineBuffer(maxBytes int, emit func(string)) *LineBuffer {
+	buffer := NewLineBuffer(emit)
+	buffer.maxBytes = max(maxBytes, utf8.UTFMax)
+	return buffer
+}
+
+const continuedLineMarker = " [line continues]"
+
 // Write implements io.Writer. Always returns len(p), nil — callers streaming
 // from a pipe or demuxer rely on this contract.
 //
@@ -36,15 +49,22 @@ func NewLineBuffer(emit func(line string)) *LineBuffer {
 // before invoking emit, so a slow subscriber cannot stall concurrent writers
 // or deadlock when emit re-enters the logging stack.
 func (l *LineBuffer) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	l.buf.Write(p)
-	lines := l.drainLocked()
-	l.mu.Unlock()
-
-	for _, line := range lines {
-		l.emit(line)
+	written := len(p)
+	for len(p) > 0 {
+		l.mu.Lock()
+		n := len(p)
+		if l.maxBytes > 0 {
+			n = min(n, l.maxBytes+utf8.UTFMax-l.buf.Len())
+		}
+		l.buf.Write(p[:n])
+		lines := l.drainLocked()
+		l.mu.Unlock()
+		for _, line := range lines {
+			l.emit(line)
+		}
+		p = p[n:]
 	}
-	return len(p), nil
+	return written, nil
 }
 
 // Flush emits any buffered bytes as a final line. Call on EOF.
@@ -70,14 +90,33 @@ func (l *LineBuffer) drainLocked() []string {
 	for {
 		data := l.buf.Bytes()
 		i := bytes.IndexByte(data, '\n')
-		if i < 0 {
+		contentEnd := i
+		if i > 0 && data[i-1] == '\r' {
+			contentEnd--
+		}
+		if i >= 0 && (l.maxBytes == 0 || contentEnd <= l.maxBytes) {
+			line := cleanLine(string(data[:i]))
+			l.buf.Next(i + 1)
+			if line != "" {
+				out = append(out, line)
+			}
+			continue
+		}
+		if l.maxBytes == 0 || len(data) <= l.maxBytes {
 			break
 		}
-		line := cleanLine(string(data[:i]))
-		l.buf.Next(i + 1)
-		if line != "" {
-			out = append(out, line)
+		if i < 0 && len(data) == l.maxBytes+1 && data[l.maxBytes] == '\r' {
+			break
 		}
+		cut := l.maxBytes
+		for cut > 0 && !utf8.RuneStart(data[cut]) {
+			cut--
+		}
+		if cut == 0 {
+			cut = l.maxBytes
+		}
+		out = append(out, string(data[:cut])+continuedLineMarker)
+		l.buf.Next(cut)
 	}
 	return out
 }
