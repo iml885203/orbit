@@ -158,6 +158,38 @@ time.sleep(300)
         with self.assertRaises(ValueError):
             dev_check.check(self.source, self.source / "cache", "go", [], 1, 30, False)
 
+    def test_lint_cache_does_not_reuse_another_checkout_paths(self):
+        self.executable("golangci-lint", """import json,os,sys
+from pathlib import Path
+if 'version' in sys.argv:print('golangci-lint has version 2.12.2');sys.exit(0)
+cache=Path(os.environ.get('GOLANGCI_LINT_CACHE',os.environ['ORBIT_TEST_FAKE_LINT_CACHE']))
+cache.mkdir(parents=True,exist_ok=True);saved=cache/'finding.json'
+if not saved.exists():saved.write_text(json.dumps({'FromLinter':'errcheck','Text':'unchecked','Pos':{'Filename':str(Path.cwd()/'file.go'),'Line':2}}))
+output=next(arg.split('=',1)[1] for arg in sys.argv if arg.startswith('--output.json.path='))
+Path(output).write_text(json.dumps({'Issues':[json.loads(saved.read_text())]}))
+""")
+        second = self.root / "second source"
+        second.mkdir()
+        with mock.patch.dict(os.environ, {"ORBIT_TEST_FAKE_LINT_CACHE": str(self.root / "shared-lint-cache")}):
+            for root in (self.source, second):
+                (root / ".golangci-lint-version").write_text('v2.12.2')
+                (root / 'file.go').write_text('package fixture\nfunc f() { call() }\n')
+                entries = lint_gate.inventory(root, lint_gate.run(root))
+                self.assertEqual(entries[0]['path'], 'file.go')
+
+    def test_cli_rejects_source_and_git_workspaces_before_writing(self):
+        nested = self.source / "nested"
+        nested.mkdir()
+        checkout = self.root / "another-checkout"
+        (checkout / ".git").mkdir(parents=True)
+        for workspace in (self.source, nested, checkout):
+            before = sorted(str(path.relative_to(workspace)) for path in workspace.rglob("*"))
+            result = subprocess.run([sys.executable, str(Path(dev_check.__file__)), "go", "--source",
+                                     str(self.source), "--workspace", str(workspace)], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(sorted(str(path.relative_to(workspace)) for path in workspace.rglob("*")), before)
+        self.assertFalse(self.proof.exists())
+
     def test_missing_storage_never_falls_back(self):
         command = [sys.executable, str(Path(dev_check.__file__)), "go", "--source", str(self.source),
                    "--workspace", str(self.root / "not-allocated")]

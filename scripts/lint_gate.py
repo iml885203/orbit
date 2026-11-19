@@ -45,6 +45,7 @@ def key(entry):
 
 
 def inventory(root, report):
+    root = root.resolve()
     entries = {}
     for issue in report.get("Issues") or []:
         if issue["FromLinter"] == "typecheck":
@@ -93,7 +94,8 @@ def run(root):
         raise ValueError("install the golangci-lint version in .golangci-lint-version")
     with tempfile.TemporaryDirectory(prefix="orbit-lint-") as temporary:
         output = Path(temporary) / "findings.json"
-        env = dict(os.environ, GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
+        env = dict(os.environ, GOOS="linux", GOARCH="amd64", CGO_ENABLED="0",
+                   GOLANGCI_LINT_CACHE=str(Path(temporary) / "cache"))
         if not (root / "cmd/orbit/dist").exists() and "-overlay" not in env.get("GOFLAGS", ""):
             fixture = Path(temporary) / "index.html"
             fixture.write_text("<title>Go lint embed fixture</title>")
