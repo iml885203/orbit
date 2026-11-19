@@ -20,6 +20,11 @@ from flow_report import export_report
 SCHEMA = 'orbit.flow.v1'
 STAGES = ('requirements', 'development', 'testing', 'review', 'rework', 'ci', 'delivery', 'postmerge', 'waiting')
 RESULTS = ('passed', 'failed', 'cancelled', 'unknown')
+EVENT_FIELDS = {
+    'begin': {'type', 'id', 'at', 'stage', 'actor', 'source', 'label', 'round', 'provenance'},
+    'end': {'type', 'id', 'at', 'result'},
+    'note': {'type', 'id', 'at', 'label'},
+}
 
 
 def now():
@@ -62,6 +67,10 @@ def validate(journal):
     for event in journal['events']:
         if type(event) is not dict or event.get('type') not in ('begin', 'end', 'note'):
             raise ValueError('invalid event')
+        fields = EVENT_FIELDS[event['type']]
+        optional = {'reason'} if event['type'] == 'begin' else set()
+        if not fields <= event.keys() or event.keys() - fields - optional:
+            raise ValueError('invalid fields for event type')
         at = timestamp(event['at'])
         if at < started or (finished is not None and at > finished):
             raise ValueError('event falls outside the session window')
@@ -79,7 +88,7 @@ def validate(journal):
             for key in ('label', 'actor', 'provenance'):
                 label(event[key])
             source_id(event['source'])
-            if event['stage'] in ('waiting', 'rework'):
+            if event['stage'] in ('waiting', 'rework') or 'reason' in event:
                 label(event.get('reason'))
             spans[identifier] = dict(event)
         else:

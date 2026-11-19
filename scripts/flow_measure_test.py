@@ -203,9 +203,24 @@ class FlowCLITest(unittest.TestCase):
         self.call('end', '--span', 'missing', '--result', 'passed', expected=1)
         self.assertEqual(path.read_bytes(), original)
         foreign = self.workspace/'foreign.json'
-        foreign.write_text(json.dumps(checkpoint()))
+        report = checkpoint()
+        report['repository'] = 'other/repo'
+        foreign.write_text(json.dumps(report))
         self.call('import-delivery', '--report', str(foreign), expected=1)
         self.assertEqual(path.read_bytes(), original)
+
+    def test_loaded_begin_cannot_forge_a_terminal_result(self):
+        path = self.workspace/'flow/journal.json'
+        value = json.loads(path.read_text())
+        value['events'] = [dict(type='begin', id='forged', at=value['started_at'], stage='testing', actor='fixture',
+                                source=SOURCE, label='No finish event', round=1, provenance='agent-reported',
+                                end=value['started_at'], result='passed')]
+        path.write_text(json.dumps(value))
+        original = path.read_bytes()
+        self.call('finish', expected=1)
+        self.call('export', expected=1)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertFalse((self.workspace/'flow/summary.json').exists())
 
     def test_source_and_symlink_outputs_rejected_before_writes(self):
         source = self.script.parent.parent
