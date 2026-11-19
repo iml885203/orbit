@@ -85,6 +85,8 @@ macOS 會偵測標準安裝的 Chrome，其他環境沿用 Playwright setup。
 `make lint` 仍顯示所有問題；保留舊債不代表 lint 已經全綠。
 
 候選產物驗證與重啟後接續請見[確認交付進度](delivery.zh-TW.md)。
+若要選用涵蓋開發、測試與 review 的 issue 時間線，請見
+[量測一張開發 issue](development-measurement.zh-TW.md)。
 完整 gate 也會用固定版本的 actionlint 驗證 GitHub workflow 語義。
 
 Release 編號與相容性承諾請見[版本與相容性](versioning.zh-TW.md)。

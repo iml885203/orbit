@@ -70,7 +70,7 @@ def latest_jobs(repository, run):
         rows = pages('repos/' + repository + '/actions/runs/' + str(run['id']) + '/attempts/' + str(attempt) + '/jobs', 'jobs')
         for row in rows:
             if row['name'] not in selected:
-                selected[row['name']] = {key: row.get(key) for key in ('id', 'name', 'status', 'conclusion', 'html_url')}
+                selected[row['name']] = {key: row.get(key) for key in ('id', 'name', 'status', 'conclusion', 'html_url', 'created_at', 'started_at', 'completed_at')}
                 selected[row['name']].update(attempt=attempt, seconds=elapsed(row))
     return list(selected.values())
 
@@ -211,6 +211,8 @@ def observe(args, previous):
             issue = api('repos/' + args.repository + '/issues/' + str(linked['number']))
             result['issues'].append({key: issue[key] for key in ('number', 'state', 'html_url')})
         result['pr_ci'] = ci_evidence(args.repository, raw['headRefOid'], 'pull_request')
+        if raw['state'] == 'MERGED' and result['pr']['merge_commit']:
+            result['main_ci'] = ci_evidence(args.repository, result['pr']['merge_commit'], 'push')
         if result['pr_ci'].get('run_id'):
             pr_run = api('repos/' + args.repository + '/actions/runs/' + str(result['pr_ci']['run_id']))
             result['pr_candidate'] = tiny_identity(args.repository, pr_run)
