@@ -140,6 +140,23 @@ termination. A restart waits until that exact process generation has exited
 and its manager record is removed before a replacement can be tracked. Late
 exit or health events from the replaced generation are ignored.
 
+On Unix, context cancellation uses that same owner and configured grace, so a
+cooperative host process can finish its shutdown handler. Readers and the wait/reaping owner
+are installed even when cancellation arrives during launch.
+
+| Wait | Starts | Budget and result |
+|---|---|---|
+| Group termination | Lifecycle cancellation or explicit stop | Existing configured grace, followed by the platform's escalation policy |
+| Final output | Leader has exited and been reaped | Up to two seconds waiting for stdout/stderr EOF |
+
+Owned pipes preserve final output before exit reporting. If inherited handles
+keep them open past the output window, Orbit closes its readers and reports
+`ErrOutputDrainTimeout` (trailing output may be incomplete). It then finishes
+owned-group cleanup using the existing grace before retiring ownership and
+reporting exit. The output window is separate from grace; it is not a two-second
+limit on the complete shutdown. Output callbacks retain their existing
+requirement to return promptly.
+
 Process PID/PGID ownership is persisted immediately after registration, before
 health can be reported. After an abrupt daemon exit, Orbit safely retires a
 live persisted process before normal startup creates a fresh child; adopting it

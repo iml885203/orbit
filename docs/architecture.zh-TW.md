@@ -129,6 +129,21 @@ Lifecycle 取消與明確的 stop 共用同一套 process group 終止流程。R
 那一代 process 確實結束、manager 紀錄移除後，才開始追蹤替代的 process；被取代
 那一代較晚送來的 exit 或 health 事件會被忽略。
 
+Unix 的 context 取消也使用同一個 owner 與設定的 grace，讓會處理 shutdown signal 的
+host process 能完成清理。即使啟動途中收到取消，也會先安裝 reader 與 wait／reaping
+owner，確保能回收與回報。
+
+| 等待項目 | 起點 | Budget 與結果 |
+|---|---|---|
+| Group 終止 | Lifecycle 取消或明確 stop | 既有設定的 grace，之後沿用平台的升級終止政策 |
+| 最後輸出 | Leader 已退出且已 reaped | 最多兩秒等待 stdout／stderr EOF |
+
+自有 pipes 讓 exit 回報前能保留最後輸出。若 inherited handles 超過輸出窗口仍未
+關閉，Orbit 會關閉自己的 readers，回報 `ErrOutputDrainTimeout`（尾端輸出可能
+不完整），並依既有 grace 完成 owned group 清理，才移除 ownership 與回報 exit。
+輸出窗口與 grace 分開計算，不是整個 shutdown 的兩秒上限。Output callback
+仍需遵守原有的快速返回要求。
+
 Process 的 PID/PGID ownership 在註冊後立刻持久化，早於回報 health。Daemon
 異常結束後，Orbit 會在正常啟動建立新 child 之前，安全地結束仍存活的已持久化
 process；若直接接管它，輸出 pipe 仍接在已死的 daemon 上，可能誤報恢復。已死的
