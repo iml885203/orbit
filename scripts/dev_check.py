@@ -189,12 +189,17 @@ def socket_root(workspace):
             alias.unlink()
 
 
-def check(source, workspace, mode, packages, jobs, timeout, reuse):
+def validate_workspace(source, workspace):
     source, workspace = source.resolve(), workspace.resolve()
     if source == workspace or source in workspace.parents or workspace in source.parents:
         raise ValueError("validation workspace must be outside the source checkout")
     if (workspace / ".git").exists():
         raise ValueError("a Git checkout cannot be a validation workspace")
+    return source, workspace
+
+
+def check(source, workspace, mode, packages, jobs, timeout, reuse):
+    source, workspace = validate_workspace(source, workspace)
     if os.name == "nt" and mode != "go":
         raise ValueError("Windows Beta supports Go checks here; use WSL or CI for full/UI/docs checks")
     for key in ("ORBIT_UI_EXT", "ORBIT_UI_TYPES", "ORBIT_UI_OUTDIR"):
@@ -322,6 +327,7 @@ def main():
             args.workspace = Path(allocation.stdout.strip())
         if not args.workspace.is_dir():
             raise ValueError("allocate the task workspace with your storage helper first")
+        args.source, args.workspace = validate_workspace(args.source, args.workspace)
         with workspace_lock(args.workspace):
             report = check(args.source, args.workspace, args.mode, args.packages or ["./internal/..."],
                            args.jobs, args.timeout, args.reuse)
