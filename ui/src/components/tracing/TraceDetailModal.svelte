@@ -40,27 +40,61 @@
   let modal = $state<HTMLDivElement>()
   let returnFocus: HTMLElement | null = null
 
-  // background=true is the live-update path (an SSE event for this trace):
-  // refetch the spans quietly (no loading flicker) and skip the expensive
-  // per-service log refetch — logs were loaded once on open.
-  async function load(id: string, background = false) {
-    if (!id) return
-    if (!background) loading = true
-    const { trace: t, gone: g } = await fetchTrace(id)
-    trace = t
-    gone = g
-    loading = false
-    // Default selection: the first errored span, else the root.
-    if (t && selectedSpanId === null) {
-      selectedSpanId = (t.spans.find((s) => s.status === 'error') ?? t.spans[0])?.spanId ?? null
+  type TraceView = {
+    id: string
+    controller: AbortController
+    busy: boolean
+    dirty: boolean
+    logsRequested: boolean
+  }
+  let currentView: TraceView | null = null
+
+  function isCurrent(view: TraceView) {
+    return currentView === view && !view.controller.signal.aborted
+  }
+
+  async function load(view: TraceView) {
+    if (!isCurrent(view)) return
+    if (view.busy) { view.dirty = true; return }
+    view.busy = true
+    try {
+      do {
+        view.dirty = false
+        const { trace: next, gone: expired } = await fetchTrace(view.id, view.controller.signal)
+        if (!isCurrent(view)) return
+        trace = next
+        gone = expired
+        loading = false
+        if (next && selectedSpanId === null) {
+          selectedSpanId = (next.spans.find((span) => span.status === 'error') ?? next.spans[0])?.spanId ?? null
+        }
+        if (next && !view.logsRequested) {
+          view.logsRequested = true
+          fetchTraceLogs(view.id, view.controller.signal).then((lines) => {
+            if (isCurrent(view)) allLogs = lines
+          })
+        }
+      } while (view.dirty && isCurrent(view))
+    } finally {
+      view.busy = false
     }
-    if (t && !background) fetchTraceLogs(t.traceId).then((lines) => (allLogs = lines))
   }
 
   $effect(() => {
+    const view: TraceView = { id: traceId, controller: new AbortController(), busy: false, dirty: false, logsRequested: false }
+    currentView = view
+    trace = null
+    gone = false
+    loading = true
     selectedSpanId = null
     allLogs = []
-    load(traceId)
+    logModalLines = null
+    logModalLoading = false
+    if (view.id) load(view)
+    return () => {
+      view.controller.abort()
+      if (currentView === view) currentView = null
+    }
   })
 
   // Focus management: capture the trigger (the trace row), move focus into the
@@ -95,7 +129,7 @@
   $effect(() => {
     const id = traceId
     const unsub = subscribe('trace', (data) => {
-      if ((data as { traceId: string }).traceId === id) load(id, true)
+      if ((data as { traceId: string }).traceId === id && currentView?.id === id) load(currentView)
     })
     return unsub
   })
@@ -125,9 +159,11 @@
   }
 
   async function openAllLogs() {
-    if (!trace) return
+    const view = currentView
+    if (!trace || !view || logModalLoading) return
     logModalLoading = true
-    const lines = await fetchTraceLogs(trace.traceId)
+    const lines = await fetchTraceLogs(view.id, view.controller.signal)
+    if (!isCurrent(view)) return
     logModalLines = lines
     logModalLoading = false
   }

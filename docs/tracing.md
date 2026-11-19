@@ -102,6 +102,10 @@ Open the **Tracing** tab (`http://localhost:19800/#/tracing`):
     lights up in order and a failed service pulses red. Step through with the
     playback bar.
 
+Trace detail merges bursts of live updates into a single refresh sequence. Switching
+traces or closing the dialog cancels its pending requests; late results cannot
+replace another trace or its logs.
+
 On the Services graph, the **Live** toggle pulses the flow-dot along edges that
 recently carried a trace — an ambient "the system is moving" view, separate from
 single-trace playback.
