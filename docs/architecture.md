@@ -99,6 +99,11 @@ Status, SSE and graph mode labels come from the same captured orchestrator kind.
 Persisted mode settings represent intent until that runtime view is published;
 disk persistence stays outside the snapshot lock.
 
+Live graph responses carry their daemon epoch, environment generation and config
+path from that snapshot. Drawer runtime details use status only when this owner
+matches; previews retain their snapshot values. Runtime updates preserve the
+structural graph reference.
+
 Asynchronous down, targeted stop and restart have bounded identity/result records. Completion
 comes from the operation result, including stop and sweep errors, rather than
 requiring an observer to catch an intermediate resource state. CLI request

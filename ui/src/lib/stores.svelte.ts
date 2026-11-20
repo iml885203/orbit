@@ -7,7 +7,7 @@
 // rather than scrolling a 50-field bag. resetForNewDaemon scope is the
 // daemon sub-store; graph and ui survive reconnect.
 
-import type { ResourceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse } from './types.gen'
+import type { ResourceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse, GraphRuntimeContext } from './types.gen'
 
 import { MAX_LINES } from './constants'
 
@@ -41,6 +41,7 @@ class DaemonStore {
   daemonEpoch = $state<number | null>(null)
   instanceName = $state('')
   services = $state<Record<string, ResourceStatus>>({})
+  runtimeContext = $state<GraphRuntimeContext | null>(null)
   logBuffers = $state<Record<string, string[]>>({})
   openLogs = $state<Record<string, boolean>>({})
   logModal = $state<{ target: string | null; loading: boolean }>({ target: null, loading: false })
@@ -136,14 +137,18 @@ export function toast(msg: string) {
   toastTimer = setTimeout(() => { store.ui.toastVisible = false }, 2500)
 }
 
-export function replaceServices(svcs: ResourceStatus[]) {
+export function replaceServices(svcs: ResourceStatus[], context: GraphRuntimeContext | null = null) {
+  store.daemon.runtimeContext = context
   const next: Record<string, ResourceStatus> = {}
   for (const svc of svcs) next[svc.name] = svc
   store.daemon.services = next
 }
 
 export function replaceGraphData(next: GraphResponse) {
-  if (store.graph.data && graphDataKey(store.graph.data) === graphDataKey(next)) return
+  if (store.graph.data && graphDataKey(store.graph.data) === graphDataKey(next)) {
+    store.graph.data.runtime = next.runtime
+    return
+  }
   store.graph.data = next
 }
 
@@ -154,6 +159,7 @@ function graphDataKey(graph: GraphResponse): string {
     nodes: graph.nodes.map(n => ({
       name: n.name,
       kind: n.kind,
+      runtimeKind: n.runtime_kind ?? '',
       icon: n.icon ?? '',
       label: n.label ?? '',
       color: n.color ?? '',
@@ -190,6 +196,7 @@ function graphDataKey(graph: GraphResponse): string {
 //   - Ephemeral UI: user intent (open settings, active toast, sql mode)
 //     must survive a daemon restart.
 export function resetForNewDaemon() {
+  store.daemon.runtimeContext = null
   store.daemon.services = {}
   store.daemon.logBuffers = {}
   store.daemon.envToggles = []
