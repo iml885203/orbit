@@ -33,18 +33,29 @@
 用是錯的。Orbit 會強制這件事——有資源運行時，`switch` 會要求確認，非互動的
 caller 必須加 `--yes`。
 
-harness 應該做的是開跑前先*驗證*：
+![唯讀 guard 在測試前檢查必要資源；失敗時停止 harness，交由明確步驟 provisioning。](./assets/e2e-readiness-guard.svg)
 
-1. 讀 `orbit env info --json`。它回報 env 的身分，以及每個資源帶出處的 port
-   與 URL——`declared` 來自 environment 檔、`observed` 來自運行中的 daemon。
-   daemon 服務的是別的 environment 時不給 observed 值，harness 永遠不會把別
-   的 stack 的 port 誤認成自己的。含憑證的 environment 值需要
-   `--show-secrets` 才輸出。
-2. 確認套件需要的資源存在且 healthy（完整生命週期細節在
-   `orbit status --json`）。
-3. 不滿足時快速失敗，並給出可執行的訊息——列出缺少的資源，印出人類（或
-   pipeline 的 provisioning 階段）該執行的 `orbit switch <env>` / `orbit up`
-   指令。不要自己執行它。
+harness 開跑前只驗證套件需要的資源。先確認 `orbit ready --help` 支援這個指令。
+若已裝 CLI 尚未提供，回報 `orbit version --json`，在明確更新 CLI 後才採用下方
+範例。既有 harness 可保留自己透過 `orbit env info --json` 與
+`orbit status --json` 實作的唯讀身分／必要資源檢查；這兩個查詢本身不是斷言。
+不要把不支援的指令解讀成資源不健康，也不要略過 guard 繼續跑。
+
+```bash
+# 如需 provisioning，另設明確的 setup 步驟。
+orbit ready postgres redis --json > readiness.json || exit 1
+# 使用 readiness.json 的 data.resources[].ports／url 設定應用程式。
+# 準備隔離的測試資料，再執行真正的應用程式斷言。
+```
+
+只需資料庫的套件不會被已停止的前端阻擋。這個 guard 不會啟動、切換或等待
+資源。失敗時保留原因及帶完整 config／instance 的恢復指令，交給人或
+provisioning 階段決定；不要把恢復動作當成測試的隱式副作用。
+
+[就緒斷言契約](agent-cli.md#required-resource-readiness-assertion)維護完整結果
+形狀和全域 blockers，包含尚未套用的設定。需要宣告 metadata 時另讀
+`orbit env info --json`；需要完整生命週期細節時讀 `orbit status --json`。
+這兩個查詢都不是斷言 guard。
 
 失敗時 `orbit up --json` 自帶證據：`data.failed_resources` 列出每個沒有變
 healthy 的資源，含狀態、原因與有上限的 log tail。CI log 不需要第二個指令就能
@@ -56,8 +67,8 @@ healthy 的資源，含狀態、原因與有上限的 log tail。CI log 不需�
 
 ```bash
 orbit up --instance ci-$BUILD_ID --infra --json
-orbit status --instance ci-$BUILD_ID --json
-# 使用上述 response 回報的 resolved endpoints 執行測試
+orbit ready postgres redis --instance ci-$BUILD_ID --json
+# 使用 data.resources 回報的 resolved endpoints 執行測試
 orbit instance clean ci-$BUILD_ID --json
 ```
 

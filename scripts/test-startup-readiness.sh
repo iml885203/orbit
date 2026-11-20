@@ -121,6 +121,55 @@ assert any("dependency request succeeded" in line for line in logs["data"]["line
 with urllib.request.urlopen(resources["api"]["url"], timeout=2) as response:
     assert response.status == 200
 PY
+run_orbit down client --json >/dev/null
+run_orbit ready api api --json >"$test_root/ready-api.json"
+if run_orbit ready client --json >"$test_root/ready-client.json"; then
+  echo "Readiness guard passed for a stopped required resource." >&2
+  exit 1
+fi
+run_orbit status --json >"$test_root/ready-status.json"
+python3 - "$test_root" "$instance_name" <<'PYREADY'
+import json
+import pathlib
+import sys
+import urllib.request
+
+root = pathlib.Path(sys.argv[1])
+passed = json.loads((root / "ready-api.json").read_text())
+failed = json.loads((root / "ready-client.json").read_text())
+status = json.loads((root / "ready-status.json").read_text())
+assert passed["ok"] and passed["data"]["ready"]
+assert passed["data"]["required_resources"] == ["api"]
+assert passed["instance"] == sys.argv[2]
+observed = passed["data"]["observation"]
+assert observed["instance"] == sys.argv[2]
+assert observed["endpoint_source"] == "daemon_status"
+resources = {item["name"]: item for item in status["data"]["resources"]}
+assert resources["client"]["state"] == "stopped"
+api = passed["data"]["resources"][0]
+assert api["ports"] == resources["api"]["ports"]
+assert api["url"] == resources["api"]["url"]
+with urllib.request.urlopen(api["url"], timeout=2) as response:
+    assert response.status == 200
+assert not failed["ok"] and not failed["data"]["ready"]
+assert failed["error"]["code"] == "checks_failed"
+assert failed["data"]["resources"][0]["state"] == "stopped"
+assert "--instance " + sys.argv[2] in failed["recommended_actions"][0]["command"]
+assert "--config " in failed["recommended_actions"][0]["command"]
+PYREADY
+printf '\n# pending edit for read-only guard\n' >> orbit.yaml
+if run_orbit ready api --json >"$test_root/ready-stale.json"; then
+  echo "Readiness guard passed unapplied configuration." >&2
+  exit 1
+fi
+python3 - "$test_root/ready-stale.json" <<'PYSTALE'
+import json
+import sys
+result = json.load(open(sys.argv[1]))
+assert not result["ok"] and not result["data"]["ready"]
+assert "observation" not in result["data"]
+assert "env apply" in result["recommended_actions"][0]["command"]
+PYSTALE
 run_orbit down --json >/dev/null
 
 mkdir -p "$test_root/silent"

@@ -269,11 +269,12 @@ caller (or its operator) intends the destruction.
 | Code | Meaning |
 |---|---|
 | `agent_plugin_failed` | a coding agent's plugin command failed; the replacement actions are the commands to run by hand |
-| `checks_failed` | doctor checks failed; resolve them, then run doctor again |
+| `checks_failed` | doctor checks or required-resource readiness failed; resolve the reported conditions, then repeat the command |
 | `canceled` | the caller or a supported catchable signal canceled the operation |
 | `command_failed` | unclassified failure; act on the hint |
 | `confirmation_required` | a destructive step needs `--yes` |
 | `daemon_unreachable` | Orbit is not running |
+| `readiness_unavailable` | the readiness assertion cannot trust runtime identity or version evidence |
 | `dashboard_port_conflict` | the dashboard port is owned by another process |
 | `dependency_blocked` | a required dependency cannot become healthy |
 | `env_mismatch` | the selected config differs from the running daemon's; `next_command` is `orbit up -c <config> --json`, which asks for `--yes` before stopping running resources |
@@ -311,11 +312,12 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 |---|---|
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
+| `orbit ready <resource>... --json` | Asserts readiness for explicit required resources; see [the assertion contract](#required-resource-readiness-assertion). |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, release-update state, and recommended follow-up commands. Read-only inspection remains available during an update transaction. |
 | `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon and release-update state, and configured resource state in `data.resources`. Read-only status remains available during an update transaction. |
 | `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
-| `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
-| `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line, starting with the last `--lines` lines (default 100). |
+| `orbit logs <resource> [resource...] --json` | Returns recent log lines in one JSON envelope. |
+| `orbit logs <resource> [resource...] -f --json` | Streams NDJSON events, one JSON object per line, starting with the last `--lines` lines (default 100). |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping resources. It is a successful no-op with empty arrays when Orbit is already stopped. Before setup it recommends `orbit init`; after setup it recommends the next normal `orbit up`. |
 | `orbit down <resources...> --json` | Returns the final lifecycle result for the requested resources. If that stop degrades running dependents, they are included in `resources` and `degraded_resources` with the one dependency-restoration action. `--group` and `--infra` use the same mutually exclusive selection modes as `orbit up`; group shutdown stops members without stopping shared dependencies. |
@@ -535,24 +537,49 @@ Non-streaming logs return one envelope:
 orbit logs redis --json
 ```
 
-The success payload includes the service name, requested line count, a non-null
-`lines` array, and whether output was truncated.
+The single-resource success payload includes `resource`, `lines_requested`,
+a non-null `lines` array and `truncated` (true when the returned count reaches
+a positive requested limit).
+
+Select several resources to correlate frontend and backend output:
+
+```bash
+orbit logs web api --lines 50 --json
+orbit logs web api --follow --lines 50 --json
+```
+
+A multi-resource snapshot still returns exactly one envelope. Its
+`data.resources` array contains the same snapshot fields for each resource,
+in selection order. Repeated names are read once. Every target is validated
+before any log output; an unknown target fails the whole request.
+
+![Two selected resource streams feed one attributed terminal output.](./assets/multiple-resource-logs.svg)
+
+The line limit applies **per resource**, including history before follow.
+Human multi-resource output prefixes each line with `[resource]`; single-resource
+output keeps its existing format. Snapshots are collected before writing output;
+a failed resource prevents a partial successful snapshot.
 
 Streaming logs use newline-delimited JSON:
 
 ```bash
-orbit logs redis -f --json
+orbit logs web api -f --json
 ```
 
-Each emitted line is a complete JSON object. Agents should parse it as NDJSON,
-not as one JSON array. The stream starts with the last `--lines` (or `--tail`)
-lines, default 100, as ordinary `log` events, then follows new lines. No line
-is lost or repeated between the backlog and the live lines; a reader that falls
-far behind can still miss live lines. `--lines 0` streams only new lines.
+Each line is a complete `log` object with `resource` and `line`, rather than an
+envelope or JSON array. One writer serializes all events. Each resource retains
+its own order; events across resources have no global chronological guarantee.
+The stream starts with each resource's last `--lines` (or `--tail`) lines,
+default 100, then follows new lines. No line is lost or repeated between its
+backlog and live lines; a reader that falls far behind can still miss live lines.
+`--lines 0` streams only new lines.
 
-If a followed log stream fails after NDJSON output has begun, Orbit emits a
-final NDJSON event with `type: "error"` instead of appending an envelope in a
-different format, then exits non-zero.
+A failed stream emits an attributed `type: "error"` NDJSON
+event, stops all selected subscriptions, and exits non-zero. It never appends an
+envelope to the stream. A broken output pipe also stops all subscriptions and
+fails, although that pipe cannot receive an error event. A clean end of one
+stream leaves the others following; when all end, the command succeeds. Ctrl-C keeps the CLI’s normal signal termination and closes every subscription,
+including quiet ones and streams blocked by a full output pipe.
 
 ## Traces
 
@@ -717,6 +744,46 @@ defines the inspect, action, verification, failure-recovery, instance-targeting,
 and destructive-operation workflow. Agents should follow response
 `recommended_actions` before falling back to ad hoc debugging.
 
+## Required-resource readiness assertion
+
+Use `orbit ready api postgres --json` as a test harness guard. It checks the
+explicit configured container or host-service names once, deduplicates repeats,
+and exits zero only when every
+required resource is `healthy`. Unrelated stopped resources or missing host
+SDKs do not block this assertion. Dependencies are not expanded automatically.
+`inspect` keeps its whole-environment reporting behavior.
+
+Both successful and failed assertions return one `orbit.cli.v1` envelope.
+`data.ready` is the assertion result; `required_resources` retains request order.
+Each `data.resources[]` entry contains `name`, `state`, `reason`, and available
+observed `ports` and `url`. Reasons are safe readiness summaries derived from
+lifecycle state and known failure categories; raw runtime messages are withheld
+because health-check URLs or process output may contain credentials.
+`data.observation` records the matching `config_path`,
+optional `instance`, daemon `epoch`/`generation`, observation time, and
+`endpoint_source: "daemon_status"`. Ports are resolved runtime values, including
+named-instance relocation; they are never copied from YAML preferences.
+Environment variable values are not included. URLs retain the observed scheme,
+host, port and path; userinfo, query strings and fragments are withheld.
+`url_redacted: true` marks a sanitized or withheld URL. Supply credentials through
+the harness's own configuration, not this report.
+
+The assertion fails for an unknown or missing resource, any state other than
+`healthy`, invalid configuration or schema, unresolved selection, unavailable
+status/version evidence, another config/instance, pending configuration changes
+(`ConfigStale`), or a daemon build different from the invoked CLI. Untrusted
+runtime endpoints are withheld. `checks_failed` means the matched required
+resources are not healthy; `readiness_unavailable` means runtime identity or
+version evidence could not be trusted. Other failures keep their existing codes.
+Errors retain diagnostic data when preparation reached the assertion.
+
+This is a read-only snapshot: it does not start a daemon, create an instance,
+switch environments, apply configuration, recover an update transaction, wait
+for readiness, or prepare test data. Follow-up commands retain config/instance
+but require an explicit provisioning decision. A pass proves infrastructure
+state at observation time; it does not prove application E2E behavior. See the
+[runnable harness example](e2e-testing.md#readiness-checks).
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -724,8 +791,8 @@ and destructive-operation workflow. Agents should follow response
 | `0` | Success. |
 | `1` | Error. In `--json` mode, converted commands still emit structured JSON. |
 
-Exit status reports whether the command itself succeeded, not whether the
-reported environment is ready. In particular, `orbit inspect --json` exits
+Reporting commands describe whether the query itself succeeded. `orbit ready`
+is an assertion: its exit status also reflects required-resource readiness. In particular, `orbit inspect --json` exits
 `0` with `ok: true` when it successfully reports `readiness.blocked: true`.
 Agents must inspect `data.readiness.blocked`; `orbit status --json` may instead
 exit `1` when the selected state prevents status from being produced.

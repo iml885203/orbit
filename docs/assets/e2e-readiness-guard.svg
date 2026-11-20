@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 450" role="img" aria-labelledby="title desc">
+<title id="title">A read-only guard before application tests</title>
+<desc id="desc">Check explicit resources. Healthy resources provide observed endpoints to application tests. A failed check stops the harness and leaves provisioning to a separate explicit step.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="#475569" stroke-width="1.5"/></marker></defs>
+<rect width="360" height="450" rx="14" fill="#f8fafc"/>
+<g font-family="system-ui, sans-serif" text-anchor="middle" fill="#172033" font-size="16">
+<text x="180" y="32" font-size="19" font-weight="700">Check before running tests</text>
+<rect x="24" y="54" width="312" height="76" rx="9" fill="#e0f2fe" stroke="#0284c7"/>
+<text x="180" y="84" font-weight="600">orbit ready postgres redis</text><text x="180" y="110">Read once • no provisioning</text>
+<rect x="24" y="157" width="312" height="47" rx="9" fill="#f1f5f9" stroke="#64748b"/>
+<path d="M180 130V157M180 204V225M24 180H12V378H24" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+<text x="180" y="187" font-weight="600">All required resources healthy?</text>
+<rect x="24" y="226" width="312" height="77" rx="9" fill="#dcfce7" stroke="#16a34a"/>
+<text x="180" y="254" font-weight="600">Yes → use observed endpoints</text><text x="180" y="280">Seed data and test the application</text>
+<rect x="24" y="334" width="312" height="91" rx="9" fill="#fff7ed" stroke="#ea580c"/>
+<text x="180" y="362" font-weight="600">No → stop the harness</text><text x="180" y="388">Keep reasons and recovery actions</text><text x="180" y="412">Provision only in an explicit step</text>
+</g>
+</svg>

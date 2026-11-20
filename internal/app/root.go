@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,8 +14,6 @@ import (
 	"github.com/iml885203/orbit/internal/cli"
 	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/daemon"
-	"github.com/iml885203/orbit/internal/daemonsrv"
-	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/envsync"
 	"github.com/iml885203/orbit/internal/extension"
 	"github.com/iml885203/orbit/internal/history"
@@ -90,14 +87,14 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
-		if !environmentApplyPreviewCommand(executed) {
+		if !readOnlyEnvironmentCommand(executed) {
 			scheduleAutomaticUpdateCheck()
 		}
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
 	showUpdateNotification(executed)
-	if !environmentApplyPreviewCommand(executed) {
+	if !readOnlyEnvironmentCommand(executed) {
 		scheduleAutomaticUpdateCheck()
 	}
 }
@@ -124,6 +121,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(downCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(inspectCmd())
+	rootCmd.AddCommand(readyCmd())
 	rootCmd.AddCommand(operationCmd())
 	rootCmd.AddCommand(restartCmd())
 	rootCmd.AddCommand(logsCmd())
@@ -203,7 +201,7 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 	if err := waitForPendingAutomaticUpdate(cmd); err != nil {
 		return err
 	}
-	if !environmentApplyPreviewCommand(cmd) {
+	if !readOnlyEnvironmentCommand(cmd) {
 		showAutomaticUpdateDisclosure(cmd)
 	}
 	// Apply saved settings (workspace root, SQL mode) to env for all commands
@@ -237,8 +235,8 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 }
 
 func prepareRootEnvironment(cmd *cobra.Command) error {
-	if environmentApplyPreviewCommand(cmd) {
-		return prepareEnvironmentApplyPreviewContext(cmd)
+	if readOnlyEnvironmentCommand(cmd) {
+		return prepareReadOnlyEnvironmentContext(cmd)
 	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	configFlagGiven = explicitConfig
@@ -347,6 +345,11 @@ func isDaemonRestartCommand(cmd *cobra.Command) bool {
 // Unavailable diagnostic history cannot be recovered by provisioning a runtime.
 // Other daemon-backed commands retain the setup/start recovery path.
 func contextualizeDaemonUnavailable(err error) error {
+	var jsonRendered errCLIJSONAlreadyRendered
+	var humanRendered errCLIHumanAlreadyRendered
+	if errors.As(err, &jsonRendered) || errors.As(err, &humanRendered) {
+		return err
+	}
 	var query operationQueryError
 	if errors.As(err, &query) {
 		return err
@@ -591,7 +594,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
-	if environmentApplyPreviewCommand(cmd) {
+	if readOnlyEnvironmentCommand(cmd) {
 		return false
 	}
 	for c := cmd; c != nil; c = c.Parent() {
@@ -829,12 +832,12 @@ func restartCmd() *cobra.Command {
 
 func logsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "logs <resource>",
+		Use:   "logs <resource> [resource...]",
 		Short: "Show or stream resource logs",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  runLogs,
 	}
-	cmd.Flags().IntVar(&logLines, "lines", 100, "number of log lines to show; with --follow, shown before streaming")
+	cmd.Flags().IntVar(&logLines, "lines", 100, "number of log lines per resource; with --follow, shown before streaming")
 	cmd.Flags().IntVar(&logLines, "tail", 100, "alias for --lines")
 	cmd.MarkFlagsMutuallyExclusive("lines", "tail")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream logs in real-time")
@@ -1097,159 +1100,6 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	}
 	progress.Close()
 	return finishLifecycleObservation(result, response, started, err, lifecycleJSONOptions{Operation: "restart", Message: response.Message, RequestedResources: []string{name}}, nil)
-}
-
-func runLogs(_ *cobra.Command, args []string) error {
-	if logLines < 0 {
-		return cli.NewInvalidArgumentError(fmt.Sprintf("--lines/--tail must be zero or more, got %d", logLines))
-	}
-	if err := validateConfiguredCommandResources(configFile, args, func(_ int, suggestion string) string {
-		command := "orbit logs " + suggestion
-		if follow {
-			command += " --follow"
-		}
-		return command
-	}); err != nil {
-		return err
-	}
-	client, err := daemon.Dial(daemon.DefaultSocketPath())
-	if err != nil {
-		return cli.NewOrbitNotRunningError()
-	}
-
-	name := args[0]
-	status, err := client.Status()
-	if err != nil {
-		return fmt.Errorf("status: %w", err)
-	}
-	resource := lifecycleResourceStatus(status, name)
-	if resource == nil {
-		return newResourceNameError(status, name, func(suggestion string) string {
-			command := "orbit logs " + suggestion
-			if follow {
-				command += " --follow"
-			}
-			return command
-		})
-	}
-
-	if follow {
-		if cli.JSONOutput {
-			if err := client.StreamLogs(name, logLines, func(line string) {
-				_ = writeLogJSONEvent(os.Stdout, name, line)
-			}); err != nil {
-				if writeErr := writeLogJSONErrorEvent(os.Stdout, name, err); writeErr != nil {
-					_, _ = fmt.Fprintf(os.Stderr, "failed writing log stream error event: %v\n", writeErr)
-				}
-				return errCLIJSONAlreadyRendered{err: err}
-			}
-			return nil
-		}
-		fmt.Printf("Streaming logs for %s (Ctrl+C to stop)...\n", name)
-		return client.StreamLogs(name, logLines, func(line string) {
-			fmt.Println(line)
-		})
-	}
-
-	resp, err := client.Logs(name, logLines)
-	if err != nil {
-		return fmt.Errorf("logs failed: %w", err)
-	}
-	if (resp == nil || len(resp.Lines) == 0) && !resource.LogsAvailable &&
-		(resource.State == "degraded" || resource.State == "pending" || resource.State == "stopped") {
-		err := cli.NewLogsUnavailableError("no logs for " + name + ": the resource did not start")
-		return cli.WithJSONActions(err, noLogsRecoveryActions(resource))
-	}
-	if latest, statusErr := client.Status(); statusErr == nil {
-		if current := lifecycleResourceStatus(latest, name); current != nil {
-			resource = current
-		}
-	}
-	actions := logsRecoveryActions(resource, projectDependencySetupCommand(name))
-	if cli.JSONOutput {
-		return cli.WriteJSONSuccess(os.Stdout, commandString(), buildLogsJSONData(name, logLines, resp), actions)
-	}
-	for _, line := range resp.Lines {
-		fmt.Println(line)
-	}
-	if resource.FailureKind == string(engine.FailureKindHealth) {
-		fmt.Printf("Health check is still failing: %s\n", resource.StateReason)
-		fmt.Println("Orbit will recover automatically when the endpoint is healthy; restarting only retries the same startup.")
-	}
-	if len(actions) == 1 {
-		fmt.Println("Next: " + strings.TrimSuffix(actions[0].Command, " --json"))
-	}
-	return nil
-}
-
-func projectDependencySetupCommand(resource string) string {
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		return ""
-	}
-	command, _ := daemonsrv.ProjectDependencySetupCommand(cfg, resource)
-	return command
-}
-
-type logsJSONData struct {
-	Resource       string   `json:"resource"`
-	LinesRequested int      `json:"lines_requested"`
-	Lines          []string `json:"lines"`
-	Truncated      bool     `json:"truncated"`
-}
-
-type logJSONEvent struct {
-	SchemaVersion string `json:"schema_version"`
-	Type          string `json:"type"`
-	Resource      string `json:"resource"`
-	Line          string `json:"line"`
-}
-
-type logJSONErrorEvent struct {
-	SchemaVersion string        `json:"schema_version"`
-	Type          string        `json:"type"`
-	Resource      string        `json:"resource"`
-	Error         cli.JSONError `json:"error"`
-}
-
-func buildLogsJSONData(resource string, requested int, resp *daemon.LogsResponse) logsJSONData {
-	lines := []string{}
-	if resp != nil && resp.Lines != nil {
-		lines = resp.Lines
-	}
-	return logsJSONData{
-		Resource:       resource,
-		LinesRequested: requested,
-		Lines:          lines,
-		Truncated:      requested > 0 && len(lines) >= requested,
-	}
-}
-
-func writeLogJSONEvent(w io.Writer, resource, line string) error {
-	return json.NewEncoder(w).Encode(logJSONEvent{
-		SchemaVersion: cli.SchemaVersion,
-		Type:          "log",
-		Resource:      resource,
-		Line:          line,
-	})
-}
-
-func writeLogJSONErrorEvent(w io.Writer, resource string, err error) error {
-	msg := ""
-	if err != nil {
-		msg = err.Error()
-	}
-	return json.NewEncoder(w).Encode(logJSONErrorEvent{
-		SchemaVersion: cli.SchemaVersion,
-		Type:          "error",
-		Resource:      resource,
-		Error: cli.JSONError{
-			Code:      "log_stream_error",
-			Message:   msg,
-			Hint:      "Retry the stream or inspect daemon state with 'orbit status --json'.",
-			Retryable: true,
-		},
-	})
 }
 
 func runOpen(_ *cobra.Command, args []string) error {

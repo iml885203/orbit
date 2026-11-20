@@ -2,8 +2,17 @@ name: Platform smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Native diagnostic coverage (release always uses full)
+        type: choice
+        options: [full, linux]
+        default: full
   workflow_call:
     inputs:
+      profile:
+        type: string
+        default: full
       version:
         type: string
         default: v0.0.0-platform-smoke
@@ -28,46 +37,35 @@ permissions:
   actions: read
 
 jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Select the explicit native profile
+        id: select
+        env:
+          NATIVE_PROFILE: ${{ inputs.profile || 'full' }}
+        run: python3 scripts/native_checks.py matrix --profile "$NATIVE_PROFILE" --github-output "$GITHUB_OUTPUT"
+
   produce:
+    needs: select
     if: ${{ !inputs.artifact-id }}
     uses: ./.github/workflows/candidate.yml
     with:
       version: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
 
   native:
-    needs: produce
-    if: ${{ !cancelled() && (inputs.artifact-id != '' || needs.produce.result == 'success') }}
+    needs: [produce, select]
+    if: ${{ !cancelled() && needs.select.result == 'success' && (inputs.artifact-id != '' || needs.produce.result == 'success') }}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: macOS arm64
-            runner: macos-15
-            target: darwin/arm64
-            windows: false
-          - name: macOS amd64
-            runner: macos-15-intel
-            target: darwin/amd64
-            windows: false
-          - name: Linux amd64
-            runner: ubuntu-24.04
-            target: linux/amd64
-            windows: false
-          - name: Linux arm64
-            runner: ubuntu-24.04-arm
-            target: linux/arm64
-            windows: false
-          - name: Windows amd64 Beta
-            runner: windows-2025
-            target: windows/amd64
-            windows: true
-          - name: Windows arm64 Beta
-            runner: windows-11-arm
-            target: windows/arm64
-            windows: true
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
     env:
       ORBIT_SMOKE_VERSION: ${{ inputs.version || 'v0.0.0-platform-smoke' }}
       CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

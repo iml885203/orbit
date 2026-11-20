@@ -95,6 +95,7 @@ jobs:
     needs: candidate
     uses: ./.github/workflows/platform-smoke.yml
     with:
+      profile: full
       version: ${{ inputs.tag }}
       artifact-id: ${{ needs.candidate.outputs.artifact-id }}
       archive-digest: ${{ needs.candidate.outputs.archive-digest }}

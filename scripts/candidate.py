@@ -93,12 +93,18 @@ def verify(root, expected, manifest_sha):
 
 
 def verify_receipts(root, candidate, manifest_sha, artifact_id, run_id):
-    names = {'native-' + target.replace('/', '-') + '.json' for target in TARGETS}
+    return verify_selected_receipts(root, candidate, manifest_sha, artifact_id, run_id, TARGETS)
+
+
+def verify_selected_receipts(root, candidate, manifest_sha, artifact_id, run_id, targets):
+    if not targets or len(set(targets)) != len(targets) or not set(targets).issubset(TARGETS):
+        raise ValueError('invalid selected native targets')
+    names = {'native-' + target.replace('/', '-') + '.json' for target in targets}
     if {path.name for path in root.iterdir()} != names or any(path.is_symlink() for path in root.iterdir()):
         raise ValueError('unexpected native receipt inventory')
     values = [json.loads(path.read_text()) for path in root.glob('*.json')]
-    if len(values) != len(TARGETS) or {v.get('target') for v in values} != set(TARGETS):
-        raise ValueError('all six unique native receipts are required')
+    if len(values) != len(targets) or {v.get('target') for v in values} != set(targets):
+        raise ValueError('all selected unique native receipts are required')
     for value in values:
         if value.get('schema') != 'orbit.native-receipt.v1' or value.get('result') != 'passed' or value.get('suite') != 'native':
             raise ValueError('native receipt is incomplete')

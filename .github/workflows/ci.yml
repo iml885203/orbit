@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       required: ${{ steps.impact.outputs.required }}
+      profile: ${{ steps.impact.outputs.profile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -28,12 +29,22 @@ jobs:
         id: impact
         env:
           IMPACT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           if [ -n "$IMPACT_BASE" ] && [ "$IMPACT_BASE" != "0000000000000000000000000000000000000000" ]; then
-            python3 scripts/native_impact.py --base "$IMPACT_BASE" --github-output "$GITHUB_OUTPUT"
+            python3 scripts/native_impact.py --base "$IMPACT_BASE" --github-output "$GITHUB_OUTPUT" --record "$RUNNER_TEMP/native-plan.json"
           else
-            python3 scripts/native_impact.py --github-output "$GITHUB_OUTPUT"
+            python3 scripts/native_impact.py --github-output "$GITHUB_OUTPUT" --record "$RUNNER_TEMP/native-plan.json"
           fi
+
+      - name: Publish native coverage plan
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: orbit-native-plan-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-plan.json
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30
 
   candidate:
     needs: native-impact
@@ -47,6 +58,7 @@ jobs:
     if: needs.native-impact.outputs.required == 'true'
     uses: ./.github/workflows/platform-smoke.yml
     with:
+      profile: ${{ needs.native-impact.outputs.profile }}
       version: v0.0.0-platform-smoke
       artifact-id: ${{ needs.candidate.outputs.artifact-id }}
       archive-digest: ${{ needs.candidate.outputs.archive-digest }}
@@ -60,20 +72,49 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require native success or an explicit documentation-only no-op
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require the selected coverage or explicit documentation no-op
         env:
           IMPACT_RESULT: ${{ needs.native-impact.result }}
-          NATIVE_REQUIRED: ${{ needs.native-impact.outputs.required }}
+          NATIVE_PROFILE: ${{ needs.native-impact.outputs.profile }}
           CANDIDATE_RESULT: ${{ needs.candidate.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
         run: |
           set -euo pipefail
           test "$IMPACT_RESULT" = success
-          case "$NATIVE_REQUIRED" in
-            true) test "$CANDIDATE_RESULT" = success; test "$NATIVE_RESULT" = success ;;
-            false) test "$CANDIDATE_RESULT" = skipped; test "$NATIVE_RESULT" = skipped; echo 'Native checks: documented no-op for pure documentation' ;;
-            *) echo 'Missing impact evidence' >&2; exit 1 ;;
+          case "$NATIVE_PROFILE" in
+            linux|full) test "$CANDIDATE_RESULT" = success; test "$NATIVE_RESULT" = success ;;
+            none) test "$CANDIDATE_RESULT" = skipped; test "$NATIVE_RESULT" = skipped ;;
+            *) echo 'Missing or unknown native coverage profile' >&2; exit 1 ;;
           esac
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: ${{ needs.native-impact.outputs.profile != 'none' }}
+        with:
+          name: orbit-candidate-identity-${{ github.run_id }}-${{ needs.candidate.outputs.producer-attempt }}
+          path: ${{ runner.temp }}/native-gate-identity
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: ${{ needs.native-impact.outputs.profile != 'none' }}
+        with:
+          pattern: native-evidence-${{ needs.candidate.outputs.artifact-id }}-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/native-gate-receipts
+      - name: Verify exact selected-target receipts
+        if: ${{ needs.native-impact.outputs.profile != 'none' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NATIVE_PROFILE: ${{ needs.native-impact.outputs.profile }}
+          PRODUCER_ATTEMPT: ${{ needs.candidate.outputs.producer-attempt }}
+          WORKFLOW_REF: ${{ needs.candidate.outputs.workflow-ref }}
+          ARTIFACT_ID: ${{ needs.candidate.outputs.artifact-id }}
+          ARCHIVE_DIGEST: ${{ needs.candidate.outputs.archive-digest }}
+          MANIFEST_SHA: ${{ needs.candidate.outputs.manifest-sha256 }}
+        run: >-
+          python3 scripts/native_checks.py verify --profile "$NATIVE_PROFILE"
+          --identity "$RUNNER_TEMP/native-gate-identity/candidate-identity.json"
+          --receipts "$RUNNER_TEMP/native-gate-receipts" --version v0.0.0-platform-smoke
+          --producer-attempt "$PRODUCER_ATTEMPT" --workflow-ref "$WORKFLOW_REF"
+          --artifact-id "$ARTIFACT_ID" --archive-digest "$ARCHIVE_DIGEST" --manifest-sha256 "$MANIFEST_SHA"
 
   go-lint:
     runs-on: ubuntu-24.04

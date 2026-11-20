@@ -157,6 +157,25 @@ and destructive-operation rules. Deeper references live in the repository's
 `docs/`: `agent-cli` (the `orbit.cli.v1` contract), `instances`, `configuration`,
 `troubleshooting`, `tracing`, `sql-workflow`, `architecture`.
 
+## Test harness readiness
+
+Check `orbit ready --help` before choosing the harness guard. If supported, use
+`orbit ready <required-resource>... --json` with the exact config and instance.
+Exit nonzero on an assertion failure; retain reasons and recovery actions for an
+explicit provisioning step. Consume `data.resources[].ports` / `url`, which are
+observed runtime endpoints; do not assume YAML port preferences.
+
+If the command is unavailable, report the installed `orbit version --json` and
+that this guard requires a CLI update. Do not treat an unsupported command as
+unhealthy resources, skip the guard, or upgrade implicitly. Existing harnesses
+may retain their own read-only checks over `orbit env info --json` and
+`orbit status --json`; queries alone do not assert readiness. Follow the
+[harness guide](https://orbit.ilogan.app/docs/e2e-testing#readiness-checks).
+
+The guard does not start, switch, wait for, or prepare anything. A pass checks
+infrastructure only; seed isolated data and run real application assertions.
+See the [readiness contract](https://orbit.ilogan.app/docs/agent-cli#required-resource-readiness-assertion).
+
 ## State changes
 
 - Use `orbit up --json` for the environment, or
@@ -212,7 +231,13 @@ and destructive-operation rules. Deeper references live in the repository's
   editing the environment; otherwise report the correction without mutating
   project intent.
 - Prefer `orbit logs <resource> --json` over reading process files directly;
-  use `-f --json` only when an NDJSON stream is useful.
+  use `-f --json` when an NDJSON stream is useful. Use multiple names such as
+  `orbit logs web api --json` only after `orbit version --json` confirms a
+  released CLI v1.5.0 or later. For older or unknown/development builds, run
+  separate single-resource commands; an upgrade is not required to read logs.
+  The line limit is per resource; a failed stream stops its peers and requires
+  a new command.
+  Payload and stream contracts live in `docs/agent-cli.md#logs`.
 - Use history and trace commands only when the task needs correlation or an
   audit trail; they are not startup prerequisites.
 - To find a request that already happened, use `orbit trace --search <path or
