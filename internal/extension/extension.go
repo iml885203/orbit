@@ -27,7 +27,9 @@ type Extension struct {
 	Name string
 
 	// Commands returns CLI commands appended to the root command. The
-	// commands emit the shared output contract via internal/cli.
+	// commands emit the shared output contract via internal/cli. Each root
+	// command must explicitly declare cli.WithDaemonAffinity, including
+	// cli.DaemonIndependent for commands without either daemon prerequisite.
 	Commands func() []*cobra.Command
 
 	// CommandVisibility returns whether each extension command belongs in

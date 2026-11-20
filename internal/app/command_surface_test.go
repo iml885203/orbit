@@ -87,22 +87,26 @@ func TestDestructiveHelpNamesDataRemoval(t *testing.T) {
 }
 
 func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
-	root := &cobra.Command{Use: "orbit"}
+	root := daemonAffinityRoot(t)
 	for _, name := range []string{
 		"down", "restart", "logs", "open", "exec", "query", "topics", "seed",
 		"edge", "service", "sqlserver", "tunnel", "bq", "trace", "tracing",
 	} {
-		parent := &cobra.Command{Use: name}
+		parent, _, err := root.Find([]string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
 		child := &cobra.Command{Use: "child"}
-		root.AddCommand(parent)
 		parent.AddCommand(child)
 		if !commandRequiresMatchingDaemonConfig(child) {
 			t.Errorf("nested %s command did not require matching daemon config", name)
 		}
 	}
 	for _, name := range []string{"up", "status", "doctor", "inspect", "history", "env", "daemon"} {
-		cmd := &cobra.Command{Use: name}
-		root.AddCommand(cmd)
+		cmd, _, err := root.Find([]string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if commandRequiresMatchingDaemonConfig(cmd) {
 			t.Errorf("%s should remain available across project contexts", name)
 		}
@@ -110,24 +114,21 @@ func TestRuntimeCommandsRequireMatchingDaemonConfig(t *testing.T) {
 }
 
 func TestMutationsRequireReconciledDaemon(t *testing.T) {
-	root := &cobra.Command{Use: "orbit"}
-	up := &cobra.Command{Use: "up"}
-	restart := &cobra.Command{Use: "restart"}
-	status := &cobra.Command{Use: "status"}
-	down := &cobra.Command{Use: "down"}
-	env := &cobra.Command{Use: "env"}
-	toggle := &cobra.Command{Use: "toggle"}
-	apply := &cobra.Command{Use: "apply"}
-	list := &cobra.Command{Use: "list"}
-	root.AddCommand(up, restart, status, down, env)
-	env.AddCommand(toggle, apply, list)
-
-	for _, cmd := range []*cobra.Command{restart, toggle} {
+	root := daemonAffinityRoot(t)
+	for _, path := range []string{"restart", "env toggle", "daemon start"} {
+		cmd, _, err := root.Find(strings.Fields(path))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s did not require a reconciled daemon", cmd.CommandPath())
 		}
 	}
-	for _, cmd := range []*cobra.Command{up, status, down, apply, list} {
+	for _, path := range []string{"up", "status", "down", "env apply", "env list", "daemon restart", "bq sandbox list"} {
+		cmd, _, err := root.Find(strings.Fields(path))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if commandRequiresReconciledDaemon(cmd) {
 			t.Errorf("%s should remain available or converge during reconciliation", cmd.CommandPath())
 		}

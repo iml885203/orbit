@@ -118,25 +118,30 @@ func newRootCommand() *cobra.Command {
 
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, _ []string) { closeLifecycleCommand(cmd) }
 	rootCmd.AddCommand(upCmd())
-	rootCmd.AddCommand(downCmd())
+	rootCmd.AddCommand(cli.WithDaemonAffinity(downCmd(), cli.DaemonMatchingConfig))
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(inspectCmd())
 	rootCmd.AddCommand(readyCmd())
 	rootCmd.AddCommand(operationCmd())
-	rootCmd.AddCommand(restartCmd())
-	rootCmd.AddCommand(logsCmd())
-	rootCmd.AddCommand(openCmd())
-	rootCmd.AddCommand(execCmd())
-	rootCmd.AddCommand(queryCmd())
-	rootCmd.AddCommand(topicsCmd())
-	rootCmd.AddCommand(seedCmd())
+	rootCmd.AddCommand(cli.WithDaemonAffinity(restartCmd(), cli.DaemonMatchingReconciledConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(logsCmd(), cli.DaemonMatchingConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(openCmd(), cli.DaemonMatchingConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(execCmd(), cli.DaemonMatchingReconciledConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(queryCmd(), cli.DaemonMatchingReconciledConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(topicsCmd(), cli.DaemonMatchingReconciledConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(seedCmd(), cli.DaemonMatchingReconciledConfig))
 	rootCmd.AddCommand(doctorCmd())
 	rootCmd.AddCommand(initCmd())
 	rootCmd.AddCommand(envCmd())
 	rootCmd.AddCommand(sourceCmd())
 	for _, ext := range extensions {
 		if ext.Commands != nil {
-			rootCmd.AddCommand(ext.Commands()...)
+			for _, cmd := range ext.Commands() {
+				if _, declared := cli.DeclaredDaemonAffinity(cmd); !declared {
+					panic(fmt.Sprintf("extension %q command %q must declare daemon affinity", ext.Name, cmd.Name()))
+				}
+				rootCmd.AddCommand(cmd)
+			}
 		}
 	}
 	rootCmd.AddCommand(switchCmd())
@@ -148,12 +153,12 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(uninstallCmd())
 	rootCmd.AddCommand(skillCmd())
 	rootCmd.AddCommand(historyCmd())
-	rootCmd.AddCommand(edgeCmd())
-	rootCmd.AddCommand(serviceCmd())
+	rootCmd.AddCommand(cli.WithDaemonAffinity(edgeCmd(), cli.DaemonMatchingReconciledConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(serviceCmd(), cli.DaemonMatchingReconciledConfig))
 	rootCmd.AddCommand(settingsCmd())
 	rootCmd.AddCommand(instanceCmd())
-	rootCmd.AddCommand(traceCmd())
-	rootCmd.AddCommand(tracingCmd())
+	rootCmd.AddCommand(cli.WithDaemonAffinity(traceCmd(), cli.DaemonMatchingConfig))
+	rootCmd.AddCommand(cli.WithDaemonAffinity(tracingCmd(), cli.DaemonMatchingConfig))
 	configureContextualRootHelp(rootCmd)
 	rejectUnknownSubcommands(rootCmd)
 
@@ -527,34 +532,25 @@ func (e errCLIHumanAlreadyRendered) Unwrap() error {
 }
 
 func commandRequiresMatchingDaemonConfig(cmd *cobra.Command) bool {
-	top := cmd
-	for top.Parent() != nil && top.Parent().Parent() != nil {
-		top = top.Parent()
-	}
-	switch top.Name() {
-	case "down", "restart", "logs", "open", "exec", "query", "topics", "seed",
-		"edge", "service", "sqlserver", "tunnel", "bq", "trace", "tracing":
-		return true
-	default:
-		return false
-	}
+	affinity := commandDaemonAffinity(cmd)
+	return affinity == cli.DaemonMatchingConfig || affinity == cli.DaemonMatchingReconciledConfig
 }
 
 func commandRequiresReconciledDaemon(cmd *cobra.Command) bool {
+	affinity := commandDaemonAffinity(cmd)
+	return affinity == cli.DaemonReconciledConfig || affinity == cli.DaemonMatchingReconciledConfig
+}
+
+func commandDaemonAffinity(cmd *cobra.Command) cli.DaemonAffinity {
+	if affinity, declared := cli.DeclaredDaemonAffinity(cmd); declared {
+		return affinity
+	}
 	top := cmd
 	for top.Parent() != nil && top.Parent().Parent() != nil {
 		top = top.Parent()
 	}
-	switch top.Name() {
-	case "restart", "exec", "query", "topics", "seed", "edge", "service", "sqlserver", "tunnel":
-		return true
-	case "env":
-		return cmd.Name() == "toggle"
-	case "daemon":
-		return cmd.Name() == "start"
-	default:
-		return false
-	}
+	affinity, _ := cli.DeclaredDaemonAffinity(top)
+	return affinity
 }
 
 // isCommandTreeQuery reports whether cmd is one of cobra's built-in
@@ -876,6 +872,7 @@ func daemonCmd() *cobra.Command {
 		Long:  "Start the orbit supervisor process. Does not start containers or services — use 'orbit up' for that.",
 		RunE:  runDaemonStart,
 	}
+	cli.WithDaemonAffinity(startCmd, cli.DaemonReconciledConfig)
 	startCmd.Flags().StringSliceVar(&groups, "group", nil, "enable specific groups")
 
 	stopCmd := &cobra.Command{

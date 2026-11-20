@@ -196,6 +196,16 @@ func captureLifecycleProcessStreams(t *testing.T) func() ([]byte, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var stdout, stderr bytes.Buffer
+	stdoutDone, stderrDone := make(chan error, 1), make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(&stdout, stdoutRead)
+		stdoutDone <- copyErr
+	}()
+	go func() {
+		_, copyErr := io.Copy(&stderr, stderrRead)
+		stderrDone <- copyErr
+	}()
 	os.Stdout, os.Stderr = stdoutWrite, stderrWrite
 	var restored atomic.Bool
 	return func() ([]byte, string) {
@@ -204,18 +214,17 @@ func captureLifecycleProcessStreams(t *testing.T) func() ([]byte, string) {
 		}
 		defer stdoutRead.Close()
 		defer stderrRead.Close()
+		os.Stdout, os.Stderr = previousStdout, previousStderr
 		_ = stdoutWrite.Close()
 		_ = stderrWrite.Close()
-		os.Stdout, os.Stderr = previousStdout, previousStderr
-		out, readErr := io.ReadAll(stdoutRead)
-		if readErr != nil {
-			t.Fatal(readErr)
+		stdoutErr, stderrErr := <-stdoutDone, <-stderrDone
+		if stdoutErr != nil {
+			t.Fatal(stdoutErr)
 		}
-		diagnostics, readErr := io.ReadAll(stderrRead)
-		if readErr != nil {
-			t.Fatal(readErr)
+		if stderrErr != nil {
+			t.Fatal(stderrErr)
 		}
-		return out, string(diagnostics)
+		return stdout.Bytes(), stderr.String()
 	}
 }
 

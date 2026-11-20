@@ -117,7 +117,7 @@ func Command() *cobra.Command {
 		sandbox.AddCommand(cmd)
 	}
 	root.AddCommand(inspect, sandbox)
-	return root
+	return cli.WithDaemonAffinity(root, cli.DaemonMatchingConfig)
 }
 
 func selectedConfig(cmd *cobra.Command) (*BQConfig, string, error) {
