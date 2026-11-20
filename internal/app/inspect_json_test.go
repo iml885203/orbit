@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"github.com/iml885203/orbit/internal/shellquote"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,20 +10,21 @@ import (
 
 	"github.com/iml885203/orbit/internal/autoupdate"
 	"github.com/iml885203/orbit/internal/cli"
-	"github.com/iml885203/orbit/internal/config"
 	"github.com/iml885203/orbit/internal/daemon"
 	"github.com/iml885203/orbit/internal/daemonsrv"
 	"github.com/iml885203/orbit/internal/engine"
 	"github.com/iml885203/orbit/internal/envsource"
+	"github.com/iml885203/orbit/internal/shellquote"
 )
 
-func TestBuildInspectServiceSummaryGroupsStates(t *testing.T) {
-	got := buildInspectServiceSummary([]daemon.ResourceStatus{
+func TestRootInspectGroupsRuntimeStates(t *testing.T) {
+	data := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
 		{Name: "payments", State: "stopped"},
 		{Name: "redis", State: "healthy"},
 		{Name: "worker", State: "degraded"},
 		{Name: "api", State: "starting"},
-	})
+	}}, false)
+	got := data.Resources
 
 	if got.Total != 4 {
 		t.Fatalf("total = %d, want 4", got.Total)
@@ -57,11 +58,8 @@ func TestInspectRejectsPretendResourceTargetWithOneCorrectedCommand(t *testing.T
 	}
 }
 
-func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath: "/tmp/missing.yaml",
-		ConfigErr:  errInspectFixture("open /tmp/missing.yaml: no such file or directory"),
-	})
+func TestRootInspectConfigInvalidWins(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\nservices: [", nil, false)
 
 	if got.Readiness.State != inspectReadinessConfigInvalid {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConfigInvalid)
@@ -77,18 +75,15 @@ func TestBuildInspectDataConfigInvalidWins(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataIncludesNonBlockingDependencyReadinessRisk(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/orbit.yaml",
-		ConfigEnvName: "local",
-		DaemonRunning: false,
-		ReadinessChecks: []daemon.DoctorCheck{{
-			Name:    "Readiness (database)",
-			Status:  daemon.CheckWarn,
-			Message: "api depends on database, but Orbit cannot infer when database is ready",
-			Hint:    "Add containers.database.health_check so dependents wait for a real readiness signal",
-		}},
-	})
+func TestRootInspectIncludesNonBlockingDependencyReadinessRisk(t *testing.T) {
+	got := inspectCommandData(t, `version: "3"
+containers:
+  database:
+    image: postgres:16
+services:
+  api:
+    depends_on: [database]
+`, nil, false)
 
 	if len(got.Risks) != 2 {
 		t.Fatalf("risks = %+v, want stopped and dependency-readiness risks", got.Risks)
@@ -104,7 +99,7 @@ func TestBuildInspectDataIncludesNonBlockingDependencyReadinessRisk(t *testing.T
 	}
 }
 
-func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
+func TestRootInspectSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
 	orbitHome := t.TempDir()
 	t.Setenv("ORBIT_HOME", orbitHome)
 	tests := []struct {
@@ -117,15 +112,28 @@ func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
 			name: "older shared environment", version: "2",
 			path: filepath.Join(orbitHome, "envs", "team.yaml"), command: "orbit source sync --json",
 		},
-		{name: "newer environment", version: "4", path: "/tmp/orbit.yaml", command: "orbit update --json"},
+		{name: "newer environment", version: "4", path: filepath.Join(orbitHome, "newer.yaml"), command: "orbit update --json"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildInspectData(inspectBuildOptions{
-				ConfigPath: tt.path,
-				ConfigErr:  config.CheckVersion(tt.version, tt.path),
-			})
+			if err := os.MkdirAll(filepath.Dir(tt.path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(tt.path, []byte("version: "+tt.version+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			out, diagnostics, err := executeAppCommand(t, "--config", tt.path, "inspect", "--json")
+			if err != nil {
+				t.Fatalf("inspect: %v %s %s", err, out, diagnostics)
+			}
+			var envelope struct {
+				Data inspectJSONData `json:"data"`
+			}
+			if err := json.Unmarshal(out, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			got := envelope.Data
 
 			if got.Readiness.State != inspectReadinessConfigInvalid {
 				t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConfigInvalid)
@@ -137,15 +145,8 @@ func TestBuildInspectDataSchemaMismatchGivesOneAdvancingAction(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataSetupRequiredPointsOnlyToInit(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		Command:       "orbit inspect --json",
-		ConfigPath:    "/tmp/missing.yaml",
-		ConfigErr:     errInspectFixture("no such file or directory"),
-		SetupRequired: true,
-		ConfigEnvName: "quickstart",
-		DaemonRunning: false,
-	})
+func TestRootInspectSetupRequiredPointsOnlyToInit(t *testing.T) {
+	got := inspectCommandData(t, "", nil, false)
 
 	if got.Readiness.State != inspectReadinessSetupRequired || !got.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", got.Readiness)
@@ -161,22 +162,31 @@ func TestBuildInspectDataSetupRequiredPointsOnlyToInit(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataUnavailableSelectionOffersExistingEnvironment(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		Command:       "orbit inspect --json",
-		ConfigPath:    "/tmp/original.yaml",
-		ConfigErr:     errInspectFixture("no such file or directory"),
-		ConfigEnvName: "original",
-		Selection: environmentSelection{
-			State:        environmentSelectionUnavailable,
-			SelectedName: "original",
-			SelectedPath: "/tmp/original.yaml",
-			Environments: []environmentChoice{{
-				Name: "renamed",
-				Path: "/tmp/renamed.yaml",
-			}},
-		},
-	})
+func TestRootInspectUnavailableSelectionOffersExistingEnvironment(t *testing.T) {
+	prepareLifecycleProgressTest(t)
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	envs := filepath.Join(daemon.OrbitDir(), "envs")
+	if err := os.MkdirAll(envs, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envs, "renamed.yaml"), []byte("version: \"3\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(daemonsrv.CurrentEnvPath(), []byte(filepath.Join(envs, "original.yaml")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, diagnostics, err := executeAppCommand(t, "inspect", "--json")
+	if err != nil {
+		t.Fatalf("inspect: %v %s %s", err, out, diagnostics)
+	}
+	var envelope struct {
+		Data inspectJSONData `json:"data"`
+	}
+	if err := json.Unmarshal(out, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	got := envelope.Data
 
 	if got.Readiness.State != inspectReadinessSelectionRequired || !got.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", got.Readiness)
@@ -194,16 +204,14 @@ func TestBuildInspectDataUnavailableSelectionOffersExistingEnvironment(t *testin
 	}
 }
 
-func TestBuildInspectDataDaemonDown(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: false,
-		Configured: []daemon.ResourceStatus{
-			{Name: "redis", Kind: daemon.ResourceKindContainer, State: "stopped"},
-			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
-		},
-	})
+func TestRootInspectDaemonDown(t *testing.T) {
+	got := inspectCommandData(t, `version: "3"
+containers:
+  redis:
+    image: redis:7
+services:
+  api: {}
+`, nil, false)
 
 	if got.Readiness.State != inspectReadinessStopped {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessStopped)
@@ -222,30 +230,12 @@ func TestBuildInspectDataDaemonDown(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataInstalledUpdateRequiresRestart(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:      "/tmp/development.yaml",
-		ConfigEnvName:   "development",
-		DaemonRunning:   true,
-		UpdateAvailable: true,
-		// The package manager already installed the release; the daemon has
-		// not restarted onto it yet, so the upgrade must not be offered again.
-		ReleaseUpdate: &autoupdate.Summary{Owner: autoupdate.OwnerHomebrew, Phase: "available", TargetVersion: "v0.16.6"},
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
-			Name:  "api",
-			State: "stopped",
-		}}},
-		Selection: environmentSelection{
-			State:        environmentSelectionSelected,
-			SelectedName: "development",
-			SelectedPath: "/tmp/development.yaml",
-			Environments: []environmentChoice{{
-				Name:     "development",
-				Path:     "/tmp/development.yaml",
-				Selected: true,
-			}},
-		},
-	})
+func TestRootInspectInstalledUpdateRequiresRestart(t *testing.T) {
+	previousVersion, previousBuildTime := version, buildTime
+	version, buildTime = "v0.16.6", ""
+	t.Cleanup(func() { version, buildTime = previousVersion, previousBuildTime })
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{Name: "api", State: "stopped"}}}, false,
+		daemon.VersionResponse{Running: "v0.16.5", ReleaseUpdate: &autoupdate.Summary{Owner: autoupdate.OwnerHomebrew, Phase: "available", TargetVersion: "v0.16.6"}})
 
 	if got.Readiness.State != inspectReadinessUpdateRequired || !got.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", got.Readiness)
@@ -259,29 +249,43 @@ func TestBuildInspectDataInstalledUpdateRequiresRestart(t *testing.T) {
 	}
 }
 
-func TestConfiguredInspectServicesExposeStoppedResourcesWithoutDaemon(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{"redis": {}},
-		Services:   map[string]*config.Service{"api": {}},
+func TestRootInspectDaemonEnvMismatchBlocksReady(t *testing.T) {
+	prepareLifecycleProgressTest(t)
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	selected := filepath.Join(t.TempDir(), "development.yaml")
+	if err := os.WriteFile(selected, []byte("version: \"3\"\n"), 0600); err != nil {
+		t.Fatal(err)
 	}
-	got := buildInspectServiceSummary(configuredInspectServices(cfg))
-	if got.Total != 2 {
-		t.Fatalf("total = %d", got.Total)
+	selected, err := filepath.EvalSymlinks(selected)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertStringSlice(t, got.Stopped, []string{"api", "redis"})
-}
-
-func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:       "/tmp/development.yaml",
-		ConfigEnvName:    "development",
-		EnvSwitchCommand: "orbit up -c /tmp/development.yaml --json",
-		DaemonRunning:    true,
-		DaemonEnv:        "local",
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-			{Name: "redis", State: "healthy"},
-		}},
+	other := filepath.Join(t.TempDir(), "local.yaml")
+	serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(http.StatusOK)
+		case "/api/status":
+			daemon.WriteJSON(w, http.StatusOK, daemon.StatusResponse{ConfigPath: other, Resources: []daemon.ResourceStatus{{Name: "redis", State: "healthy"}}})
+		case "/api/envs":
+			daemon.WriteJSON(w, http.StatusOK, daemon.EnvsResponse{Current: other})
+		case "/api/version":
+			daemon.WriteJSON(w, http.StatusOK, daemon.VersionResponse{Running: buildVersion()})
+		default:
+			http.NotFound(w, r)
+		}
 	})
+	out, diagnostics, err := executeAppCommand(t, "--config", selected, "inspect", "--json")
+	if err != nil {
+		t.Fatalf("inspect: %v %s %s", err, out, diagnostics)
+	}
+	var envelope struct {
+		Data inspectJSONData `json:"data"`
+	}
+	if err := json.Unmarshal(out, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	got := envelope.Data
 
 	if got.Readiness.State != inspectReadinessNeedsDaemon {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessNeedsDaemon)
@@ -298,7 +302,7 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	if !strings.Contains(got.Risks[0].Message, "development") || !strings.Contains(got.Risks[0].Message, "local") {
 		t.Fatalf("risk message = %q, want both env names", got.Risks[0].Message)
 	}
-	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit up -c /tmp/development.yaml --json" {
+	if len(got.RecommendedActions) == 0 || got.RecommendedActions[0].Command != "orbit up -c "+shellquote.Quote(selected)+" --json" {
 		t.Fatalf("first action = %+v", got.RecommendedActions)
 	}
 	if got.RecommendedActions[0].Reason != "Switch the daemon to the selected environment; Orbit confirms before stopping running resources." {
@@ -309,19 +313,8 @@ func TestBuildInspectDataDaemonEnvMismatchBlocksReady(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataKeepsOtherProjectResourcesOutOfCurrentProject(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:      "/workspace/project-b/orbit.yaml",
-		ConfigEnvName:   "project-b",
-		DaemonRunning:   true,
-		DaemonEnv:       "project-a",
-		ContextMismatch: true,
-		RunningPath:     "/workspace/project-a/orbit.yaml",
-		Configured: []daemon.ResourceStatus{{
-			Name:  "app-b",
-			State: "stopped",
-		}},
-	})
+func TestRootInspectKeepsOtherProjectResourcesOutOfCurrentProject(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\nservices:\n  app-b: {}\n", &daemon.StatusResponse{ConfigPath: filepath.Join(t.TempDir(), "project-a", "orbit.yaml"), Resources: []daemon.ResourceStatus{{Name: "app-a", State: "healthy"}}}, false)
 
 	if got.Readiness.State != inspectReadinessNeedsDaemon || !got.Readiness.Blocked {
 		t.Fatalf("readiness = %+v", got.Readiness)
@@ -347,7 +340,7 @@ func TestBuildInspectDataKeepsOtherProjectResourcesOutOfCurrentProject(t *testin
 	}
 }
 
-func TestBuildInspectDataIncludesPersistedProjectContext(t *testing.T) {
+func TestRootInspectIncludesPersistedProjectContext(t *testing.T) {
 	context := daemon.EnvironmentContext{
 		Kind: "project", Identity: "/workspace/payments/orbit.yaml",
 		DisplayName: "payments", ConfigPath: "/workspace/payments/orbit.yaml",
@@ -356,7 +349,7 @@ func TestBuildInspectDataIncludesPersistedProjectContext(t *testing.T) {
 			Name: "e2e", Path: "/envs/e2e.yaml", Active: false,
 		},
 	}
-	got := buildInspectData(inspectBuildOptions{Context: context})
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Context: context}, false)
 	if got.Environment.Context.Kind != "project" ||
 		got.Environment.Context.Identity != context.Identity ||
 		got.Environment.Context.ProjectRoot != context.ProjectRoot ||
@@ -430,12 +423,8 @@ func TestLocalInspectEnvironmentContextUsesQualifiedManagedIdentity(t *testing.T
 	}
 }
 
-func TestBuildInspectDataZeroServicesMarshalEmptyArrays(t *testing.T) {
-	data := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: false,
-	})
+func TestRootInspectZeroServicesMarshalEmptyArrays(t *testing.T) {
+	data := inspectCommandData(t, "version: \"3\"\n", nil, false)
 
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -452,16 +441,10 @@ func TestBuildInspectDataZeroServicesMarshalEmptyArrays(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-			{Name: "worker", State: "degraded"},
-			{Name: "payments", State: "stopped"},
-		}},
-	})
+func TestRootInspectDegradedBeatsStopped(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
+		{Name: "worker", State: "degraded"}, {Name: "payments", State: "stopped"},
+	}}, false)
 
 	if got.Readiness.State != inspectReadinessDegraded {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessDegraded)
@@ -486,18 +469,8 @@ func TestBuildInspectDataDegradedBeatsStopped(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataDoesNotDescribeHealthFailureAsProcessExit(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{
-			Name:        "api",
-			State:       "degraded",
-			StateReason: "HTTP 500 from http://localhost:8080/health",
-			FailureKind: string(engine.FailureKindHealth),
-		}}},
-	})
+func TestRootInspectDoesNotDescribeHealthFailureAsProcessExit(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{Name: "api", State: "degraded", StateReason: "HTTP 500 from http://localhost:8080/health", FailureKind: string(engine.FailureKindHealth)}}}, false)
 
 	if len(got.RecommendedActions) != 1 ||
 		got.RecommendedActions[0].Command != "orbit logs api --json" {
@@ -509,13 +482,8 @@ func TestBuildInspectDataDoesNotDescribeHealthFailureAsProcessExit(t *testing.T)
 	}
 }
 
-func TestBuildInspectDataStatusUnavailableIsNotReady(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		StatusErr:     errInspectFixture("status request failed: connection reset"),
-	})
+func TestRootInspectStatusUnavailableIsNotReady(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{}, true)
 
 	if got.Readiness.State != inspectReadinessConverging {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConverging)
@@ -534,16 +502,8 @@ func TestBuildInspectDataStatusUnavailableIsNotReady(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataStoppingAndRestartingAreConverging(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-			{Name: "worker", State: "restarting"},
-			{Name: "payments", State: "stopping"},
-		}},
-	})
+func TestRootInspectStoppingAndRestartingAreConverging(t *testing.T) {
+	got := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{Name: "worker", State: "restarting"}, {Name: "payments", State: "stopping"}}}, false)
 
 	if got.Readiness.State != inspectReadinessConverging {
 		t.Fatalf("state = %q, want %q", got.Readiness.State, inspectReadinessConverging)
@@ -553,18 +513,8 @@ func TestBuildInspectDataStoppingAndRestartingAreConverging(t *testing.T) {
 	assertStringSlice(t, got.Resources.ByState["stopping"], []string{"payments"})
 }
 
-func TestBuildInspectDataEnvelopePayload(t *testing.T) {
-	data := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/development.yaml",
-		ConfigEnvName: "development",
-		DaemonRunning: true,
-		PID:           123,
-		Version:       "dev",
-		Dashboard:     "http://localhost:7171",
-		Status: &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-			{Name: "redis", State: "healthy"},
-		}},
-	})
+func TestRootInspectEnvelopePayload(t *testing.T) {
+	data := inspectCommandData(t, "version: \"3\"\n", &daemon.StatusResponse{Resources: []daemon.ResourceStatus{{Name: "redis", State: "healthy"}}}, false)
 
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -600,14 +550,10 @@ func TestBuildInspectDataEnvelopePayload(t *testing.T) {
 	if got.Readiness.State != inspectReadinessReady {
 		t.Fatalf("readiness.state = %q", got.Readiness.State)
 	}
-	if !got.Daemon.Running || got.Daemon.PID != 123 || got.Daemon.Version != "dev" {
+	if !got.Daemon.Running || got.Daemon.PID != os.Getpid() || got.Daemon.Version != buildVersion() {
 		t.Fatalf("daemon = %+v", got.Daemon)
 	}
 }
-
-type errInspectFixture string
-
-func (e errInspectFixture) Error() string { return string(e) }
 
 func hasInspectAction(actions []cli.JSONAction, command string) bool {
 	for _, action := range actions {
@@ -674,17 +620,29 @@ func TestEnvSwitchCommandNamesAManagedConfigToo(t *testing.T) {
 	}
 }
 
-func TestBuildInspectDataStartsTheConfigTheInvocationNamed(t *testing.T) {
-	got := buildInspectData(inspectBuildOptions{
-		ConfigPath:    "/tmp/b.yaml",
-		ConfigEnvName: "b",
-		StartCommand:  "orbit up -c /tmp/b.yaml --json",
-		Configured: []daemon.ResourceStatus{
-			{Name: "api", Kind: daemon.ResourceKindService, State: "stopped"},
-		},
-	})
-	if len(got.RecommendedActions) != 1 || got.RecommendedActions[0].Command != "orbit up -c /tmp/b.yaml --json" {
-		t.Fatalf("recommended_actions = %+v", got.RecommendedActions)
+func TestRootInspectStartsTheConfigTheInvocationNamed(t *testing.T) {
+	prepareLifecycleProgressTest(t)
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "b.yaml")
+	if err := os.WriteFile(path, []byte("version: \"3\"\nservices:\n  api: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, diagnostics, err := executeAppCommand(t, "--config", path, "inspect", "--json")
+	if err != nil {
+		t.Fatalf("inspect: %v %s %s", err, out, diagnostics)
+	}
+	var envelope struct {
+		Data inspectJSONData `json:"data"`
+	}
+	if err := json.Unmarshal(out, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.RecommendedActions) != 1 || envelope.Data.RecommendedActions[0].Command != "orbit up -c "+shellquote.Quote(resolved)+" --json" {
+		t.Fatalf("start action: %s", out)
 	}
 }
 
@@ -706,4 +664,56 @@ func TestStartCommandNamesOnlyAConfigGivenWithTheFlag(t *testing.T) {
 	if got := startCommand(); got != "orbit up -c "+shellquote.Quote(configFile) {
 		t.Fatalf("explicit config start = %q", got)
 	}
+}
+
+func inspectCommandData(t *testing.T, content string, status *daemon.StatusResponse, unavailable bool, runtimeVersion ...daemon.VersionResponse) inspectJSONData {
+	t.Helper()
+	prepareLifecycleProgressTest(t)
+	t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+	project := t.TempDir()
+	t.Chdir(project)
+	path := filepath.Join(project, "orbit.yaml")
+	if content != "" {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if status != nil {
+		serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/health":
+				w.WriteHeader(http.StatusOK)
+			case "/api/status":
+				if unavailable {
+					http.Error(w, "status unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				snapshot := *status
+				if snapshot.ConfigPath == "" {
+					snapshot.ConfigPath = path
+				}
+				daemon.WriteJSON(w, http.StatusOK, snapshot)
+			case "/api/version":
+				response := daemon.VersionResponse{Running: buildVersion()}
+				if len(runtimeVersion) > 0 {
+					response = runtimeVersion[0]
+				}
+				daemon.WriteJSON(w, http.StatusOK, response)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+	}
+	out, diagnostics, err := executeAppCommand(t, "inspect", "--json")
+	if err != nil {
+		t.Fatalf("inspect: %v\n%s\n%s", err, out, diagnostics)
+	}
+	assertOneLifecycleEnvelope(t, out, true)
+	var envelope struct {
+		Data inspectJSONData `json:"data"`
+	}
+	if err := json.Unmarshal(out, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	return envelope.Data
 }

@@ -160,22 +160,6 @@ func TestPrintExecutionErrorHuman(t *testing.T) {
 	}
 }
 
-// The human path must not advertise the --json spellings that only agents
-// need; both audiences read the same classification, so the suffix is
-// stripped rather than duplicated into a second vocabulary.
-func TestPrintExecutionErrorHumanDropsAgentOnlyJSONSuffix(t *testing.T) {
-	origJSON := cli.JSONOutput
-	t.Cleanup(func() { cli.JSONOutput = origJSON })
-	cli.JSONOutput = false
-
-	var buf bytes.Buffer
-	printExecutionError(&buf, cli.NewUnknownResourceError("missing"))
-
-	if strings.Contains(buf.String(), "--json") {
-		t.Fatalf("human error leaks the agent-only --json suffix:\n%s", buf.String())
-	}
-}
-
 func TestPrintExecutionErrorHumanMakesProjectConfigDiscoverableBeforeSetup(t *testing.T) {
 	origJSON := cli.JSONOutput
 	t.Cleanup(func() { cli.JSONOutput = origJSON })

@@ -177,17 +177,17 @@ containers:
 	}
 }
 
-func TestApplyDefaultsUpdatesContainerPointersInMap(t *testing.T) {
-	cfg := Config{
-		Containers: map[string]*Container{
-			"sql-server": {
-				Image: "example.db:latest",
-			},
-		},
+func TestLoadDefaultsContainerPullPolicy(t *testing.T) {
+	path := writeOrbitYAML(t, `
+version: "3"
+containers:
+  sql-server:
+    image: example.db:latest
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	applyDefaults(&cfg)
-
 	if cfg.Containers["sql-server"].PullPolicy != "always" {
 		t.Fatalf("pull policy = %q, want always", cfg.Containers["sql-server"].PullPolicy)
 	}

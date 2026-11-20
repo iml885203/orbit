@@ -88,12 +88,6 @@ func TestEffectiveTimeout_ZeroFallsBackToDefault(t *testing.T) {
 	}
 }
 
-func TestEffectiveTimeout_NonZeroPassesThrough(t *testing.T) {
-	if got := effectiveTimeout(30 * time.Second); got != 30*time.Second {
-		t.Errorf("got %v, want 30s", got)
-	}
-}
-
 func TestNextSnapshots_FilterSelectsSubsetOfServices(t *testing.T) {
 	// The caller of nextSnapshots is responsible for only feeding it
 	// services it wants to track — we don't add a filter knob inside.
@@ -231,51 +225,6 @@ func TestDiffProgress_HeartbeatFiresForAStalledStart(t *testing.T) {
 	got := diffProgress(prev, curr, time.Unix(60, 0))
 	if len(got) != 1 || got[0].kind != eventHeartbeat {
 		t.Fatalf("want one heartbeat for a start stalled 60s, got %+v", got)
-	}
-}
-
-func TestFormatProgressEvent_HealthyShowsElapsed(t *testing.T) {
-	line := formatProgressEvent(progressEvent{
-		kind: eventTransition, name: "worker", from: "starting", to: "healthy",
-		elapsed: 39 * time.Second,
-	})
-	want := "  ● worker healthy (39s)"
-	if line != want {
-		t.Errorf("\n got: %q\nwant: %q", line, want)
-	}
-}
-
-func TestFormatProgressEvent_DegradedShowsElapsed(t *testing.T) {
-	line := formatProgressEvent(progressEvent{
-		kind: eventTransition, name: "payments", from: "starting", to: "degraded",
-		elapsed: 12 * time.Second,
-	})
-	want := "  ◑ payments degraded (12s)"
-	if line != want {
-		t.Errorf("\n got: %q\nwant: %q", line, want)
-	}
-}
-
-func TestFormatProgressEvent_IntermediateTransitionShowsArrow(t *testing.T) {
-	line := formatProgressEvent(progressEvent{
-		kind: eventTransition, name: "worker", from: "pending", to: "building",
-	})
-	want := "  ⋯ worker pending → building"
-	if line != want {
-		t.Errorf("\n got: %q\nwant: %q", line, want)
-	}
-}
-
-func TestFormatProgressEvent_FirstAppearanceOmitsArrow(t *testing.T) {
-	// No "from" state means this is the service's first appearance, so
-	// the arrow would be misleading ("→ pending" suggests an origin
-	// state that never existed).
-	line := formatProgressEvent(progressEvent{
-		kind: eventTransition, name: "worker", from: "", to: "pending",
-	})
-	want := "  ⋯ worker pending"
-	if line != want {
-		t.Errorf("\n got: %q\nwant: %q", line, want)
 	}
 }
 

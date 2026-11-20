@@ -55,7 +55,6 @@ func TestUpJSONNoAffectedResourcesSkipsReadinessPhaseAndWritesOneEnvelope(t *tes
 func TestUpJSONFailureReportsEvidencePhaseOnceAndWritesOneEnvelope(t *testing.T) {
 	prepareLifecycleProgressTest(t)
 	var started atomic.Bool
-	var logRequests atomic.Int32
 	serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/api/health":
@@ -70,7 +69,6 @@ func TestUpJSONFailureReportsEvidencePhaseOnceAndWritesOneEnvelope(t *testing.T)
 			started.Store(true)
 			daemon.WriteJSON(w, http.StatusOK, daemon.APIResponse{OK: true, AffectedResources: []string{"api"}})
 		case strings.HasPrefix(r.URL.Path, "/api/logs/api"):
-			logRequests.Add(1)
 			daemon.WriteJSON(w, http.StatusOK, daemon.LogsResponse{Lines: []string{"application failed"}})
 		default:
 			http.NotFound(w, r)
@@ -90,8 +88,19 @@ func TestUpJSONFailureReportsEvidencePhaseOnceAndWritesOneEnvelope(t *testing.T)
 	if count := strings.Count(diagnostics, "⋯ collecting failure evidence\n"); count != 1 {
 		t.Fatalf("evidence phase count = %d in %q", count, diagnostics)
 	}
-	if got := logRequests.Load(); got != 2 {
-		t.Fatalf("log evidence requests = %d, want terminal evidence plus final tail", got)
+	var envelope struct {
+		Data struct {
+			Failed []struct {
+				Name    string   `json:"name"`
+				LogTail []string `json:"log_tail"`
+			} `json:"failed_resources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Failed) != 1 || envelope.Data.Failed[0].Name != "api" || strings.Join(envelope.Data.Failed[0].LogTail, ",") != "application failed" {
+		t.Fatalf("failure evidence missing: %s", out)
 	}
 }
 
@@ -193,6 +202,8 @@ func captureLifecycleProcessStreams(t *testing.T) func() ([]byte, string) {
 		if !restored.CompareAndSwap(false, true) {
 			return nil, ""
 		}
+		defer stdoutRead.Close()
+		defer stderrRead.Close()
 		_ = stdoutWrite.Close()
 		_ = stderrWrite.Close()
 		os.Stdout, os.Stderr = previousStdout, previousStderr

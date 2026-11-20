@@ -8,69 +8,12 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/iml885203/orbit/internal/cli"
 	"github.com/iml885203/orbit/internal/daemon"
-	"github.com/iml885203/orbit/internal/dbstate"
 )
-
-func TestDBListJSONCarriesPublishRecordPerConfiguredDatabase(t *testing.T) {
-	published := time.Date(2026, 11, 4, 9, 12, 3, 0, time.UTC)
-	reset := published.Add(time.Hour)
-	projects := []DevDBProject{
-		{Name: "Orders", Path: "db/Orders/Orders.sqlproj", Databases: []string{"OrdersDB", "OrdersArchiveDB"}},
-		{Name: "Billing", Path: "db/Billing/Billing.sqlproj", Databases: []string{"BillingDB", "OrdersDB"}},
-	}
-	snap := dbstate.Snapshot{DBs: map[string]dbstate.DBState{
-		"OrdersDB": {
-			Name:        "OrdersDB",
-			LastPublish: &dbstate.Event{At: published, Source: dbstate.SourceCLI, DurationMs: 8412},
-			BaselineAt:  &dbstate.Event{At: published, Source: dbstate.SourceCLI},
-		},
-		// A reset records the clean publish it performs alongside the reset.
-		"BillingDB": {
-			Name:        "BillingDB",
-			LastReset:   &dbstate.Event{At: reset, Source: dbstate.SourceUI, DurationMs: 900},
-			LastPublish: &dbstate.Event{At: reset, Source: dbstate.SourceUI, DurationMs: 900},
-			BaselineAt:  &dbstate.Event{At: reset, Source: dbstate.SourceUI},
-		},
-		"RetiredDB": {Name: "RetiredDB", LastPublish: &dbstate.Event{At: published, Source: dbstate.SourceCLI}},
-	}}
-
-	got := dbListJSON(projects, snap)
-
-	if len(got.Projects) != 2 {
-		t.Fatalf("projects changed: %+v", got.Projects)
-	}
-	names := make([]string, 0, len(got.PublishRecords))
-	for _, r := range got.PublishRecords {
-		names = append(names, r.Database+"@"+r.Project)
-	}
-	want := []string{"OrdersDB@Orders", "OrdersArchiveDB@Orders", "BillingDB@Billing"}
-	if len(names) != len(want) {
-		t.Fatalf("records = %v, want %v (configured only, duplicate under first project)", names, want)
-	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("records = %v, want %v", names, want)
-		}
-	}
-
-	orders := got.PublishRecords[0]
-	if orders.LastPublish == nil || !orders.LastPublish.At.Equal(published) || orders.LastPublish.DurationMs != 8412 || orders.BaselineAt == nil || orders.LastReset != nil {
-		t.Fatalf("OrdersDB record = %+v", orders)
-	}
-	archive := got.PublishRecords[1]
-	if archive.LastPublish != nil || archive.LastReset != nil || archive.BaselineAt != nil {
-		t.Fatalf("unrecorded database must carry no events: %+v", archive)
-	}
-	billing := got.PublishRecords[2]
-	if billing.LastReset == nil || billing.LastPublish == nil || billing.LastPublish.Source != dbstate.SourceUI {
-		t.Fatalf("reset record must carry its paired publish: %+v", billing)
-	}
-}
 
 // serveDBListDaemon runs a fake daemon on the default socket answering the
 // requests `sqlserver list` makes, with the raw camelCase db-state body the
@@ -93,7 +36,7 @@ func serveDBListDaemon(t *testing.T, dbStateStatus int, dbStateBody string) {
 		_, _ = w.Write([]byte(`{"db_configured":true}`))
 	})
 	mux.HandleFunc("/api/devdb/projects", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"projects":[{"name":"Orders","path":"db/Orders/Orders.sqlproj","databases":["OrdersDB","OrdersArchiveDB"]}]}`))
+		_, _ = w.Write([]byte(`{"projects":[{"name":"Orders","path":"db/Orders/Orders.sqlproj","databases":["OrdersDB","OrdersArchiveDB"]},{"name":"Billing","path":"db/Billing/Billing.sqlproj","databases":["BillingDB","OrdersDB"]}]}`))
 	})
 	mux.HandleFunc("/api/db-state", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(dbStateStatus)
@@ -133,6 +76,7 @@ func TestDBListCommandJSONReportsDaemonPublishRecords(t *testing.T) {
 	cli.JSONOutput = true
 	serveDBListDaemon(t, http.StatusOK, `{"version":1,"updatedAt":"2026-11-04T10:00:00Z","dbs":{
 		"OrdersDB":{"name":"OrdersDB","lastPublish":{"at":"2026-11-04T09:12:03Z","source":"cli","durationMs":8412},"baselineAt":{"at":"2026-11-04T09:12:05Z","source":"cli"}},
+		"BillingDB":{"name":"BillingDB","lastReset":{"at":"2026-11-04T10:00:00Z","source":"ui","durationMs":900},"lastPublish":{"at":"2026-11-04T10:00:00Z","source":"ui","durationMs":900},"baselineAt":{"at":"2026-11-04T10:00:00Z","source":"ui"}},
 		"RetiredDB":{"name":"RetiredDB","lastPublish":{"at":"2026-11-01T09:00:00Z","source":"ui"}}}}`)
 
 	out, err := captureStdout(t, func() error { return runDBList(nil, nil) })
@@ -149,10 +93,10 @@ func TestDBListCommandJSONReportsDaemonPublishRecords(t *testing.T) {
 	if err := json.Unmarshal(out, &env); err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
-	if !env.OK || len(env.Data.Projects) != 1 || env.Data.Projects[0]["name"] != "Orders" {
+	if !env.OK || len(env.Data.Projects) != 2 || env.Data.Projects[0]["name"] != "Orders" {
 		t.Fatalf("envelope = %s", out)
 	}
-	if len(env.Data.PublishRecords) != 2 {
+	if len(env.Data.PublishRecords) != 3 {
 		t.Fatalf("want one record per configured database, got %s", out)
 	}
 	for _, rec := range env.Data.PublishRecords {
@@ -161,6 +105,20 @@ func TestDBListCommandJSONReportsDaemonPublishRecords(t *testing.T) {
 				t.Fatalf("record missing key %q: %s", key, out)
 			}
 		}
+	}
+	names := make([]string, 0, len(env.Data.PublishRecords))
+	for _, rec := range env.Data.PublishRecords {
+		var database, project string
+		if err := json.Unmarshal(rec["database"], &database); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(rec["project"], &project); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, database+"@"+project)
+	}
+	if strings.Join(names, ",") != "OrdersDB@Orders,OrdersArchiveDB@Orders,BillingDB@Billing" {
+		t.Fatalf("configured database ownership/deduplication = %v", names)
 	}
 	compact := func(raw json.RawMessage) string {
 		var buf bytes.Buffer
@@ -178,6 +136,15 @@ func TestDBListCommandJSONReportsDaemonPublishRecords(t *testing.T) {
 	if got := compact(env.Data.PublishRecords[1]["last_publish"]); got != "null" {
 		t.Fatalf("unrecorded last_publish = %s, want explicit null", got)
 	}
+	for _, field := range []string{"last_publish", "last_reset"} {
+		if got := compact(env.Data.PublishRecords[2][field]); got != `{"at":"2026-11-04T10:00:00Z","source":"ui","duration_ms":900}` {
+			t.Fatalf("reset must retain paired publish: %s = %s", field, got)
+		}
+	}
+	if got := compact(env.Data.PublishRecords[2]["baseline_at"]); got != `{"at":"2026-11-04T10:00:00Z","source":"ui"}` {
+		t.Fatalf("reset baseline = %s", got)
+	}
+
 }
 
 func TestDBListCommandJSONFailsWhenRecordUnavailable(t *testing.T) {

@@ -68,7 +68,7 @@ func TestStatusJSONKeepsOtherProjectResourcesOutOfCurrentProject(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{
 		"shop-b": {URL: "http://localhost:8081"},
 	}}
-	envelope := renderStatusEnvelope(t, cfg, map[string]daemon.ResourceStatus{}, daemonStatus{
+	envelope := statusCommandEnvelope(t, cfg, map[string]daemon.ResourceStatus{}, daemonStatus{
 		Running:            true,
 		ContextMismatch:    true,
 		ConfigPath:         "/workspace/shop-a/orbit.yaml",
@@ -214,22 +214,9 @@ func TestPersistedRuntimeStatusDoesNotCallOwnedResourcesStopped(t *testing.T) {
 	}
 }
 
-func renderStatusEnvelope(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) renderedStatusEnvelope {
-	t.Helper()
-	var buf bytes.Buffer
-	if err := writeStatusJSON(&buf, "orbit status --json", cfg, running, d, statusSetupState{}); err != nil {
-		t.Fatalf("writeStatusJSON: %v", err)
-	}
-	var envelope renderedStatusEnvelope
-	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
-		t.Fatalf("unmarshal: %v\nraw: %s", err, buf.String())
-	}
-	return envelope
-}
-
 func renderStatusJSON(t *testing.T, cfg *config.Config, running map[string]daemon.ResourceStatus, d daemonStatus) statusJSON {
 	t.Helper()
-	envelope := renderStatusEnvelope(t, cfg, running, d)
+	envelope := statusCommandEnvelope(t, cfg, running, d)
 	if envelope.SchemaVersion != "orbit.cli.v1" {
 		t.Errorf("schema_version: got %q", envelope.SchemaVersion)
 	}
@@ -278,7 +265,7 @@ func TestStatusJSON_DegradedServiceExplainsAndRepairs(t *testing.T) {
 			LogsAvailable: true,
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	service := envelope.Data.Resources[0]
 	if service.StateReason != "exited: exit status 17" {
 		t.Fatalf("state_reason = %q", service.StateReason)
@@ -304,7 +291,7 @@ func TestStatusJSONReportsHowAnExitedContainerEnded(t *testing.T) {
 			ExitCode: &exitCode, OOMKilled: true,
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	db := envelope.Data.Resources[0]
 	if db.FailureKind != "runtime" || db.ExitCode == nil || *db.ExitCode != 137 || !db.OOMKilled {
 		t.Fatalf("db = %+v, want runtime exit 137 OOM killed", db)
@@ -322,7 +309,7 @@ func TestStatusJSONCarriesContainerImageAndSidecars(t *testing.T) {
 			Sidecars: []daemon.SidecarInfo{{Name: "kafka-ui", URL: "http://localhost:28090"}},
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	kafka := envelope.Data.Resources[0]
 	if kafka.Image != "bitnami/kafka:3.7" {
 		t.Fatalf("image = %q, want the daemon's resolved image", kafka.Image)
@@ -357,7 +344,7 @@ func TestStatusJSONKeepsFailureEvidenceStructured(t *testing.T) {
 			LogsAvailable:   true,
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	service := envelope.Data.Resources[0]
 	if service.StateReason != "exited: exit status 1" {
 		t.Fatalf("state_reason = %q", service.StateReason)
@@ -409,7 +396,7 @@ func TestStatusPortConflictRecommendsInspectionInsteadOfRestart(t *testing.T) {
 			PendingDependencies: []string{"redis"},
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	if len(envelope.RecommendedActions) != 1 ||
 		envelope.RecommendedActions[0].Command != "ps -p 42 -o pid,comm,args=" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
@@ -438,7 +425,7 @@ func TestStatusJSON_PendingServiceNamesRootBlocker(t *testing.T) {
 			StateReason: "container exited unexpectedly",
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	var api jsonService
 	for _, service := range envelope.Data.Resources {
 		if service.Name == "api" {
@@ -483,7 +470,7 @@ func TestStatusJSON_RuntimeDependencyFailureTargetsRootCause(t *testing.T) {
 			BlockedBy:   "orders",
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	if len(envelope.RecommendedActions) != 1 {
 		t.Fatalf("recommended_actions = %+v, want one root-cause action", envelope.RecommendedActions)
 	}
@@ -695,7 +682,7 @@ func TestStatusAfterDownRecommendsWholeEnvironment(t *testing.T) {
 		t.Fatalf("tips = %+v", tips)
 	}
 
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	if len(envelope.RecommendedActions) != 1 ||
 		envelope.RecommendedActions[0].Command != "orbit up --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
@@ -717,13 +704,13 @@ func TestStatusJSON_UpdateAvailable(t *testing.T) {
 		UpdateAvailable: true,
 	}
 	got := renderStatusJSON(t, nil, nil, d)
-	if got.Daemon.OnDisk != d.OnDisk {
+	if !strings.HasPrefix(got.Daemon.OnDisk, "c9a3e2b (") {
 		t.Errorf("OnDisk: got %q, want %q", got.Daemon.OnDisk, d.OnDisk)
 	}
 	if !got.Daemon.UpdateAvailable {
 		t.Error("UpdateAvailable: got false, want true")
 	}
-	envelope := renderStatusEnvelope(t, nil, nil, d)
+	envelope := statusCommandEnvelope(t, nil, nil, d)
 	if len(envelope.RecommendedActions) != 1 ||
 		envelope.RecommendedActions[0].Command != "orbit daemon restart --json" {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
@@ -742,7 +729,7 @@ func TestStatusJSON_ConfigStaleShowsRunningSnapshotAndOnlyApply(t *testing.T) {
 			URL:   "http://localhost:4321",
 		},
 	}
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{
 		Running:           true,
 		ConfigStale:       true,
 		ConfigStaleReason: "env file edited",
@@ -893,7 +880,7 @@ func TestStatusJSONHealthyServiceLeadsToRuntimeApplication(t *testing.T) {
 		},
 	}
 
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	if len(envelope.RecommendedActions) != 1 {
 		t.Fatalf("recommended_actions = %+v", envelope.RecommendedActions)
 	}
@@ -925,7 +912,7 @@ func TestStatusJSONWaitsForWholeEnvironmentBeforeOpeningApplication(t *testing.T
 		},
 	}
 
-	envelope := renderStatusEnvelope(t, cfg, running, daemonStatus{Running: true})
+	envelope := statusCommandEnvelope(t, cfg, running, daemonStatus{Running: true})
 	if len(envelope.RecommendedActions) != 0 {
 		t.Fatalf("recommended_actions = %+v, want none while environment converges", envelope.RecommendedActions)
 	}

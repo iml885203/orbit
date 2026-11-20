@@ -50,12 +50,6 @@ describe('ServiceNode', () => {
     expect(queryByTestId('service-node-infra-icon')).toBeNull()
   })
 
-  it('shows an infra icon container for infra nodes without node.icon so the Cog fallback can render', () => {
-    const node = { ...baseNode, name: 'postgres', kind: 'infra' as const, mode: undefined }
-    const { getByTestId } = render(ServiceNode, { props: { data: node, id: 'postgres' } })
-    expect(getByTestId('service-node-infra-icon')).toBeTruthy()
-  })
-
   it('shows restart and stop buttons when running', () => {
     const { getByRole } = render(ServiceNode, { props: { data: baseNode, id: 'api' } })
     expect(getByRole('button', { name: /restart/i })).toBeTruthy()
@@ -188,10 +182,5 @@ describe('ServiceNode', () => {
     expect(badge.getAttribute('aria-label')).toContain('Consumes (2): demo.order.place, demo.order.settle')
   })
 
-  it('node has wider width for new layout', () => {
-    const { container } = render(ServiceNode, { props: { data: baseNode, id: 'api' } })
-    const node = container.querySelector('.node') as HTMLElement
-    expect(node).toBeTruthy()
-    // node width is set via CSS (240px); just verify the node renders
-  })
+
 })

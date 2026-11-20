@@ -1,31 +1,44 @@
 package devdb
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/iml885203/orbit/internal/daemon"
-	"github.com/iml885203/orbit/internal/dbstate"
 )
 
-func TestSnapshotDatabases_DerivesStates(t *testing.T) {
-	at := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
-	snap := dbstate.Snapshot{DBs: map[string]dbstate.DBState{
-		"CatalogDB": {Name: "CatalogDB"},
-		"OrdersDB":  {Name: "OrdersDB", LastApply: &dbstate.Event{At: at, Source: "cli"}},
-	}}
-
-	states := map[string]daemon.ResourceSnapshot{}
-	for _, r := range snapshotDatabases(snap, "sql-server") {
-		states[r.Name] = r
-		if r.Type != "database" || r.Parent != "sql-server" {
-			t.Errorf("%s: wrong type/parent: %+v", r.Name, r)
+func TestDatabaseResourcesFollowRecordedEvents(t *testing.T) {
+	feature := newTestDBFeature(t, arbitraryTargetConfig())
+	host := feature.host.(*fakeDaemonHost)
+	mux := http.NewServeMux()
+	SetupDaemon(host, mux)
+	if len(host.resources) != 1 {
+		t.Fatalf("database contributor not registered: %d", len(host.resources))
+	}
+	for _, event := range []string{
+		`{"kind":"publish","db":"CatalogDB","source":"cli","status":"ok"}`,
+		`{"kind":"apply","db":"OrdersDB","source":"cli","status":"ok"}`,
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/db-state/event", strings.NewReader(event)))
+		if response.Code != http.StatusOK {
+			t.Fatalf("record DB event: %d %s", response.Code, response.Body.String())
 		}
 	}
-	if states["CatalogDB"].State != "baseline" {
-		t.Errorf("CatalogDB state = %q, want baseline", states["CatalogDB"].State)
+	states := map[string]daemon.ResourceSnapshot{}
+	for _, resource := range host.resources[0](context.Background()) {
+		states[resource.Name] = resource
+		if resource.Type != "database" || resource.Parent != "mydb" {
+			t.Fatalf("wrong resource ownership: %+v", resource)
+		}
 	}
-	if states["OrdersDB"].State != "modified" || states["OrdersDB"].Properties["last_apply"] == "" {
-		t.Errorf("OrdersDB snapshot wrong: %+v", states["OrdersDB"])
+	if len(states) != 2 || states["CatalogDB"].State != "baseline" {
+		t.Fatalf("baseline resources: %+v", states)
+	}
+	if states["OrdersDB"].State != "modified" || !strings.Contains(states["OrdersDB"].Properties["last_apply"], "(cli)") {
+		t.Fatalf("apply evidence: %+v", states["OrdersDB"])
 	}
 }

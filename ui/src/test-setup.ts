@@ -55,8 +55,6 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver
 }
 
-vi.mock('./components/ServiceControls.svelte', () => ({ default: () => null }))
-
 vi.mock('@xyflow/svelte', () => ({
   Handle: () => null,
   Position: { Top: 'top', Bottom: 'bottom' },
