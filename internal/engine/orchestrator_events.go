@@ -11,7 +11,7 @@ import (
 func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 	switch evt.Type {
 	case EventDepsReady:
-		return o.startService(ctx, evt.Service)
+		return o.startService(ctx, evt)
 
 	case EventHealthOK:
 		o.mu.Lock()
@@ -111,14 +111,11 @@ func (o *Orchestrator) handleEvent(ctx context.Context, evt Event) error {
 		o.mu.Unlock()
 
 	case EventProcessExited:
-		// An exit while Stopping/Stopped is the expected result of a stop
-		// request (the guard below skips it — StopService already set the
-		// final state). Any other exit is a crash: mark Degraded, per the
-		// state machine in docs/architecture.md, so the dashboard/CLI show
-		// a red "something died" rather than a gray "someone stopped it".
+		// Stop can return before OnExit is enqueued. While a replacement is
+		// pending, that exit still belongs to the previous runtime.
 		o.mu.Lock()
 		info, exists := o.services[evt.Service]
-		if exists && !staleLifecycleEvent(info, evt) && info.State != StateStopping && info.State != StateStopped {
+		if exists && !staleLifecycleEvent(info, evt) && info.State != StatePending && info.State != StateStopping && info.State != StateStopped {
 			info.Transition(StateDegraded)
 			reason := evt.Message
 			if reason == "" {

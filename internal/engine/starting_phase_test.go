@@ -22,7 +22,7 @@ func TestStartingPhaseSeparatesLaunchFromReadinessWait(t *testing.T) {
 		return nil
 	}
 
-	if err := o.startService(context.Background(), "api"); err != nil {
+	if err := startQueuedService(context.Background(), o, "api"); err != nil {
 		t.Fatalf("startService: %v", err)
 	}
 	if got := serviceInfo(t, o, "api").StartingPhase(); got != StartingPhaseLaunching {
@@ -67,7 +67,7 @@ func TestStartingPhaseIgnoresALaunchFromASupersededStart(t *testing.T) {
 		return nil
 	}
 
-	if err := o.startService(context.Background(), "api"); err != nil {
+	if err := startQueuedService(context.Background(), o, "api"); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
 	waitClosed(t, firstEntered, "first start hook")
@@ -75,7 +75,7 @@ func TestStartingPhaseIgnoresALaunchFromASupersededStart(t *testing.T) {
 	o.mu.Lock()
 	o.services["api"].Transition(StateStopped)
 	o.mu.Unlock()
-	if err := o.startService(context.Background(), "api"); err != nil {
+	if err := startQueuedService(context.Background(), o, "api"); err != nil {
 		t.Fatalf("second start: %v", err)
 	}
 	close(releaseFirst)

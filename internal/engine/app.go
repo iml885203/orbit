@@ -414,7 +414,9 @@ func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Polle
 		// Containers absent from the poll no longer exist in Docker at
 		// all — reconcile those too, or a remove that outlives its stop
 		// ctx leaves the service degraded forever.
-		for _, svc := range orch.GetAllServices() {
+		services := orch.GetAllServices()
+		for i := range services {
+			svc := &services[i]
 			if svc.Kind != "container" {
 				continue
 			}
