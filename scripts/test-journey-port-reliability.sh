@@ -14,7 +14,7 @@ late_failure_namespace="harness-late-failure-$$"
 cleanup() {
   local status="$1"
   local failed_line="$2"
-  trap - EXIT
+  trap - EXIT DEBUG
   if [ "$status" -ne 0 ]; then
     printf 'Journey harness failed at scripts/test-journey-port-reliability.sh:%s (exit %s)\n' "$failed_line" "$status" >&2
   fi
@@ -36,7 +36,10 @@ cleanup() {
   fi
   exit "$status"
 }
-trap 'cleanup "$?" "$LINENO"' EXIT
+last_command_line=0
+# Bash 5 emits a synthetic DEBUG event at line 1 on EXIT; this script's line 1 is its shebang.
+trap 'if (( LINENO > 1 )); then last_command_line=$LINENO; fi' DEBUG
+trap 'cleanup "$?" "$last_command_line"' EXIT
 
 cat >"$test_root/transient-conflict.sh" <<'SH'
 #!/usr/bin/env bash
