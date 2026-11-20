@@ -85,3 +85,27 @@ executable；binary 驗證仍由 native 與 promotion jobs 執行。
 Checkpoint 只保留選定證據，不儲存 token、簽名 archive URL 或私人專案設定。
 放在 task storage，工作完成後依儲存政策釋放；若需要長期報告，先另存成果。
 Actions candidate artifacts 有保存期限。
+
+### 接續套件 updater
+
+套件 updater 已接受、但 parent 無法觀測結果時，以確切 downstream run ID
+執行獨立 sync workflow。例如：
+
+```bash
+gh workflow run sync-scoop.yml --ref main -f version=v1.5.0 -f existing_run_id=44671384322
+```
+
+Homebrew 使用 `sync-homebrew.yml`。這會在 Orbit 啟動驗證，不會再次派送套件
+更新。先驗證已發布的 immutable release，再核對所選 run 屬於套件 repository
+的 `update.yml`、來源為 `main`、以 workflow dispatch 更新 Orbit 的指定版本。
+該 run 必須成功，目前套件 manifest 也必須仍引用該 release。不符的 run 或
+manifest 會失敗；不會把較新套件降版。歷史 parent run 保留原本結果。
+
+新派送與明確 recovery 都觀測確切的 accepted run URL。Dispatch、discovery
+與觀測共用 10 分鐘總預算，保留 workflow 其他檢查所需時間。每次觀測最多讀取
+60 次，每次 request 最多 10 秒，未完成或暫時讀取失敗時相隔 5 秒。只重試
+404、HTTP 500/502/503/504 與 request timeout；404 不代表已知無法讀取的原因。
+明確授權錯誤、rate limit、格式錯誤與 identity 不符立即失敗；未成功的終止
+結果與耗盡次數也會明確失敗。Discovery 有獨立的有限次數；兩條路徑都不會
+重試 dispatch。若 dispatch 回應遺失，先檢查已接受的工作，再選 existing run
+ID；不要直接重做更新。

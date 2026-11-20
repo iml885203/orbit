@@ -113,3 +113,32 @@ The checkpoint stores selected evidence, not tokens, signed archive URLs or
 private project configuration. Keep it in task storage and release that storage
 when the task ends. Save any required long-term report before cleanup; Actions
 candidate artifacts have a limited retention period.
+
+### Resume a package updater
+
+If a package updater was accepted but its parent failed to observe it, run the
+standalone sync workflow with that exact downstream run ID. For example:
+
+```bash
+gh workflow run sync-scoop.yml --ref main -f version=v1.5.0 -f existing_run_id=44671384322
+```
+
+Use `sync-homebrew.yml` for Homebrew. This starts verification in Orbit without
+dispatching another package update. It verifies the immutable published release,
+then checks the selected run belongs to the package repository's `update.yml`
+workflow, on `main`, dispatched for Orbit and the exact version. The run must
+succeed, and the current package manifest must still reference that release.
+A mismatched run or manifest fails; a newer package version is not rolled back.
+The historical parent run keeps its original result.
+
+Both new dispatches and explicit recovery observe the exact accepted run URL.
+Dispatch, discovery and observation share a 10-minute total budget, leaving
+time for the workflow’s other checks. Each observation allows up to 60 reads,
+with a 10-second request limit and 5 seconds between unfinished or transient
+reads. Only 404, HTTP
+500/502/503/504 and request timeouts are retried; 404 does not establish why a
+run was unreadable. Explicit authorization errors, rate limits, malformed data
+and identity mismatches fail immediately. Unsuccessful terminal results and an
+exhausted budget fail visibly. Discovery has a separate bounded budget; neither
+path retries dispatch. After a lost dispatch response, inspect accepted work
+before choosing an existing run ID; do not blindly repeat the update.
