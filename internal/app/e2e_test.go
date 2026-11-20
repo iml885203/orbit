@@ -26,6 +26,7 @@ import (
 
 	"github.com/iml885203/orbit/internal/cli"
 	"github.com/iml885203/orbit/internal/daemon"
+	"github.com/iml885203/orbit/internal/daemonsrv"
 	"github.com/iml885203/orbit/internal/platform"
 	"github.com/iml885203/orbit/internal/shellquote"
 )
@@ -397,11 +398,48 @@ func TestE2E_UpInfraReconcilesExternalRestart(t *testing.T) {
 	env.run(t, "daemon", "start")
 	_, _ = env.runNoFail(t, "up", "--infra")
 
-	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool {
-		return env.serviceState(t, "redis") == "healthy"
-	})
-
 	redisName := "orbit-" + env.namespace + "-redis"
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		out, diagnostics, err := env.runJSONNoFail(t, "status", "--json")
+		t.Logf("last status: err=%v stdout=%s stderr=%s", err, out, diagnostics)
+		inspected, inspectErr := exec.Command("docker", "inspect", redisName).CombinedOutput()
+		t.Logf("owned Redis %s inspect: err=%v %s", redisName, inspectErr, inspected)
+		persisted, readErr := os.ReadFile(filepath.Join(env.home, "state.json"))
+		t.Logf("owned daemon state: err=%v %s", readErr, persisted)
+	})
+	env.waitFor(t, "redis healthy", e2eReadyTimeout, func() bool { return env.serviceState(t, "redis") == "healthy" })
+	inspected, err := exec.Command("docker", "inspect", redisName).Output()
+	if err != nil {
+		t.Fatalf("inspect owned Redis %s: %v", redisName, err)
+	}
+	var containers []struct{ State struct{ StartedAt time.Time } }
+	if err := json.Unmarshal(inspected, &containers); err != nil || len(containers) != 1 || containers[0].State.StartedAt.IsZero() {
+		t.Fatalf("invalid owned Redis runtime: %v %s", err, inspected)
+	}
+	startedAt := containers[0].State.StartedAt
+	configPath, err := filepath.EvalSymlinks(env.envYaml)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateFile := daemonsrv.NewStateFile(filepath.Join(env.home, "state.json"))
+	initial, initialErr := stateFile.Read()
+	t.Logf("pre-admission runtime StartedAt=%s persisted=%+v read_error=%v", startedAt, initial, initialErr)
+	env.waitFor(t, "daemon observed pre-restart Redis runtime", e2eReadyTimeout, func() bool {
+		state, err := stateFile.Read()
+		if err != nil {
+			return false
+		}
+		observedConfigPath, err := filepath.EvalSymlinks(state.ConfigPath)
+		if err != nil || observedConfigPath != configPath {
+			return false
+		}
+		resource, ok := state.Services["redis"]
+		return ok && resource.Kind == "container" && resource.State == "healthy" && resource.ExternalRestartCount == 0 && resource.ContainerStartedAt.Equal(startedAt)
+	})
+	t.Logf("admitted external restart after daemon persisted Redis runtime StartedAt=%s config=%s", startedAt, configPath)
 	restart := exec.Command("docker", "restart", redisName)
 	if output, err := restart.CombinedOutput(); err != nil {
 		t.Fatalf("docker restart %s: %v\n%s", redisName, err, output)

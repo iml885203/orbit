@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -450,6 +451,23 @@ func TestLifecycleCleanupWarningsPreserveTerminalResult(t *testing.T) {
 	}
 }
 
+type evidenceObservationContext struct {
+	context.Context
+	done chan struct{}
+	err  error
+}
+
+func (c *evidenceObservationContext) Done() <-chan struct{} { return c.done }
+func (c *evidenceObservationContext) Err() error {
+	select {
+	case <-c.done:
+		return c.err
+	default:
+		return nil
+	}
+}
+func (c *evidenceObservationContext) Value(any) any { return nil }
+
 func TestHumanUpFailureEvidenceRespectsObservationContext(t *testing.T) {
 	for _, dependency := range []bool{false, true} {
 		for _, canceled := range []bool{false, true} {
@@ -457,14 +475,26 @@ func TestHumanUpFailureEvidenceRespectsObservationContext(t *testing.T) {
 				prepareLifecycleProgressTest(t)
 				previousTimeout := timeout
 				t.Cleanup(func() { timeout = previousTimeout })
-				timeout = 150 * time.Millisecond
-				ctx, cancel := context.WithCancel(t.Context())
-				defer cancel()
+				timeout = 10 * time.Second
+				cause := error(context.DeadlineExceeded)
+				if canceled {
+					cause = context.Canceled
+				}
+				ctx := &evidenceObservationContext{Context: context.Background(), done: make(chan struct{}), err: cause}
 				entered := make(chan struct{})
-				requestCanceled := make(chan struct{})
+				handlerFinished := make(chan struct{})
+				statusRelease := make(chan struct{})
+				statusEntered := make(chan struct{})
+				var statusOnce sync.Once
 				serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
 					switch r.URL.Path {
 					case "/api/status":
+						statusOnce.Do(func() { close(statusEntered) })
+						select {
+						case <-statusRelease:
+						case <-r.Context().Done():
+							return
+						}
 						resources := []daemon.ResourceStatus{{Name: "api", State: "degraded", StateReason: "controlled failure"}}
 						if dependency {
 							resources = []daemon.ResourceStatus{{Name: "api", State: "pending", PendingDependencies: []string{"db"}}, {Name: "db", State: "degraded", StateReason: "controlled failure"}}
@@ -472,34 +502,54 @@ func TestHumanUpFailureEvidenceRespectsObservationContext(t *testing.T) {
 						daemon.WriteJSON(w, http.StatusOK, daemon.StatusResponse{Resources: resources})
 					case "/api/logs/api", "/api/logs/db":
 						close(entered)
-						select {
-						case <-r.Context().Done():
-							close(requestCanceled)
-						case <-time.After(500 * time.Millisecond):
-							daemon.WriteJSON(w, http.StatusOK, daemon.LogsResponse{})
-						}
+						defer close(handlerFinished)
+						<-r.Context().Done()
 					default:
 						http.NotFound(w, r)
 					}
 				})
-				if canceled {
-					go func() {
-						select {
-						case <-entered:
-							cancel()
-						case <-ctx.Done():
-						}
-					}()
+				result := make(chan error, 1)
+				joined := make(chan struct{})
+				go func() {
+					defer close(joined)
+					result <- waitForUpHealthyContext(ctx, daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
+				}()
+				watchdog := time.NewTimer(5 * time.Second)
+				defer watchdog.Stop()
+				terminated := false
+				defer func() {
+					if !terminated {
+						close(ctx.done)
+					}
+					select {
+					case <-joined:
+					case <-time.After(5 * time.Second):
+						t.Error("observation did not join after cleanup cancellation")
+					}
+				}()
+				wait := func(event <-chan struct{}, label string) {
+					t.Helper()
+					select {
+					case <-event:
+					case <-watchdog.C:
+						t.Fatalf("watchdog waiting for %s", label)
+					}
 				}
+				wait(statusEntered, "status request")
+				time.Sleep(175 * time.Millisecond)
+				close(statusRelease)
+				wait(entered, "evidence request after slow status")
 				started := time.Now()
+				close(ctx.done)
+				terminated = true
 				var err error
-				if canceled {
-					err = waitForUpHealthyContext(ctx, daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
-				} else {
-					err = waitForUpHealthy(daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
+				select {
+				case err = <-result:
+				case <-watchdog.C:
+					t.Fatal("watchdog waiting for observation termination")
 				}
-				if elapsed := time.Since(started); elapsed > 350*time.Millisecond {
-					t.Fatalf("failure evidence blocked observation: %s", elapsed)
+				if elapsed := time.Since(started); elapsed > time.Second {
+					t.Fatalf("evidence cancellation blocked observation: %s", elapsed)
 				}
 				if canceled && err != nil {
 					t.Fatalf("cancellation did not detach: %v", err)
@@ -507,12 +557,43 @@ func TestHumanUpFailureEvidenceRespectsObservationContext(t *testing.T) {
 				if !canceled && !errors.Is(err, cli.ErrTimeout) {
 					t.Fatalf("deadline returned service error: %v", err)
 				}
-				select {
-				case <-requestCanceled:
-				case <-time.After(time.Second):
-					t.Fatal("evidence HTTP request was not canceled")
-				}
+				wait(handlerFinished, "canceled evidence handler")
+				wait(joined, "observation goroutine")
 			})
 		}
+	}
+}
+
+func TestHumanUpObservationBudgetExpiresDuringSlowStatus(t *testing.T) {
+	prepareLifecycleProgressTest(t)
+	previousTimeout := timeout
+	t.Cleanup(func() { timeout = previousTimeout })
+	timeout = 150 * time.Millisecond
+	statusFinished := make(chan struct{})
+	var evidenceRequests atomic.Int32
+	serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/status" {
+			defer close(statusFinished)
+			<-r.Context().Done()
+			return
+		}
+		evidenceRequests.Add(1)
+		http.NotFound(w, r)
+	})
+	started := time.Now()
+	err := waitForUpHealthy(daemon.NewClient(daemon.DefaultSocketPath()), []string{"api"}, "ready")
+	if !errors.Is(err, cli.ErrTimeout) {
+		t.Fatalf("real observation budget returned %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("real observation budget blocked: %s", elapsed)
+	}
+	select {
+	case <-statusFinished:
+	case <-time.After(time.Second):
+		t.Fatal("status handler did not finish")
+	}
+	if evidenceRequests.Load() != 0 {
+		t.Fatal("evidence requested before status was available")
 	}
 }
