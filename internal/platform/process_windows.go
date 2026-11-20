@@ -22,46 +22,21 @@ var (
 
 const jobRetirementTimeout = 2 * time.Second
 
-var ErrJobRetirementTimeout = errors.New("Windows job retirement could not be confirmed before deadline")
+var ErrJobRetirementTimeout = errors.New("windows job retirement could not be confirmed before deadline")
 
 type ownedJob struct {
 	mu      sync.Mutex
 	handle  windows.Handle
 	retired bool
-	query   func(windows.Handle) (uint32, error)
 	budget  time.Duration
-}
-
-type jobAccounting struct {
-	TotalUserTime             int64
-	TotalKernelTime           int64
-	ThisPeriodTotalUserTime   int64
-	ThisPeriodTotalKernelTime int64
-	TotalPageFaultCount       uint32
-	TotalProcesses            uint32
-	ActiveProcesses           uint32
-	TotalTerminatedProcesses  uint32
-}
-
-func queryActiveJobProcesses(handle windows.Handle) (uint32, error) {
-	var accounting jobAccounting
-	if err := windows.QueryInformationJobObject(handle, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), nil); err != nil {
-		return 0, fmt.Errorf("query job accounting: %w", err)
-	}
-	return accounting.ActiveProcesses, nil
+	members map[uint32]windows.Handle
+	census  func(windows.Handle, time.Time) ([]uint32, error)
 }
 
 func registeredJob(pid int) *ownedJob {
 	jobMu.Lock()
 	defer jobMu.Unlock()
 	return jobObjects[pid]
-}
-
-func (job *ownedJob) active() (uint32, error) {
-	if job.query != nil {
-		return job.query(job.handle)
-	}
-	return queryActiveJobProcesses(job.handle)
 }
 
 // SetProcessGroup configures the command to create a new process group
@@ -99,25 +74,26 @@ func AssignJobObject(pid int) error {
 	}
 
 	// Open the process handle
-	handle, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(pid))
+	handle, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
 		_ = windows.CloseHandle(job)
 		return fmt.Errorf("OpenProcess(%d): %w", pid, err)
 	}
-	defer windows.CloseHandle(handle)
 
 	jobMu.Lock()
 	if jobObjects[pid] != nil {
 		jobMu.Unlock()
+		_ = windows.CloseHandle(handle)
 		_ = windows.CloseHandle(job)
 		return fmt.Errorf("job ownership for pid %d is already registered", pid)
 	}
 	if err := windows.AssignProcessToJobObject(job, handle); err != nil {
 		jobMu.Unlock()
+		_ = windows.CloseHandle(handle)
 		_ = windows.CloseHandle(job)
 		return fmt.Errorf("AssignProcessToJobObject: %w", err)
 	}
-	jobObjects[pid] = &ownedJob{handle: job, budget: jobRetirementTimeout}
+	jobObjects[pid] = &ownedJob{handle: job, budget: jobRetirementTimeout, members: map[uint32]windows.Handle{uint32(pid): handle}}
 	jobMu.Unlock()
 
 	return nil
@@ -150,27 +126,7 @@ func KillProcessGroup(pgid int, _ syscall.Signal) error {
 	if job.handle == 0 {
 		return fmt.Errorf("job ownership for %d has no open handle", pgid)
 	}
-	if err := windows.TerminateJobObject(job.handle, 1); err != nil {
-		return fmt.Errorf("TerminateJobObject: %w", err)
-	}
-	deadline := time.Now().Add(job.budget)
-	for {
-		active, err := job.active()
-		if err != nil {
-			return err
-		}
-		// Accounting includes terminated processes whose references remain open.
-		// A nonzero count can be conservative uncertainty; only zero admits
-		// retirement. Do not replace it with leader exit or a job-handle wait.
-		if active == 0 {
-			job.retired = true
-			return nil
-		}
-		if !time.Now().Before(deadline) {
-			return fmt.Errorf("pid %d: %w", pgid, ErrJobRetirementTimeout)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	return job.retire(time.Now().Add(job.budget))
 }
 
 func IsGroupAlive(pgid int) bool {
@@ -180,17 +136,7 @@ func IsGroupAlive(pgid int) bool {
 	}
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	if job.retired {
-		return false
-	}
-	if job.handle == 0 {
-		return true
-	}
-	active, err := job.active()
-	if err == nil && active == 0 {
-		job.retired = true
-	}
-	return err != nil || active != 0
+	return !job.retired
 }
 
 // IsProcessAlive checks if a process with the given PID exists and is running.
@@ -257,6 +203,10 @@ func CleanupJobObject(pid int) {
 		delete(jobObjects, pid)
 	}
 	jobMu.Unlock()
+	for pid, handle := range job.members {
+		_ = windows.CloseHandle(handle)
+		delete(job.members, pid)
+	}
 	if job.handle != 0 {
 		_ = windows.CloseHandle(job.handle)
 		job.handle = 0
@@ -288,7 +238,7 @@ func ResumeProcess(pid int) error {
 	if err != nil {
 		return fmt.Errorf("snapshot suspended threads: %w", err)
 	}
-	defer windows.CloseHandle(snapshot)
+	defer func() { _ = windows.CloseHandle(snapshot) }()
 	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
 	for err = windows.Thread32First(snapshot, &entry); err == nil; err = windows.Thread32Next(snapshot, &entry) {
 		if entry.OwnerProcessID != uint32(pid) {

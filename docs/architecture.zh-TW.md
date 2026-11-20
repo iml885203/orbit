@@ -151,9 +151,13 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 
 - **Unix**(Linux/macOS 上的 `internal/platform/process_unix.go`):`syscall.SysProcAttr{Setpgid: true}`，shutdown 時呼叫 `syscall.Kill(-pgid, sig)`。
 - **Windows**：Child 先暫停建立，加入 Job Object、記錄 ownership 後才開始執行。
-  停止時保留 Job，最多兩秒查詢其 active-process accounting，確認清退。
-  查詢失敗或逾時會保留同一 Job 與 child 身分，供明確呼叫 `Stop` 重試。
-  外部 process reference 可能延後清退確認。Daemon 結束時，關閉 Job 也會終止其後代。
+  清退時先取得目前成員的 process handle，逐一終止並等待同一 handle，再完整查詢
+  成員清單，補捉 parent 結束前新生的 child。所有輪次共用兩秒期限。已取得的 handle
+  （含已結束者）會保留至整個 owner 清退，避免 PID 重用；查詢不完整、失敗或逾時
+  都保留 Job 與 owner，供明確呼叫 `Stop` 重試。Accounting 歸零不代表 process 已完成。
+  這確認目前可發現的 runtime 與已捕捉的 process 身分，不宣稱涵蓋捕捉前已自然結束
+  的所有歷史 process object。Daemon 結束時關閉 Job 仍會終止後代；明確清退成功則
+  必須等已捕捉的 handle 進入 signaled 狀態。
 
 結果是:`orbit down` 能可靠地回收整棵 process tree —— 不管是 shell、reload 中的 `dotnet watch` server,還是 `pnpm dev` 的 Vite instance —— 而不是只對 leader 送 signal、留下孫程序。
 

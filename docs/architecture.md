@@ -188,11 +188,16 @@ Killing a dev process (e.g. `dotnet watch`) with SIGTERM often leaves grandchild
 
 - **Unix** (`internal/platform/process_unix.go` on Linux/macOS): `syscall.SysProcAttr{Setpgid: true}`, then `syscall.Kill(-pgid, sig)` on shutdown.
 - **Windows**: Each child starts suspended, joins its Job Object, and resumes
-  after ownership is recorded. Stopping retains that Job while checking its
-  active-process accounting for up to two seconds. Query failure or a deadline
-  keeps the same Job and child identity for an explicit `Stop` retry. External
-  process references may delay retirement confirmation. Closing the Job also
-  terminates its descendants if the daemon exits.
+  after ownership is recorded. Retirement pins the current members' process
+  handles, terminates and waits on those same handles, then repeats the complete
+  member census to discover children born before their parents finished. All
+  passes share a two-second deadline. Captured handles, including signaled ones,
+  remain pinned across explicit `Stop` retries; incomplete discovery, query
+  failure, or timeout retains the Job and owner. Accounting zero alone does not
+  prove process completion. This confirms the current discoverable runtime and
+  captured process identities, not every historical process object that exited
+  naturally before capture. Closing the Job terminates descendants if the daemon
+  exits; successful explicit retirement requires the captured handles to signal.
 
 Result: `orbit down` reliably reaps the whole process tree — shell, `dotnet watch` reloading, or `pnpm dev` Vite instance — rather than signalling only the leader and leaving grandchildren behind.
 
