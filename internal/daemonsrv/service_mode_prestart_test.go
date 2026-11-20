@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -51,7 +52,7 @@ func TestModePreparationProcessHelper(t *testing.T) {
 
 func TestServiceModeRetiresOwnedPreparationBeforeTargetStart(t *testing.T) {
 	command := func(stage string) string {
-		return strconv.Quote(os.Args[0]) + " -test.run=^TestModePreparationProcessHelper$ -test.timeout=15s -- " + stage
+		return strconv.Quote(filepath.ToSlash(os.Args[0])) + " -test.run=^TestModePreparationProcessHelper$ -test.timeout=15s -- " + stage
 	}
 	cfg := &config.Config{Services: map[string]*config.Service{"api": {Name: "api", Type: "node", Path: t.TempDir(), Command: command("main"), PreStart: []string{command("tree")}, Env: map[string]string{"ORBIT_MODE_PREPARATION_HELPER": "1"}}}, Containers: map[string]*config.Container{"api": {Name: "api", Image: "api"}}}
 	cfg.Settings.ShutdownTimeout = time.Second

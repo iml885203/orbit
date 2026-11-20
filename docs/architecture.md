@@ -143,7 +143,10 @@ in-flight edge write ordering; controls wait for settlement and reconciliation.
 Only a replacement runtime owner retires old write queues. Preview requests cannot reopen an
 exited preview. A switch acknowledgement means the restart was scheduled, not
 that the requested environment owns the runtime: the dashboard waits for its
-canonical identity, a replacement owner and matching graph. A stalled switch
+canonical identity, a different daemon epoch and matching graph. Switching requires a
+connected daemon owner even while previewing; bootstrap and disconnected previews
+cannot activate an environment. A target path/generation published before the
+scheduled restart does not complete the switch. A stalled switch
 stays read-only and offers refresh/reload while observation continues.
 
 Table, node, group and drawer controls project live status only when the graph

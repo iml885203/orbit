@@ -72,7 +72,7 @@ func TestWindowsIndependentOutputHelper(t *testing.T) {
 }
 
 func windowsIndependentCommand(stage string) string {
-	return strconv.Quote(os.Args[0]) + " -test.run=^TestWindowsIndependentOutputHelper$ -test.timeout=20s -- " + stage
+	return strconv.Quote(filepath.ToSlash(os.Args[0])) + " -test.run=^TestWindowsIndependentOutputHelper$ -test.timeout=20s -- " + stage
 }
 
 func TestWindowsRetirementSuccessMeansDescendantHandleSignaledAtReturn(t *testing.T) {

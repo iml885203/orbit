@@ -120,7 +120,7 @@ DaemonStore 唯一擁有 SSE 環境身分與資源狀態；GraphStore 統一管�
 
 目前環境的 graph 讀取有期限，重複刷新會合併。切換 owner 會取消舊讀取，避免舊環境卡住新環境。每條 edge 保留操作順序與待確認意圖；成功回應只確認該 edge，再重新讀取 graph 更新節點資訊。讀取失敗不會抹掉已成功的寫入；等待或失敗的資料同步會顯示在畫面上。
 
-初次載入或斷線時保留可閱讀的唯讀快照，匹配的 graph 重新讀取完成後才開放修改。同 owner 重連保留已送出 edge 寫入的順序，等候結果與資料同步；只有 runtime owner 被替換才退休舊寫入佇列。已退出的預覽不會被遲到回應重新開啟。切換 ACK 只代表 daemon 重啟已排程；畫面必須等到目標的正式 identity、新 runtime owner 與匹配 graph。切換逾時維持唯讀，提供刷新／重新載入，並繼續觀察。
+初次載入或斷線時保留可閱讀的唯讀快照，匹配的 graph 重新讀取完成後才開放修改。同 owner 重連保留已送出 edge 寫入的順序，等候結果與資料同步；只有 runtime owner 被替換才退休舊寫入佇列。已退出的預覽不會被遲到回應重新開啟。切換 ACK 只代表 daemon 重啟已排程；畫面必須等到目標的正式 identity、不同的 daemon epoch 與匹配 graph。預覽也必須具備已連線的 daemon owner 才能啟用環境；初次載入或斷線時不能切換。重啟前先發布的目標路徑／generation 不代表切換完成。切換逾時維持唯讀，提供刷新／重新載入，並繼續觀察。
 
 表格、節點、群組與 drawer 只有在 graph owner、資源種類、模式與節點身分一致時才投影 live 狀態。即使快速停止／啟動落在兩次相同的 SSE 之間，也會清除過時的依賴阻擋。預覽與斷線時保留快照；投影不替換 graph，也不重新排版。Runtime 更新保留結構相同的 graph 參照。Dashboard 的 edge 修改帶既有 expected epoch／generation headers，daemon 在環境切換鎖內、產生任何效果前檢查；未帶 header 的舊 client 保持原本行為。
 

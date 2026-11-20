@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -25,7 +26,7 @@ func TestStatePersistsOriginalPreparationInsteadOfMainCommand(t *testing.T) {
 	cfg := &config.Config{Services: map[string]*config.Service{"api": {Name: "api", Type: "node", Command: "different-main ${TOKEN}"}}, Containers: map[string]*config.Container{}}
 	srv := newTestServer(t, cfg)
 	dir := t.TempDir()
-	command := strconv.Quote(os.Args[0]) + " -test.run=^TestPreparingStateHelper$ -test.timeout=15s -- ${TOKEN}"
+	command := strconv.Quote(filepath.ToSlash(os.Args[0])) + " -test.run=^TestPreparingStateHelper$ -test.timeout=15s -- ${TOKEN}"
 	manager := srv.app.ProcessMgr
 	ready := make(chan struct{})
 	var once sync.Once

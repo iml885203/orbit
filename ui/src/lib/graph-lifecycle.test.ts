@@ -11,6 +11,7 @@ const status = (runtime: GraphRuntimeContext = owner, identity = 'source/local')
     config_path: runtime.config_path, available: true, running: false },
 })
 function observe(runtime: GraphRuntimeContext = owner, identity = 'source/local') {
+  store.daemon.daemonEpoch = runtime.epoch
   store.daemon.runtimeContext = runtime
   store.daemon.environmentIdentity = identity
   store.daemon.connected = true
@@ -59,6 +60,23 @@ describe('graph authority lifecycle', () => {
     releaseA(graph())
     await settle()
     expect(store.graph.data?.runtime).toEqual(replacement)
+  })
+
+  it('keeps target publication in the old daemon pending until a replacement epoch arrives', async () => {
+    observe()
+    await settle()
+    expect(store.graph.beginSwitch('source/target', 0)).toBe(true)
+    store.graph.receiveSwitch(true)
+    const published = { ...owner, generation: 2, config_path: '/workspace/target/orbit.yaml' }
+    observe(published, 'source/target')
+    await settle()
+    expect(store.graph.data?.runtime).toEqual(published)
+    expect(store.graph.envSwitching?.phase).toBe('loading')
+    expect(mutationsDisabled()).toBe(true)
+    observe({ ...published, epoch: 202 }, 'source/target')
+    await settle()
+    expect(store.graph.envSwitching).toBeNull()
+    expect(mutationsDisabled()).toBe(false)
   })
 
   it('requires a replacement owner for same-identity switch, retains stalled state, then recovers', async () => {
@@ -120,7 +138,12 @@ describe('graph authority lifecycle', () => {
     fetchGraph.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
     const pending = store.graph.requestPreview('source/old')
     if (action === 'exit') store.graph.exitPreview()
-    else if (action === 'switch') store.graph.beginSwitch('source/target', 0)
+    else if (action === 'switch') {
+      store.daemon.connected = true
+      store.daemon.daemonEpoch = owner.epoch
+      store.daemon.runtimeContext = owner
+      store.graph.beginSwitch('source/target', 0)
+    }
     else {
       fetchGraph.mockResolvedValueOnce({ env: 'source/new', nodes: [], edges: [] })
       await store.graph.requestPreview('source/new')

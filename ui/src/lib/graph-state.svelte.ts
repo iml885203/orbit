@@ -50,7 +50,7 @@ export class GraphStore {
   private refreshPending = false
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private retries = 0
-  private switchIntent: { owner: GraphRuntimeContext | null; identity: string; acknowledged: boolean } | null = null
+  private switchIntent: { owner: GraphRuntimeContext; identity: string; acknowledged: boolean } | null = null
   private switchTimer: ReturnType<typeof setTimeout> | null = null
   private edges = new SvelteMap<string, EdgeIntent>()
   private edgeQueues = new SvelteMap<string, Promise<void>>()
@@ -59,6 +59,12 @@ export class GraphStore {
 
   get active(): GraphResponse | null { return this.preview ?? this.data }
   get isPreviewing(): boolean { return this.preview !== null }
+  get canSwitch(): boolean {
+    const live = this.authority()
+    return !this.envSwitching && live.connected && !!live.runtimeContext?.config_path &&
+      live.runtimeContext.epoch === live.daemonEpoch
+  }
+
   get canMutate(): boolean {
     const live = this.authority()
     return !this.isPreviewing && !this.envSwitching && !this.waitingForRead && live.connected &&
@@ -269,10 +275,13 @@ export class GraphStore {
       this.notify('A switch is still pending. Wait for the replacement daemon or reload the dashboard.')
       return false
     }
+    if (!this.canSwitch) return false
+    const owner = this.authority().runtimeContext
+    if (!owner) return false
     if (this.switchTimer) clearTimeout(this.switchTimer)
     this.invalidateRead()
     this.cancelPreviewRequest()
-    this.switchIntent = { owner: this.authority().runtimeContext, identity, acknowledged: false }
+    this.switchIntent = { owner: { ...owner }, identity, acknowledged: false }
     this.envSwitching = { target: identity, total, phase: 'stopping' }
     this.switchTimer = setTimeout(() => {
       if (this.envSwitching) this.envSwitching.phase = 'stalled'
@@ -300,7 +309,8 @@ export class GraphStore {
     const intent = this.switchIntent
     const live = this.authority()
     if (!intent?.acknowledged || !live.connected || live.environmentIdentity !== intent.identity ||
-      !live.runtimeContext || sameGraphOwner(live.runtimeContext, intent.owner) ||
+      !live.runtimeContext || live.daemonEpoch !== live.runtimeContext.epoch ||
+      live.runtimeContext.epoch === intent.owner.epoch ||
       !sameGraphOwner(this.data?.runtime, live.runtimeContext)) return
     this.clearSwitch()
   }

@@ -107,6 +107,27 @@ describe('App graph response ownership', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Start web' })).toBeEnabled())
   })
 
+  it.each(['bootstrap', 'disconnected'])('does not switch a preview without connected authority: %s', async phase => {
+    render(App)
+    await waitFor(() => expect(graphs).toHaveLength(1))
+    graphs[0](response(graph('a', 1)))
+    if (phase === 'disconnected') {
+      StatusSource.current.emit(status('a', 1))
+      await waitFor(() => expect(graphs).toHaveLength(2))
+      graphs[1](response(graph('a', 1)))
+      await waitFor(() => expect(store.graph.canMutate).toBe(true))
+      StatusSource.current.onerror?.()
+      await tick()
+    }
+    store.graph.preview = { env: 'b', nodes: [], edges: [] }
+    await tick()
+    const use = screen.getByRole('button', { name: 'Use this env' })
+    await fireEvent.click(use)
+    expect(switches).toHaveLength(0)
+    expect(use).toBeDisabled()
+    expect(store.graph.beginSwitch('b', 0)).toBe(false)
+  })
+
   it('waits through actual switch ACK and old same-identity status until the replacement graph arrives', async () => {
     render(App)
     await waitFor(() => expect(graphs).toHaveLength(1))

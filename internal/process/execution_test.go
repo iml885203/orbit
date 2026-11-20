@@ -105,7 +105,7 @@ func TestExecutionProcessHelper(t *testing.T) {
 }
 
 func executionCommand(stage string) string {
-	return strconv.Quote(os.Args[0]) + " -test.run=^TestExecutionProcessHelper$ -test.timeout=15s -- " + stage
+	return strconv.Quote(filepath.ToSlash(os.Args[0])) + " -test.run=^TestExecutionProcessHelper$ -test.timeout=15s -- " + stage
 }
 
 func awaitExecution(t *testing.T, done <-chan struct{}) {

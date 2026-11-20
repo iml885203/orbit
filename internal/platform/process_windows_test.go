@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -129,28 +130,87 @@ func TestOwnedJobLivenessIncludesDescendantAfterLeaderExit(t *testing.T) {
 	if IsProcessAlive(root) {
 		t.Fatal("leader should already be reaped")
 	}
-	if !IsProcessAlive(child) {
-		t.Fatal("descendant exited before liveness observation")
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(child))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = windows.CloseHandle(handle)
+		}
+	}()
+	originalPID, err := windows.GetProcessId(handle)
+	if err != nil || originalPID != uint32(child) {
+		t.Fatalf("original descendant pid=%d err=%v", originalPID, err)
+	}
+	var created, exited, kernel, user windows.Filetime
+	if err := windows.GetProcessTimes(handle, &created, &exited, &kernel, &user); err != nil {
+		t.Fatal(err)
+	}
+	job := registeredJob(root)
+	if job == nil {
+		t.Fatal("owned job missing")
+	}
+	var member int32
+	job.mu.Lock()
+	originalJob := job.handle
+	memberOK, _, memberErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(handle), uintptr(originalJob), uintptr(unsafe.Pointer(&member)))
+	beforeActive, beforeErr := job.active()
+	job.mu.Unlock()
+	if memberOK == 0 || member == 0 {
+		t.Fatalf("original child is not a member of exact owned job: member=%d err=%v", member, memberErr)
+	}
+	beforeSignal, err := windows.WaitForSingleObject(handle, 0)
+	if err != nil || beforeSignal != uint32(windows.WAIT_TIMEOUT) {
+		t.Fatalf("original descendant was not alive before termination: wait=%d err=%v", beforeSignal, err)
 	}
 	if !IsGroupAlive(root) {
 		t.Fatal("job liveness ignored the remaining descendant")
 	}
-	if err := KillProcessGroup(root, syscall.SIGTERM); err != nil {
-		t.Fatal(err)
+	result := KillProcessGroup(root, syscall.SIGTERM)
+	afterSignal, waitErr := windows.WaitForSingleObject(handle, 0)
+	job.mu.Lock()
+	afterActive, afterErr := job.active()
+	retained := job.handle == originalJob
+	job.mu.Unlock()
+	t.Logf("pinned descendant pid=%d created=%d:%d member=%d before_wait=%d before_active=%d before_query_error=%v after_wait=%d after_active=%d after_query_error=%v termination_error=%v", originalPID, created.HighDateTime, created.LowDateTime, member, beforeSignal, beforeActive, beforeErr, afterSignal, afterActive, afterErr, result)
+	if waitErr != nil {
+		t.Fatal(waitErr)
+	}
+	if result == nil {
+		if afterSignal != windows.WAIT_OBJECT_0 {
+			t.Fatalf("successful retirement returned before ORIGINAL pinned descendant exit: wait=%d", afterSignal)
+		}
+	} else {
+		if !errors.Is(result, ErrJobRetirementTimeout) {
+			t.Fatalf("unexpected retirement failure: %v", result)
+		}
+		if registeredJob(root) != job || !retained {
+			t.Fatal("bounded uncertainty lost exact job identity")
+		}
+	}
+	// The process reference is deliberately retained across the strict oracle.
+	// Accounting may require releasing it before a conservative retry succeeds.
+	_ = windows.CloseHandle(handle)
+	closed = true
+	if result != nil {
+		if err := KillProcessGroup(root, syscall.SIGTERM); err != nil {
+			t.Fatal("retry after releasing original process handle:", err)
+		}
 	}
 	if IsGroupAlive(root) {
-		t.Fatal("successful retirement left active job count")
+		t.Fatal("completed retirement still reports active job")
 	}
-	// No external reference pins accounting during this normal success case.
-	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(child))
-	if err == nil {
-		defer windows.CloseHandle(handle)
-		state, waitErr := windows.WaitForSingleObject(handle, 0)
-		if waitErr != nil || state != windows.WAIT_OBJECT_0 {
-			t.Fatalf("successful retirement returned before descendant exit: state=%d err=%v", state, waitErr)
-		}
-	} else if !errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
-		t.Fatal(err)
+}
+
+func TestOwnedJobRetirementWithoutExternalReferencesSucceeds(t *testing.T) {
+	root, _ := startOwnedJobFixture(t)
+	if err := KillProcessGroup(root, syscall.SIGTERM); err != nil {
+		t.Fatal("ordinary job retirement:", err)
+	}
+	if IsGroupAlive(root) {
+		t.Fatal("ordinary successful retirement left active job")
 	}
 }
 

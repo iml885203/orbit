@@ -181,6 +181,7 @@
         class="toolbar-btn primary"
         type="button"
         title={`Activate ${store.graph.preview.env} — stops services from ${current}`}
+        disabled={!store.graph.canSwitch}
         onclick={useThisEnv}
       ><Power size={14} /> Use this env</button>
       <button
