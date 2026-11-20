@@ -1,7 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="200" viewBox="0 0 900 200" role="img" aria-labelledby="title desc">
-<title id="title">Mode transition preserves active ownership</title><desc id="desc">Capture target, retire current owner, then commit target and dispatch startup. A failed stop preserves current ownership and reports failure.</desc>
-<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#475569"/></marker></defs>
-<rect width="900" height="200" rx="12" fill="#f8fafc"/>
-<g fill="#fff" stroke="#94a3b8"><rect x="20" y="35" width="185" height="65" rx="8"/><rect x="240" y="35" width="210" height="65" rx="8"/><rect x="490" y="35" width="185" height="65" rx="8"/><rect x="710" y="35" width="170" height="65" rx="8"/><rect x="240" y="135" width="435" height="45" rx="8"/></g>
-<g font-family="system-ui,sans-serif" font-size="16" fill="#0f172a" text-anchor="middle"><text x="112" y="62">Capture target</text><text x="112" y="84" font-size="13">Reserve operation</text><text x="345" y="62">Stop + join old owner</text><text x="345" y="84" font-size="13">Active kind stays truthful</text><text x="582" y="62">Commit target</text><text x="582" y="84" font-size="13">Only after retirement</text><text x="795" y="62">Dispatch startup</text><text x="795" y="84" font-size="13">Readiness is separate</text><text x="457" y="163">Stop failed: retain old kind, report failed operation</text></g>
-<g fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"><path d="M205 67H238"/><path d="M450 67H488"/><path d="M675 67H708"/><path d="M345 100V133"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 560" role="img" aria-labelledby="title desc">
+  <title id="title">Mode transition preserves active ownership</title>
+  <desc id="desc">Capture target, retire current owner, then commit target and dispatch startup. A failed stop preserves current ownership and reports failure.</desc>
+  <style>text{font:16px system-ui,sans-serif;fill:#0f172a;text-anchor:middle}.sub{font-size:14px}.box{fill:#fff;stroke:#94a3b8}.line{fill:none;stroke:#475569;stroke-width:2}</style>
+  <defs><marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="#475569"/></marker></defs>
+  <rect width="360" height="560" rx="12" fill="#f8fafc"/>
+  <g class="box"><rect x="36" y="20" width="288" height="72" rx="8"/><rect x="36" y="124" width="288" height="72" rx="8"/><rect x="36" y="228" width="288" height="72" rx="8"/><rect x="36" y="332" width="288" height="72" rx="8"/><rect x="36" y="472" width="288" height="68" rx="8"/></g>
+  <text x="180" y="49">Capture target</text><text class="sub" x="180" y="73">Reserve operation</text>
+  <text x="180" y="153">Stop + join old owner</text><text class="sub" x="180" y="177">Active kind stays truthful</text>
+  <text x="180" y="257">Commit target</text><text class="sub" x="180" y="281">Only after retirement</text>
+  <text x="180" y="361">Dispatch startup</text><text class="sub" x="180" y="385">Readiness is separate</text>
+  <text x="180" y="499">Stop failed: retain old kind</text><text class="sub" x="180" y="523">Report failed operation; do not start</text>
+  <g class="line" marker-end="url(#arrow)"><path d="M180 92V120"/><path d="M180 196V224"/><path d="M180 300V328"/><path d="M324 160H344V506H328"/></g>
+  <text class="sub" x="254" y="218">Stop succeeded</text>
+</svg>
