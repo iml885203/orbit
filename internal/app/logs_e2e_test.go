@@ -27,6 +27,10 @@ func TestE2E_MultipleResourceLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	namespace := "e2e-logs-" + filepath.Base(home)
+	registerE2ENamespace(t, namespace)
+	t.Logf("ORBIT_NAMESPACE=%s", namespace)
+	dashboardPort := reserveLocalPort(t)
 	workspace := t.TempDir()
 	configPath := filepath.Join(workspace, "orbit.yaml")
 	configYAML := fmt.Sprintf(`version: "3"
@@ -45,7 +49,7 @@ services:
 	}
 	command := func(ctx context.Context, args ...string) *exec.Cmd {
 		cmd := exec.CommandContext(ctx, binary, append([]string{"-c", configPath}, args...)...)
-		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home, "ORBIT_INSTANCE_BASE_HOME="+home, "ORBIT_NAMESPACE=e2e-logs-"+filepath.Base(home), fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", reserveLocalPort(t)))
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home, "ORBIT_INSTANCE_BASE_HOME="+home, "ORBIT_NAMESPACE="+namespace, fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort))
 		return cmd
 	}
 	t.Cleanup(func() {
