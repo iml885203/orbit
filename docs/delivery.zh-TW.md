@@ -40,10 +40,21 @@ checksum、SBOM、provenance 與 immutable-release 驗證，不重建 dashboard
 或產品 executable。正式發布仍是原本八個檔案。Source tests 的編譯與
 installer 測試用的 fixture builds 另外計算。
 
-相關 PR 會提早跑 native checks。只有明確的純文件路徑可顯示 no-op；未知
-輸入或分類失敗不能繞過 gate。Linux .NET job 改為 blocking。發布會核對
-最新 canonical main CI run 的實際 job 結果，包括 native gate，不只看可能
-掩蓋單項失敗的 aggregate success。
+## 一般 CI 的驗證範圍
+
+PR 與 main 都保留完整 Linux preflight、lint、供應鏈與使用者／.NET 流程檢查。原生驗證依變更選擇：
+
+- 已知文件：明確的原生驗證 no-op。
+- 已識別的一般功能與 UI：Linux amd64、arm64。
+- 主機生命週期、CLI／daemon／platform、安裝／更新、建置／依賴、CI／政策、未知輸入或缺少可靠 diff：完整六平台。
+
+![一般 CI 依變更選擇 no-op、Linux 或完整原生驗證；發布仍需六平台與 SQL 證據。](./assets/native-ci-coverage.zh-TW.svg)
+
+[Classifier](https://github.com/iml885203/orbit/blob/main/scripts/native_impact.py) 是已識別路徑政策的唯一來源，會檢查 diff 兩側，包括一般檔名內的 Go build constraints。無效證據會失敗，不能產生成功的 no-op。Native gate 會核對選定平台的 receipts 與同一份 candidate，不只看 workflow aggregate success。即使只選 Linux，candidate 仍包含原本六個 executable。
+
+Observer 的 `native_coverage` 會列出 profile、targets、原因與實際 jobs。Linux 通過只代表該範圍，不代表完整六平台相容。舊的完整矩陣仍可檢查，並標示 legacy 證據；部分矩陣缺少計畫、非預期 skip 或不符／過期 receipt 都不能通過。
+
+若要明確診斷，可手動執行 **Platform smoke**，選擇 `linux` 或預設的 `full`。這類 dispatch 與正式 PR／main CI 分開，不能滿足發布的 current-main 檢查。發布固定選 full，promotion 仍需六份原生 receipts 與 SQL 證據；不會把簡化 PR 驗證當作發布權威。
 
 PR 產物用於診斷。只有另行核准、來源仍為 current main 的 release workflow
 能提升自己建立的 candidate。PR jobs 只有 repository read 權限，沒有 release

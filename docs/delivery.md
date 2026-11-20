@@ -45,11 +45,37 @@ immutable-release verification. It does not rebuild the dashboard or product
 executables. The published eight-file inventory stays unchanged. Source-test
 compilation and installer fixture builds are separate from candidate builds.
 
-Relevant PRs run native checks early. Only known documentation paths may take
-an explicit no-op; unknown inputs and an unsuccessful impact check cannot
-bypass the native gate. The Linux .NET job is blocking. Publication checks the
-latest canonical main CI run and actual job results, including the native gate,
-rather than trusting a green aggregate that could hide a failed job.
+## Choose ordinary CI coverage
+
+PR and main CI keep the complete Linux preflight, lint, supply-chain and user /
+.NET journeys. Native validation follows the changed inputs:
+
+- Known documentation: an explicit native no-op.
+- Recognized general features and UI: Linux amd64 and arm64.
+- Host lifecycle, CLI/daemon/platform, installer/update, build/dependencies,
+  CI/policy, unknown inputs or missing diff evidence: all six platforms.
+
+![Ordinary CI selects no-op, Linux or full native coverage; release always requires all six targets and SQL evidence.](./assets/native-ci-coverage.svg)
+
+The [classifier](https://github.com/iml885203/orbit/blob/main/scripts/native_impact.py) owns the recognized input policy.
+It checks both sides of a diff, including Go build constraints in generic
+filenames. Invalid evidence fails; it cannot produce a successful no-op.
+The native gate verifies exact selected-target receipts against the candidate,
+not just the reusable workflow's aggregate result. The six-executable candidate
+inventory stays unchanged even for Linux validation.
+
+The observer reports `native_coverage` with the selected profile, targets,
+reason and actual jobs. An intentional Linux pass establishes that coverage;
+it is not six-platform compatibility. Older full-matrix runs remain observable
+with their legacy evidence labelled. A missing partial-matrix plan, unexpected
+skip or foreign/stale receipt cannot pass.
+
+For a deliberate diagnostic, manually run **Platform smoke** with `profile`
+set to `linux` or `full` (the default). Diagnostic dispatch is separate from
+canonical PR/main CI and cannot satisfy publication's current-main check.
+Release always selects full coverage and promotion still requires six native
+receipts plus SQL evidence. Publication checks the latest canonical main CI and
+actual required jobs; release authority never comes from a reduced PR pass.
 
 PR artifacts are diagnostic. Only a separately approved, current-main release
 workflow can promote its own candidate. PR jobs have read-only repository

@@ -52,7 +52,8 @@ class ActualJobEvidence(unittest.TestCase):
         older = {'id': 10, 'head_sha': commit, 'event': 'push', 'path': '.github/workflows/ci.yml',
                  'head_branch': 'main', 'status': 'completed', 'conclusion': 'success', 'run_attempt': 1, 'html_url': 'old'}
         newer = dict(older, id=11, status='in_progress', conclusion=None)
-        with mock.patch('delivery_status.pages', return_value=[older, newer]), mock.patch('delivery_status.latest_jobs', return_value=[job(n) for n in delivery.REQUIRED_CI]):
+        manual = dict(older, id=99, event='workflow_dispatch')
+        with mock.patch('delivery_status.pages', side_effect=lambda route, field: [] if '/artifacts' in route else [older, newer, manual]), mock.patch('delivery_status.latest_jobs', return_value=[job(n) for n in delivery.REQUIRED_CI]):
             with self.assertRaises(ValueError):
                 delivery.ci_evidence('iml885203/orbit', commit, 'push', require=True)
 
@@ -163,6 +164,54 @@ class CandidateIdentityArchive(unittest.TestCase):
         with mock.patch('delivery_status.pages', return_value=[metadata]), mock.patch('delivery_status.api', return_value=raw):
             with self.assertRaises(ValueError):
                 delivery.tiny_identity('iml885203/orbit', run)
+
+
+
+
+class NativeCoverageEvidence(unittest.TestCase):
+    def setUp(self):
+        self.run = dict(id=10,run_attempt=1,status='completed',conclusion='success',head_sha='a'*40)
+        self.plan = dict(schema='orbit.native-impact.v1',repository='iml885203/orbit',run_id='10',
+                         head_commit='a'*40,commit='b'*40,profile='linux',required=True,
+                         targets=['linux/amd64','linux/arm64'],reason='general feature policy')
+
+    def jobs(self, profile):
+        return [job(n,number=i+1) for i,n in enumerate(['native-impact']+
+            (['candidate / produce'] if profile!='none' else [])+
+            ['native / '+p['name'] for p in delivery.native_checks.PLATFORMS
+             if p['target'] in delivery.native_checks.targets(profile)])]
+
+    def observe(self, rows, plan=True):
+        bundle=io.BytesIO()
+        with zipfile.ZipFile(bundle,'w') as archive:archive.writestr('native-plan.json',json.dumps(self.plan))
+        data=bundle.getvalue();metadata=dict(id=20,name='orbit-native-plan-10',expired=False,
+                    size_in_bytes=len(data),digest='sha256:'+hashlib.sha256(data).hexdigest())
+        with mock.patch('delivery_status.pages',return_value=[metadata] if plan else []),mock.patch('delivery_status.api',return_value=data):
+            return delivery.native_coverage('iml885203/orbit',self.run,rows)
+
+    def test_linux_full_and_documentation_coverage_are_distinct(self):
+        for profile in ['linux','full','none']:
+            self.plan.update(profile=profile,required=profile!='none',targets=delivery.native_checks.targets(profile))
+            result=self.observe(self.jobs(profile));self.assertEqual(result['state'],'passed');self.assertEqual(result['profile'],profile)
+        self.run['status']='in_progress';self.run['conclusion']=None
+        self.assertEqual(self.observe([],plan=False)['state'],'pending')
+
+    def test_missing_unexpected_skipped_and_foreign_evidence_never_pass(self):
+        rows=self.jobs('linux')
+        for values in [rows[:-1],rows+[job('native / macOS arm64')],rows[:-1]+[job(rows[-1]['name'],'skipped')]]:
+            with self.assertRaises(ValueError):self.observe(values)
+        with self.assertRaises(ValueError):self.observe(rows,plan=False)
+        for field,value in [('head_commit','c'*40),('repository','other/repo'),('run_id','11'),
+                            ('targets',[]),('profile','unknown'),('required',False)]:
+            old=self.plan[field];self.plan[field]=value
+            with self.assertRaises(ValueError):self.observe(rows)
+            self.plan[field]=old
+
+    def test_legacy_full_matrix_remains_observable_without_inventing_a_plan(self):
+        result=self.observe(self.jobs('full'),plan=False)
+        self.assertEqual(result['profile'],'full');self.assertIn('legacy',result['reason'])
+        rows=self.jobs('full');rows[-1]['conclusion']='failure'
+        with self.assertRaises(ValueError):self.observe(rows,plan=False)
 
 
 if __name__ == '__main__':
