@@ -68,7 +68,7 @@ func TestHandleGraph_HappyPath(t *testing.T) {
 	}
 }
 
-func TestBuildGroupInfos(t *testing.T) {
+func TestHandleGraphGroups(t *testing.T) {
 	cfg := &config.Config{
 		Groups: map[string]config.Group{
 			"platform": {Enabled: true, Services: []string{"api", "frontend"}},
@@ -83,7 +83,7 @@ func TestBuildGroupInfos(t *testing.T) {
 			"feed-worker": {Name: "feed-worker"},
 		},
 	}
-	groups := buildGroupInfos(cfg)
+	groups := readGraphResponse(t, newTestServer(t, cfg)).Groups
 
 	// empty + typo both drop to zero — group with no resolvable services is skipped.
 	if len(groups) != 2 {
@@ -107,7 +107,7 @@ func TestHandleGraph_ContainerIconsComeFromEnvConfig(t *testing.T) {
 		},
 		Services: map[string]*config.Service{},
 	}
-	nodes := buildGraphNodes(cfg, nil)
+	nodes := readGraphResponse(t, newTestServer(t, cfg)).Nodes
 
 	byName := map[string]GraphNode{}
 	for _, n := range nodes {
@@ -445,7 +445,7 @@ func TestHandleGraph_PreviewUnknownEnv(t *testing.T) {
 	}
 }
 
-func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
+func TestHandleGraph_SyncEdgeEnvironment(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"frontend": {Name: "frontend", Kind: "frontend", DependsOn: []string{"api"}},
@@ -454,7 +454,7 @@ func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
 	}
 	s := newTestServer(t, cfg)
 	s.SetConfigPath("/tmp/test/foo.yaml")
-	edges := buildGraphEdges(cfg, s.settings, s.currentEnvName())
+	edges := readGraphResponse(t, s).Edges
 	if len(edges) != 1 {
 		t.Fatalf("edges = %d, want 1", len(edges))
 	}
@@ -469,7 +469,7 @@ func TestBuildGraphEdges_SyncKindSet(t *testing.T) {
 	}
 }
 
-func TestBuildGraphNodes_EmitsExternals(t *testing.T) {
+func TestHandleGraph_EmitsExternals(t *testing.T) {
 	cfg := &config.Config{
 		Externals: map[string]*config.External{
 			"upstream": {
@@ -481,7 +481,7 @@ func TestBuildGraphNodes_EmitsExternals(t *testing.T) {
 		},
 		Services: map[string]*config.Service{},
 	}
-	nodes := buildGraphNodes(cfg, nil)
+	nodes := readGraphResponse(t, newTestServer(t, cfg)).Nodes
 	var ext *GraphNode
 	for i := range nodes {
 		if nodes[i].Name == "upstream" {
@@ -506,7 +506,7 @@ func TestBuildGraphNodes_EmitsExternals(t *testing.T) {
 	}
 }
 
-func TestBuildGraphNodes_ServiceCarriesKafka(t *testing.T) {
+func TestHandleGraph_ServiceCarriesKafka(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"odds-api": {
@@ -519,7 +519,7 @@ func TestBuildGraphNodes_ServiceCarriesKafka(t *testing.T) {
 			},
 		},
 	}
-	nodes := buildGraphNodes(cfg, nil)
+	nodes := readGraphResponse(t, newTestServer(t, cfg)).Nodes
 	var s *GraphNode
 	for i := range nodes {
 		if nodes[i].Name == "odds-api" {
@@ -541,7 +541,7 @@ func TestBuildGraphNodes_ServiceCarriesKafka(t *testing.T) {
 	}
 }
 
-func TestBuildGraphNodes_ExternalLabelFallsBackToName(t *testing.T) {
+func TestHandleGraph_ExternalLabelFallsBackToName(t *testing.T) {
 	cfg := &config.Config{
 		Externals: map[string]*config.External{
 			"upstream": {
@@ -551,7 +551,7 @@ func TestBuildGraphNodes_ExternalLabelFallsBackToName(t *testing.T) {
 			},
 		},
 	}
-	nodes := buildGraphNodes(cfg, nil)
+	nodes := readGraphResponse(t, newTestServer(t, cfg)).Nodes
 	var ext *GraphNode
 	for i := range nodes {
 		if nodes[i].Name == "upstream" {
@@ -567,14 +567,14 @@ func TestBuildGraphNodes_ExternalLabelFallsBackToName(t *testing.T) {
 	}
 }
 
-func TestBuildGraphNodes_ServiceWithoutKafkaHasNilKafka(t *testing.T) {
+func TestHandleGraph_ServiceWithoutKafkaHasNilKafka(t *testing.T) {
 	cfg := &config.Config{
 		Services: map[string]*config.Service{
 			"plain": {Name: "plain", Kind: "backend"},
 			// No Kafka block at all
 		},
 	}
-	nodes := buildGraphNodes(cfg, nil)
+	nodes := readGraphResponse(t, newTestServer(t, cfg)).Nodes
 	var s *GraphNode
 	for i := range nodes {
 		if nodes[i].Name == "plain" {
@@ -672,4 +672,18 @@ func TestBuildAsyncEdges_IncludesExternals(t *testing.T) {
 	if edges[0].From != "upstream" || edges[0].To != "odds-api" {
 		t.Errorf("edge = %s -> %s, want upstream -> odds-api", edges[0].From, edges[0].To)
 	}
+}
+
+func readGraphResponse(t *testing.T, server *Server) GraphResponse {
+	t.Helper()
+	response := httptest.NewRecorder()
+	server.handleGraph(response, httptest.NewRequest(http.MethodGet, "/api/graph", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /api/graph = %d: %s", response.Code, response.Body.String())
+	}
+	var graph GraphResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &graph); err != nil {
+		t.Fatalf("decode graph: %v", err)
+	}
+	return graph
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -58,208 +59,141 @@ func TestNewOrchestrator_PendingDeps(t *testing.T) {
 	}
 }
 
-// Note: "SkipsDisabled" and "IgnoresDisabledDeps" tests were removed — the
-// enabled-filter concept no longer exists; full enumeration registers every
-// service in cfg. Coverage of the new behavior lives in
-// orchestrator_full_enum_test.go.
-
-func TestNotifyDependents(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{
-			"redis": {Name: "redis"},
-		},
-		Services: map[string]*config.Service{
-			"api":      {Name: "api", DependsOn: []string{"redis"}},
-			"frontend": {Name: "frontend", DependsOn: []string{"api"}},
-		},
-	}
-	o := testOrchestrator(cfg)
-	o.Start([]string{"redis", "api", "frontend"})
-	// Drain DepsReady event for redis (no deps), so later assertions see the api event.
-	select {
-	case <-o.events:
-	case <-time.After(time.Second):
-		t.Fatal("timeout draining initial DepsReady for redis")
-	}
-
-	// Simulate redis becoming healthy
-	o.mu.Lock()
-	o.services["redis"].State = StateHealthy
-	o.mu.Unlock()
-	o.notifyDependents("redis")
-
-	// api's PendingDeps should now be empty
-	api, _ := o.GetServiceInfo("api")
-	if len(api.PendingDeps) != 0 {
-		t.Errorf("api PendingDeps after redis healthy = %v, want empty", api.PendingDeps)
-	}
-
-	// frontend still depends on api (not healthy yet)
-	frontend, _ := o.GetServiceInfo("frontend")
-	if len(frontend.PendingDeps) != 1 {
-		t.Errorf("frontend PendingDeps = %v, want {api: true}", frontend.PendingDeps)
-	}
-
-	// Drain the DepsReady event for api
-	select {
-	case evt := <-o.events:
-		if evt.Type != EventDepsReady || evt.Service != "api" {
-			t.Errorf("expected DepsReady for api, got %s for %s", evt.Type, evt.Service)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for DepsReady event")
+func TestRunningOrchestratorStartsDependentsOnlyAfterAllDependenciesAreHealthy(t *testing.T) {
+	for _, dependencies := range [][]string{{"redis"}, {"redis", "sql"}} {
+		t.Run(strings.Join(dependencies, "+"), func(t *testing.T) {
+			cfg := &config.Config{Containers: map[string]*config.Container{}, Services: map[string]*config.Service{
+				"api": {Name: "api", DependsOn: dependencies}, "frontend": {Name: "frontend", DependsOn: []string{"api"}},
+			}}
+			for _, name := range dependencies {
+				cfg.Containers[name] = &config.Container{Name: name}
+			}
+			o := testOrchestrator(cfg)
+			runOrchestratorForTest(t, o)
+			names := append(append([]string{}, dependencies...), "api", "frontend")
+			o.Start(names)
+			for _, name := range dependencies {
+				waitForOrchestratorState(t, o, name, StateStarting)
+			}
+			for i, name := range dependencies {
+				if info, _ := o.GetServiceInfo("api"); info.State != StatePending {
+					t.Fatalf("api unblocked before dependency %s: %+v", name, info)
+				}
+				info, _ := o.GetServiceInfo(name)
+				o.Events() <- Event{Type: EventHealthOK, Service: name, Generation: info.Generation}
+				waitForOrchestratorState(t, o, name, StateHealthy)
+				if i < len(dependencies)-1 {
+					waitForPendingDependencies(t, o, "api", dependencies[i+1:])
+					if info, _ := o.GetServiceInfo("api"); info.State != StatePending {
+						t.Fatalf("api started before all dependencies: %+v", info)
+					}
+				}
+			}
+			api := waitForOrchestratorState(t, o, "api", StateStarting)
+			if info, _ := o.GetServiceInfo("frontend"); info.State != StatePending {
+				t.Fatalf("frontend bypassed api readiness: %+v", info)
+			}
+			o.Events() <- Event{Type: EventHealthOK, Service: "api", Generation: api.Generation}
+			waitForOrchestratorState(t, o, "frontend", StateStarting)
+		})
 	}
 }
 
-func TestNotifyDependents_MultipleDeps(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{
-			"redis": {Name: "redis"},
-			"sql":   {Name: "sql"},
-		},
-		Services: map[string]*config.Service{
-			"api": {Name: "api", DependsOn: []string{"redis", "sql"}},
-		},
-	}
-	o := testOrchestrator(cfg)
-	o.Start([]string{"redis", "sql", "api"})
-	// Drain initial DepsReady for redis and sql (no deps).
-	for i := 0; i < 2; i++ {
+func runOrchestratorForTest(t *testing.T, o *Orchestrator) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = o.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
 		select {
-		case <-o.events:
-		case <-time.After(time.Second):
-			t.Fatal("timeout draining initial DepsReady events")
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("orchestrator event loop did not exit")
+		}
+	})
+}
+
+func waitForOrchestratorState(t *testing.T, o *Orchestrator, name string, state ServiceState) ServiceInfo {
+	t.Helper()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		info, ok := o.GetServiceInfo(name)
+		if ok && info.State == state {
+			return info
+		}
+		select {
+		case <-deadline.C:
+			t.Fatalf("%s state = %s, want %s", name, info.State, state)
+		case <-ticker.C:
 		}
 	}
+}
 
-	// Only redis healthy — api should still have sql pending
-	o.mu.Lock()
-	o.services["redis"].State = StateHealthy
-	o.mu.Unlock()
-	o.notifyDependents("redis")
-
-	api, _ := o.GetServiceInfo("api")
-	if len(api.PendingDeps) != 1 || !api.PendingDeps["sql"] {
-		t.Errorf("api PendingDeps after redis = %v, want {sql: true}", api.PendingDeps)
-	}
-
-	// Now sql healthy — api should have no pending deps
-	o.mu.Lock()
-	o.services["sql"].State = StateHealthy
-	o.mu.Unlock()
-	o.notifyDependents("sql")
-
-	api, _ = o.GetServiceInfo("api")
-	if len(api.PendingDeps) != 0 {
-		t.Errorf("api PendingDeps after both = %v, want empty", api.PendingDeps)
-	}
-
-	select {
-	case evt := <-o.events:
-		if evt.Type != EventDepsReady || evt.Service != "api" {
-			t.Errorf("expected DepsReady for api, got %s for %s", evt.Type, evt.Service)
+func waitForPendingDependencies(t *testing.T, o *Orchestrator, name string, want []string) {
+	t.Helper()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		// GetServiceInfo returns a shallow snapshot; copy the pending map under its owner's lock.
+		o.mu.RLock()
+		pending := make([]string, 0, len(o.services[name].PendingDeps))
+		for dependency := range o.services[name].PendingDeps {
+			pending = append(pending, dependency)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for DepsReady event")
+		o.mu.RUnlock()
+		slices.Sort(pending)
+		if slices.Equal(pending, want) {
+			return
+		}
+		select {
+		case <-deadline.C:
+			t.Fatalf("%s pending = %v, want %v", name, pending, want)
+		case <-ticker.C:
+		}
 	}
 }
 
-func TestHandleEvent_HealthOK(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{
-			"redis": {Name: "redis"},
-		},
-		Services: map[string]*config.Service{},
-	}
+func TestRunningOrchestratorHealthFailureCrashAndRestart(t *testing.T) {
+	cfg := &config.Config{Services: map[string]*config.Service{"api": {Name: "api"}}}
 	o := testOrchestrator(cfg)
-
-	o.mu.Lock()
-	o.services["redis"].State = StateStarting
-	o.mu.Unlock()
-
-	ctx := context.Background()
-	_ = o.handleEvent(ctx, Event{Type: EventHealthOK, Service: "redis"})
-
-	info, _ := o.GetServiceInfo("redis")
-	if info.State != StateHealthy {
-		t.Errorf("state = %s, want healthy", info.State)
+	runOrchestratorForTest(t, o)
+	o.Start([]string{"api"})
+	started := waitForOrchestratorState(t, o, "api", StateStarting)
+	if started.StartedAt.IsZero() || !started.HealthyAt.IsZero() {
+		t.Fatalf("startup timestamps: %+v", started)
 	}
-	if info.HealthyAt.IsZero() {
-		t.Error("HealthyAt should be set")
+	o.Events() <- Event{Type: EventHealthFail, Service: "api", Generation: started.Generation, Message: "HTTP 500", FailureKind: FailureKindHealth}
+	failed := waitForOrchestratorState(t, o, "api", StateDegraded)
+	if failed.StateReason != "HTTP 500" || failed.FailureKind != FailureKindHealth {
+		t.Fatalf("probe evidence lost: %+v", failed)
 	}
-}
-
-func TestHandleEvent_HealthFail(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{},
-		Services: map[string]*config.Service{
-			"api": {Name: "api"},
-		},
+	o.Events() <- Event{Type: EventHealthOK, Service: "api", Generation: started.Generation}
+	healthy := waitForOrchestratorState(t, o, "api", StateHealthy)
+	if healthy.HealthyAt.IsZero() || healthy.StateReason != "" {
+		t.Fatalf("recovered health: %+v", healthy)
 	}
-	o := testOrchestrator(cfg)
-
-	o.mu.Lock()
-	o.services["api"].State = StateStarting
-	o.mu.Unlock()
-
-	ctx := context.Background()
-	_ = o.handleEvent(ctx, Event{Type: EventHealthFail, Service: "api"})
-
-	info, _ := o.GetServiceInfo("api")
-	if info.State != StateDegraded {
-		t.Errorf("state = %s, want degraded", info.State)
+	o.Events() <- Event{Type: EventProcessExited, Service: "api", Generation: started.Generation, Message: "exited: exit status 2", Evidence: "application failed"}
+	crashed := waitForOrchestratorState(t, o, "api", StateDegraded)
+	if crashed.StateReason != "exited: exit status 2" || crashed.FailureEvidence != "application failed" {
+		t.Fatalf("crash evidence lost: %+v", crashed)
 	}
-}
-
-func TestHandleEvent_ProcessExited(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{},
-		Services: map[string]*config.Service{
-			"api": {Name: "api"},
-		},
+	if err := o.RestartService(t.Context(), "api"); err != nil {
+		t.Fatal(err)
 	}
-	o := testOrchestrator(cfg)
-
-	o.mu.Lock()
-	o.services["api"].State = StateHealthy
-	o.mu.Unlock()
-
-	ctx := context.Background()
-	_ = o.handleEvent(ctx, Event{Type: EventProcessExited, Service: "api", Message: "exited: exit status 2"})
-
-	info, _ := o.GetServiceInfo("api")
-	if info.State != StateDegraded {
-		t.Errorf("state = %s, want degraded (unexpected exit is a crash, not a stop)", info.State)
+	restarted := waitForOrchestratorState(t, o, "api", StateStarting)
+	if restarted.Generation <= started.Generation || !restarted.HealthyAt.IsZero() {
+		t.Fatalf("restart retained prior lifecycle: %+v", restarted)
 	}
-	if info.StateReason != "exited: exit status 2" {
-		t.Errorf("state reason = %q, want the exit message", info.StateReason)
-	}
-}
-
-func TestHandleEvent_ProcessExited_ReasonClearedOnRecovery(t *testing.T) {
-	cfg := &config.Config{
-		Containers: map[string]*config.Container{},
-		Services: map[string]*config.Service{
-			"api": {Name: "api"},
-		},
-	}
-	o := testOrchestrator(cfg)
-
-	o.mu.Lock()
-	o.services["api"].State = StateHealthy
-	o.mu.Unlock()
-
-	ctx := context.Background()
-	_ = o.handleEvent(ctx, Event{Type: EventProcessExited, Service: "api", Message: "exited"})
-	// Recovery (e.g. restart brings it back) must not carry a stale reason.
-	_ = o.handleEvent(ctx, Event{Type: EventHealthOK, Service: "api"})
-
-	info, _ := o.GetServiceInfo("api")
-	if info.State != StateHealthy {
-		t.Fatalf("state = %s, want healthy", info.State)
-	}
-	if info.StateReason != "" {
-		t.Errorf("state reason = %q, want cleared on recovery", info.StateReason)
+	o.Events() <- Event{Type: EventHealthOK, Service: "api", Generation: restarted.Generation}
+	recovered := waitForOrchestratorState(t, o, "api", StateHealthy)
+	if recovered.StateReason != "" || recovered.FailureEvidence != "" {
+		t.Fatalf("stale failure after restart: %+v", recovered)
 	}
 }
 

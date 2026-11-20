@@ -1,140 +1,100 @@
 package app
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
+	"net/http"
+	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
-	"github.com/iml885203/orbit/internal/cli"
 	"github.com/iml885203/orbit/internal/daemon"
 )
 
-func TestUpJSONFailurePreservesImagePullDiagnostics(t *testing.T) {
-	reason := "pulling image private.example/app:1 (platform linux/arm64): registry unavailable"
-	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{Name: "api", State: "degraded", StateReason: reason},
-	}}
-	data := buildUpFailureJSONData([]string{"api"}, status, func(string) []string { return nil })
-	var output bytes.Buffer
-	if err := cli.WriteJSONFailure(&output, "orbit up --json", data, errors.New("up failed"), nil); err != nil {
-		t.Fatal(err)
-	}
-	var envelope struct {
-		SchemaVersion string `json:"schema_version"`
-		OK            bool   `json:"ok"`
-		Data          struct {
-			FailedResources []upFailedResource `json:"failed_resources"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
-		t.Fatal(err)
-	}
-	if envelope.SchemaVersion != "orbit.cli.v1" || envelope.OK {
-		t.Fatalf("envelope = %+v", envelope)
-	}
-	if len(envelope.Data.FailedResources) != 1 {
-		t.Fatalf("failed_resources = %+v", envelope.Data.FailedResources)
-	}
-	got := envelope.Data.FailedResources[0]
-	if got.Name != "api" || !strings.Contains(got.StateReason, "private.example/app:1") ||
-		!strings.Contains(got.StateReason, "linux/arm64") || !strings.Contains(got.StateReason, "registry unavailable") {
-		t.Fatalf("pull diagnostics lost from failed resource: %+v", got)
-	}
-}
-
-func TestBuildUpFailureJSONDataCollectsEvidencePerUnhealthyResource(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{Name: "db", State: "healthy"},
-		{Name: "api", State: "degraded", StateReason: "exited with code 1"},
-		{Name: "worker", State: "pending"},
-		{Name: "unwatched", State: "degraded", StateReason: "not requested"},
-	}}
-	tails := map[string][]string{
-		"api":    {"panic: connection refused", "exit status 1"},
-		"worker": nil,
-	}
-
-	data := buildUpFailureJSONData([]string{"db", "api", "worker"}, status, func(name string) []string {
-		return tails[name]
-	})
-
-	if data.Operation != "up" {
-		t.Fatalf("operation = %q", data.Operation)
-	}
-	want := []upFailedResource{
-		{Name: "api", State: "degraded", StateReason: "exited with code 1", LogTail: tails["api"]},
-		{Name: "worker", State: "pending"},
-	}
-	if !reflect.DeepEqual(data.FailedResources, want) {
-		t.Fatalf("failed_resources = %+v, want %+v", data.FailedResources, want)
-	}
-}
-
-func TestUpJSONFailureIdentifiesAnExitedInfraContainer(t *testing.T) {
+func TestRootUpJSONFailureEvidence(t *testing.T) {
 	exitCode := 137
-	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{
-			Name: "db", Kind: daemon.ResourceKindContainer, Role: "infra", State: "degraded",
-			StateReason: "container exited unexpectedly", FailureKind: "runtime",
-			ExitCode: &exitCode, OOMKilled: true,
-		},
-		{Name: "api", Kind: daemon.ResourceKindService, Role: "backend", State: "pending", PendingDependencies: []string{"db"}},
-	}}
-	data := buildUpFailureJSONData([]string{"db", "api"}, status, func(string) []string { return nil })
-	var output bytes.Buffer
-	if err := cli.WriteJSONFailure(&output, "orbit up --json", data, errors.New("up failed"), nil); err != nil {
-		t.Fatal(err)
-	}
-	var envelope struct {
-		Data struct {
-			FailedResources []map[string]any `json:"failed_resources"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
-		t.Fatal(err)
-	}
-	want := []map[string]any{
-		{
-			"name": "db", "kind": "container", "role": "infra", "state": "degraded",
-			"state_reason": "container exited unexpectedly", "failure_kind": "runtime",
-			"exit_code": float64(137), "oom_killed": true,
-		},
-		{"name": "api", "kind": "service", "role": "backend", "state": "pending", "state_reason": "waiting for db"},
-	}
-	if !reflect.DeepEqual(envelope.Data.FailedResources, want) {
-		t.Fatalf("failed_resources = %+v, want %+v", envelope.Data.FailedResources, want)
-	}
-}
-
-func TestBuildUpFailureJSONDataFallsBackToHealthProbeError(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{
-			Name:           "api",
-			State:          "degraded",
-			HealthProgress: &daemon.HealthProgressInfo{LastErr: "dial tcp 127.0.0.1:8080: connection refused"},
-		},
-	}}
-
-	data := buildUpFailureJSONData([]string{"api"}, status, func(string) []string { return nil })
-
-	if len(data.FailedResources) != 1 {
-		t.Fatalf("failed_resources = %+v, want one entry", data.FailedResources)
-	}
-	if got := data.FailedResources[0].StateReason; got != "dial tcp 127.0.0.1:8080: connection refused" {
-		t.Fatalf("state_reason = %q, want the health probe error", got)
-	}
-}
-
-func TestBuildUpFailureJSONDataSurvivesMissingStatus(t *testing.T) {
-	data := buildUpFailureJSONData([]string{"api"}, nil, func(string) []string { return nil })
-	if len(data.FailedResources) != 0 {
-		t.Fatalf("failed_resources = %+v, want none without a status snapshot", data.FailedResources)
-	}
-	if !reflect.DeepEqual(data.RequestedResources, []string{"api"}) {
-		t.Fatalf("requested_resources = %+v", data.RequestedResources)
+	for _, tc := range []struct {
+		name          string
+		resources     []daemon.ResourceStatus
+		affected      []string
+		logs          map[string][]string
+		missingStatus bool
+		want          []map[string]any
+	}{
+		{name: "image pull preserves registry and platform diagnostics", affected: []string{"api"},
+			resources: []daemon.ResourceStatus{{Name: "api", State: "degraded", StateReason: "pulling image registry.example/app:1 (platform linux/arm64): registry unavailable"}},
+			want:      []map[string]any{{"name": "api", "kind": "", "state": "degraded", "state_reason": "pulling image registry.example/app:1 (platform linux/arm64): registry unavailable"}}},
+		{name: "only unhealthy requested resources carry evidence", affected: []string{"db", "api", "worker"},
+			resources: []daemon.ResourceStatus{{Name: "db", State: "healthy"}, {Name: "api", State: "degraded", StateReason: "exited with code 1"}, {Name: "worker", State: "pending"}, {Name: "unwatched", State: "degraded", StateReason: "not requested"}},
+			logs:      map[string][]string{"api": {"panic: connection refused", "exit status 1"}},
+			want:      []map[string]any{{"name": "api", "kind": "", "state": "degraded", "state_reason": "exited with code 1", "log_tail": []any{"panic: connection refused", "exit status 1"}}, {"name": "worker", "kind": "", "state": "pending"}}},
+		{name: "exited infra and dependent retain root cause", affected: []string{"db", "api", "worker"},
+			resources: []daemon.ResourceStatus{{Name: "db", Kind: daemon.ResourceKindContainer, Role: "infra", State: "degraded", StateReason: "container exited unexpectedly", FailureKind: "runtime", ExitCode: &exitCode, OOMKilled: true}, {Name: "api", Kind: daemon.ResourceKindService, Role: "backend", State: "pending", PendingDependencies: []string{"db"}}, {Name: "worker", State: "building"}},
+			want:      []map[string]any{{"name": "db", "kind": "container", "role": "infra", "state": "degraded", "state_reason": "container exited unexpectedly", "failure_kind": "runtime", "exit_code": float64(137), "oom_killed": true}, {"name": "api", "kind": "service", "role": "backend", "state": "pending", "state_reason": "waiting for db"}, {"name": "worker", "kind": "", "state": "building"}}},
+		{name: "health probe supplies missing reason", affected: []string{"api"},
+			resources: []daemon.ResourceStatus{{Name: "api", State: "degraded", HealthProgress: &daemon.HealthProgressInfo{LastErr: "connection refused"}}},
+			want:      []map[string]any{{"name": "api", "kind": "", "state": "degraded", "state_reason": "connection refused"}}},
+		{name: "status unavailable preserves requested resources", affected: []string{"api"}, missingStatus: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prepareLifecycleProgressTest(t)
+			t.Setenv("ORBIT_UPDATE_HOME", t.TempDir())
+			if err := os.WriteFile(configFile, []byte("version: \"3\"\nservices:\n  api:\n    command: echo api\n  worker:\n    command: echo worker\ncontainers:\n  db:\n    image: postgres:16\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var started atomic.Bool
+			serveLifecycleProgressDaemon(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/api/health":
+					w.WriteHeader(http.StatusOK)
+				case r.URL.Path == "/api/status":
+					if started.Load() && tc.missingStatus {
+						http.Error(w, "status unavailable", http.StatusServiceUnavailable)
+						return
+					}
+					status := daemon.StatusResponse{ConfigPath: configFile}
+					if started.Load() {
+						status.Resources = tc.resources
+					}
+					daemon.WriteJSON(w, http.StatusOK, status)
+				case r.URL.Path == "/api/up":
+					started.Store(true)
+					daemon.WriteJSON(w, http.StatusOK, daemon.APIResponse{OK: true, AffectedResources: tc.affected})
+				case strings.HasPrefix(r.URL.Path, "/api/logs/"):
+					name := strings.TrimPrefix(r.URL.Path, "/api/logs/")
+					daemon.WriteJSON(w, http.StatusOK, daemon.LogsResponse{Lines: tc.logs[name]})
+				case r.URL.Path == "/api/history/cli-event":
+					w.WriteHeader(http.StatusOK)
+				default:
+					http.NotFound(w, r)
+				}
+			})
+			out, diagnostics, err := executeAppCommand(t, "--config", configFile, "up", "--json", "--timeout", "3s")
+			if err == nil || !started.Load() {
+				t.Fatalf("up was not dispatched and failed as expected: %v\n%s\n%s", err, out, diagnostics)
+			}
+			assertOneLifecycleEnvelope(t, out, false)
+			var envelope struct {
+				Error *struct {
+					Code string `json:"code"`
+				} `json:"error"`
+				Data struct {
+					Operation string           `json:"operation"`
+					Requested []string         `json:"requested_resources"`
+					Failed    []map[string]any `json:"failed_resources"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(out, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.Error == nil || envelope.Error.Code == "" || envelope.Data.Operation != "up" || !reflect.DeepEqual(envelope.Data.Requested, tc.affected) || !reflect.DeepEqual(envelope.Data.Failed, tc.want) {
+				t.Fatalf("lost failure evidence: %s\nwant failed resources: %+v", out, tc.want)
+			}
+			if strings.Count(diagnostics, "collecting failure evidence") > 1 {
+				t.Fatalf("duplicate evidence phase: %s", diagnostics)
+			}
+		})
 	}
 }
 

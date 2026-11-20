@@ -24,6 +24,11 @@ type fakeDaemonHost struct {
 	pm         *process.Manager
 	configPath string
 	updateErr  error
+	resources  []daemon.ResourceContributor
+}
+
+func (h *fakeDaemonHost) AddResourceContributor(contributor daemon.ResourceContributor) {
+	h.resources = append(h.resources, contributor)
 }
 
 func (h *fakeDaemonHost) Config() *config.Config { return h.holder.Load() }

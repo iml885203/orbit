@@ -6,19 +6,6 @@ import (
 	"testing"
 )
 
-func TestHolder_LoadStoreRoundTrip(t *testing.T) {
-	a := &Config{Version: "3"}
-	h := NewHolder(a)
-	if h.Load() != a {
-		t.Fatal("Load must return the stored snapshot")
-	}
-	b := &Config{Version: "4"}
-	h.Store(b)
-	if h.Load() != b {
-		t.Fatal("Store must publish the new snapshot")
-	}
-}
-
 // Concurrent readers against a swapping writer must always observe a
 // complete snapshot — this is the race class the Holder exists to kill
 // (run with -race).
@@ -50,6 +37,9 @@ func TestHolder_ConcurrentLoadStore(t *testing.T) {
 	for gen := 1; gen <= 500; gen++ {
 		cur := h.Load()
 		h.Store(cur.WithContainer("sql-server", &Container{Name: "sql-server", Image: fmt.Sprintf("gen-%d", gen)}))
+	}
+	if got := h.Load().Containers["sql-server"].Image; got != "gen-500" {
+		t.Fatalf("last published snapshot = %q", got)
 	}
 	close(stop)
 	wg.Wait()

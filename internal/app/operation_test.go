@@ -20,25 +20,7 @@ import (
 
 func executeOperationRoot(t *testing.T, args ...string) ([]byte, error) {
 	t.Helper()
-	oldArgs, oldConfig, oldGiven, oldKind, oldInstance := os.Args, configFile, configFlagGiven, configContextKind, instanceName
-	oldJSON, oldStart := cli.JSONOutput, cli.StartCommand
-	oldID, oldAt, oldCommand := cliHistID, cliHistAt, cliHistCmd
-	defer func() {
-		os.Args, configFile, configFlagGiven, configContextKind, instanceName = oldArgs, oldConfig, oldGiven, oldKind, oldInstance
-		cli.JSONOutput, cli.StartCommand = oldJSON, oldStart
-		cliHistID, cliHistAt, cliHistCmd = oldID, oldAt, oldCommand
-	}()
-	os.Args = append([]string{"orbit"}, args...)
-	restore := captureLifecycleProcessStreams(t)
-	defer restore()
-	root := newRootCommand()
-	root.SetArgs(args)
-	err := root.ExecuteContext(t.Context())
-	if err != nil {
-		err = contextualizeDaemonUnavailable(err)
-		printExecutionError(os.Stderr, err)
-	}
-	out, _ := restore()
+	out, _, err := executeAppCommand(t, args...)
 	return out, err
 }
 

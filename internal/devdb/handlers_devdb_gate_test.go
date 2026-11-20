@@ -56,6 +56,7 @@ func TestDBWorkflowGate_RejectsWhenNoSQLServer(t *testing.T) {
 }
 
 func TestDBWorkflowGate_MetaReportsConfigured(t *testing.T) {
+	t.Setenv("ORBIT_NAMESPACE", "sandbox")
 	for _, tc := range []struct {
 		name        string
 		cfg         *config.Config
@@ -82,6 +83,13 @@ func TestDBWorkflowGate_MetaReportsConfigured(t *testing.T) {
 		}
 		if *meta.DBConfigured != tc.want {
 			t.Errorf("%s: db_configured = %v, want %v", tc.name, *meta.DBConfigured, tc.want)
+		}
+		wantTarget := ""
+		if tc.wantService != "" {
+			wantTarget = "orbit-sandbox-" + tc.wantService
+		}
+		if meta.SQLServerTarget != wantTarget {
+			t.Fatalf("%s: SQL target = %q, want %q", tc.name, meta.SQLServerTarget, wantTarget)
 		}
 		if meta.SQLServerService != tc.wantService {
 			t.Errorf("%s: sql_server_service = %q, want %q", tc.name, meta.SQLServerService, tc.wantService)

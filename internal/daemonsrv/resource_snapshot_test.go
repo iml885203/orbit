@@ -1,67 +1,159 @@
 package daemonsrv
 
 import (
+	"context"
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/engine"
 )
 
-func TestSnapshotWorkloads_MapsStatusAndDependencies(t *testing.T) {
+func TestResourcesAggregatesRuntimeDependenciesAndFeatureContributors(t *testing.T) {
+	probe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
+	defer probe.Close()
+	_, portText, err := net.SplitHostPort(strings.TrimPrefix(probe.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := &config.Config{
-		Containers: map[string]*config.Container{
-			"redis": {Name: "redis"},
-		},
-		Services: map[string]*config.Service{
-			"api": {Name: "api", DependsOn: []string{"redis"}},
-		},
+		Containers: map[string]*config.Container{"redis": {Name: "redis", Image: "redis:7.4", Ports: map[string]config.PortDef{"redis": {Host: 36379, Target: 6379}}}},
+		Services:   map[string]*config.Service{"api": {Name: "api", DependsOn: []string{"redis"}, URL: "http://localhost:3000"}},
 	}
-	statuses := []ResourceStatus{
-		{Name: "redis", Kind: "container", State: "healthy", Image: "redis:7.4", Ports: map[string]int{"redis": 36379}},
-		{Name: "api", Kind: "service", State: "degraded", StateReason: "health check failed", FailureKind: "health",
-			URL: "http://localhost:3000", RestartCount: 2,
-			HealthProgress: &HealthProgressInfo{Attempts: 12, MaxRetries: 12, Recovering: true}},
+	srv := newTestServer(t, cfg)
+	o := srv.app.Orchestrator
+	o.OnStartProcess = func(context.Context, string, int, *config.Config, *config.Service) error { return nil }
+	o.OnStopProcess = func(string) error { return nil }
+	o.OnHealthCheck = func(context.Context, string, int) error { return nil }
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = o.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("event loop leaked")
+		}
+	})
+	o.OnContainerSeen("redis", true)
+	o.Start([]string{"api"})
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		info, _ := o.GetServiceInfo("api")
+		if info.State == engine.StateStarting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("api never started")
+		}
+		time.Sleep(time.Millisecond)
 	}
-
-	out := snapshotWorkloads(dependencyMap(cfg), statuses)
-	if len(out) != 2 {
-		t.Fatalf("got %d resources, want 2", len(out))
+	for range 2 {
+		if err := o.RestartService(ctx, "api"); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			info, _ := o.GetServiceInfo("api")
+			if info.State == engine.StateStarting {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("api never restarted")
+			}
+			time.Sleep(time.Millisecond)
+		}
 	}
-
-	redis := out[0]
-	if redis.Type != "container" || redis.State != "healthy" || redis.Properties["image"] != "redis:7.4" {
-		t.Errorf("redis snapshot wrong: %+v", redis)
+	if err := srv.app.HealthChecker.WaitForHealthy(ctx, "api", &config.HealthCheckConfig{Type: "http", Port: port, Path: "/health", Retries: 1, Interval: time.Millisecond}, nil); err == nil {
+		t.Fatal("failed health probe accepted")
 	}
-	if redis.Properties["port:redis"] != "36379" {
-		t.Errorf("expected port property, got %v", redis.Properties)
+	srv.app.HealthChecker.MarkRecovering("api", 0)
+	info, _ := o.GetServiceInfo("api")
+	o.Events() <- engine.Event{Type: engine.EventHealthFail, Service: "api", Generation: info.Generation, Message: "health check failed", FailureKind: engine.FailureKindHealth}
+	for {
+		info, _ = o.GetServiceInfo("api")
+		if info.State == engine.StateDegraded {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("health failure never reached status")
+		}
+		time.Sleep(time.Millisecond)
 	}
-
-	api := out[1]
-	if api.Type != "service" || api.StateReason != "health check failed" || api.FailureKind != "health" {
-		t.Errorf("api snapshot wrong: %+v", api)
+	srv.AddResourceContributor(func(context.Context) []ResourceSnapshot {
+		return []ResourceSnapshot{{Name: "CatalogDB", Type: "database", Parent: "redis", State: "baseline"}}
+	})
+	response := httptest.NewRecorder()
+	srv.handleResources(response, httptest.NewRequest(http.MethodGet, "/api/resources", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("resources: %d %s", response.Code, response.Body.String())
 	}
-	if len(api.DependsOn) != 1 || api.DependsOn[0] != "redis" {
-		t.Errorf("expected depends_on [redis], got %v", api.DependsOn)
+	var result ResourcesResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
 	}
-	if len(api.URLs) != 1 || api.URLs[0] != "http://localhost:3000" {
-		t.Errorf("expected url, got %v", api.URLs)
+	if result.SchemaVersion != ResourceSchemaVersion || len(result.Resources) != 3 {
+		t.Fatalf("resources: %+v", result)
+	}
+	resources := map[string]ResourceSnapshot{}
+	for _, resource := range result.Resources {
+		resources[resource.Name] = resource
+	}
+	redis, api := resources["redis"], resources["api"]
+	if redis.Type != "container" || redis.State != "healthy" || redis.Properties["image"] != "redis:7.4" || redis.Properties["port:redis"] != "36379" {
+		t.Fatalf("container runtime: %+v", redis)
+	}
+	if api.Type != "service" || api.StateReason != "health check failed" || api.FailureKind != "health" || strings.Join(api.DependsOn, ",") != "redis" || strings.Join(api.URLs, ",") != "http://localhost:3000" {
+		t.Fatalf("service runtime: %+v", api)
 	}
 	if api.Properties["restarts"] != "2" {
-		t.Errorf("expected restarts property, got %v", api.Properties)
+		t.Fatalf("restart count lost: %+v", api.Properties)
 	}
-	if api.Health == nil || !api.Health.Recovering {
-		t.Errorf("expected health progress with recovering, got %+v", api.Health)
+	if api.Health == nil || !api.Health.Recovering || api.Health.Attempts != 1 || api.Health.MaxRetries != 1 {
+		t.Fatalf("health progress: %+v", api.Health)
 	}
-}
+	if result.Resources[2].Name != "CatalogDB" || result.Resources[2].Parent != "redis" {
+		t.Fatalf("feature resource ordering: %+v", result.Resources)
+	}
+	o.Events() <- engine.Event{Type: engine.EventProcessExited, Service: "api", Generation: info.Generation, Message: "exited: exit status 1", Evidence: "application failed"}
+	for {
+		info, _ = o.GetServiceInfo("api")
+		if info.FailureEvidence != "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("process evidence never reached status")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	response = httptest.NewRecorder()
+	srv.handleResources(response, httptest.NewRequest(http.MethodGet, "/api/resources", nil))
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, resource := range result.Resources {
+		if resource.Name == "api" {
+			found = true
+			if resource.StateReason != "exited: exit status 1 — application failed" {
+				t.Fatalf("lost failure evidence: %+v", resource)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("api disappeared from resources after process exit")
+	}
 
-func TestResourceFailureSummaryKeepsLifecycleCauseAndEvidence(t *testing.T) {
-	status := ResourceStatus{
-		StateReason:     "exited: exit status 1",
-		FailureEvidence: "ModuleNotFoundError: No module named 'humanize'",
-	}
-	want := "exited: exit status 1 — ModuleNotFoundError: No module named 'humanize'"
-	if got := resourceFailureSummary(status); got != want {
-		t.Fatalf("summary = %q, want %q", got, want)
-	}
 }
 
 func TestSortResources_ParentsFirstDeterministic(t *testing.T) {

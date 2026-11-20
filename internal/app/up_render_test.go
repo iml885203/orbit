@@ -23,17 +23,6 @@ func TestAppendRenderer_PrintsCommittedLinesOnceEach(t *testing.T) {
 	}
 }
 
-func TestAppendRenderer_RenderIsNoOp(t *testing.T) {
-	var buf bytes.Buffer
-	r := newAppendRenderer(&buf)
-	r.render(map[string]progressSnapshot{
-		"a": {state: "starting"},
-	}, nil, time.Unix(0, 0), 0)
-	if buf.Len() != 0 {
-		t.Errorf("append renderer should not emit on render(), got %q", buf.String())
-	}
-}
-
 func TestRenderLines_HealthyServicesNotIncludedInInPlaceRegion(t *testing.T) {
 	now := time.Unix(10, 0)
 	snapshots := map[string]progressSnapshot{

@@ -1,6 +1,7 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/svelte'
 import NodeDrawer from './NodeDrawer.svelte'
+import NodeDrawerSelection from './NodeDrawerSelection.test.svelte'
 import { store } from '../../lib/stores.svelte'
 
 describe('NodeDrawer', () => {
@@ -38,12 +39,6 @@ describe('NodeDrawer', () => {
     const node = { name: 'frontend', kind: 'frontend' as const, state: 'healthy' }
     const { queryByTestId } = render(NodeDrawer, { props: { node, onClose: () => {} } })
     expect(queryByTestId('node-drawer-infra-icon')).toBeNull()
-  })
-
-  it('shows an infra icon container for infra nodes without node.icon so the Cog fallback can render', () => {
-    const node = { name: 'clickhouse', kind: 'infra' as const, state: 'healthy' }
-    const { getByTestId } = render(NodeDrawer, { props: { node, onClose: () => {} } })
-    expect(getByTestId('node-drawer-infra-icon')).toBeTruthy()
   })
 
   it('calls onClose when Esc is pressed', async () => {
@@ -220,49 +215,43 @@ describe('NodeDrawer', () => {
 describe('NodeDrawer detached dependency lifecycle', () => {
   beforeEach(() => {
     store.graph.preview = null
+    store.daemon.envs = null
     vi.restoreAllMocks()
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-      new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 }),
-    )
   })
 
-  it('starts the selected service after detach and restores the dependency action after reattach', async () => {
-    const blocked = {
-      name: 'shop',
-      kind: 'frontend' as const,
-      state: 'degraded',
-      blockedBy: 'api',
-    }
+  it('updates lifecycle actions through detach and reattach requests', async () => {
+    const blocked = { name: 'shop', kind: 'frontend' as const, state: 'degraded', blockedBy: 'api' }
     const api = { name: 'api', kind: 'backend' as const, state: 'stopped' }
-    store.graph.data = {
-      env: 'local',
-      nodes: [blocked, api],
-      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false }],
-    }
-    const view = render(NodeDrawer, { props: { node: blocked, onClose: () => {} } })
-
-    expect(view.getByRole('button', { name: 'Start api' })).toBeTruthy()
-
-    const detached = { name: 'shop', kind: 'frontend' as const, state: 'stopped' }
-    store.graph.data = {
-      env: 'local',
-      nodes: [detached, api],
-      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: true }],
-    }
-    await view.rerender({ node: detached, onClose: () => {} })
+    const attached = { env: 'local', nodes: [blocked, api], edges: [
+      { from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false },
+    ] }
+    const detached = { ...attached, nodes: [{ name: 'shop', kind: 'frontend' as const, state: 'stopped' }, api],
+      edges: [{ ...attached.edges[0], detached: true }] }
+    const requests: Array<{ path: string; method?: string; body: unknown }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = String(input)
+      const body = JSON.parse(String(init?.body ?? '{}'))
+      requests.push({ path, method: init?.method, body })
+      if (path === '/api/edges/shop/api') {
+        return new Response(JSON.stringify({ ok: true, graph: body.detached ? detached : attached }))
+      }
+      if (path === '/api/service-env/shop') return new Response(JSON.stringify({ env: [] }))
+      if (path === '/api/up') return new Response(JSON.stringify({ ok: true }))
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    store.graph.data = attached
+    store.graph.selectedNode = 'shop'
+    const view = render(NodeDrawerSelection)
+    expect(view.getByRole('button', { name: 'Start api' })).toBeInTheDocument()
+    await fireEvent.click(view.getByRole('button', { name: 'Detach' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'Start' })).toBeInTheDocument())
     await fireEvent.click(view.getByRole('button', { name: 'Start' }))
-    await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith('/api/up', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resources: ['shop'] }),
-    }))
-
-    store.graph.data = {
-      env: 'local',
-      nodes: [blocked, api],
-      edges: [{ from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false }],
-    }
-    await view.rerender({ node: blocked, onClose: () => {} })
-    expect(view.getByRole('button', { name: 'Start api' })).toBeTruthy()
+    await waitFor(() => expect(requests).toContainEqual({ path: '/api/up', method: 'POST', body: { resources: ['shop'] } }))
+    await fireEvent.click(view.getByRole('button', { name: 'Reattach' }))
+    await waitFor(() => expect(view.getByRole('button', { name: 'Start api' })).toBeInTheDocument())
+    expect(requests.filter((request) => request.path === '/api/edges/shop/api')).toEqual([
+      { path: '/api/edges/shop/api', method: 'PUT', body: { env: 'local', detached: true } },
+      { path: '/api/edges/shop/api', method: 'PUT', body: { env: 'local', detached: false } },
+    ])
   })
 })

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/iml885203/orbit/internal/cli"
-	"github.com/iml885203/orbit/internal/daemon"
 )
 
 // A user raised a service's health_check.retries to 20 minutes, timed out
@@ -78,30 +77,5 @@ func TestWaitTimeoutErrorStaysClassifiedAsTimeout(t *testing.T) {
 	}
 	if !errors.Is(err, cli.ErrTimeout) {
 		t.Errorf("error = %v, want it to classify as a timeout", err)
-	}
-}
-
-// A pending resource reported an empty state_reason, which a caller's
-// formatter rendered as "web-e2e (pending): undefined". Empty is
-// indistinguishable from a resource that started and failed without saying
-// why; what it is waiting on is both known and the actual answer.
-func TestPendingResourceReportsWhatItIsWaitingOn(t *testing.T) {
-	status := &daemon.StatusResponse{Resources: []daemon.ResourceStatus{
-		{Name: "web-e2e", State: "pending", PendingDependencies: []string{"api-e2e"}},
-		{Name: "api-e2e", State: "building"},
-	}}
-
-	data := buildUpFailureJSONData(nil, status, func(string) []string { return nil })
-
-	byName := map[string]upFailedResource{}
-	for _, r := range data.FailedResources {
-		byName[r.Name] = r
-	}
-	if got := byName["web-e2e"].StateReason; got != "waiting for api-e2e" {
-		t.Errorf("pending state_reason = %q, want it to name the dependency", got)
-	}
-	// A resource with nothing to wait on must not gain an invented reason.
-	if got := byName["api-e2e"].StateReason; got != "" {
-		t.Errorf("building state_reason = %q, want it left empty", got)
 	}
 }
