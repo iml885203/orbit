@@ -11,6 +11,16 @@ import (
 	"github.com/iml885203/orbit/internal/config"
 )
 
+func startQueuedService(ctx context.Context, o *Orchestrator, name string) error {
+	o.Start([]string{name})
+	select {
+	case evt := <-o.events:
+		return o.handleEvent(ctx, evt)
+	default:
+		return nil
+	}
+}
+
 // testOrchestrator creates an orchestrator with noop callbacks for testing.
 func testOrchestrator(cfg *config.Config) *Orchestrator {
 	o := NewOrchestrator(config.NewHolder(cfg), nil, nil)
@@ -409,7 +419,7 @@ func TestStartService_TransitionsToStarting(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := o.startService(ctx, "api")
+	err := startQueuedService(ctx, o, "api")
 	if err != nil {
 		t.Fatalf("startService error: %v", err)
 	}
@@ -449,7 +459,7 @@ func TestStartService_SkipsAlreadyRunning(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_ = o.startService(ctx, "api")
+	_ = startQueuedService(ctx, o, "api")
 
 	if called {
 		t.Error("OnStartProcess should not be called for already healthy service")

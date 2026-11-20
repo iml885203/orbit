@@ -60,6 +60,10 @@ Orchestrator 跑一條 goroutine，從 buffered channel 消費事件。事件定
 
 （`EventServiceLog` 載著一行擷取到的 stdout/stderr。它走同一個 loop 派發，但不觸發任何狀態轉換 —— 它會廣播給 log 訂閱者（SSE、`orbit logs`），所以上面的轉換表沒有列它。）
 
+排入佇列的相依就緒工作只屬於當次 pending 啟動意圖。Orchestrator 在同一個
+鎖定區間內確認意圖仍有效、資源仍存在且處於 pending，以及目前相依都已就緒，
+才會啟動資源。停止、移除或新的啟動意圖會讓舊工作失效，包含舊相依等待者送出的通知。
+
 事件本身不會直接改 state —— 它們會被 dispatch 給 orchestrator，由 orchestrator 同步套用 transition。這樣 state machine 維持單執行緒，race condition 也比較好推理。
 
 ## Startup sequence

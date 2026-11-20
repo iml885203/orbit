@@ -33,7 +33,7 @@ func TestHealthCheck_StopsWhenServiceCancelled(t *testing.T) {
 		return nil
 	}
 
-	if err := o.startService(context.Background(), "api"); err != nil {
+	if err := startQueuedService(context.Background(), o, "api"); err != nil {
 		t.Fatalf("startService: %v", err)
 	}
 
@@ -88,10 +88,10 @@ func TestHealthCheck_RootCtxStillLive_AfterServiceStopped(t *testing.T) {
 	root, cancelRoot := context.WithCancel(context.Background())
 	defer cancelRoot()
 
-	if err := o.startService(root, "api"); err != nil {
+	if err := startQueuedService(root, o, "api"); err != nil {
 		t.Fatalf("startService api: %v", err)
 	}
-	if err := o.startService(root, "other"); err != nil {
+	if err := startQueuedService(root, o, "other"); err != nil {
 		t.Fatalf("startService other: %v", err)
 	}
 	// Drain both HC invocations.

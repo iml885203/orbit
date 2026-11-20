@@ -101,11 +101,12 @@ func (e EventType) String() string {
 
 // Event is sent through the orchestrator event channel.
 type Event struct {
-	Type     EventType
-	Service  string
-	Message  string
-	Evidence string
-	Err      error
+	pendingStart uint64
+	Type         EventType
+	Service      string
+	Message      string
+	Evidence     string
+	Err          error
 	// FailureKind identifies the source of EventHealthFail. That legacy event
 	// name also carries startup and lifecycle failures, so consumers must not
 	// infer that every sender represents a health probe.
@@ -159,6 +160,7 @@ type ContainerExit struct {
 
 // ServiceInfo holds runtime state for a single service/container.
 type ServiceInfo struct {
+	pendingStart uint64
 	Name         string
 	Kind         string // "container" or "service"
 	State        ServiceState
@@ -359,6 +361,9 @@ func (i *ServiceInfo) Transition(to ServiceState) {
 		i.stateChangedAt = time.Now()
 	}
 	i.State = to
+	if to != StatePending {
+		i.pendingStart = 0
+	}
 	if to != StateDegraded {
 		// Reasons describe a degradation; entering any other state
 		// invalidates them. Callers set StateReason right after a

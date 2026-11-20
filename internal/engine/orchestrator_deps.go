@@ -23,11 +23,11 @@ func (o *Orchestrator) notifyDependents(readyService string) {
 	defer o.mu.Unlock()
 
 	for name, info := range o.services {
-		if info.MarkDependencyReady(readyService) {
-			// All deps ready — schedule start
-			go func(n string) {
-				o.events <- Event{Type: EventDepsReady, Service: n}
-			}(name)
+		if info.State == StatePending && info.MarkDependencyReady(readyService) {
+			evt := Event{Type: EventDepsReady, Service: name, pendingStart: info.pendingStart}
+			go func() {
+				o.events <- evt
+			}()
 		}
 	}
 }

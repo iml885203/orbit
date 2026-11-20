@@ -61,6 +61,11 @@ The orchestrator runs a single goroutine that consumes events from a buffered ch
 
 (`EventServiceLog` carries a captured stdout/stderr line. It is dispatched through the same loop but triggers no state transition — it is broadcast to log subscribers (SSE, `orbit logs`), which is why it is absent from the transition table above.)
 
+Queued dependency-ready work belongs to one pending startup intent. The orchestrator
+validates that intent, resource existence, pending state and current dependency
+readiness together before starting a resource. Stop, removal or a replacement
+startup invalidates older work, including notifications from dependency waiters.
+
 Events never mutate state directly — they are dispatched to the orchestrator which applies transitions synchronously. This keeps the state machine single-threaded and makes reasoning about races tractable.
 
 ## Startup sequence

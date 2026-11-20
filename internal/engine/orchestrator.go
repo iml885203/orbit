@@ -13,12 +13,14 @@ type Orchestrator struct {
 	// holder is the shared immutable-config publisher. Operations Load()
 	// one snapshot each (per start, per event). Config reconciliation swaps
 	// the services map and DepGraph under their owning locks with the holder.
-	holder     *config.Holder
-	services   map[string]*ServiceInfo
-	events     chan Event
-	depGraph   *DepGraph
-	depGraphMu sync.RWMutex
-	mu         sync.RWMutex
+	holder   *config.Holder
+	services map[string]*ServiceInfo
+	// IDs survive removal so queued work cannot match a same-name replacement.
+	nextPendingStart uint64
+	events           chan Event
+	depGraph         *DepGraph
+	depGraphMu       sync.RWMutex
+	mu               sync.RWMutex
 
 	// Callbacks set by the application
 	// OnStartContainer reports the runtime it starts or adopts through

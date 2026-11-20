@@ -10,12 +10,18 @@ const DockerObservationUnavailableReason = "Docker is unavailable; Orbit will re
 
 const containerExitedReason = "container exited unexpectedly"
 
-func (o *Orchestrator) startService(ctx context.Context, name string) error {
+func (o *Orchestrator) startService(ctx context.Context, evt Event) error {
+	name := evt.Service
 	o.mu.Lock()
-	info := o.services[name]
-	if info.State == StateHealthy || info.State == StateStarting {
+	info, exists := o.services[name]
+	if !exists || info.State != StatePending || info.pendingStart == 0 || info.pendingStart != evt.pendingStart {
 		o.mu.Unlock()
-		return nil // already running or starting, skip
+		return nil
+	}
+	info.PendingDeps = o.calcPendingDeps(o.holder.Load(), name)
+	if len(info.PendingDeps) != 0 {
+		o.mu.Unlock()
+		return nil
 	}
 	// Order matters: cancel any old lifecycle ctx before installing the
 	// new ctx/cancel, then run Transition. If a future change makes
@@ -86,7 +92,7 @@ func (o *Orchestrator) Start(names []string) {
 	// requested service must come from the same config generation.
 	cfg := o.holder.Load()
 	o.mu.Lock()
-	var ready []string
+	var ready []Event
 	for _, name := range names {
 		info, exists := o.services[name]
 		if !exists {
@@ -96,15 +102,17 @@ func (o *Orchestrator) Start(names []string) {
 			continue
 		}
 		info.Transition(StatePending)
+		o.nextPendingStart++
+		info.pendingStart = o.nextPendingStart
 		info.PendingDeps = o.calcPendingDeps(cfg, name)
 		if len(info.PendingDeps) == 0 {
-			ready = append(ready, name)
+			ready = append(ready, Event{Type: EventDepsReady, Service: name, pendingStart: info.pendingStart})
 		}
 	}
 	o.mu.Unlock()
 
-	for _, name := range ready {
-		o.events <- Event{Type: EventDepsReady, Service: name}
+	for _, evt := range ready {
+		o.events <- evt
 	}
 }
 
@@ -440,13 +448,16 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	o.mu.Lock()
 	info = o.services[name]
 	info.Transition(StatePending)
+	o.nextPendingStart++
+	info.pendingStart = o.nextPendingStart
 	info.PendingDeps = o.calcPendingDeps(o.holder.Load(), name)
 	info.MarkRestart()
 	ready := len(info.PendingDeps) == 0
+	evt := Event{Type: EventDepsReady, Service: name, pendingStart: info.pendingStart}
 	o.mu.Unlock()
 
 	if ready {
-		o.events <- Event{Type: EventDepsReady, Service: name}
+		o.events <- evt
 	}
 	return nil
 }

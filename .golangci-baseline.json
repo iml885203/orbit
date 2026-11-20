@@ -1927,15 +1927,6 @@
       "count": 1
     },
     {
-      "path": "internal/engine/app.go",
-      "rule": "gocritic",
-      "message": "rangeValCopy: each iteration copies 376 bytes (consider pointers or indexing)",
-      "scope": "func (a *App) newPoller(cfg *config.Config, orch *Orchestrator) *container.Poller {",
-      "source": "for _, svc := range orch.GetAllServices() {",
-      "metric": null,
-      "count": 1
-    },
-    {
       "path": "internal/health/http_protocol_test.go",
       "rule": "bodyclose",
       "message": "response body must be closed",
