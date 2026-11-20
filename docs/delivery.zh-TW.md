@@ -109,3 +109,79 @@ manifest 會失敗；不會把較新套件降版。歷史 parent run 保留原�
 結果與耗盡次數也會明確失敗。Discovery 有獨立的有限次數；兩條路徑都不會
 重試 dispatch。若 dispatch 回應遺失，先檢查已接受的工作，再選 existing run
 ID；不要直接重做更新。
+
+### 保留套件觀測結果
+
+Homebrew 與 Scoop jobs 會保留七天的 observer artifact，名稱為
+`package-observation-<channel>-<Orbit run ID>-<attempt>`。它記錄選了哪個 updater，
+以及觀測成功或停止的原因。`success` 只代表 **updater 成功**；immutable release
+及目前 formula／manifest 仍各有獨立 gate。若前置 gate 在 observer 啟動前失敗，
+可能沒有結果 artifact。
+
+![先記錄派送意圖，再核對所選 run 身份，updater 成功與套件管道驗證各自獨立](./assets/package-observation.svg)
+
+本機觀測可選擇設定 `SYNC_RESULT_PATH`，指向已配置 task storage 裡的檔案。
+未設定時保留既有 logs 與 exit 行為。Composite action 的可選 `result_path`
+會提供這個環境變數。只上傳 JSON；旁邊的 lock 與暫存檔不會上傳。
+
+若要接續保留的結果，從 **確切** Orbit run 下載 **確切名稱** 的 artifact 到已配置
+的 task workspace。使用包含此 helper 的 checkout：
+
+```bash
+gh run download ORBIT_RUN_ID --repo iml885203/orbit \
+  --name package-observation-scoop-ORBIT_RUN_ID-ATTEMPT --dir /path/to/task/restored
+REPOSITORY=iml885203/scoop-bucket VERSION=v1.5.1 \
+  SYNC_RESULT_PATH=/path/to/task/restored/package-observation-scoop.json \
+  .github/actions/sync-package-repository/sync.sh
+```
+
+先讓 `gh` 取得套件 repository 權限，例如在環境中設定 `GH_TOKEN`。不要把憑證
+放進 JSON。下載不會自動接續 job；上述明確的本機執行會驗證檔案，再遠端核對
+所選 run，不會派送或搜尋另一個 run。即使目前 Orbit run／attempt 不同，也會
+保留原派送 correlation 及完整 title 核對。檔案中的 `identity_verified` 不能
+替代新一次核對。
+
+若派送可能已接受、但尚未選到 run ID，helper 會拒絕再次派送。先檢查已接受的
+工作，再設定 `EXISTING_RUN_ID` 接續確切 updater；衝突 ID 在網路呼叫前即失敗。
+前述 hosted workflow 的 `existing_run_id` recovery 不需要 artifact，保存期限
+過後仍可使用。Artifact 不代表跨 job 自動 restore。
+
+#### 維護者結果契約
+
+`docs/delivery.md` 擁有 `orbit.package-observation.v1`。此維護者 schema 與
+`orbit.cli.v1` 獨立，不能授權 release 或套件 promotion。
+
+| 欄位 | 意義 |
+| --- | --- |
+| `schema`, `repository`, `version` | Schema 名稱與確切套件／release |
+| `producer` | 原派送 `run_id`、`attempt`（以連字號組合成 correlation）；直接 existing-run recovery 為 null |
+| `state`, `reason_code` | 目前觀測階段與下列穩定原因 |
+| `dispatch_acknowledged` | 派送回覆成功，不代表 updater 身份已核對 |
+| `selected_run` | 正整數十進位 `id` 與本機建立的 canonical `url`，或 null |
+| `identity_verified` | 目前階段通過身份核對；restore 不會信任此值 |
+| `observation` | Allowlist 中的 updater `status`／`conclusion`，或 null |
+| `mismatches` | 欄位名稱、預期規則代號與安全觀測標記 |
+| `started_at`, `observed_at` | UTC 時間；restore 保留原起始時間 |
+| `recovery` | 安全的下一步 `action` 與已選 `run_id`（若有） |
+
+State 包含 `dispatch`、`selected`（未驗證）、`accepted`（已核對身份）、
+`observing`、`success`、`failure`、`identity_mismatch`。Reason 包含
+`dispatch_pending`、`dispatch_unknown`、`selected_unverified`、`accepted`、
+`observing`、`updater_success`、`updater_failed`、`identity_mismatch`、
+`observation_exhausted`、`request_denied`、`invalid_response`、
+`discovery_exhausted`、`budget_exhausted`。Recovery action 為
+`observe_existing_run`、`inspect_dispatch`、`inspect_failure`、`none`。
+
+Mismatch 欄位為 `id`、`repository`、`path`、`head_branch`、`event`、
+`display_title`；對應的 expected 規則依序為 `selected_run_id`、
+`requested_repository`、`update_workflow`、`main_branch`、`dispatch_event`、
+`dispatch_title`。Observed 只能是 `different`、`missing`、`invalid_type`、
+`oversize`，即使很短也不會複製原始不符字串。結果不含原始 API body、任意
+stderr、憑證或簽名 URL。
+
+輸入在 JSON 解析 **之前** 限制為 16 KiB；輸出在 JSON escaping 與 UTF-8 編碼
+**之後** 也有相同限制。外部操作前先驗證固定格式、身份與 state，只以已知欄位
+原子替換檔案。頂層未知輸入欄位會忽略且不會重新輸出。本機 file lock 防止同一路徑同時寫入。Checkpoint 驗證失敗會保留
+原檔；應檢查錯誤，不把它當 updater 結果。寫入錯誤會明確失敗；派送前寫入失敗
+就不派送。若派送後儲存故障，log 中的確切 updater URL 可能是僅存的 recovery
+證據；磁碟故障後無法保證持久保存。既有重試與 deadline 不變。

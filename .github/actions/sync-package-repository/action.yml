@@ -14,6 +14,10 @@ inputs:
     description: Accepted updater run to verify without dispatching another update
     required: false
     default: ""
+  result_path:
+    description: Optional bounded observation result and explicit local checkpoint path
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -22,5 +26,6 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         REPOSITORY: ${{ inputs.repository }}
         VERSION: ${{ inputs.version }}
+        SYNC_RESULT_PATH: ${{ inputs.result_path }}
         EXISTING_RUN_ID: ${{ inputs.existing_run_id }}
       run: "$GITHUB_ACTION_PATH/sync.sh"
