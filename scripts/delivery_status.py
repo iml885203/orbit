@@ -13,6 +13,7 @@ import sys
 import zipfile
 
 import candidate
+import native_checks
 from dev_check import validate_workspace, workspace_lock, write_json
 
 REQUIRED_CI = ('go-lint', 'preflight', 'supply-chain', 'installed-user-journeys', 'dotnet-journey', 'native-gate')
@@ -103,13 +104,76 @@ def ci_evidence(repository, commit, event, require=False):
     proof = {'run_id': run['id'], 'attempt': run['run_attempt'], 'commit': commit, 'status': run['status'],
              'conclusion': run['conclusion'], 'jobs': jobs, 'url': run['html_url']}
     try:
+        proof['native_coverage'] = native_coverage(repository, run, jobs)
         require_success(run, jobs, REQUIRED_CI)
+        if proof['native_coverage']['state'] != 'passed':
+            raise ValueError('native coverage evidence is incomplete')
         proof['gate_state'] = 'passed'
     except ValueError as error:
         proof['gate_state'] = 'pending' if run['status'] != 'completed' else 'blocked'
         proof['gate_detail'] = str(error)
         if require:
             raise
+    return proof
+
+
+def small_artifact_record(repository, metadata, filename):
+    if metadata['expired'] or metadata['size_in_bytes'] > 2 * 1024 * 1024:
+        raise ValueError('artifact record is expired or exceeds limit')
+    archive = api('repos/' + repository + '/actions/artifacts/' + str(metadata['id']) + '/zip', binary=True)
+    if len(archive) > 2 * 1024 * 1024 or metadata.get('digest') != 'sha256:' + hashlib.sha256(archive).hexdigest():
+        raise ValueError('artifact record archive digest mismatch')
+    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+        entries = bundle.infolist()
+        if len(entries) != 1 or entries[0].filename != filename or entries[0].file_size > 1024 * 1024:
+            raise ValueError('unexpected artifact record archive')
+        return json.loads(bundle.read(entries[0]))
+
+
+def native_coverage(repository, run, jobs):
+    artifacts = pages('repos/' + repository + '/actions/runs/' + str(run['id']) + '/artifacts', 'artifacts')
+    selected = [a for a in artifacts if a['name'] == 'orbit-native-plan-' + str(run['id'])]
+    observed = {row['name'] for row in jobs if row['name'] in
+                {'native / ' + p['name'] for p in native_checks.PLATFORMS}}
+    if selected:
+        if len(selected) != 1:
+            raise ValueError('ambiguous native coverage plan')
+        value = small_artifact_record(repository, selected[0], 'native-plan.json')
+        if not isinstance(value, dict):
+            raise ValueError('native coverage plan must be an object')
+        profile = value.get('profile')
+        if (value.get('schema') != 'orbit.native-impact.v1' or value.get('repository') != repository
+                or value.get('run_id') != str(run['id']) or value.get('head_commit') != run['head_sha']
+                or not isinstance(value.get('commit'), str) or not re.fullmatch(r'[0-9a-f]{40}', value['commit'])
+                or (run.get('event') == 'push' and value['commit'] != run['head_sha'])
+                or value.get('targets') != native_checks.targets(profile)
+                or value.get('required') is not (profile != 'none')
+                or not isinstance(value.get('reason'), str) or not value['reason']):
+            raise ValueError('native coverage plan does not match observed run')
+        proof = {'state': 'planned', 'profile': profile, 'targets': value['targets'], 'commit': value['commit'],
+                 'reason': value['reason'], 'source': 'verified current-run native plan artifact'}
+    elif run['status'] != 'completed':
+        return {'state': 'pending', 'reason': 'coverage plan has not been produced'}
+    elif observed == {'native / ' + p['name'] for p in native_checks.PLATFORMS}:
+        profile = 'full'
+        proof = {'state': 'legacy', 'profile': profile, 'targets': native_checks.targets(profile),
+                 'reason': 'legacy full matrix; no profile plan recorded', 'source': 'actual native job inventory'}
+    elif not observed and not any(j['name'] == 'candidate / produce' for j in jobs):
+        profile = 'none'
+        proof = {'state': 'legacy', 'profile': profile, 'targets': [],
+                 'reason': 'legacy documentation no-op; native gate remains required', 'source': 'actual job inventory'}
+    else:
+        raise ValueError('native coverage plan is missing for a partial matrix')
+    expected = {'native / ' + p['name'] for p in native_checks.PLATFORMS if p['target'] in proof['targets']}
+    proof['observed_jobs'] = sorted(observed)
+    if run['status'] == 'completed' and run['conclusion'] == 'success':
+        if observed != expected:
+            raise ValueError('actual native jobs do not match the planned target set')
+        names = ['native-impact'] + sorted(expected)
+        if profile != 'none':
+            names.append('candidate / produce')
+        require_success(run, jobs, names)
+        proof['state'] = 'passed'
     return proof
 
 
@@ -123,14 +187,7 @@ def tiny_identity(repository, run):
         return {'state': 'expired', 'identity_artifact_id': metadata['id']}
     if metadata['size_in_bytes'] > 2 * 1024 * 1024:
         raise ValueError('candidate identity artifact exceeds limit')
-    archive = api('repos/' + repository + '/actions/artifacts/' + str(metadata['id']) + '/zip', binary=True)
-    if len(archive) > 2 * 1024 * 1024 or metadata.get('digest') != 'sha256:' + hashlib.sha256(archive).hexdigest():
-        raise ValueError('candidate identity archive digest mismatch')
-    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-        entries = bundle.infolist()
-        if len(entries) != 1 or entries[0].filename != 'candidate-identity.json' or entries[0].file_size > 1024 * 1024:
-            raise ValueError('unexpected candidate identity archive')
-        value = json.loads(bundle.read(entries[0]))
+    value = small_artifact_record(repository, metadata, 'candidate-identity.json')
     if value.get('schema') != 'orbit.candidate-identity.v1':
         raise ValueError('unknown candidate identity schema')
     manifest = value['manifest']

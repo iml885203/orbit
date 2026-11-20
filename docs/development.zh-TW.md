@@ -117,3 +117,7 @@ UI build 在 [ui/vite.config.ts](https://github.com/iml885203/orbit/blob/main/ui
 - `ORBIT_UI_OUTDIR` 選擇由團隊 binary embed 的 dashboard build output。
 
 這條路線代表團隊必須自行維護 build 與 release line。只在 env 設定無法表達需求時使用，並將中性改進留在這個 repo，避免複製 core。
+
+## 讀取 CI 驗證範圍
+
+透過 [delivery observer](./delivery.zh-TW.md#一般-ci-的驗證範圍) 查看選定的原生 profile 與實際檢查。一般功能／UI 可使用 Linux 驗證；主機、建置、政策或不確定的變更使用完整驗證。本機 fresh preflight 與 review 要求不變。手動選擇的 Linux 診斷不能當作正式 main CI 或發布證據。
