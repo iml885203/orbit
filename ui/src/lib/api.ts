@@ -1,4 +1,4 @@
-import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, EnvironmentSwitchResponse, GraphResponse, EdgeDetachResponse, LogsResponse, ServiceEnvResponse } from './types.gen'
+import type { APIResponse, DoctorResponse, Settings, EnvToggleInfo, VersionResponse, EnvsResponse, EnvironmentSwitchResponse, GraphResponse, EdgeDetachResponse, GraphRuntimeContext, LogsResponse, ServiceEnvResponse } from './types.gen'
 import type { HistoryRecord, HistoryFilter } from './history.svelte'
 import { toast } from './stores.svelte'
 
@@ -15,6 +15,7 @@ export async function getJSON<T>(path: string, unavailable?: string, signal?: Ab
     if (res.ok) return await res.json()
     console.error(`GET ${path}: HTTP ${res.status}`)
   } catch (e) {
+    if (signal?.aborted) return null
     console.error(`GET ${path}:`, e)
   }
   if (unavailable) toast(unavailable)
@@ -36,11 +37,11 @@ export async function apiPost<T extends APIResponse = APIResponse>(path: string,
   }
 }
 
-export async function apiPut<T extends APIResponse = APIResponse>(path: string, body: Record<string, unknown> = {}): Promise<{ ok: boolean; data?: T }> {
+export async function apiPut<T extends APIResponse = APIResponse>(path: string, body: Record<string, unknown> = {}, headers: Record<string, string> = {}): Promise<{ ok: boolean; data?: T }> {
   try {
     const res = await fetch(path, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
     })
     const data: T = await res.json()
@@ -80,9 +81,9 @@ export async function mutateSource(action: Record<string, unknown>) {
 }
 
 // Polled every status tick — log-only on failure (connection dot covers it).
-export async function fetchGraph(env?: string): Promise<GraphResponse | null> {
+export async function fetchGraph(env?: string, signal?: AbortSignal): Promise<GraphResponse | null> {
   const url = env ? `/api/graph?env=${encodeURIComponent(env)}` : '/api/graph'
-  return getJSON(url)
+  return getJSON(url, undefined, signal)
 }
 
 export async function fetchLogs(name: string): Promise<string[] | null> {
@@ -97,8 +98,9 @@ export async function fetchServiceEnv(name: string): Promise<ServiceEnvResponse 
   return getJSON(`/api/service-env/${encodeURIComponent(name)}`, 'service env unavailable')
 }
 
-export async function detachEdge(env: string, from: string, to: string, detached: boolean) {
-  return apiPut<EdgeDetachResponse>(`/api/edges/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { env, detached })
+export async function detachEdge(env: string, from: string, to: string, detached: boolean, owner?: GraphRuntimeContext) {
+  const headers: Record<string, string> = owner ? { 'X-Orbit-Expected-Epoch': String(owner.epoch), 'X-Orbit-Expected-Generation': String(owner.generation) } : {}
+  return apiPut<EdgeDetachResponse>(`/api/edges/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { env, detached }, headers)
 }
 
 export async function switchEnv(env: string, confirmed = false, currentIdentity = '', targetIdentity = '', runningResources: string[] = []) {

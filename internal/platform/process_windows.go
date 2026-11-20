@@ -3,26 +3,72 @@
 package platform
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 var (
-	jobObjects = make(map[int]windows.Handle) // pid → job object handle
+	jobObjects = make(map[int]*ownedJob)
 	jobMu      sync.Mutex
 )
 
+const jobRetirementTimeout = 2 * time.Second
+
+var ErrJobRetirementTimeout = errors.New("Windows job retirement could not be confirmed before deadline")
+
+type ownedJob struct {
+	mu      sync.Mutex
+	handle  windows.Handle
+	retired bool
+	query   func(windows.Handle) (uint32, error)
+	budget  time.Duration
+}
+
+type jobAccounting struct {
+	TotalUserTime             int64
+	TotalKernelTime           int64
+	ThisPeriodTotalUserTime   int64
+	ThisPeriodTotalKernelTime int64
+	TotalPageFaultCount       uint32
+	TotalProcesses            uint32
+	ActiveProcesses           uint32
+	TotalTerminatedProcesses  uint32
+}
+
+func queryActiveJobProcesses(handle windows.Handle) (uint32, error) {
+	var accounting jobAccounting
+	if err := windows.QueryInformationJobObject(handle, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), nil); err != nil {
+		return 0, fmt.Errorf("query job accounting: %w", err)
+	}
+	return accounting.ActiveProcesses, nil
+}
+
+func registeredJob(pid int) *ownedJob {
+	jobMu.Lock()
+	defer jobMu.Unlock()
+	return jobObjects[pid]
+}
+
+func (job *ownedJob) active() (uint32, error) {
+	if job.query != nil {
+		return job.query(job.handle)
+	}
+	return queryActiveJobProcesses(job.handle)
+}
+
 // SetProcessGroup configures the command to create a new process group
-// and assigns it to a Job Object after start. Call AssignJobObject after cmd.Start().
+// suspended: assign the job and publish ownership before ResumeProcess.
 func SetProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | windows.CREATE_SUSPENDED,
 	}
 }
 
@@ -60,13 +106,18 @@ func AssignJobObject(pid int) error {
 	}
 	defer windows.CloseHandle(handle)
 
+	jobMu.Lock()
+	if jobObjects[pid] != nil {
+		jobMu.Unlock()
+		_ = windows.CloseHandle(job)
+		return fmt.Errorf("job ownership for pid %d is already registered", pid)
+	}
 	if err := windows.AssignProcessToJobObject(job, handle); err != nil {
+		jobMu.Unlock()
 		_ = windows.CloseHandle(job)
 		return fmt.Errorf("AssignProcessToJobObject: %w", err)
 	}
-
-	jobMu.Lock()
-	jobObjects[pid] = job
+	jobObjects[pid] = &ownedJob{handle: job, budget: jobRetirementTimeout}
 	jobMu.Unlock()
 
 	return nil
@@ -87,30 +138,59 @@ func GetProcessGroup(pid int) (int, error) {
 // KillProcessGroup terminates all processes in the Job Object.
 // The sig parameter is ignored on Windows.
 func KillProcessGroup(pgid int, _ syscall.Signal) error {
-	jobMu.Lock()
-	job, ok := jobObjects[pgid]
-	jobMu.Unlock()
-
-	if !ok {
-		// No job object — try to kill the process directly
+	job := registeredJob(pgid)
+	if job == nil {
 		return terminateProcess(uint32(pgid))
 	}
-
-	if err := windows.TerminateJobObject(job, 1); err != nil {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	if job.retired {
+		return nil
+	}
+	if job.handle == 0 {
+		return fmt.Errorf("job ownership for %d has no open handle", pgid)
+	}
+	if err := windows.TerminateJobObject(job.handle, 1); err != nil {
 		return fmt.Errorf("TerminateJobObject: %w", err)
 	}
-
-	jobMu.Lock()
-	delete(jobObjects, pgid)
-	jobMu.Unlock()
-
-	_ = windows.CloseHandle(job)
-	return nil
+	deadline := time.Now().Add(job.budget)
+	for {
+		active, err := job.active()
+		if err != nil {
+			return err
+		}
+		// Accounting includes terminated processes whose references remain open.
+		// A nonzero count can be conservative uncertainty; only zero admits
+		// retirement. Do not replace it with leader exit or a job-handle wait.
+		if active == 0 {
+			job.retired = true
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("pid %d: %w", pgid, ErrJobRetirementTimeout)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
-// IsGroupAlive checks if the process group (Job Object) still has live processes.
 func IsGroupAlive(pgid int) bool {
-	return IsProcessAlive(pgid)
+	job := registeredJob(pgid)
+	if job == nil {
+		return IsProcessAlive(pgid)
+	}
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	if job.retired {
+		return false
+	}
+	if job.handle == 0 {
+		return true
+	}
+	active, err := job.active()
+	if err == nil && active == 0 {
+		job.retired = true
+	}
+	return err != nil || active != 0
 }
 
 // IsProcessAlive checks if a process with the given PID exists and is running.
@@ -163,15 +243,23 @@ func terminateProcess(pid uint32) error {
 // CleanupJobObject removes and closes the Job Object for a PID.
 // Called when a process exits normally.
 func CleanupJobObject(pid int) {
+	job := registeredJob(pid)
+	if job == nil {
+		return
+	}
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	if !job.retired {
+		return
+	}
 	jobMu.Lock()
-	job, ok := jobObjects[pid]
-	if ok {
+	if jobObjects[pid] == job {
 		delete(jobObjects, pid)
 	}
 	jobMu.Unlock()
-
-	if ok {
-		_ = windows.CloseHandle(job)
+	if job.handle != 0 {
+		_ = windows.CloseHandle(job.handle)
+		job.handle = 0
 	}
 }
 
@@ -190,4 +278,32 @@ func ExecReplace(name string, args []string) error {
 	}
 	os.Exit(0)
 	return nil // unreachable
+}
+
+// Go closes CreateProcess's initial thread handle before Cmd.Start returns.
+// The initial thread is still suspended, so enumeration cannot race user code
+// creating additional threads before job membership and ownership publication.
+func ResumeProcess(pid int) error {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return fmt.Errorf("snapshot suspended threads: %w", err)
+	}
+	defer windows.CloseHandle(snapshot)
+	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
+	for err = windows.Thread32First(snapshot, &entry); err == nil; err = windows.Thread32Next(snapshot, &entry) {
+		if entry.OwnerProcessID != uint32(pid) {
+			continue
+		}
+		thread, openErr := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, entry.ThreadID)
+		if openErr != nil {
+			return fmt.Errorf("open initial thread: %w", openErr)
+		}
+		_, resumeErr := windows.ResumeThread(thread)
+		_ = windows.CloseHandle(thread)
+		if resumeErr != nil {
+			return fmt.Errorf("resume owned process: %w", resumeErr)
+		}
+		return nil
+	}
+	return fmt.Errorf("initial thread for suspended process %d: %w", pid, err)
 }

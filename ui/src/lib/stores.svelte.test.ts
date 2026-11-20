@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hydrateLogs, replaceGraphData, store } from './stores.svelte'
+import { hydrateLogs, store } from './stores.svelte'
 import type { GraphResponse } from './types.gen'
 
 const graph = (state = 'healthy'): GraphResponse => ({
@@ -19,7 +19,7 @@ describe('replaceGraphData', () => {
     store.graph.data = first
     const existing = store.graph.data
 
-    replaceGraphData(graph())
+    store.graph.publish(graph())
 
     expect(store.graph.data).toBe(existing)
   })
@@ -28,7 +28,7 @@ describe('replaceGraphData', () => {
     const first = graph('starting')
     store.graph.data = first
 
-    replaceGraphData(graph('healthy'))
+    store.graph.publish(graph('healthy'))
 
     expect(store.graph.data).not.toBe(first)
     expect(store.graph.data?.nodes[0].state).toBe('healthy')
@@ -40,7 +40,7 @@ describe('replaceGraphData', () => {
     const next = graph()
     next.nodes[0].logsAvailable = true
 
-    replaceGraphData(next)
+    store.graph.publish(next)
 
     expect(store.graph.data).not.toBe(first)
     expect(store.graph.data?.nodes[0].logsAvailable).toBe(true)

@@ -151,33 +151,11 @@ REPOSITORY=iml885203/scoop-bucket VERSION=v1.5.1 \
 `docs/delivery.md` 擁有 `orbit.package-observation.v1`。此維護者 schema 與
 `orbit.cli.v1` 獨立，不能授權 release 或套件 promotion。
 
-| 欄位 | 意義 |
-| --- | --- |
-| `schema`, `repository`, `version` | Schema 名稱與確切套件／release |
-| `producer` | 原派送 `run_id`、`attempt`（以連字號組合成 correlation）；直接 existing-run recovery 為 null |
-| `state`, `reason_code` | 目前觀測階段與下列穩定原因 |
-| `dispatch_acknowledged` | 派送回覆成功，不代表 updater 身份已核對 |
-| `selected_run` | 正整數十進位 `id` 與本機建立的 canonical `url`，或 null |
-| `identity_verified` | 目前階段通過身份核對；restore 不會信任此值 |
-| `observation` | Allowlist 中的 updater `status`／`conclusion`，或 null |
-| `mismatches` | 欄位名稱、預期規則代號與安全觀測標記 |
-| `started_at`, `observed_at` | UTC 時間；restore 保留原起始時間 |
-| `recovery` | 安全的下一步 `action` 與已選 `run_id`（若有） |
+完整欄位、狀態、原因代碼與 recovery action 定義，只維護於
+[英文結果契約](./delivery.md#maintainer-result-contract)。
 
-State 包含 `dispatch`、`selected`（未驗證）、`accepted`（已核對身份）、
-`observing`、`success`、`failure`、`identity_mismatch`。Reason 包含
-`dispatch_pending`、`dispatch_unknown`、`selected_unverified`、`accepted`、
-`observing`、`updater_success`、`updater_failed`、`identity_mismatch`、
-`observation_exhausted`、`request_denied`、`invalid_response`、
-`discovery_exhausted`、`budget_exhausted`。Recovery action 為
-`observe_existing_run`、`inspect_dispatch`、`inspect_failure`、`none`。
-
-Mismatch 欄位為 `id`、`repository`、`path`、`head_branch`、`event`、
-`display_title`；對應的 expected 規則依序為 `selected_run_id`、
-`requested_repository`、`update_workflow`、`main_branch`、`dispatch_event`、
-`dispatch_title`。Observed 只能是 `different`、`missing`、`invalid_type`、
-`oversize`，即使很短也不會複製原始不符字串。結果不含原始 API body、任意
-stderr、憑證或簽名 URL。
+身份不符時只記錄欄位名稱、預期規則代號與安全標記，即使原始字串很短也不會
+複製它。結果不含原始 API body、任意 stderr、憑證或簽名 URL。
 
 輸入在 JSON 解析 **之前** 限制為 16 KiB；輸出在 JSON escaping 與 UTF-8 編碼
 **之後** 也有相同限制。外部操作前先驗證固定格式、身份與 state，只以已知欄位

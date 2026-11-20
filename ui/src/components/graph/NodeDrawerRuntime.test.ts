@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import NodeDrawerSelection from './NodeDrawerSelection.test.svelte'
-import { replaceGraphData, replaceServices, resetForNewDaemon, store } from '$lib/stores.svelte'
+import { replaceServices, resetForNewDaemon, store } from '$lib/stores.svelte'
 import type { GraphNode, GraphResponse, GraphRuntimeContext, ResourceStatus } from '$lib/types.gen'
 
 const owner: GraphRuntimeContext = { epoch: 101, generation: 2, config_path: '/workspace/local/orbit.yaml' }
@@ -28,6 +28,8 @@ beforeEach(() => {
   store.graph.data = graph()
   store.daemon.daemonEpoch = owner.epoch
   store.daemon.connected = true
+  store.daemon.runtimeContext = owner
+  store.graph.publish(store.graph.data!)
   vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ env: [] })))
 })
 afterEach(() => {
@@ -48,7 +50,7 @@ describe('selected live drawer runtime', () => {
     expectSnapshot()
     const initialGraph = store.graph.data
     replaceServices([status()], owner)
-    replaceGraphData(graph())
+    store.graph.publish(graph())
     await tick()
     expect(screen.getByText('restarts: 3')).toBeInTheDocument()
     expect(screen.getByText('started in 2s')).toBeInTheDocument()
@@ -75,11 +77,11 @@ describe('selected live drawer runtime', () => {
     render(NodeDrawerSelection)
     expect(screen.getByText('restarts: 3')).toBeInTheDocument()
     const initialGraph = store.graph.data
-    replaceGraphData(graph())
+    store.graph.publish(graph())
     await tick()
-    expectSnapshot()
+    expect(screen.getByText('restarts: 3')).toBeInTheDocument()
     expect(store.graph.data).toBe(initialGraph)
-    replaceGraphData(graph({}, current))
+    store.graph.publish(graph({}, current))
     await tick()
     expect(screen.getByText('restarts: 3')).toBeInTheDocument()
     expect(store.graph.data).toBe(initialGraph)

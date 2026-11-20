@@ -32,6 +32,10 @@ SENSITIVE_MARKER = re.compile(
     r"(?i)access|api.?key|authorization|connection|cookie|credential|database|dsn|password|passwd|private|secret|token|https?://|AKIA|gh[oprsu]_"
 )
 JOURNEY_FILES = {
+    "journey-harness": {
+        "relocation.stderr", "relocation-error.stderr", "relocation-holder.stderr",
+        "relocation-attempt-1.stderr", "relocation-attempt-2.stderr",
+    },
     "quickstart": {
         "control-stop.json", "down-again.json", "down.json", "offline-group-typo.json",
         "offline-logs-typo.json", "offline-open-typo.json", "offline-resource-typo.json",

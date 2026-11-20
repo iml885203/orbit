@@ -7,7 +7,7 @@ import { switchEnv } from '$lib/api'
 
 vi.mock('$lib/api', () => ({
   apiPost: vi.fn(),
-  fetchGraph: vi.fn(),
+  fetchGraph: vi.fn().mockResolvedValue(null),
   switchEnv: vi.fn(),
 }))
 

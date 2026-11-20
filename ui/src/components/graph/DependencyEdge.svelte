@@ -19,11 +19,11 @@
   const live = $derived.by(() => {
     if (isAsync) return false
     if (detached) return false
-    const g = store.graph.data
+    const g = store.graph.active
     if (!g) return false
     const from = g.nodes.find(n => n.name === props.source)
     const to   = g.nodes.find(n => n.name === props.target)
-    return !!(from && to && from.state === 'healthy' && to.state === 'healthy')
+    return !!(from && to && store.graph.projectNode(from).state === 'healthy' && store.graph.projectNode(to).state === 'healthy')
   })
 
   const pathData = $derived(buildDependencyPath({

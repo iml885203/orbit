@@ -93,7 +93,7 @@ test-journeys: build
 		exit "$$status"; \
 	}; \
 	trap cleanup EXIT; \
-	$(MAKE) test-journey-harness; \
+	ORBIT_JOURNEY_ARTIFACT_DIR="$$artifact_root" $(MAKE) test-journey-harness; \
 	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_ARTIFACT_DIR="$$artifact_root" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \
 		$(MAKE) -j2 test-journey-quickstart test-journey-project-context-switch; \
 	ORBIT_INSTANCE_BASE_HOME="$$instance_base" ORBIT_JOURNEY_ARTIFACT_DIR="$$artifact_root" ORBIT_JOURNEY_SHARED_RESOURCE_CLEANUP=1 ORBIT_JOURNEY_NAMESPACE_REGISTRY="$$namespace_registry" \

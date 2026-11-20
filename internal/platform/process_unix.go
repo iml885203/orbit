@@ -71,3 +71,5 @@ func ExecReplace(name string, args []string) error {
 	argv := append([]string{name}, args...)
 	return syscall.Exec(path, argv, os.Environ())
 }
+
+func ResumeProcess(pid int) error { return nil }

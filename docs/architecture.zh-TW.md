@@ -93,15 +93,36 @@ Build 的 stdout 與 stderr 同時排空。超過 64 KiB 的診斷行會切成�
 Status、SSE 與 graph 的 mode 標示來自同一份 orchestrator kind snapshot。
 已保存的 mode 設定在 runtime 視圖發布前代表意圖；磁碟保存不持有 snapshot lock。
 
-Live graph response 會攜帶該 snapshot 的 daemon epoch、環境 generation 與 config
-路徑。Drawer 的 runtime 詳細資料只在這個擁有者與 status 相符時使用即時狀態；
-preview 保留自己的 snapshot 值。Runtime 更新不會替換結構相同的 graph reference。
-
 非同步 down、指定目標的 stop 與 restart 使用有數量上限的身分與結果紀錄。完成與否取決於
 operation 結果，包含 stop 與 sweep 錯誤，不依賴觀測者剛好看見中間狀態。
 CLI request deadline 與取消控制的是觀測；detach 不會撤銷 daemon 已接受的工作。
 同步 reconcile 與 `Down.Wait` 沿用 response 作為結果。其他 config transition
 保留既有 RPC，唯讀 request 也能持續回應。
+
+### 模式切換
+
+![模式切換：固定目標，先清退舊 owner，再提交並啟動。](./assets/architecture-mode-transition.svg)
+
+模式切換沿用同一套 operation 紀錄。接受要求時固定目標模式；對外顯示的 kind
+仍代表目前執行中的資源。Orbit 先停止並等待原本 owner 完成清理，再提交新模式、
+派送替代資源啟動。停止失敗時保留原本 kind，並回報失敗 operation。
+同一資源已有已接受或執行中的模式切換時，重疊要求回傳 `operation_busy`，
+包含背景工作尚未開始的空檔；遭拒要求不會改寫已儲存的意圖。
+要求目前模式仍會重新啟動。Operation 成功代表啟動已派送，健康狀態仍需另外觀察。
+整體轉換的 budget 包含停止 grace、回收／輸出排空與啟動派送；
+`shutdown_timeout` 仍是 owner 的停止 grace，不是所有階段共用的截止時間。
+
+### Dashboard graph 的資料擁有權
+
+DaemonStore 唯一擁有 SSE 環境身分與資源狀態；GraphStore 統一管理 graph 寫入、預覽、選取與切換意圖。所有 graph 回應都經過同一個接納入口，核對 daemon epoch、環境 generation 與設定路徑。
+
+![Daemon 狀態授權 graph 更新；預覽與保留快照不會取得 live 修改權限。](./assets/graph-ownership.svg)
+
+目前環境的 graph 讀取有期限，重複刷新會合併。切換 owner 會取消舊讀取，避免舊環境卡住新環境。每條 edge 保留操作順序與待確認意圖；成功回應只確認該 edge，再重新讀取 graph 更新節點資訊。讀取失敗不會抹掉已成功的寫入；等待或失敗的資料同步會顯示在畫面上。
+
+初次載入或斷線時保留可閱讀的唯讀快照，匹配的 graph 重新讀取完成後才開放修改。同 owner 重連保留已送出 edge 寫入的順序，等候結果與資料同步；只有 runtime owner 被替換才退休舊寫入佇列。已退出的預覽不會被遲到回應重新開啟。切換 ACK 只代表 daemon 重啟已排程；畫面必須等到目標的正式 identity、新 runtime owner 與匹配 graph。切換逾時維持唯讀，提供刷新／重新載入，並繼續觀察。
+
+表格、節點、群組與 drawer 只有在 graph owner、資源種類、模式與節點身分一致時才投影 live 狀態。即使快速停止／啟動落在兩次相同的 SSE 之間，也會清除過時的依賴阻擋。預覽與斷線時保留快照；投影不替換 graph，也不重新排版。Runtime 更新保留結構相同的 graph 參照。Dashboard 的 edge 修改帶既有 expected epoch／generation headers，daemon 在環境切換鎖內、產生任何效果前檢查；未帶 header 的舊 client 保持原本行為。
 
 ## Container supervision vs process supervision
 
@@ -129,7 +150,10 @@ transport 抖動造成使用者可見的狀態跳動。`status` 會指出 Docker
 用 SIGTERM 殺 dev process(例如 `dotnet watch`)時，孫程序常常會殘留。Orbit 的解法是把每個 spawn 出來的 process 放進自己的 process group，然後對**整個 group** 送 signal，而不是只對 leader。
 
 - **Unix**(Linux/macOS 上的 `internal/platform/process_unix.go`):`syscall.SysProcAttr{Setpgid: true}`，shutdown 時呼叫 `syscall.Kill(-pgid, sig)`。
-- **Windows**:Job Objects。Spawn 出來的 process 會被附掛到一個 job，關閉 job handle 會把所有後代 atomic 地一起終止。
+- **Windows**：Child 先暫停建立，加入 Job Object、記錄 ownership 後才開始執行。
+  停止時保留 Job，最多兩秒查詢其 active-process accounting，確認清退。
+  查詢失敗或逾時會保留同一 Job 與 child 身分，供明確呼叫 `Stop` 重試。
+  外部 process reference 可能延後清退確認。Daemon 結束時，關閉 Job 也會終止其後代。
 
 結果是:`orbit down` 能可靠地回收整棵 process tree —— 不管是 shell、reload 中的 `dotnet watch` server,還是 `pnpm dev` 的 Vite instance —— 而不是只對 leader 送 signal、留下孫程序。
 
@@ -150,9 +174,24 @@ Leader 自然退出時，若 group 終止尚未開始，manager 會透過同一 
 Readers 在設定的 group grace 期間保持開啟；leader 已 reaped 且 group 終止返回後，
 才開始最後輸出窗口。若 inherited handles 超過輸出窗口仍未
 關閉，Orbit 會關閉自己的 readers，回報 `ErrOutputDrainTimeout`（尾端輸出可能
-不完整）。終止與排空都返回結果後，才移除 ownership 與回報 exit。
+不完整）。終止與排空都返回結果後，才回報主 child 的 exit。
+Tree 終止成功才移除 ownership；終止失敗會保留 child 身分與 reservation，
+阻擋替代啟動，直到明確呼叫 `Stop` 重試。重試成功會釋放已清退的 owner，
+但仍回報先前的輸出排空逾時。
 輸出窗口與 grace 分開計算，不是整個 shutdown 的兩秒上限。Output callback
 仍需遵守原有的快速返回要求。
+
+![Service execution 先保留 ownership，依序執行準備與主指令，清退後才允許替代啟動。](./assets/process-execution-ownership.svg)
+
+Process manager 在第一個 `pre_start` 之前保留 service 名稱。每個準備或主
+child 分別管理自己的 process tree、reaping 與最後輸出排空；整段 execution
+統一管理取消，禁止啟動重疊。`Stop` 與 `StopAll` 會取消並等待完整 execution，
+包括準備指令之間尚無 child 的階段。沒有 active child 的 reservation 不回報 PID。
+`OnStarted` 與帶 generation 的 `OnExit` 仍只代表主 child。獨立 ownership 通知
+會持久化 active child 原始、未展開的指令、目錄、stage 與 PID/PGID，不會把
+準備 PID 記成主指令。Recovery 沿用既有清退流程，將任一 stage 結束並標成
+stopped，重新啟動時再從頭執行準備指令。持久化仍為 best effort，並非涵蓋
+process 建立與磁碟寫入的 transaction。
 
 Process 的 PID/PGID ownership 在註冊後立刻持久化，早於回報 health。Daemon
 異常結束後，Orbit 會在正常啟動建立新 child 之前，安全地結束仍存活的已持久化

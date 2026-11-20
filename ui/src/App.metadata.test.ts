@@ -61,7 +61,7 @@ beforeEach(() => {
         if (deferMetadata) return new Promise<Response>((resolve) => { pending.push(resolve) })
         return response(metadata(project))
       case '/api/features/bigquery': return response({ configured: false })
-      case '/api/graph': return response({ env: 'local', nodes: [], edges: [] })
+      case '/api/graph': return response({ env: 'local', runtime: { epoch: 101, generation: 1, config_path: `/workspace/${project}/orbit.yaml` }, nodes: [], edges: [] })
       case '/api/env-toggles': return response([])
       case '/api/settings': return response({ env_toggles: {}, user_env: {} })
       case '/api/envs': return response({ running: 0, sources: [], context: status(project).context })

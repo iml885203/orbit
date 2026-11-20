@@ -126,6 +126,14 @@ container 的清理失敗，仍會使 operation 失敗。
 同步 `POST /api/down` 的 `wait: true` response 也保留相同的 `cleanup` 與
 `warnings` 證據。
 
+`PUT /api/service-mode/{name}` 保留非同步 HTTP 200 response，並增加
+`operation_id` 與 `affected_resources`。Operation 的 `kind` 為 `mode`，
+`target_mode`（`dev` 或 `container`）固定為已接受的目標。
+再次修改前，沿用相同 operation lookup 查詢結果。成功代表舊 owner 已清退、
+替代啟動已派送，不代表替代資源已健康。停止失敗保留原本生效模式；儲存的
+目標模式仍只是意圖。重疊模式要求回傳 `operation_busy`，且不儲存遭拒目標，
+包含已接受工作尚未開始的空檔。
+
 此診斷歷史最多
 128 筆，先淘汰已結束紀錄；最多接受 32 筆尚未結束的工作。找不到 ID 時回
 `operation_not_found`，不代表成功，也不表示可以直接重送。

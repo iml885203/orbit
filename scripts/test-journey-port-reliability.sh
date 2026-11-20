@@ -11,6 +11,19 @@ test_root="$(mktemp -d)"
 existing_network="orbit-harness-existing-$$"
 new_network="orbit-harness-new-$$"
 late_failure_namespace="harness-late-failure-$$"
+retire_relocation_guard() {
+  [ -n "${relocation_guard_pid:-}" ] || return 0
+  kill "$relocation_guard_pid" >/dev/null 2>&1 || true
+  for _ in $(seq 1 50); do
+    kill -0 "$relocation_guard_pid" >/dev/null 2>&1 || break
+    sleep 0.05
+  done
+  if kill -0 "$relocation_guard_pid" >/dev/null 2>&1; then
+    kill -KILL "$relocation_guard_pid" >/dev/null 2>&1 || true
+  fi
+  wait "$relocation_guard_pid" >/dev/null 2>&1 || true
+  relocation_guard_pid=""
+}
 cleanup() {
   local status="$1"
   local failed_line="$2"
@@ -18,13 +31,10 @@ cleanup() {
   if [ "$status" -ne 0 ]; then
     printf 'Journey harness failed at scripts/test-journey-port-reliability.sh:%s (exit %s)\n' "$failed_line" "$status" >&2
   fi
-  if [ -n "${release_watcher_pid:-}" ]; then
-    kill "$release_watcher_pid" >/dev/null 2>&1 || true
-    wait "$release_watcher_pid" >/dev/null 2>&1 || true
-  fi
-  if [ -n "${relocation_guard_pid:-}" ]; then
-    kill "$relocation_guard_pid" >/dev/null 2>&1 || true
-    wait "$relocation_guard_pid" >/dev/null 2>&1 || true
+  retire_relocation_guard
+  if [ "$status" -ne 0 ] && [ -n "${ORBIT_JOURNEY_ARTIFACT_DIR:-}" ]; then
+    "$repo_root/scripts/export-journey-diagnostics.sh" journey-harness "$status" "$test_root" ||
+      echo "Failed to export journey harness diagnostics." >&2
   fi
   docker network rm "$new_network" "$existing_network" >/dev/null 2>&1 || true
   docker network rm "orbit-$late_failure_namespace" >/dev/null 2>&1 || true
@@ -191,38 +201,51 @@ test ! -e "$test_root/fixture-ready"
 grep -F "test fixture could not own port 28070" "$test_root/fixture-error" >/dev/null
 
 if [ -x "$orbit_bin" ]; then
-  "$port_fixture" hold "$test_root/relocation-ready" "$test_root/relocation-error" 21081 &
+  "$port_fixture" hold "$test_root/relocation-ready" "$test_root/relocation-error.stderr" 21081 >"$test_root/relocation-holder.stderr" 2>&1 &
   relocation_guard_pid=$!
   for _ in $(seq 1 50); do
     [ -f "$test_root/relocation-ready" ] && break
-    if [ -f "$test_root/relocation-error" ]; then
-      cat "$test_root/relocation-error" >&2
+    if [ -f "$test_root/relocation-error.stderr" ]; then
+      cat "$test_root/relocation-error.stderr" >&2
       exit 1
     fi
     sleep 0.1
   done
   test -f "$test_root/relocation-ready"
-  (
-    for _ in $(seq 1 600); do
-      if grep -F "checks_failed" "$test_root/relocation-output" >/dev/null 2>&1; then
-        kill "$relocation_guard_pid" >/dev/null 2>&1 || true
-        exit 0
-      fi
-      sleep 0.05
-    done
-    echo "Timed out waiting for the runtime journey's occupied-port failure." >&2
-    tail -n 40 "$test_root/relocation-output" >&2 || true
-    exit 1
-  ) &
-  release_watcher_pid=$!
-  ORBIT_BIN="$orbit_bin" ORBIT_JOURNEY_RETRY_DELAY_SECONDS=0.2 \
-    "$retry_runner" "$repo_root/scripts/test-runtime-adoption.sh" \
-    >"$test_root/relocation-output" 2>&1
-  wait "$release_watcher_pid"
-  grep -F "Python, Node, and Go projects adopt Orbit" "$test_root/relocation-output" >/dev/null
-  test "$(grep -c 'retrying the isolated journey (2/2)' "$test_root/relocation-output")" -eq 1
-  wait "$relocation_guard_pid" >/dev/null 2>&1 || true
-  relocation_guard_pid=""
+  cat >"$test_root/relocation-attempt.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+runtime="$1"
+port_fixture="$2"
+guard_pid="$3"
+fixture_root="$4"
+set +e
+"$runtime" 2>&1 | tee "$fixture_root/relocation-attempt-${ORBIT_JOURNEY_ATTEMPT}.stderr"
+status="${PIPESTATUS[0]}"
+set -e
+if [ "$ORBIT_JOURNEY_ATTEMPT" -eq 1 ] && [ "$status" -ne 0 ] &&
+  grep -F '"checks_failed"' "$fixture_root/relocation-attempt-1.stderr" >/dev/null &&
+  grep -Eq 'port 21081.*already in use' "$fixture_root/relocation-attempt-1.stderr"; then
+  kill "$guard_pid" >/dev/null 2>&1 || true
+  for _ in $(seq 1 100); do
+    if "$port_fixture" check 21081 >/dev/null 2>&1; then
+      exit "$status"
+    fi
+    sleep 0.05
+  done
+  echo '{"error":{"code":"fixture_release_failed","message":"Owned port fixture did not release port 21081 within its bounded wait"}}' >&2
+  exit 70
+fi
+exit "$status"
+SH
+  chmod +x "$test_root/relocation-attempt.sh"
+  ORBIT_BIN="$orbit_bin" \
+    "$retry_runner" "$test_root/relocation-attempt.sh" "$repo_root/scripts/test-runtime-adoption.sh" \
+    "$port_fixture" "$relocation_guard_pid" "$test_root" \
+    >"$test_root/relocation.stderr" 2>&1
+  grep -F "Python, Node, and Go projects adopt Orbit" "$test_root/relocation.stderr" >/dev/null
+  test "$(grep -c 'retrying the isolated journey (2/2)' "$test_root/relocation.stderr")" -eq 1
+  retire_relocation_guard
 fi
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then

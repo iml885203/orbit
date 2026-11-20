@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'vitest'
+import { beforeEach, afterEach, describe, it, expect } from 'vitest'
 import { render } from '@testing-library/svelte'
 import ServiceNode from './ServiceNode.svelte'
 import { store } from '../../lib/stores.svelte'
@@ -13,6 +13,15 @@ const baseNode = {
 }
 
 describe('ServiceNode', () => {
+  beforeEach(() => {
+    store.graph.dispose()
+    const owner = { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' }
+    store.daemon.connected = true
+    store.daemon.runtimeContext = owner
+    store.graph.data = { env: 'local', runtime: owner, nodes: [], edges: [] }
+    store.graph.publish(store.graph.data)
+  })
+
   afterEach(() => {
     store.graph.preview = null
     store.daemon.envs = null

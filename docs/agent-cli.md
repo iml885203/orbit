@@ -147,6 +147,15 @@ API and discovered-container cleanup failures still fail the operation.
 The synchronous `POST /api/down` request with `wait: true` carries the same
 `cleanup` and `warnings` evidence in its response.
 
+`PUT /api/service-mode/{name}` keeps its asynchronous HTTP 200 response and
+adds `operation_id` and `affected_resources`. Its operation has `kind: "mode"`
+and immutable `target_mode` (`dev` or `container`). Inspect it through the same
+operation lookup before another mutation. Success means the old owner retired
+and replacement startup was dispatched, not that the replacement is healthy.
+A failed stop retains the old active mode. The saved requested mode remains
+intent. Overlapping mode requests return `operation_busy` without saving their
+target, including requests arriving before the accepted worker starts.
+
 This is bounded diagnostic history: at most 128 records, with
 terminal records evicted first and at most 32 active operations. A missing ID
 returns `operation_not_found`; it does not establish success or authorize retry.

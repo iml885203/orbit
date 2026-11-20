@@ -12,6 +12,7 @@ type LifecycleOperation struct {
 	Warnings   []string   `json:"warnings,omitempty"`
 	Cleanup    string     `json:"cleanup,omitempty"`
 	ID         string     `json:"id"`
+	TargetMode string     `json:"target_mode,omitempty"`
 	Kind       string     `json:"kind"`
 	State      string     `json:"state"`
 	Phase      string     `json:"phase"`

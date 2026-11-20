@@ -7,6 +7,7 @@ export interface LifecycleOperation {
   warnings?: string[];
   cleanup?: string;
   id: string;
+  target_mode?: string;
   kind: string;
   state: string;
   phase: string;

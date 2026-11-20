@@ -9,7 +9,8 @@
   import { tooltip } from '../../lib/tooltip.svelte'
   import Icon from '@iconify/svelte'
 
-  let { data: node, id }: { data: GraphNode; id: string } = $props()
+  let { data: snapshot, id }: { data: GraphNode; id: string } = $props()
+  const node = $derived(store.graph.projectNode(snapshot))
 
   // Trace playback (additive; all false when no trace is playing). A node not
   // in the trace dims back; nodes on the revealed path light up; a failed

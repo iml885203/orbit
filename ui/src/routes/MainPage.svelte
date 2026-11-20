@@ -45,6 +45,12 @@
     <GraphView />
   {/if}
   <OperationBanner />
+  {#if store.graph.freshness !== 'current'}
+    <div role="status" class="graph-freshness">
+      {store.graph.freshness === 'unavailable' ? 'Graph refresh unavailable. Showing the last snapshot.' : 'Graph reconciling. Details may be from the last snapshot.'}
+      <button type="button" onclick={() => store.graph.refresh()}>Refresh graph</button>
+    </div>
+  {/if}
 </section>
 
 <NodeDrawer node={selectedNodeData} onClose={() => store.graph.selectedNode = null} />

@@ -99,11 +99,6 @@ Status, SSE and graph mode labels come from the same captured orchestrator kind.
 Persisted mode settings represent intent until that runtime view is published;
 disk persistence stays outside the snapshot lock.
 
-Live graph responses carry their daemon epoch, environment generation and config
-path from that snapshot. Drawer runtime details use status only when this owner
-matches; previews retain their snapshot values. Runtime updates preserve the
-structural graph reference.
-
 Asynchronous down, targeted stop and restart have bounded identity/result records. Completion
 comes from the operation result, including stop and sweep errors, rather than
 requiring an observer to catch an intermediate resource state. CLI request
@@ -111,6 +106,54 @@ deadlines and cancellation govern observation; detaching an observer does not
 revoke daemon work that was already accepted.
 Synchronous reconcile and `Down.Wait` keep their response-based result. Other
 config transitions retain their existing RPCs while read-only requests stay responsive.
+
+### Mode transitions
+
+![Mode transition: capture target, retire old owner, then commit and start.](./assets/architecture-mode-transition.svg)
+
+Mode changes use the same operation records. The requested target is captured at
+acceptance, while the published kind continues to identify the current runtime.
+Orbit stops and joins that owner before committing the target and dispatching
+replacement startup. Stop failure preserves the old kind and reports a failed
+operation. An overlapping mode request for the same resource returns
+`operation_busy`, including the interval before its accepted worker starts; rejected
+requests do not change saved intent. Requesting the current mode still restarts it.
+Operation success means startup was dispatched; health convergence remains separate.
+The whole transition budget allows shutdown grace plus retirement/drain and dispatch;
+`shutdown_timeout` remains the owner's stop grace, not a deadline for all stages.
+
+### Dashboard graph ownership
+
+Live graph responses carry their daemon epoch, environment generation and config
+path from that snapshot. DaemonStore owns SSE context and resources; GraphStore
+owns graph publication, preview, selection and switch intent. All graph producers
+use that one admission boundary.
+
+![Daemon status authorizes graph publication; previews and retained snapshots remain separate from live mutation authority.](./assets/graph-ownership.svg)
+
+Graph reads are bounded and coalesced within the current owner. Replacing that
+owner aborts its read without delaying the new environment. Edge writes retain
+per-edge order and pending intent; acknowledgements confirm only their edge,
+then a fresh read reconciles node details. A failed read cannot erase a successful
+write. Deferred or failed reconciliation is visible in the dashboard.
+
+Bootstrap and disconnected graphs remain readable snapshots with mutation controls
+disabled until a matching graph read returns. A same-owner reconnect retains
+in-flight edge write ordering; controls wait for settlement and reconciliation.
+Only a replacement runtime owner retires old write queues. Preview requests cannot reopen an
+exited preview. A switch acknowledgement means the restart was scheduled, not
+that the requested environment owns the runtime: the dashboard waits for its
+canonical identity, a replacement owner and matching graph. A stalled switch
+stays read-only and offers refresh/reload while observation continues.
+
+Table, node, group and drawer controls project live status only when the graph
+owner, resource kind, mode and exact node membership match. This also clears
+stale dependency blockers when a fast stop/start fits between two identical SSE
+snapshots. Preview and disconnected views retain snapshot values; projections
+do not replace the graph or rerun layout. Runtime updates preserve the
+structural graph reference. Dashboard edge mutations also carry the existing
+expected epoch/generation headers; the daemon checks them before effects under
+the environment transition lock. Headerless clients keep their existing behavior.
 
 ## Container supervision vs process supervision
 
@@ -141,7 +184,12 @@ described above.
 Killing a dev process (e.g. `dotnet watch`) with SIGTERM often leaves grandchild processes running. Orbit solves this by putting every spawned process in its own process group and signalling the **group**, not the leader.
 
 - **Unix** (`internal/platform/process_unix.go` on Linux/macOS): `syscall.SysProcAttr{Setpgid: true}`, then `syscall.Kill(-pgid, sig)` on shutdown.
-- **Windows**: Job Objects. The spawned process is attached to a job, and closing the job handle terminates every descendant atomically.
+- **Windows**: Each child starts suspended, joins its Job Object, and resumes
+  after ownership is recorded. Stopping retains that Job while checking its
+  active-process accounting for up to two seconds. Query failure or a deadline
+  keeps the same Job and child identity for an explicit `Stop` retry. External
+  process references may delay retirement confirmation. Closing the Job also
+  terminates its descendants if the daemon exits.
 
 Result: `orbit down` reliably reaps the whole process tree — shell, `dotnet watch` reloading, or `pnpm dev` Vite instance — rather than signalling only the leader and leaving grandchildren behind.
 
@@ -164,11 +212,29 @@ escalation if termination has not started; otherwise it joins that owner.
 Readers remain open throughout the configured group grace. Once the leader is
 reaped and group termination returns, the final output window starts. If inherited handles
 keep them open past the output window, Orbit closes its readers and reports
-`ErrOutputDrainTimeout` (trailing output may be incomplete). Ownership is retired
-and exit reported after both termination and draining return. The output window
-is separate from grace; it is not a two-second
+`ErrOutputDrainTimeout` (trailing output may be incomplete). The main child's exit
+is reported after termination and draining return. Successful tree termination
+retires ownership; a termination failure keeps the child identity and reservation
+for an explicit `Stop` retry, blocking replacement. A successful retry still
+reports any earlier output-drain timeout, but releases the retired owner.
+The output window is separate from grace; it is not a two-second
 limit on the complete shutdown. Output callbacks retain their existing
 requirement to return promptly.
+
+![One service execution reserves ownership before preparation, runs each child in order, and retires before a replacement.](./assets/process-execution-ownership.svg)
+
+The process manager reserves the service name before the first `pre_start`.
+Preparation and main children each own their process tree, reaping and final
+output drain; one execution owns cancellation and admits no overlapping startup.
+`Stop` and `StopAll` cancel and join that complete execution, including a wait
+between preparation commands. A reservation without an active child has no PID.
+`OnStarted` and generation-bearing `OnExit` still describe the main child only.
+A separate ownership notification persists the active child's original,
+unexpanded command, directory and optional stage with its PID/PGID. Preparation
+is never recorded as the configured main command. Recovery retires either stage
+through the existing recorded-process path, marks it stopped, and starts the
+preparation sequence afresh. Persistence remains best effort; it is not a
+transaction spanning process creation and disk writes.
 
 Process PID/PGID ownership is persisted immediately after registration, before
 health can be reported. After an abrupt daemon exit, Orbit safely retires a

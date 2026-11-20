@@ -1,3 +1,4 @@
+import { tick } from 'svelte'
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EnvPopover from './EnvPopover.svelte'
@@ -30,6 +31,7 @@ describe('EnvPopover', () => {
     vi.clearAllMocks()
 	mutateSource.mockResolvedValue({ ok: true, data: {} })
     store.ui.envPopoverOpen = true
+    store.daemon.environmentIdentity = liveGraph.env
     store.graph.data = liveGraph
     store.graph.preview = null
     store.ui.sourceMigrationNoticeSeen = false
@@ -109,7 +111,7 @@ describe('EnvPopover', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'example' }))
 
-    expect(fetchGraph).toHaveBeenCalledWith('default/example')
+    expect(fetchGraph).toHaveBeenCalledWith('default/example', expect.any(AbortSignal))
     expect(store.graph.preview).toStrictEqual(previewGraph)
     expect(store.ui.envPopoverOpen).toBe(false)
     expect(push).toHaveBeenCalledWith('/')
@@ -154,4 +156,32 @@ describe('EnvPopover', () => {
 	  await fireEvent.click(screen.getByRole('button', { name: 'Dismiss migration summary' }))
 	  expect(screen.getByRole('status', { name: 'Environment source migration complete' })).toBeInTheDocument()
 	})
+  it('explains a preview deadline and keeps superseded preview requests silent', async () => {
+    vi.useFakeTimers()
+    let finish!: (value: typeof previewGraph) => void
+    fetchGraph.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    store.ui.toastMessage = ''
+    render(EnvPopover)
+    try {
+      await fireEvent.click(screen.getByRole('button', { name: /example/ }))
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(store.ui.toastMessage).toContain('timed out')
+      expect(store.ui.toastMessage).toContain('retry')
+      finish(previewGraph)
+      await tick()
+      expect(store.graph.preview).toBeNull()
+      let release!: (value: typeof previewGraph) => void
+      fetchGraph.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
+      store.ui.toastMessage = ''
+      await fireEvent.click(screen.getByRole('button', { name: /example/ }))
+      store.graph.exitPreview()
+      await vi.advanceTimersByTimeAsync(10_000)
+      release(previewGraph)
+      await tick()
+      expect(store.ui.toastMessage).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
 })

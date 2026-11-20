@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 430" role="img" aria-labelledby="title desc">
+<title id="title">Service execution owns preparation through retirement</title><desc id="desc">One reservation runs preparation and the main child in order. Stop joins process tree termination and output drain before a replacement starts.</desc>
+<rect width="480" height="430" rx="12" fill="#101827"/>
+<g font-family="sans-serif" fill="#f3f4f6" text-anchor="middle"><text x="240" y="32" font-size="20">One service execution</text><text x="240" y="54" font-size="15">No overlapping startup</text></g>
+<g fill="#1e3348" stroke="#67e8f9" stroke-width="2"><rect x="32" y="74" width="416" height="48" rx="8"/><rect x="32" y="140" width="416" height="48" rx="8"/><rect x="32" y="206" width="416" height="48" rx="8"/><rect x="32" y="272" width="416" height="48" rx="8"/></g>
+<g fill="#f3f4f6" font-family="sans-serif" font-size="18" text-anchor="middle"><text x="240" y="105">Reserve service name</text><text x="240" y="171">Run pre_start 1…N</text><text x="240" y="237">Run main child</text><text x="240" y="303">Retire execution owner</text></g>
+<g stroke="#cbd5e1" stroke-width="2" fill="none"><path d="M240 123v14m-5-6 5 6 5-6"/><path d="M240 189v14m-5-6 5 6 5-6"/><path d="M240 255v14m-5-6 5 6 5-6"/></g>
+<g font-family="sans-serif" text-anchor="middle" font-size="16"><text x="240" y="351" fill="#fbbf24">Stop / cancel → terminate tree → reap</text><text x="240" y="374" fill="#fbbf24">Drain final output, then allow replacement</text><text x="240" y="408" fill="#cbd5e1">No active child = no PID</text></g>
+</svg>

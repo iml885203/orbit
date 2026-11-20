@@ -19,8 +19,9 @@ type DaemonState struct {
 	Services   map[string]ServiceStateEntry `json:"services"`
 }
 
-// ProcessRecord stores PID/PGID so the daemon can reconnect after crash.
+// ProcessRecord preserves the active child identity for retirement after a crash.
 type ProcessRecord struct {
+	Stage   string `json:"stage,omitempty"`
 	PID     int    `json:"pid"`
 	PGID    int    `json:"pgid"`
 	Command string `json:"command"`

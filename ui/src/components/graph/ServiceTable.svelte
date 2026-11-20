@@ -3,7 +3,7 @@
   import type { GraphNode, GraphResponse } from '../../lib/types.gen'
   import { apiPost } from '../../lib/api'
   import { COLORS, ICONS } from '../../lib/constants'
-  import { isRunning, mutationsDisabled, openLogViewer, toast } from '../../lib/stores.svelte'
+  import { isRunning, mutationsDisabled, openLogViewer, store, toast } from '../../lib/stores.svelte'
   import { tooltip } from '../../lib/tooltip.svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
@@ -29,10 +29,11 @@
     }
     return result
   })
+  const liveNodes = $derived(graph.nodes.map(node => store.graph.projectNode(node)))
   const filtered = $derived.by(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return graph.nodes
-    return graph.nodes.filter(node => [
+    if (!needle) return liveNodes
+    return liveNodes.filter(node => [
       node.name, node.kind, node.state, node.mode ?? '', groupOf.get(node.name) ?? '',
     ].some(value => value.toLowerCase().includes(needle)))
   })
