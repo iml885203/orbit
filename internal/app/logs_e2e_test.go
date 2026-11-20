@@ -9,12 +9,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/iml885203/orbit/internal/autoupdate"
 )
 
 func TestE2E_MultipleResourceLogs(t *testing.T) {
@@ -22,6 +26,16 @@ func TestE2E_MultipleResourceLogs(t *testing.T) {
 		t.Skip("python3 unavailable")
 	}
 	binary := findOrbitBinary(t)
+	parentUpdateHome := t.TempDir()
+	t.Setenv("ORBIT_UPDATE_HOME", parentUpdateHome)
+	t.Setenv(autoupdate.EnvLaunchPath, filepath.Join(t.TempDir(), "unrelated-orbit"))
+	t.Setenv(backgroundUpdateEnv, "0")
+	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("logs fixture invoked the update endpoint")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer updateServer.Close()
+	t.Setenv("ORBIT_RELEASE_API_URL", updateServer.URL)
 	home, err := os.MkdirTemp(os.TempDir(), "orb-logs-")
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +63,9 @@ services:
 	}
 	command := func(ctx context.Context, args ...string) *exec.Cmd {
 		cmd := exec.CommandContext(ctx, binary, append([]string{"-c", configPath}, args...)...)
-		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home, "ORBIT_INSTANCE_BASE_HOME="+home, "ORBIT_NAMESPACE="+namespace, fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort))
+		cmd.Env = append(os.Environ(), "ORBIT_HOME="+home, "ORBIT_INSTANCE_BASE_HOME="+home,
+			"ORBIT_UPDATE_HOME="+filepath.Join(home, "updates"), "ORBIT_UPDATE_BACKGROUND=1",
+			autoupdate.EnvLaunchPath+"="+binary, "ORBIT_NAMESPACE="+namespace, fmt.Sprintf("ORBIT_DASHBOARD_PORT=%d", dashboardPort))
 		return cmd
 	}
 	t.Cleanup(func() {
@@ -136,4 +152,28 @@ services:
 	if envelope := parseE2EEnvelope(t, string(out)); envelope.Error == nil || envelope.Error.Code != "unknown_resource" {
 		t.Fatalf("unknown: %s", out)
 	}
+	entries, err := os.ReadDir(parentUpdateHome)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("logs fixture modified inherited update home: entries=%d, err=%v", len(entries), err)
+	}
+	updateData, err := os.ReadFile(filepath.Join(home, "updates", "update-registry.json"))
+	if err != nil {
+		t.Fatalf("read fixture update registry: %v", err)
+	}
+	var registry map[string]map[string]autoupdate.State
+	if err := json.Unmarshal(updateData, &registry); err != nil {
+		t.Fatal(err)
+	}
+	installationID, launchPath, err := autoupdate.InstallationID(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installations := registry["installations"]
+	if len(installations) != 1 || installations[installationID].LaunchPath != launchPath {
+		t.Fatal("logs fixture registered an unrelated installation")
+	}
+	if state := installations[installationID]; state.NextCheckAt != nil || state.LastCheckedAt != nil {
+		t.Fatal("logs fixture scheduled an update check")
+	}
+
 }

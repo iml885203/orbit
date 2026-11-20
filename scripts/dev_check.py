@@ -85,6 +85,39 @@ def tool_identity(name, args):
             "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
 
+def mktemp_adapter():
+    if sys.platform != "darwin":
+        return None
+    executable = shutil.which("mktemp")
+    if not executable:
+        raise ValueError("required tool is missing: mktemp")
+    executable = Path(executable).resolve(strict=True)
+    template = Path(__file__).with_name("dev_check_mktemp.py").read_text()
+    content = ("#!" + sys.executable + "\n" + template.replace(
+        'NATIVE_MKTEMP = None', "NATIVE_MKTEMP = " + repr(str(executable))))
+    return {"content": content, "identity": {
+        "path": str(executable), "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+        "adapter_sha256": hashlib.sha256(content.encode()).hexdigest(),
+        "python_path": sys.executable,
+        "python_sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}}
+
+
+def install_mktemp_adapter(adapter, run, temporary, env):
+    if adapter is None:
+        return
+    directory = run / "tools"
+    directory.mkdir()
+    executable = directory / "mktemp"
+    executable.write_text(adapter["content"])
+    executable.chmod(0o755)
+    env["PATH"] = str(directory) + os.pathsep + env.get("PATH", os.defpath)
+    for args in (["-u", "-d"], ["-u", "-d", "-t", "orbit-check"]):
+        result = subprocess.run([str(executable), *args], env=env, capture_output=True,
+                                text=True, timeout=30)
+        if result.returncode or Path(result.stdout.strip()).resolve().parent != temporary.resolve():
+            raise ValueError("cannot route shell temporaries into the validation workspace")
+
+
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".new")
@@ -229,6 +262,9 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
         tools["go"] = tool_identity("go", ["version"])
     if mode != "go":
         tools.update(node=tool_identity("node", ["--version"]), pnpm=tool_identity("pnpm", ["--version"]))
+    adapter = mktemp_adapter()
+    if adapter is not None:
+        tools["mktemp"] = adapter["identity"]
     inherited = dict(os.environ)
     inputs = {"source": identity, "commit": git(source, "rev-parse", "HEAD").decode().strip(),
               "tags": hashlib.sha256(tags.encode()).hexdigest(), "tools": tools,
@@ -266,6 +302,7 @@ def check(source, workspace, mode, packages, jobs, timeout, reuse):
                                    "PLAYWRIGHT_BROWSERS_PATH": "cache/playwright", "ORBIT_HOME": "runtime/home",
                                    "ORBIT_UPDATE_HOME": "runtime/updates", "ORBIT_INSTANCE_BASE_HOME": "runtime/instances"}.items():
                 env[name] = str(workspace / relative)
+            install_mktemp_adapter(adapter, run, temporary, env)
             env["ORBIT_SOURCE_RELEASE_TAGS_FILE"] = str(release_tags)
             if not env.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"):
                 chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
