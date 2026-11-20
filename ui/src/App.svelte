@@ -35,16 +35,7 @@
   }
   let lastGraphKey = ''
 
-  // DB-workflow availability (devMeta.db_configured) follows the active env —
-  // a switch can add or remove the sql-server container — so refetch the dev
-  // meta whenever the live graph lands on a different env.
-  let lastMetaEnv = ''
-  $effect(() => {
-    const env = store.graph.data?.env
-    if (!env || env === lastMetaEnv) return
-    lastMetaEnv = env
-    extEnvChanged()
-  })
+  let lastMetaContext = ''
 
   function fetchDaemonState() {
     fetchEnvToggles().then(t => { store.daemon.envToggles = t })
@@ -61,6 +52,8 @@
   onMount(() => {
     const cleanupStatus = subscribe('status', (data) => {
       const resp = data as StatusResponse
+      const metaContext = JSON.stringify([resp.epoch, resp.generation, resp.config_path, resp.context?.identity])
+      const daemonRestarted = store.daemon.daemonEpoch !== null && store.daemon.daemonEpoch !== resp.epoch
       if (store.daemon.daemonEpoch !== resp.epoch) {
         if (store.daemon.daemonEpoch !== null) {
           resetForNewDaemon()
@@ -69,6 +62,10 @@
           fetchDaemonState()
         }
         store.daemon.daemonEpoch = resp.epoch
+      }
+      if (metaContext !== lastMetaContext) {
+        lastMetaContext = metaContext
+        if (!daemonRestarted) extEnvChanged()
       }
       store.daemon.instanceName = resp.instance ?? ''
       store.daemon.connected = true

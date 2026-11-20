@@ -19,10 +19,22 @@ export type DBOpInFlight = {
 }
 
 class DevStore {
+	private metaRequest = 0
 	devMeta = $state<DevDBMetaResponse | null>(null)
 	dbProjects = $state<DevDBProject[]>([])
 	dbState = $state<Record<string, DBState>>({})
 	dbOpInFlight = $state<DBOpInFlight | null>(null)
+
+	async refreshMeta(load: () => Promise<DevDBMetaResponse | null>): Promise<void> {
+		const request = ++this.metaRequest
+		const meta = await load()
+		if (request === this.metaRequest && meta) this.devMeta = meta
+	}
+
+	resetMeta() {
+		this.metaRequest++
+		this.devMeta = null
+	}
 }
 
 export const devStore = new DevStore()
@@ -46,7 +58,7 @@ export function tunnelHidden(): boolean {
 // resetDevState clears env-derived feature state when a new daemon epoch
 // is detected — called from the ext module's onDaemonReset hook.
 export function resetDevState() {
-	devStore.devMeta = null
+	devStore.resetMeta()
 	devStore.dbProjects = []
 	devStore.dbState = {}
 	devStore.dbOpInFlight = null
