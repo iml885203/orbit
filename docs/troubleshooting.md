@@ -57,10 +57,11 @@ orbit switch example
 
 ### Environment changes are waiting to be applied
 
-Run `orbit env apply`. Orbit validates the updated environment before stopping
+Preview with `orbit env apply --dry-run`, then run `orbit env apply`.
+See [previewing a pending update](./environment-sources.md#preview-a-pending-update).
+Orbit validates the updated environment before stopping
 anything. Unchanged resources keep their current process or container; changed
-resources and their dependents restart. Resources that were already stopped
-remain stopped. Daemon-level changes use a full handoff and restore the running
+resources and their dependents restart. Unrelated stopped resources remain stopped; newly required dependencies can start. Daemon-level changes use a full handoff and restore the running
 resources afterward.
 
 If you want to download a team update without interrupting the current
@@ -193,8 +194,10 @@ sudo chown -R $(whoami) ~/.orbit
 
 ### A lifecycle command is waiting or observation ended
 
-Read the printed operation ID and phase, then run `orbit status --json` from
-the same project and instance. A slow stop can still be using its configured
+Read the printed operation ID and phase, then run `orbit operation <id> --json`
+with the same instance and explicit config flags. Without an ID, use
+`orbit status --json`. A successful lookup can report a failed operation; inspect
+`data.state` and cleanup warnings. History disappears when the daemon restarts. A slow stop can still be using its configured
 shutdown grace period. Piped output includes elapsed heartbeats, so silence
 does not have to hide an accepted operation.
 

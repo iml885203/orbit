@@ -54,8 +54,10 @@ orbit switch example
 
 ### 環境變更正在等待套用
 
-執行 `orbit env apply`。Orbit 會先驗證更新後的環境，再記住目前運行中的
-資源、套用更新並恢復這些資源；原本已停止的資源仍會保持停止。
+先用 `orbit env apply --dry-run` 預覽，再執行 `orbit env apply`。
+流程見[預覽待套用更新](./environment-sources.zh-TW.md#先預覽待套用的更新)。
+Orbit 會先驗證更新後的環境；未變更的資源保持原行程或容器，變更的資源與依賴它的資源會重啟。
+不相關的已停止資源保持停止；新需要的依賴可能啟動。Daemon 層級變更會交接並恢復原本運行中的資源。
 
 若想先下載團隊更新、暫時不中斷目前環境，可使用
 `orbit source sync <name> --no-apply`，準備好後再套用。
@@ -180,8 +182,10 @@ sudo chown -R $(whoami) ~/.orbit
 
 ### Lifecycle 指令還在等待，或觀測已結束
 
-先看輸出的 operation ID 與 phase，再從同一專案、同一 instance 執行
-`orbit status --json`。停止緩慢可能仍在使用設定的 shutdown 緩衝時間。
+先看輸出的 operation ID 與 phase，再帶相同的 instance 與明確指定的 config flags
+執行 `orbit operation <id> --json`。沒有 ID 時，使用 `orbit status --json`。
+查詢成功仍可能得到失敗的 operation，請檢查 `data.state` 與清理警告；daemon
+重新啟動後歷史會消失。停止緩慢可能仍在使用設定的 shutdown 緩衝時間。
 Pipe 輸出也會有 elapsed heartbeat，讓已接受的工作有持續可見的進度。
 
 `orbit down --timeout 30s` 限制 CLI 的觀測時間；Ctrl-C 則 detach。兩者都不會

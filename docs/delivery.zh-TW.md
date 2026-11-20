@@ -15,6 +15,13 @@ python3 scripts/delivery_status.py --pr 123 --workspace /path/to/task --json
 用附近另一個 run 猜測發布結果。參數請見 `--help`。一般輸出摘要進度，JSON
 保留各 job、attempt、耗時與候選檔案 digest。
 
+Artifact metadata 只查指定的同一個 ID，最多三次 GET；每次最多 10 秒，
+只有 404、HTTP 500/502/503/504 或 request timeout 會等待 0.5 秒、1 秒後重試。404 也可能
+表示無權存取，不能當成 metadata 稍後一定出現的證據。明確的 401/403、rate limit、
+格式錯誤及身分／digest／expiry 不符都直接失敗。Timeout 共用原本最多三次的
+額度，不會重新計次。
+這項有界讀取政策也用於 delivery observer，不會重新上傳或重送 publication。
+
 ![核准後建立一份候選產物，並行測試，再原樣提升為正式發布](./assets/candidate-delivery.svg)
 
 ## 流程驗證什麼

@@ -400,6 +400,25 @@ export interface EnvironmentSwitchResponse {
   target_context?: EnvironmentContext;
   running_resources?: string[];
 }
+/**
+ * EnvironmentApplyPreview describes one observation, never an executable plan.
+ */
+export interface EnvironmentApplyPreview {
+  daemon_running: boolean;
+  changes_pending: boolean;
+  restart_required: boolean;
+  observed_at: string;
+  pid?: number /* int */;
+  generation: number /* uint64 */;
+  context: EnvironmentContext;
+  target_fingerprint?: string;
+  stop_resources: string[];
+  restart_resources: string[];
+  removed_resources: string[];
+  started_dependencies: string[];
+  unavailable_resources: string[];
+  affected_resources: string[];
+}
 export interface EnvironmentReconcileResponse {
   ok?: boolean;
   error?: string;

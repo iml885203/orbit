@@ -113,13 +113,25 @@ presenting a pre-command snapshot as the final state.
 Progress stays on stderr in JSON mode. Human output also reports phases,
 resource changes and elapsed heartbeats when output is piped or color is off.
 `orbit down --timeout 30s` bounds observation. A timeout or Ctrl-C does not undo
-accepted daemon work: preserve the operation ID and run `orbit status --json`
-before another mutation. An older daemon without operation IDs uses the legacy
+accepted daemon work: preserve the operation ID and run `orbit operation <id> --json`
+before another mutation. Without an ID, inspect `orbit status --json`. An older daemon without operation IDs uses the legacy
 state wait and explicitly reports that a definitive operation result is absent.
 
 Human `up --timeout` retains its readiness budget, including failure-log
 collection. Preparation remains cancellable. JSON `up` and `env apply` retain
 their whole-command budget, including preparation.
+
+Query with the same `--instance` and explicit `--config` flags used by the
+original command. `orbit operation <id> --json` is read-only: it does not start
+a daemon, create an instance, load the current project config, apply pending
+environment changes or recover an update transaction. A changed or deleted
+config does not prevent reading the original context.
+
+A successful lookup returns `ok: true` and exits zero even when
+`data.state` is `failed`. Inspect that state, `error`, `code`, `cleanup` and
+`warnings` for the original outcome. Lookup failures return `ok: false` and a
+nonzero exit; unavailable history never proves success. Human output makes the
+same distinction. Accepted/running results recommend querying the same ID again.
 
 The daemon's `GET /api/operations/{id}` returns the recorded `kind`, `state`
 (`accepted`, `running`, `succeeded`, `failed`), `phase`, target resources,
@@ -312,6 +324,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit env use <path> --json` | Returns the selected env, env name, daemon running state, and whether restart is required. |
 | `orbit source sync [<name>] --json` | Returns per-source results; `--all` continues independent sources and reports every success or failure. |
 | `orbit env apply --json` | Applies pending environment changes without interrupting unchanged resources, then returns the resources that were running, preserved or restarted, or removed from the new config. It accepts the same operation-wide `--timeout` as `up`. |
+| `orbit env apply --dry-run --json` | Read-only impact snapshot, operation `env_apply_preview`; never starts the daemon, applies changes, or waits for/recovers an automatic-update transaction. |
 | `orbit switch <env> --json` | Returns the selected env, daemon start/restart action, final daemon state, config path, dashboard URL, and the new env's prerequisite checks/readiness. |
 | `orbit update --json` | Checks/downloads when no target is staged, applies the verified target across registered default/named runtimes, and returns additive phase and per-runtime outcomes. Existing binary/resource fields remain compatible. `--rollback` uses the same installation-wide journal. |
 | `orbit daemon start --json` | Returns daemon running state, PID, config path, and dashboard URL. |
@@ -434,6 +447,7 @@ Stable `data.operation` values for converted control commands:
 | `orbit env use <path> --json` | `env_use` |
 | `orbit source sync --json` | `source_sync` |
 | `orbit env apply --json` | `env_apply` |
+| `orbit env apply --dry-run --json` | `env_apply_preview` |
 | `orbit switch <env> --json` | `switch` |
 | `orbit daemon start --json` | `daemon_start` |
 | `orbit daemon stop --json` | `daemon_stop` |
@@ -746,3 +760,33 @@ local receipts with source/freshness/error; it never acquires ADC. It has no
 mutation counterpart.
 
 Every tracked job has an explicit `planned`, `submission_intent`, `terminal` or `schema_only` state. A missing state is malformed evidence, never proof of non-submission. Cleanup confirms tracked submitted jobs are terminal even if the dataset has already disappeared.
+
+
+### Environment apply preview
+
+`orbit env apply --dry-run --json` returns `data.operation`, `daemon_running`,
+`changes_pending`, `restart_required`, `observed_at` (UTC), `pid` (with a daemon),
+`generation`, `context`, `target_fingerprint` (with a daemon), and six always-array
+fields: `stop_resources`, `restart_resources`, `removed_resources`,
+`started_dependencies`, `unavailable_resources`, `affected_resources`.
+Name arrays are sorted; empty sets are `[]`.
+
+`removed_resources` includes configured resources removed even when stopped.
+`stop_resources` contains affected running resources; `restart_resources` contains
+resources to restart/restore. `affected_resources` includes restart targets and
+their dependency closure. `started_dependencies` lists only currently non-running
+dependencies that would start. `unavailable_resources` contains formerly running
+resources absent from the new config. Daemon handoff lists the broad stop/restore
+impact rather than presenting an empty partial plan as no interruption.
+
+Context, daemon generation, observation time and the effective config SHA-256
+fingerprint identify the snapshot without returning raw config values. They do
+not authorize executing an old plan. Real apply validates, reloads and recalculates.
+A file edit with equivalent effective config can have `changes_pending: true`
+and empty resource arrays. Without a daemon, config is still validated, but
+`daemon_running` is false and arrays are empty; no runtime files are created.
+Wrong context or invalid config fails without applying. `--instance` selects a
+named runtime. Preview does not record CLI history, migrate sources, persist
+update disclosure or schedule background updates.
+
+Preview uses the same pending-file/graph admission as real apply, including its mtime/size fast path. Process-environment substitutions and shared extension data alone are not tracked as pending changes; an effective-config fingerprint can change without an apply transition.

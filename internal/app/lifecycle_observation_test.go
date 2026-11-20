@@ -167,7 +167,7 @@ func TestDownJSONCancelDetachesAcceptedOperationWithoutRepeatingMutation(t *test
 		t.Fatalf("error=%v", err)
 	}
 	assertOneLifecycleEnvelope(t, out, false)
-	if !strings.Contains(string(out), "stop-detach") || !strings.Contains(string(out), "may continue") {
+	if !strings.Contains(string(out), "orbit operation stop-detach --json") || !strings.Contains(string(out), "may continue") {
 		t.Fatalf("lost detached operation context: %s", out)
 	}
 	if !strings.Contains(diagnostics, "accepted:") || submitted.Load() != 1 {

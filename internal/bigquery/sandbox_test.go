@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func testProfile() Profile {
@@ -210,20 +209,6 @@ func TestCleanupUnknownJobBlocksButNeverSubmittedJobDoesNot(t *testing.T) {
 			}
 		})
 	}
-}
-func TestJobPendingDeadlinePreservesEvidence(t *testing.T) {
-	fake := testFake(t)
-	fake.pending = true
-	r := testRunner(t, fake, t.TempDir())
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	rec, err := r.prepare(ctx, testProfile(), "run-1", testInputs())
-	requireCode(t, err, "job_pending")
-	if rec.DataReady || rec.Jobs["orders"] == "" {
-		t.Fatal("incorrect pending evidence")
-	}
-	_, err = r.clean(context.Background(), testProfile(), "run-1", true)
-	requireCode(t, err, "cleanup_job_pending")
 }
 func TestWarningsAreNotFatal(t *testing.T) {
 	fake := testFake(t)

@@ -43,6 +43,14 @@ make setup         # Install git hooks
 先把同一個使用者結果相關的修改集中起來，整體 review release candidate，
 再發布一個版本。
 
+修改前先整理簡短的驗收與證據對照：哪些行為必須成立、各邊界怎麼驗證，
+以及哪些不在範圍內。指令與契約的選擇在 intake 定清楚，並沿用作為 review 輸入。
+
+需要獨立 review 時，先跑隔離的 focused checks，在修改成本還低時 review。
+修正 findings，重跑受影響的檢查與 review；來源穩定後，才在 commit 前跑全新的
+完整 gate。完整驗證執行期間不要再修改該來源；輸入有變就必須重新跑，舊成功
+不能授權修改後的 commit。調整的是順序，必要檢查一項也不減。
+
 ### 隔離驗證
 
 用既有儲存政策建立一個 task workspace，編輯期間沿用同一路徑。
@@ -55,7 +63,7 @@ python3 scripts/dev_check.py go --workspace /path/to/task --package ./internal/e
 make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
 ```
 
-![修改來源後驗證隔離快照，檢視證據再 commit](./assets/development-checks.svg)
+![先定驗收，修改並跑 focused checks，完成 review 後在 commit 前執行全新完整驗證](./assets/development-checks.svg)
 
 模式與參數以 `python3 scripts/dev_check.py --help` 為準。
 `go`、`ui`、`docs` 用於編輯迴圈；`full` 執行完整 `make preflight`，每次
@@ -85,6 +93,8 @@ macOS 會偵測標準安裝的 Chrome，其他環境沿用 Playwright setup。
 `make lint` 仍顯示所有問題；保留舊債不代表 lint 已經全綠。
 
 候選產物驗證與重啟後接續請見[確認交付進度](delivery.zh-TW.md)。
+若要選用涵蓋開發、測試與 review 的 issue 時間線，請見
+[量測一張開發 issue](development-measurement.zh-TW.md)。
 完整 gate 也會用固定版本的 actionlint 驗證 GitHub workflow 語義。
 
 Release 編號與相容性承諾請見[版本與相容性](versioning.zh-TW.md)。

@@ -220,13 +220,15 @@ func validateLifecycleStatusTarget(status, before *daemon.StatusResponse) error 
 
 func lifecycleObservationContextError(ctx context.Context, id string, started time.Time) error {
 	scope := "lifecycle request"
+	recovery := operationDiagnosticCommand([]string{"status"}, true)
 	if id != "" {
 		scope = "operation " + id
+		recovery = operationDiagnosticCommand([]string{"operation", id}, true)
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return cli.NewTimeoutError(fmt.Sprintf("timeout observing %s after %s; accepted daemon work may continue — inspect 'orbit status --json' before another mutation", scope, fmtDur(time.Since(started))))
+		return cli.NewTimeoutError(fmt.Sprintf("timeout observing %s after %s; accepted daemon work may continue — inspect '%s' before another mutation", scope, fmtDur(time.Since(started)), recovery))
 	}
-	return cli.NewCanceledError(fmt.Sprintf("detached from %s; accepted daemon work may continue — inspect 'orbit status --json'", scope))
+	return cli.NewCanceledError(fmt.Sprintf("detached from %s; accepted daemon work may continue — inspect '%s'", scope, recovery))
 }
 
 func finishLifecycleObservation(result lifecycleObservationResult, response *daemon.APIResponse, started time.Time, err error, options lifecycleJSONOptions, actions []cli.JSONAction) error {
@@ -248,8 +250,11 @@ func finishLifecycleObservation(result lifecycleObservationResult, response *dae
 	}
 	if err != nil {
 		options.Message = err.Error()
+		if response.OperationID != "" && (errors.Is(err, cli.ErrTimeout) || errors.Is(err, cli.ErrCanceled)) {
+			err = cli.WithJSONReplacementActions(err, operationObservationActions(response.OperationID))
+		}
 		if !cli.JSONOutput && errors.Is(err, cli.ErrCanceled) {
-			fmt.Println(err)
+			fmt.Println(options.Message)
 			return nil
 		}
 		if cli.JSONOutput {

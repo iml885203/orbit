@@ -46,6 +46,17 @@ and `make preflight` once before committing it. Do not create a release for
 each fix. Accumulate related fixes behind one user outcome, review the release
 candidate as a whole, then publish one version.
 
+Before editing, turn the issue into a short acceptance/evidence map: what must
+work, how each boundary will be checked, and which behavior is outside scope.
+Settle command and contract choices there; keep the intake as the review input.
+
+When independent review is required, run focused isolated checks first and
+review while changes are still inexpensive. Resolve findings and repeat the
+affected checks/review, then run the fresh full gate on the stable source just
+before the commit. Keep source edits out of that full validation window.
+Changed input requires another fresh gate; a previous success cannot authorize
+a changed commit. This changes the order, not the required checks.
+
 ### Isolated checks
 
 Keep build output and test state outside the checkout. Allocate one task
@@ -56,7 +67,7 @@ python3 scripts/dev_check.py go --workspace /path/to/task --package ./internal/e
 make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
 ```
 
-![Edit source, verify an isolated snapshot, inspect evidence, then commit](./assets/development-checks.svg)
+![Set acceptance, edit and run focused checks, resolve review, then run fresh full validation before commit](./assets/development-checks.svg)
 
 The runner copies tracked and non-ignored new files, including local edits.
 It keeps dependencies, generated files, logs, caches and runtime homes in the
@@ -98,6 +109,8 @@ the exact base commit and rejects expansion. `make lint` remains the stricter
 all-findings view; existing debt is not a clean lint result.
 
 For candidate verification and restart recovery, see [Verify and resume a delivery](delivery.md).
+For an optional issue timeline covering development, tests and review, see
+[Measure one development issue](development-measurement.md).
 The full gate also checks GitHub workflow semantics with a pinned actionlint.
 
 Release numbering and compatibility promises are documented in

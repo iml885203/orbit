@@ -11,6 +11,13 @@ import candidate
 import native_impact
 
 
+def artifact_response(metadata, status=200):
+    body = metadata if isinstance(metadata, str) else json.dumps(metadata)
+    return subprocess.CompletedProcess([], 0 if status == 200 else 1,
+                                       stdout='HTTP/2.0 {} Status\ncontent-type: application/json\n\n'.format(status) + body,
+                                       stderr='unstructured diagnostic')
+
+
 class CandidateTrust(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='orbit-candidate-test-')
@@ -134,14 +141,79 @@ class CandidateTrust(unittest.TestCase):
     def test_artifact_api_identity_expiration_and_digest_fail_closed(self):
         metadata = {'id': 20, 'expired': False, 'digest': 'sha256:' + 'd' * 64, 'name': 'orbit-candidate-10-2',
                     'workflow_run': {'id': 10, 'head_sha': self.expected['head_commit']}}
-        with mock.patch('candidate.subprocess.check_output', return_value=json.dumps(metadata)):
+        with mock.patch('candidate.subprocess.run', return_value=artifact_response(metadata)):
             candidate.verify_remote(self.expected, '20', 'd' * 64)
         for change in [{'expired': True}, {'id': 21}, {'digest': None}, {'name': 'orbit-candidate-10-3'},
                        {'workflow_run': {'id': 11, 'head_sha': self.expected['head_commit']}},
                        {'workflow_run': {'id': 10, 'head_sha': 'c' * 40}}]:
-            with self.subTest(change=change), mock.patch('candidate.subprocess.check_output', return_value=json.dumps(dict(metadata, **change))):
+            with self.subTest(change=change), mock.patch('candidate.subprocess.run', return_value=artifact_response(dict(metadata, **change))):
                 with self.assertRaises(ValueError):
                     candidate.verify_remote(self.expected, '20', 'd' * 64)
+
+
+class RemoteArtifactRead(unittest.TestCase):
+    def setUp(self):
+        self.expected = {'repository':'iml885203/orbit','run_id':'10','producer_attempt':'2','head_commit':'b'*40}
+        self.metadata = {'id':20,'expired':False,'digest':'sha256:'+'d'*64,'name':'orbit-candidate-10-2',
+                         'workflow_run':{'id':10,'head_sha':'b'*40}}
+
+    def verify(self):
+        return candidate.verify_remote(self.expected,'20','d'*64)
+
+    def test_transient_statuses_read_only_exact_id_then_verify_identity(self):
+        for code in (404,500,502,503,504):
+            with self.subTest(code=code), mock.patch('candidate.subprocess.run',side_effect=[artifact_response({},code),artifact_response(self.metadata)]) as request, mock.patch('candidate.time.sleep') as sleep:
+                self.assertEqual(self.verify(),self.metadata)
+                self.assertEqual(request.call_count,2)
+                for call in request.call_args_list:
+                    self.assertEqual(call.args[0],['gh','api','--include','repos/iml885203/orbit/actions/artifacts/20'])
+                    self.assertEqual(call.kwargs['timeout'],10)
+                sleep.assert_called_once_with(0.5)
+
+    def test_exhaustion_has_three_attempts_and_bounded_delays(self):
+        with mock.patch('candidate.subprocess.run',return_value=artifact_response({},404)) as request, mock.patch('candidate.time.sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'HTTP 404 after 3 attempt'):
+                self.verify()
+            self.assertEqual(request.call_count,3)
+            self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
+
+    def test_permanent_failures_stop_and_timeout_exhaustion_stays_bounded(self):
+        responses = [artifact_response({},code) for code in (401,403,429,422)]
+        responses += [subprocess.CompletedProcess([],1,stdout='no headers',stderr='HTTP 404'),
+                      subprocess.CompletedProcess([],1,stdout='HTTP/2.0 200 Status\n\n{}',stderr='error')]
+        for response in responses:
+            with self.subTest(response=response.stdout), mock.patch('candidate.subprocess.run',return_value=response) as request, mock.patch('candidate.time.sleep') as sleep:
+                with self.assertRaises(ValueError):self.verify()
+                self.assertEqual(request.call_count,1)
+                sleep.assert_not_called()
+        with mock.patch('candidate.subprocess.run',side_effect=subprocess.TimeoutExpired('gh',10)) as request, mock.patch('candidate.time.sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'10s limit'):self.verify()
+            self.assertEqual(request.call_count,3)
+            self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
+
+    def test_mixed_temporary_failures_share_three_attempts(self):
+        responses = [subprocess.TimeoutExpired('gh',10),artifact_response({},503),
+                     subprocess.TimeoutExpired('gh',10),artifact_response(self.metadata)]
+        with mock.patch('candidate.subprocess.run',side_effect=responses) as request, mock.patch('candidate.time.sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'after 3 attempts'):self.verify()
+            self.assertEqual(request.call_count,3)
+            self.assertEqual(sleep.call_args_list,[mock.call(0.5),mock.call(1.0)])
+
+    def test_timeout_then_matching_response_recovers_with_the_same_budget(self):
+        with mock.patch('candidate.subprocess.run',side_effect=[subprocess.TimeoutExpired('gh',10),artifact_response(self.metadata)]) as request, mock.patch('candidate.time.sleep') as sleep:
+            self.assertEqual(self.verify(),self.metadata)
+            self.assertEqual(request.call_count,2)
+            self.assertTrue(all(call.kwargs['timeout']==10 for call in request.call_args_list))
+            sleep.assert_called_once_with(0.5)
+
+    def test_malformed_or_untrusted_success_never_becomes_retry_success(self):
+        values = ['invalid JSON',[],{},dict(self.metadata,expired=True),dict(self.metadata,workflow_run=None),
+                  dict(self.metadata,digest='sha256:'+'e'*64),dict(self.metadata,expired='false')]
+        for value in values:
+            with self.subTest(value=value), mock.patch('candidate.subprocess.run',side_effect=[artifact_response(value),artifact_response(self.metadata)]) as request, mock.patch('candidate.time.sleep') as sleep:
+                with self.assertRaises(ValueError):self.verify()
+                self.assertEqual(request.call_count,1)
+                sleep.assert_not_called()
 
 
 class NativeImpact(unittest.TestCase):

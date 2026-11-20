@@ -167,7 +167,12 @@ and destructive-operation rules. Deeper references live in the repository's
 - Use `orbit up --infra --json` only when the user explicitly wants
   containers without host services.
 - A canceled or timed-out lifecycle wait may leave accepted daemon work running.
-  Read `orbit status --json` before retrying; do not infer rollback or dispatch
+  When an operation ID is available, run `orbit operation <id> --json` with the
+  same instance and explicit config flags. A successful query can return a failed
+  operation: inspect `data.state`, `error`, `cleanup` and `warnings`. This lookup
+  does not start a daemon or require the current config; history is bounded and
+  disappears on daemon restart. Without an ID, read `orbit status --json`
+  before retrying; do not infer rollback or dispatch
   the same action again just because observation ended. Use timeout flags only
   when the installed command's `--help` lists them.
 - Check whole-down cleanup evidence when the response provides it:
@@ -187,8 +192,11 @@ and destructive-operation rules. Deeper references live in the repository's
   Environment values need `--show-secrets`; key names are always listed.
 - After editing the active config, normal `orbit up --json` validates before
   interruption, restores resources that were running, then performs the
-  requested startup selection. Use `orbit env apply --json` when the edit must
-  apply without starting any resource that was already stopped.
+  requested startup selection. Use `orbit env apply --dry-run --json` to inspect stops, restarts, removals,
+  newly required dependency starts and daemon handoff before applying. It is
+  read-only and honors `--instance`. Treat it as a snapshot; apply recalculates.
+  Use `orbit env apply --json` to apply without starting unrelated stopped
+  resources; newly required dependencies can start.
 
 ## Diagnostics
 

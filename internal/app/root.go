@@ -90,12 +90,16 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
-		scheduleAutomaticUpdateCheck()
+		if !environmentApplyPreviewCommand(executed) {
+			scheduleAutomaticUpdateCheck()
+		}
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
 	showUpdateNotification(executed)
-	scheduleAutomaticUpdateCheck()
+	if !environmentApplyPreviewCommand(executed) {
+		scheduleAutomaticUpdateCheck()
+	}
 }
 
 func newRootCommand() *cobra.Command {
@@ -120,6 +124,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(downCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(inspectCmd())
+	rootCmd.AddCommand(operationCmd())
 	rootCmd.AddCommand(restartCmd())
 	rootCmd.AddCommand(logsCmd())
 	rootCmd.AddCommand(openCmd())
@@ -198,7 +203,9 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 	if err := waitForPendingAutomaticUpdate(cmd); err != nil {
 		return err
 	}
-	showAutomaticUpdateDisclosure(cmd)
+	if !environmentApplyPreviewCommand(cmd) {
+		showAutomaticUpdateDisclosure(cmd)
+	}
 	// Apply saved settings (workspace root, SQL mode) to env for all commands
 	s := daemon.LoadSettings(daemon.DefaultSettingsPath())
 	s.ApplyToEnv()
@@ -230,9 +237,15 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 }
 
 func prepareRootEnvironment(cmd *cobra.Command) error {
+	if environmentApplyPreviewCommand(cmd) {
+		return prepareEnvironmentApplyPreviewContext(cmd)
+	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	configFlagGiven = explicitConfig
 	cli.StartCommand = startCommand
+	if cmd.Name() == "operation" && cmd.Parent() == cmd.Root() {
+		return nil
+	}
 	configContextKind = ""
 	if daemonContextKind != "" {
 		configContextKind = daemonContextKind
@@ -331,11 +344,13 @@ func isDaemonRestartCommand(cmd *cobra.Command) bool {
 	return cmd.Name() == "restart" && cmd.Parent() != nil && cmd.Parent().Name() == "daemon"
 }
 
-// contextualizeDaemonUnavailable keeps every daemon-backed command on the
-// same recovery path. Before setup the user must initialize; with a selected
-// project or environment, starting it is the next step. The underlying socket
-// error is an implementation detail on both paths.
+// Unavailable diagnostic history cannot be recovered by provisioning a runtime.
+// Other daemon-backed commands retain the setup/start recovery path.
 func contextualizeDaemonUnavailable(err error) error {
+	var query operationQueryError
+	if errors.As(err, &query) {
+		return err
+	}
 	if !errors.Is(err, daemon.ErrDaemonUnreachable) {
 		return err
 	}
@@ -558,7 +573,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "init", "switch", "status", "inspect", "doctor", "down", "logs", "open",
+	case "init", "switch", "status", "inspect", "operation", "doctor", "down", "logs", "open",
 		"version", "update", "uninstall", "skill", "history", "settings", "trace", "tracing", "instance", "source":
 		return false
 	case "env":
@@ -576,6 +591,9 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
+	if environmentApplyPreviewCommand(cmd) {
+		return false
+	}
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Name() == "history" || c.Name() == "uninstall" || c.Name() == "skill" {
 			return false
