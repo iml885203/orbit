@@ -43,20 +43,39 @@ func TestGraceProcessHelper(t *testing.T) {
 		defer readyWriter.Close()
 		cmd.ExtraFiles = []*os.File{readyWriter}
 		cmd.Env = append(cmd.Env, graceHelperMode+"="+descendantMode, "ORBIT_PROCESS_READY_FD=1")
+		var explicitStop chan os.Signal
 		if os.Getenv("ORBIT_PROCESS_ESCAPE_GROUP") == "1" {
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			explicitStop = make(chan os.Signal, 1)
+			signal.Notify(explicitStop, syscall.SIGTERM)
+			defer signal.Stop(explicitStop)
 		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
+		if explicitStop != nil {
+			fmt.Printf("OWNED-DESCENDANT=%d\n", cmd.Process.Pid)
+		}
+		published := false
+		defer func() {
+			if explicitStop != nil && !published {
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+			}
+		}()
 		_ = readyWriter.Close()
 		var ready [1]byte
 		if _, err := readyReader.Read(ready[:]); err != nil {
 			t.Fatal(err)
 		}
 		fmt.Printf("DESCENDANT=%d\n", cmd.Process.Pid)
+		published = true
+		if explicitStop != nil {
+			<-explicitStop
+			fmt.Println("LEADER-STOP-RECEIVED")
+		}
 		return
 	}
 	if mode == "uncooperative" {

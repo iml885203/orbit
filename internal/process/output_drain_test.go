@@ -288,8 +288,19 @@ func TestStopSurfacesEscapedDescriptorDrainTimeout(t *testing.T) {
 	manager := NewManager()
 	manager.CancelGrace = 100 * time.Millisecond
 	descendant := make(chan int, 1)
+	ownedDescendant := make(chan int, 1)
 	exited := make(chan error, 1)
+	stopReceived := make(chan struct{}, 1)
 	manager.OnOutput = func(_ string, line string) {
+		if line == "LEADER-STOP-RECEIVED" {
+			stopReceived <- struct{}{}
+		}
+		if value, ok := strings.CutPrefix(line, "OWNED-DESCENDANT="); ok {
+			pid, err := strconv.Atoi(value)
+			if err == nil {
+				ownedDescendant <- pid
+			}
+		}
 		if value, ok := strings.CutPrefix(line, "DESCENDANT="); ok {
 			pid, err := strconv.Atoi(value)
 			if err == nil {
@@ -302,18 +313,43 @@ func TestStopSurfacesEscapedDescriptorDrainTimeout(t *testing.T) {
 	env["ORBIT_PROCESS_ESCAPE_GROUP"] = "1"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	var pid int
+	defer func() {
+		_ = manager.Stop("escaped-output", time.Second)
+		if pid == 0 {
+			select {
+			case pid = <-ownedDescendant:
+			default:
+			}
+		}
+		if pid > 0 {
+			_ = platform.KillProcessGroup(pid, syscall.SIGKILL)
+			assertOwnedProcessGroupGone(t, pid)
+		}
+	}()
 	if err := manager.Start(ctx, "escaped-output", t.TempDir(), graceHelperCommand(), env, nil, 1); err != nil {
 		t.Fatal(err)
 	}
-	var pid int
 	select {
 	case pid = <-descendant:
 	case <-time.After(5 * time.Second):
 		t.Fatal("missing owned test descendant")
 	}
-	defer func() { _ = platform.KillProcessGroup(pid, syscall.SIGKILL) }()
+	leader, _, ok := manager.GetProcessInfo("escaped-output")
+	if !ok || !platform.IsProcessAlive(leader) {
+		t.Fatal("leader exited before explicit stop")
+	}
+	started := time.Now()
 	if err := manager.Stop("escaped-output", time.Second); !errors.Is(err, ErrOutputDrainTimeout) {
 		t.Fatalf("stop lost output failure: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > 4*time.Second {
+		t.Fatalf("stop exceeded the bounded drain window: %s", elapsed)
+	}
+	select {
+	case <-stopReceived:
+	default:
+		t.Fatal("leader did not acknowledge explicit stop")
 	}
 	select {
 	case err := <-exited:
