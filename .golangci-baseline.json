@@ -1090,15 +1090,6 @@
       "count": 1
     },
     {
-      "path": "internal/process/manager.go",
-      "rule": "funlen",
-      "message": "Function 'Start' is too long (# > 120)",
-      "scope": "func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[string]string, preStart []string, epoch int) error {",
-      "source": "func (m *Manager) Start(ctx context.Context, name, dir, command string, env map[string]string, preStart []string, epoch int) error {",
-      "metric": 141,
-      "count": 1
-    },
-    {
       "path": "internal/config/validate.go",
       "rule": "funlen",
       "message": "Function 'Validate' is too long (# > 120)",

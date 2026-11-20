@@ -142,3 +142,86 @@ and identity mismatches fail immediately. Unsuccessful terminal results and an
 exhausted budget fail visibly. Discovery has a separate bounded budget; neither
 path retries dispatch. After a lost dispatch response, inspect accepted work
 before choosing an existing run ID; do not blindly repeat the update.
+
+### Keep a package observation result
+
+Homebrew and Scoop jobs retain an observer-only artifact for seven days, named
+`package-observation-<channel>-<Orbit run ID>-<attempt>`. It records which updater
+was selected and why observation passed or stopped. `success` means **the updater
+succeeded**; immutable-release and current formula/manifest checks remain separate
+gates. A gate that fails before the observer starts may leave no result artifact.
+
+![Dispatch intent is recorded before dispatch, selected run identity is checked before observation, and updater success remains separate from channel verification](./assets/package-observation.svg)
+
+For a local observation, set optional `SYNC_RESULT_PATH` to a file in allocated
+task storage. Without it, the helper retains its existing logs and exit behavior.
+The composite action's optional `result_path` supplies that environment variable.
+Only the JSON file is uploaded; its sibling lock and temporary files are not.
+
+To resume from a retained result, download the **exact** artifact from the **exact**
+Orbit run into your allocated task workspace. Use a checkout containing this helper:
+
+```bash
+gh run download ORBIT_RUN_ID --repo iml885203/orbit \
+  --name package-observation-scoop-ORBIT_RUN_ID-ATTEMPT --dir /path/to/task/restored
+REPOSITORY=iml885203/scoop-bucket VERSION=v1.5.1 \
+  SYNC_RESULT_PATH=/path/to/task/restored/package-observation-scoop.json \
+  .github/actions/sync-package-repository/sync.sh
+```
+
+Authenticate `gh` for the package repository, for example with `GH_TOKEN` in your
+environment. Never put credentials in the JSON file. Download does not automatically
+resume a job: this explicit local invocation validates the restored file, then
+rechecks the selected run remotely. It does not dispatch or discover another run.
+The original dispatch correlation and exact title check survive restoration, even
+when the current Orbit run/attempt differs. A persisted `identity_verified` flag
+never substitutes for a new check.
+
+If dispatch may have been accepted but no run ID was selected, the helper refuses
+to dispatch again. Inspect accepted work and set `EXISTING_RUN_ID` to reconcile
+that exact updater. A conflicting ID fails before network calls. The hosted
+`existing_run_id` workflow recovery above also works without a result artifact,
+including after retention expires. Artifacts are not an automatic cross-job restore.
+
+#### Maintainer result contract
+
+`docs/delivery.md` owns `orbit.package-observation.v1`. This maintainer schema is
+independent of `orbit.cli.v1`; it does not authorize release or package promotion.
+
+| Field | Meaning |
+| --- | --- |
+| `schema`, `repository`, `version` | Named schema and exact requested package/release |
+| `producer` | Original dispatch `run_id` and `attempt` (correlation is their hyphenated join), or null for explicit existing-run recovery |
+| `state`, `reason_code` | Current observation stage and stable reason below |
+| `dispatch_acknowledged` | Dispatch returned successfully; not proof of updater identity |
+| `selected_run` | Positive decimal `id` and locally constructed canonical `url`, or null |
+| `identity_verified` | Current stage passed identity checks; never trusted on restoration |
+| `observation` | Allowlisted updater `status`/`conclusion`, or null |
+| `mismatches` | Field names, symbolic expected rules and safe observed markers |
+| `started_at`, `observed_at` | UTC timestamps; the first survives restoration |
+| `recovery` | Safe next `action` and selected `run_id`, if available |
+
+States are `dispatch`, `selected` (unverified), `accepted` (identity checked),
+`observing`, `success`, `failure`, and `identity_mismatch`. Reasons are
+`dispatch_pending`, `dispatch_unknown`, `selected_unverified`, `accepted`,
+`observing`, `updater_success`, `updater_failed`, `identity_mismatch`,
+`observation_exhausted`, `request_denied`, `invalid_response`,
+`discovery_exhausted`, and `budget_exhausted`. Recovery actions are
+`observe_existing_run`, `inspect_dispatch`, `inspect_failure`, and `none`.
+
+Mismatch fields are `id`, `repository`, `path`, `head_branch`, `event`, and
+`display_title`. Their expected rules are `selected_run_id`, `requested_repository`,
+`update_workflow`, `main_branch`, `dispatch_event`, and `dispatch_title` respectively.
+Observed values are only `different`, `missing`, `invalid_type`, or `oversize`;
+raw mismatched strings are never copied, even when short. Results contain no raw
+API bodies, arbitrary stderr, credentials or signed URLs.
+
+Input is limited to 16 KiB **before** JSON decoding. Output has the same limit
+**after** JSON escaping and UTF-8 encoding. The helper validates the fixed shape,
+identity and states before external actions. Unknown top-level input fields are ignored and never reemitted. It writes only known fields using
+atomic replacement. A local file lock prevents concurrent writers on one path.
+Checkpoint validation errors leave the original file intact; inspect them rather
+than treating them as an updater result. Write errors fail visibly. A failed
+pre-dispatch write prevents dispatch. If storage fails after dispatch, the log's
+exact updater URL may be the remaining recovery evidence; durable persistence
+cannot be promised after a disk failure. Retries and deadlines are unchanged.

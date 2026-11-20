@@ -94,7 +94,10 @@ Go `^TestE2E_` suite, so no e2e test is left to run only by hand.
 When a shell journey fails, `make test-journeys` exports a curated diagnostic
 bundle under `artifacts/installed-user-journeys/<journey>/attempt-<n>`. The
 bundle contains bounded structured outputs, stderr captures, and a bounded
-daemon-log tail with sensitive fields redacted. It never archives the complete
+daemon-log tail with sensitive fields redacted. The port-retry harness also
+exports its relocation attempts before deleting temporary state. Its deliberate
+port conflict waits for the owned fixture socket to be released before allowing
+a retry; a release timeout fails visibly instead of retrying. It never archives the complete
 temporary project, configuration, binaries, or daemon state. CI retains this
 bundle briefly only when the installed-user job fails.
 

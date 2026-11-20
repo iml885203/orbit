@@ -23,6 +23,11 @@
           {/if}
         </span>
       </div>
+      {#if sw.phase === 'stalled'}
+        <p>The last graph remains read-only. Orbit is still watching for the replacement daemon.</p>
+        <button type="button" onclick={() => store.graph.refresh()}>Check graph again</button>
+        <button type="button" onclick={() => window.location.reload()}>Reload dashboard</button>
+      {/if}
       {#if sw.phase === 'stopping' && sw.total > 0}
         <div class="progress" aria-label="Stopping services">
           <div class="progress-bar" style:width="{pct}%"></div>

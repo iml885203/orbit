@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { store, toast, replaceGraphData, openLogViewer } from '../../lib/stores.svelte'
+  import { store, toast, mutationsDisabled, openLogViewer } from '../../lib/stores.svelte'
   import { opProgress } from '../../lib/opProgress.svelte'
-  import { switchEnv, apiPost, fetchGraph } from '../../lib/api'
+  import { switchEnv, apiPost } from '../../lib/api'
   import { environmentActionState } from '../../lib/graphActions'
   import { Power, PowerOff, Database, ExternalLink, ScrollText } from '@lucide/svelte'
   import ConfirmModal from '../ConfirmModal.svelte'
@@ -16,7 +16,7 @@
       s => s.state !== 'stopped' && s.state !== 'pending'
     ).length
   )
-  const actionState = $derived(environmentActionState(store.graph.data?.nodes ?? []))
+  const actionState = $derived(environmentActionState((store.graph.data?.nodes ?? []).map(node => store.graph.projectNode(node))))
   const primaryAction = $derived(actionState.primary)
   const instanceContext = $derived(store.daemon.instanceName ? ` in instance \`${store.daemon.instanceName}\`` : '')
 
@@ -43,8 +43,9 @@
 
   async function doSwitch(short: string, confirmed = false, currentIdentity = '', targetIdentity = '', confirmedResources: string[] = []) {
     const total = running
-    store.graph.envSwitching = { target: short, total, phase: 'stopping' }
+    if (!store.graph.beginSwitch(short, total)) return
     const { ok, data } = await switchEnv(short, confirmed, currentIdentity, targetIdentity, confirmedResources)
+    store.graph.receiveSwitch(ok, data)
     if (!ok) {
       if (data?.confirmation_required && data.current_context) {
         pending = {
@@ -55,33 +56,13 @@
           targetIdentity: data.target_context?.identity || '',
           resources: data.running_resources ?? [],
         }
-        store.graph.envSwitching = null
         return
       }
       toast(data?.error || 'Failed to switch env')
-      store.graph.envSwitching = null
       return
     }
     toast(data?.message || `Switched to ${short}`)
-    // We're now live on this env; clear any preview so the watermark
-    // and read-only state come off immediately rather than waiting for
-    // the SSE tick.
-    store.graph.preview = null
-    // Stop phase done; daemon's reloaded cfg, but our store.graph.data
-    // still holds the previous env until the next SSE tick brings the
-    // new graph in. Flip to "loading" phase and wait for that to land
-    // before clearing the overlay.
-    store.graph.envSwitching = { target: short, total, phase: 'loading' }
-    if (!(await waitForGraphEnv(short, 10_000))) {
-      // Don't silently clear a wait that never completed: show a stalled
-      // phase (daemon may still be restarting) and keep watching. Only
-      // after the extended window give up loudly.
-      store.graph.envSwitching = { target: short, total, phase: 'stalled' }
-      if (!(await waitForGraphEnv(short, 20_000))) {
-        toast(`Switched to ${short}, but its graph never loaded — is the daemon back up? Try reloading.`)
-      }
-    }
-    store.graph.envSwitching = null
+
   }
 
   // Promotion path from preview → live. Re-uses the same confirm modal
@@ -92,27 +73,6 @@
     if (!store.graph.preview) return
     const target = store.graph.preview.env
     doSwitch(target)
-  }
-
-  // Wait for the live graph to reflect the target env, with a deadline.
-  // Actively fetches /api/graph instead of watching store.graph.data:
-  // the SSE-driven refetch in App.svelte is keyed on service status, and
-  // two envs whose service snapshots happen to match produce the same key
-  // — passively waiting on the store would stall forever in that case.
-  // (A polling loop, not runed.watch, because this runs post-await in
-  // doSwitch, outside Svelte's effect context — watch() throws
-  // effect_orphan there.)
-  // Resolves true when the live graph reflects the target env, false when
-  // the timeout elapses first — callers decide how loudly to react.
-  async function waitForGraphEnv(target: string, timeoutMs: number): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      const g = await fetchGraph()
-      if (g) replaceGraphData(g)
-      if (g?.env === target) return true
-      await new Promise(r => setTimeout(r, 500))
-    }
-    return false
   }
 
   async function doDown() {
@@ -221,20 +181,21 @@
         class="toolbar-btn primary"
         type="button"
         title={`Activate ${store.graph.preview.env} — stops services from ${current}`}
+        disabled={!store.graph.canSwitch}
         onclick={useThisEnv}
       ><Power size={14} /> Use this env</button>
       <button
         class="toolbar-btn"
         type="button"
         title="Return to the live env view"
-        onclick={() => store.graph.preview = null}
+        onclick={() => store.graph.exitPreview()}
       >Exit preview</button>
     {:else}
       {#if primaryAction}
         <button
           class="toolbar-btn primary"
           type="button"
-          disabled={primaryAction.kind === 'busy' || busy}
+          disabled={primaryAction.kind === 'busy' || busy || mutationsDisabled()}
           aria-busy={busy}
           onclick={runPrimaryAction}
         >
@@ -245,12 +206,12 @@
         </button>
       {/if}
       {#if running > 0}
-        <button class="toolbar-btn danger" type="button" title="Stop the current environment" disabled={busy} aria-busy={busy} onclick={downAll}><PowerOff size={14} /> Stop environment</button>
+        <button class="toolbar-btn danger" type="button" title="Stop the current environment" disabled={busy || mutationsDisabled()} aria-busy={busy} onclick={downAll}><PowerOff size={14} /> Stop environment</button>
       {/if}
       <details class="advanced-actions">
         <summary>More</summary>
         <div class="advanced-menu">
-          <button type="button" disabled={busy} aria-busy={busy} onclick={infraOnly}><Database size={14} /> Start infrastructure only</button>
+          <button type="button" disabled={busy || mutationsDisabled()} aria-busy={busy} onclick={infraOnly}><Database size={14} /> Start infrastructure only</button>
         </div>
       </details>
     {/if}

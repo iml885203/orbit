@@ -28,7 +28,7 @@
     store.graph.active?.groups?.find(g => g.name === data.name)?.services ?? [],
   )
   const groupNodes = $derived(
-    (store.graph.active?.nodes ?? []).filter(node => services.includes(node.name)),
+    (store.graph.active?.nodes ?? []).filter(node => services.includes(node.name)).map(node => store.graph.projectNode(node)),
   )
   const groupChanging = $derived(
     groupNodes.some(node => ['starting', 'building', 'stopping', 'restarting'].includes(node.state)),

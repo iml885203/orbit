@@ -544,6 +544,12 @@ services:
 | `depends_on` | list | no | 必須先 `Healthy` 才能啟動的名稱 |
 | `kafka` | object | no | `produces` / `consumes` topic 清單 — 在 graph 上畫成 async edge |
 
+`pre_start` 與主指令由同一個 execution 管理。準備期間停止或取消 service，
+會終止當前指令的 process tree，並等待最後輸出排空；後續準備指令與主指令
+都不會再啟動。舊 execution 完成清理後，才能啟動替代 execution。Log 會保留
+各指令依序產生的 `[pre_start]` 輸出與結束結果。非 watch .NET 在這之前執行的
+build 有獨立的生命週期。
+
 對未啟用 watch 的 .NET service，Orbit 會逐一建置設定的 project，再啟動
 service。即使多個 service 同時符合啟動條件，當 MSBuild project 共用輸出
 artifact 時也不會互相競爭。Orbit 會在建置後取得各 project 評估出的

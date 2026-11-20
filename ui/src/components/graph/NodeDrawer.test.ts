@@ -1,12 +1,18 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/svelte'
+import type { GraphResponse } from '$lib/types.gen'
 import NodeDrawer from './NodeDrawer.svelte'
 import NodeDrawerSelection from './NodeDrawerSelection.test.svelte'
 import { store } from '../../lib/stores.svelte'
 
 describe('NodeDrawer', () => {
   beforeEach(() => {
-    store.graph.data = null
+    store.graph.dispose()
+    const owner = { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' }
+    store.daemon.connected = true
+    store.daemon.runtimeContext = owner
+    store.graph.data = { env: 'local', runtime: owner, nodes: [], edges: [] }
+    store.graph.publish(store.graph.data)
     store.graph.preview = null
     store.graph.selectedNode = null
     store.daemon.envs = null
@@ -117,7 +123,7 @@ describe('NodeDrawer', () => {
       blockedBy: 'redis',
     }
     store.graph.data = {
-      env: 'local',
+      env: 'local', runtime: { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' },
       nodes: [
         node,
         { name: 'redis', kind: 'infra', state: 'stopped' },
@@ -148,7 +154,7 @@ describe('NodeDrawer', () => {
       blockedBy: 'api',
     }
     store.graph.data = {
-      env: 'local',
+      env: 'local', runtime: { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' },
       nodes: [
         node,
         {
@@ -182,7 +188,7 @@ describe('NodeDrawer', () => {
       blockedBy: 'api',
     }
     store.graph.data = {
-      env: 'local',
+      env: 'local', runtime: { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' },
       nodes: [
         node,
         {
@@ -222,24 +228,32 @@ describe('NodeDrawer detached dependency lifecycle', () => {
   it('updates lifecycle actions through detach and reattach requests', async () => {
     const blocked = { name: 'shop', kind: 'frontend' as const, state: 'degraded', blockedBy: 'api' }
     const api = { name: 'api', kind: 'backend' as const, state: 'stopped' }
-    const attached = { env: 'local', nodes: [blocked, api], edges: [
+    store.graph.dispose()
+    const owner = { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' }
+    store.daemon.connected = true
+    store.daemon.runtimeContext = owner
+    const attached = { env: 'local', runtime: owner, nodes: [blocked, api], edges: [
       { from: 'shop', to: 'api', kind: 'dependency', detachable: true, detached: false },
     ] }
     const detached = { ...attached, nodes: [{ name: 'shop', kind: 'frontend' as const, state: 'stopped' }, api],
       edges: [{ ...attached.edges[0], detached: true }] }
+    let currentGraph: GraphResponse = attached
     const requests: Array<{ path: string; method?: string; body: unknown }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const path = String(input)
       const body = JSON.parse(String(init?.body ?? '{}'))
       requests.push({ path, method: init?.method, body })
       if (path === '/api/edges/shop/api') {
-        return new Response(JSON.stringify({ ok: true, graph: body.detached ? detached : attached }))
+        currentGraph = body.detached ? detached : attached
+        return new Response(JSON.stringify({ ok: true, graph: currentGraph }))
       }
+      if (path === '/api/graph') return new Response(JSON.stringify(currentGraph))
       if (path === '/api/service-env/shop') return new Response(JSON.stringify({ env: [] }))
       if (path === '/api/up') return new Response(JSON.stringify({ ok: true }))
       throw new Error(`Unexpected request: ${path}`)
     })
     store.graph.data = attached
+    store.graph.publish(attached)
     store.graph.selectedNode = 'shop'
     const view = render(NodeDrawerSelection)
     expect(view.getByRole('button', { name: 'Start api' })).toBeInTheDocument()

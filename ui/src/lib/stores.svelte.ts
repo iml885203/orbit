@@ -7,33 +7,10 @@
 // rather than scrolling a 50-field bag. resetForNewDaemon scope is the
 // daemon sub-store; graph and ui survive reconnect.
 
-import type { ResourceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphResponse, GraphRuntimeContext } from './types.gen'
+import type { ResourceStatus, DoctorCheck, EnvToggleInfo, VersionResponse, EnvsResponse, GraphRuntimeContext } from './types.gen'
 
+import { GraphStore } from './graph-state.svelte'
 import { MAX_LINES } from './constants'
-
-// Graph dashboard state — clears on env switch / new daemon.
-class GraphStore {
-  data = $state<GraphResponse | null>(null)
-  // preview is a parallel read-only snapshot of another env's graph.
-  // Sibling to data: live polling never touches preview; one-shot fetch
-  // from EnvSwitcher writes it. When non-null, views render preview
-  // instead of data and disable mutating controls.
-  preview = $state<GraphResponse | null>(null)
-  selectedNode = $state<string | null>(null)
-  selectedEdge = $state<{ from: string; to: string; x: number; y: number } | null>(null)
-  envSwitching = $state<{ target: string; total: number; phase: 'stopping' | 'loading' | 'stalled' } | null>(null)
-
-  // The graph the canvas should render — preview wins over the live
-  // poll feed. This is the contract: every view reads `active` so the
-  // preview-wins rule lives in exactly one place. Changing it (e.g.
-  // hide preview if stale) only touches this getter.
-  get active(): GraphResponse | null {
-    return this.preview ?? this.data
-  }
-  get isPreviewing(): boolean {
-    return this.preview !== null
-  }
-}
 
 // Daemon-bound live state — clears on daemon epoch change.
 class DaemonStore {
@@ -42,6 +19,7 @@ class DaemonStore {
   instanceName = $state('')
   services = $state<Record<string, ResourceStatus>>({})
   runtimeContext = $state<GraphRuntimeContext | null>(null)
+  environmentIdentity = $state('')
   logBuffers = $state<Record<string, string[]>>({})
   openLogs = $state<Record<string, boolean>>({})
   logModal = $state<{ target: string | null; loading: boolean }>({ target: null, loading: false })
@@ -114,8 +92,8 @@ class UIStore {
 }
 
 class AppStore {
-  graph = new GraphStore()
   daemon = new DaemonStore()
+  graph = new GraphStore(() => this.daemon, toast)
   ui = new UIStore()
 }
 
@@ -124,7 +102,7 @@ export const store = new AppStore()
 // mutationsDisabled keeps another env's on-disk graph a read-only preview.
 // Activating that environment makes its mutation controls available.
 export function mutationsDisabled(): boolean {
-  return store.graph.isPreviewing
+  return !store.graph.canMutate
 }
 
 // --- Helper functions ---
@@ -144,50 +122,6 @@ export function replaceServices(svcs: ResourceStatus[], context: GraphRuntimeCon
   store.daemon.services = next
 }
 
-export function replaceGraphData(next: GraphResponse) {
-  if (store.graph.data && graphDataKey(store.graph.data) === graphDataKey(next)) {
-    store.graph.data.runtime = next.runtime
-    return
-  }
-  store.graph.data = next
-}
-
-function graphDataKey(graph: GraphResponse): string {
-  return JSON.stringify({
-    env: graph.env,
-    groups: graph.groups ?? [],
-    nodes: graph.nodes.map(n => ({
-      name: n.name,
-      kind: n.kind,
-      runtimeKind: n.runtime_kind ?? '',
-      icon: n.icon ?? '',
-      label: n.label ?? '',
-      color: n.color ?? '',
-      state: n.state,
-      stateReason: n.stateReason ?? '',
-      failureKind: n.failureKind ?? '',
-      blockedBy: n.blockedBy ?? '',
-      portConflict: n.portConflict ?? null,
-      logsAvailable: n.logsAvailable ?? false,
-      mode: n.mode ?? '',
-      url: n.url ?? '',
-      ports: n.ports ?? {},
-      health: n.health ?? null,
-      sidecars: n.sidecars ?? [],
-      kafka: n.kafka ?? null,
-    })),
-    edges: graph.edges.map(e => ({
-      from: e.from,
-      to: e.to,
-      kind: e.kind,
-      topic: e.topic ?? '',
-      detached: e.detached,
-      detachable: e.detachable,
-      env_vars: e.env_vars ?? [],
-    })),
-  })
-}
-
 // resetForNewDaemon clears all daemon-bound state when the daemon epoch
 // changes (reconnect / restart). Only the "Daemon live state" group is
 // reset; the other two groups are intentionally preserved:
@@ -197,6 +131,8 @@ function graphDataKey(graph: GraphResponse): string {
 //     must survive a daemon restart.
 export function resetForNewDaemon() {
   store.daemon.runtimeContext = null
+  store.daemon.environmentIdentity = ''
+  store.graph.disconnect()
   store.daemon.services = {}
   store.daemon.logBuffers = {}
   store.daemon.envToggles = []

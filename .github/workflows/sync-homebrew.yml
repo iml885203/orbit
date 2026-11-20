@@ -58,6 +58,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           version: ${{ inputs.version }}
           existing_run_id: ${{ inputs.existing_run_id || '' }}
+          result_path: ${{ runner.temp }}/package-observation-homebrew.json
       - name: Verify the formula
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -78,3 +79,11 @@ jobs:
             }
           done
           echo "Homebrew formula updated to $VERSION" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain package updater observation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: package-observation-homebrew-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-observation-homebrew.json
+          retention-days: 7
+          if-no-files-found: ignore

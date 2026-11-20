@@ -19,7 +19,8 @@
   const reducedMotionQuery = new MediaQuery('prefers-reduced-motion: reduce')
   const reducedMotion = $derived(reducedMotionQuery.current)
 
-  let { node, onClose }: { node: GraphNode | null; onClose: () => void } = $props()
+  let { node: snapshot, onClose }: { node: GraphNode | null; onClose: () => void } = $props()
+  const node = $derived(snapshot ? store.graph.projectNode(snapshot) : null)
   const drawerInfraIcon = $derived(node && node.kind === 'infra' ? node.icon : null)
   // Preview mode: the node was rendered from another env's on-disk yaml,
   // so no live process exists. All mutating controls are disabled — the
@@ -37,7 +38,8 @@
     let blocker: GraphNode | undefined
     while (name && !seen.has(name)) {
       seen.add(name)
-      blocker = graph.nodes.find(candidate => candidate.name === name)
+      const candidate = graph.nodes.find(candidate => candidate.name === name)
+      blocker = candidate ? store.graph.projectNode(candidate) : undefined
       if (!blocker) return null
       name = blocker.blockedBy
     }
@@ -240,18 +242,6 @@
   type ServiceControlsInput = Pick<ResourceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'external_restart_count' | 'last_restart' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
 
   const resourceKind = $derived(node?.runtime_kind ?? (node?.kind === 'infra' ? 'container' : 'service'))
-  const liveRuntime = $derived.by(() => {
-    const graph = store.graph.data
-    const owner = graph?.runtime
-    const statusOwner = store.daemon.runtimeContext
-    if (!node || isPreviewing || store.graph.envSwitching || !store.daemon.connected ||
-        !owner || !statusOwner || !owner.config_path ||
-        owner.epoch !== store.daemon.daemonEpoch || owner.epoch !== statusOwner.epoch ||
-        owner.generation !== statusOwner.generation || owner.config_path !== statusOwner.config_path ||
-        !graph.nodes.includes(node)) return null
-    const status = store.daemon.services[node.name]
-    return status?.kind === resourceKind && status.mode === node.mode ? status : null
-  })
   const svc = $derived<ServiceControlsInput | null>(
     node
       ? {
@@ -262,11 +252,11 @@
           url: node.url,
           ports: node.ports,
           health_progress: node.health,
-          restart_count: liveRuntime ? liveRuntime.restart_count : node.restart_count ?? 0,
-          external_restart_count: liveRuntime ? liveRuntime.external_restart_count : node.external_restart_count ?? 0,
-          last_restart: liveRuntime ? liveRuntime.last_restart : node.last_restart,
-          startup_time: liveRuntime ? liveRuntime.startup_time : node.startup_time,
-          uptime: liveRuntime ? liveRuntime.uptime : node.uptime,
+          restart_count: node.restart_count ?? 0,
+          external_restart_count: node.external_restart_count ?? 0,
+          last_restart: node.last_restart,
+          startup_time: node.startup_time,
+          uptime: node.uptime,
         }
       : null
   )

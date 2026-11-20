@@ -380,12 +380,21 @@ func (s *Settings) SetServiceMode(name, mode string) error {
 	if s.ServiceModes == nil {
 		s.ServiceModes = make(map[string]string)
 	}
+	previous, existed := s.ServiceModes[name]
 	if mode == "dev" {
 		delete(s.ServiceModes, name)
 	} else {
 		s.ServiceModes[name] = mode
 	}
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if existed {
+			s.ServiceModes[name] = previous
+		} else {
+			delete(s.ServiceModes, name)
+		}
+		return err
+	}
+	return nil
 }
 
 // GetServiceModes returns a copy of all service mode overrides.

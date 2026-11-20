@@ -393,18 +393,30 @@ func (o *Orchestrator) StopService(ctx context.Context, name string) error {
 
 // RestartService stops and restarts a service.
 func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
-	o.mu.RLock()
+	return o.restartService(ctx, name, "")
+}
+
+// Callers serialize resource mutations. Kind must remain runtime truth until
+// retirement completes; requested intent belongs to the accepted daemon operation.
+func (o *Orchestrator) ChangeServiceMode(ctx context.Context, name, targetKind string) error {
+	if targetKind != "service" && targetKind != "container" {
+		return fmt.Errorf("invalid runtime kind: %s", targetKind)
+	}
+	cfg := o.holder.Load()
+	if cfg.Services[name] == nil || cfg.Containers[name] == nil {
+		return fmt.Errorf("%s is not available in both dev and container mode", name)
+	}
+	return o.restartService(ctx, name, targetKind)
+}
+
+func (o *Orchestrator) restartService(ctx context.Context, name, targetKind string) error {
+	o.mu.Lock()
 	info, exists := o.services[name]
 	if !exists {
-		o.mu.RUnlock()
+		o.mu.Unlock()
 		return fmt.Errorf("unknown service: %s", name)
 	}
 	kind := info.Kind
-	o.mu.RUnlock()
-
-	o.narrate(name, "restart requested")
-
-	o.mu.Lock()
 	// Stopping (not just a ctx cancel) so the poller's OnContainerGone
 	// reads the container vanishing as a stop in progress, not as
 	// healthy-drift ("removed outside orbit"). Transition(StateStopping)
@@ -414,7 +426,9 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	// Stop can unblock. Restart moves through Pending rather than Stopped, so
 	// state alone cannot distinguish a late expected exit from a new crash.
 	o.services[name].Generation++
+	ownerGeneration := info.Generation
 	o.mu.Unlock()
+	o.narrate(name, "restart requested")
 
 	// Stop
 	var stopErr error
@@ -430,7 +444,10 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	if stopErr != nil {
 		o.narrate(name, "stop failed: "+stopErr.Error())
 		o.mu.Lock()
-		info = o.services[name]
+		if o.services[name] != info || info.Generation != ownerGeneration {
+			o.mu.Unlock()
+			return stopErr
+		}
 		info.Transition(StateDegraded)
 		info.StateReason = fmt.Sprintf("could not restart: failed to stop existing resource: %v", stopErr)
 		info.FailureKind = FailureKindRuntime
@@ -446,7 +463,18 @@ func (o *Orchestrator) RestartService(ctx context.Context, name string) error {
 	}
 
 	o.mu.Lock()
-	info = o.services[name]
+	if o.services[name] != info || info.Generation != ownerGeneration {
+		o.mu.Unlock()
+		return fmt.Errorf("resource %s changed during retirement", name)
+	}
+	if err := ctx.Err(); targetKind != "" && err != nil {
+		info.Transition(StateStopped)
+		o.mu.Unlock()
+		return fmt.Errorf("restart %s canceled after retirement: %w", name, err)
+	}
+	if targetKind != "" {
+		info.Kind = targetKind
+	}
 	info.Transition(StatePending)
 	o.nextPendingStart++
 	info.pendingStart = o.nextPendingStart

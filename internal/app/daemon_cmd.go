@@ -599,7 +599,7 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	server.SetRestartLauncher(launchDashboardRestart)
 	server.SetUpdateLauncher(launchDashboardUpdate)
 	app.OnExternalContainerRestart = server.RecordExternalContainerRestart
-	app.ProcessMgr.OnStarted = func(_ string) {
+	app.ProcessMgr.OnOwnershipChanged = func(_ string) {
 		server.PersistState()
 	}
 	// Point starting services at the receiver's actual bound endpoint. Reads

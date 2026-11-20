@@ -462,6 +462,10 @@ func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
+	if err := s.checkLifecycleEnvironment(r); err != nil {
+		lifecycleAcceptanceError(w, err)
+		return
+	}
 	// from/to come from the URL path only. The legacy body form
 	// (/api/edges/detach with from/to in JSON) was removed after all clients
 	// migrated to PUT /api/edges/{from}/{to}.

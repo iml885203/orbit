@@ -2,7 +2,7 @@
   import { push } from 'svelte-spa-router'
   import { Eye } from '@lucide/svelte'
   import { store, toast } from '$lib/stores.svelte'
-  import { fetchGraph, mutateSource } from '$lib/api'
+  import { mutateSource } from '$lib/api'
   import SourceManager from './SourceManager.svelte'
 
   let managingSources = $state(false)
@@ -12,18 +12,7 @@
   }
 
   async function preview(identity: string) {
-    if (identity === store.graph.data?.env) {
-      store.graph.preview = null
-      close()
-      await push('/')
-      return
-    }
-    const graph = await fetchGraph(identity)
-    if (!graph) {
-      toast(`Failed to load ${identity}`)
-      return
-    }
-    store.graph.preview = graph
+    if (!(await store.graph.requestPreview(identity))) return
     close()
     await push('/')
   }

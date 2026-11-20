@@ -585,6 +585,13 @@ services:
 | `depends_on` | list | no | Names that must be `Healthy` before this starts |
 | `kafka` | object | no | `produces` / `consumes` topic lists — drawn as async edges on the graph |
 
+`pre_start` belongs to the same execution as the main command. Stopping or
+canceling during preparation stops its process tree and waits for final output;
+later preparation commands and the main command do not start. A replacement
+execution waits for the old one to retire. Logs keep each command's ordered
+`[pre_start]` output and exit result. The non-watch .NET build that runs before
+this execution has its own lifecycle.
+
 For non-watch .NET services, Orbit builds the configured projects one at a
 time before starting them. This keeps independently ready services from racing
 when MSBuild projects share output artifacts. Orbit evaluates each project's

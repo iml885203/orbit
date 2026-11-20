@@ -7,7 +7,7 @@ import { switchEnv } from '$lib/api'
 
 vi.mock('$lib/api', () => ({
   apiPost: vi.fn(),
-  fetchGraph: vi.fn(),
+  fetchGraph: vi.fn().mockResolvedValue(null),
   switchEnv: vi.fn(),
 }))
 
@@ -92,6 +92,9 @@ describe('EnvSwitcher', () => {
       },
     })
 
+    store.daemon.connected = true
+    store.daemon.daemonEpoch = 101
+    store.daemon.runtimeContext = { epoch: 101, generation: 1, config_path: '/work/payments/orbit.yaml' }
     render(EnvSwitcher)
     expect(screen.getByText('payments')).toBeInTheDocument()
     expect(screen.getByText('Project environment')).toBeInTheDocument()

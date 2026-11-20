@@ -58,6 +58,38 @@ func TestPackageSyncVerifiesBeforeMintingWriteToken(t *testing.T) {
 	}
 }
 
+func TestPackageSyncRetainsObserverEvidenceAfterFailure(t *testing.T) {
+	for _, channel := range []string{"homebrew", "scoop"} {
+		t.Run(channel, func(t *testing.T) {
+			workflow := readWorkflow(t, "sync-"+channel+".yml")
+			steps := sequence(t, mapping(t, mapping(t, workflow, "jobs"), "update"), "steps")
+			observe := stepIndex(steps, "uses", "./.github/actions/sync-package-repository")
+			retain := stepIndex(steps, "uses", "actions/upload-artifact@")
+			if observe < 0 || retain <= observe {
+				t.Fatal("observer result retention must follow package observation")
+			}
+			resultPath := "${{ runner.temp }}/package-observation-" + channel + ".json"
+			if scalar(t, mapping(t, steps.Content[observe], "with"), "result_path") != resultPath {
+				t.Fatal("observer must write the retained channel-specific result")
+			}
+			if _, exists := mappingValue(steps.Content[observe], "continue-on-error"); exists {
+				t.Fatal("result retention must not suppress an observation failure")
+			}
+			if scalar(t, steps.Content[retain], "if") != "always()" {
+				t.Fatal("retain observer evidence even after failure")
+			}
+			inputs := mapping(t, steps.Content[retain], "with")
+			if scalar(t, inputs, "path") != resultPath || scalar(t, inputs, "retention-days") != "7" ||
+				scalar(t, inputs, "if-no-files-found") != "ignore" {
+				t.Fatal("retain only the bounded result for seven days; prerequisite failure may leave no result")
+			}
+			if scalar(t, inputs, "name") != "package-observation-"+channel+"-${{ github.run_id }}-${{ github.run_attempt }}" {
+				t.Fatal("artifact must identify the exact channel, run and attempt")
+			}
+		})
+	}
+}
+
 func TestPackageSyncSecurityPolicyRejectsFailOpenMutations(t *testing.T) {
 	contents, err := os.ReadFile(filepath.Join(repositoryRoot(t), ".github", "workflows", "sync-homebrew.yml"))
 	if err != nil {

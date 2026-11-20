@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte'
 import GroupNode from './GroupNode.svelte'
 import { store } from '../../lib/stores.svelte'
@@ -6,7 +6,7 @@ import type { GraphResponse } from '../../lib/types.gen'
 
 function groupGraph(state: string): GraphResponse {
   return {
-    env: 'local',
+    env: 'local', runtime: { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' },
     groups: [{ name: 'app', services: ['api'] }],
     nodes: [{ name: 'api', kind: 'backend', state }],
     edges: [],
@@ -14,6 +14,15 @@ function groupGraph(state: string): GraphResponse {
 }
 
 describe('GroupNode', () => {
+  beforeEach(() => {
+    store.graph.dispose()
+    const owner = { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' }
+    store.daemon.connected = true
+    store.daemon.runtimeContext = owner
+    store.graph.data = { env: 'local', runtime: owner, nodes: [], edges: [] }
+    store.graph.publish(store.graph.data)
+  })
+
   afterEach(() => {
     cleanup()
     store.graph.data = null
@@ -52,7 +61,7 @@ describe('GroupNode', () => {
 
   it('locks both lifecycle directions while the group is changing', () => {
     store.graph.data = {
-      env: 'local',
+      env: 'local', runtime: { epoch: 101, generation: 1, config_path: '/workspace/local/orbit.yaml' },
       groups: [{ name: 'app', services: ['api', 'worker'] }],
       nodes: [
         { name: 'api', kind: 'backend', state: 'starting' },

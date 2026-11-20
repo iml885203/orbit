@@ -4,21 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/daemon"
 )
 
 func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
-	s.environmentTransitionMu.Lock()
+	if !s.beginLifecycleRequest(w, r) {
+		return
+	}
 	defer s.environmentTransitionMu.Unlock()
 	if requireMethod(w, r, http.MethodPut) {
 		return
 	}
-	generation := s.environmentGeneration.Load()
 	name := strings.TrimPrefix(r.URL.Path, "/api/service-mode/")
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "service name required"})
@@ -40,29 +41,41 @@ func (s *Server) handleServiceMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.settings.SetServiceMode(name, req.Mode); err != nil {
-		slog.Error("persist service mode", "component", "settings", "err", err)
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
-		return
-	}
-
 	kind := "service"
 	if req.Mode == "container" {
 		kind = "container"
 	}
-	s.snapshotMu.Lock()
-	s.app.Orchestrator.SetServiceKind(name, kind)
-	s.snapshotMu.Unlock()
-
-	s.startEnvironmentBackground(generation, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		if err := s.app.Orchestrator.RestartService(ctx, name); err != nil {
-			slog.Error("restart failed", "component", "service-mode", "name", name, "err", err)
+	s.snapshotMu.RLock()
+	operation := daemon.LifecycleOperation{Kind: "mode", TargetMode: req.Mode, Epoch: s.epoch(), Generation: s.environmentGeneration.Load(), ConfigPath: s.ConfigPath(), Instance: s.instanceName, Resources: []string{name}}
+	s.snapshotMu.RUnlock()
+	operation, err := s.lifecycle.accept(operation)
+	if err != nil {
+		lifecycleAcceptanceError(w, err)
+		return
+	}
+	if err := s.settings.SetServiceMode(name, req.Mode); err != nil {
+		s.lifecycle.discardAdmission(operation.ID)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	s.dispatchLifecycle(operation, func(id string) error {
+		// Group grace and the subsequent join/drain are separate waits. Keep the
+		// previous transition allowance beyond both, without duration overflow.
+		grace := s.holder.Load().Settings.ShutdownTimeout
+		budget := time.Duration(1<<63 - 1)
+		if grace <= (budget-2*time.Minute)/2 {
+			budget = 2*grace + 2*time.Minute
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), budget)
+		defer cancel()
+		err := s.app.Orchestrator.ChangeServiceMode(ctx, name, kind)
+		if err == nil {
+			s.lifecycle.phase(id, "starting")
+		}
+		s.PersistState()
+		return err
 	})
-
-	writeJSON(w, http.StatusOK, APIResponse{OK: true, Message: fmt.Sprintf("%s switching to %s mode", name, req.Mode)})
+	writeJSON(w, http.StatusOK, APIResponse{OK: true, OperationID: operation.ID, AffectedResources: []string{name}, Message: fmt.Sprintf("%s switching to %s mode", name, req.Mode)})
 }
 
 func runtimeServiceMode(cfg *config.Config, name, kind string) string {

@@ -4,8 +4,8 @@
   import { subscribe, onConnectionLost } from '$lib/eventbus'
   import { startHistoryStream } from '$lib/history.svelte'
   import { onAppMount as extAppMount, onDaemonState as extDaemonState, onEnvChanged as extEnvChanged, onDaemonReset as extDaemonReset } from '$ext'
-  import { store, replaceServices, replaceGraphData, appendLog, resetForNewDaemon } from '$lib/stores.svelte'
-  import { fetchEnvToggles, fetchSettings, fetchVersion, fetchEnvs, fetchGraph } from '$lib/api'
+  import { store, replaceServices, appendLog, resetForNewDaemon } from '$lib/stores.svelte'
+  import { fetchEnvToggles, fetchSettings, fetchVersion, fetchEnvs } from '$lib/api'
   import { tracing, fetchTracingStatus, subscribeLiveTraces } from '$lib/tracing.svelte'
   import type { StatusResponse } from '$lib/types.gen'
 
@@ -19,19 +19,6 @@
   import HistoryBar from './components/HistoryBar.svelte'
   import { routes } from './routes'
 
-  function graphKeyOf(resp: StatusResponse): string {
-    const resources = (resp.resources ?? [])
-      .map((s) => [
-        s.name, s.state, s.state_reason ?? '', s.mode ?? '', s.url ?? '',
-        s.logs_available ? 'logs' : '',
-        JSON.stringify(s.ports ?? {}),
-        s.health_progress ? `${s.health_progress.attempts}/${s.health_progress.last_err ?? ''}` : '',
-      ].join('|'))
-      .join(';')
-    return JSON.stringify([resp.epoch, resp.generation, resp.config_path, resources])
-  }
-  let lastGraphKey = ''
-
   let lastMetaContext = ''
 
   function fetchDaemonState() {
@@ -42,7 +29,7 @@
       extDaemonState(s)
     })
     fetchEnvs().then(e => { store.daemon.envs = e })
-    fetchGraph().then(g => { if (g) replaceGraphData(g) })
+    store.graph.refresh()
     fetchTracingStatus().then(s => { tracing.status = s })
   }
 
@@ -66,15 +53,12 @@
       }
       store.daemon.instanceName = resp.instance ?? ''
       store.daemon.connected = true
+      store.daemon.environmentIdentity = resp.context?.identity ?? ''
       replaceServices(resp.resources || [], { epoch: resp.epoch, generation: resp.generation, config_path: resp.config_path })
-      const key = graphKeyOf(resp)
-      if (key !== lastGraphKey || !store.graph.data) {
-        lastGraphKey = key
-        fetchGraph().then(g => { if (g) replaceGraphData(g) })
-      }
+      store.graph.observeStatus(resp)
     })
 
-    const cleanupConn = onConnectionLost(() => { store.daemon.connected = false })
+    const cleanupConn = onConnectionLost(() => { store.daemon.connected = false; store.graph.disconnect() })
 
     const cleanupLogs = subscribe('log', (data) => {
       const msg = data as LogMessage
@@ -109,6 +93,7 @@
       cleanupTraces()
       cleanupExt()
       clearInterval(versionInterval)
+      store.graph.dispose()
     }
   })
 </script>

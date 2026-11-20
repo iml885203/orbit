@@ -18,6 +18,8 @@ import (
 const lifecycleOperationLimit = 128
 const lifecycleActiveLimit = 32
 
+var errLifecycleBusy = errors.New("a mode transition for this resource is already accepted; observe its result before retrying")
+
 var errLifecycleCapacity = errors.New("lifecycle operation capacity reached")
 var errLifecycleEnvironmentChanged = errors.New("environment changed; inspect the selected target before retrying")
 var errLifecycleEnvironmentPrecondition = errors.New("invalid lifecycle environment precondition")
@@ -33,6 +35,19 @@ func (s *lifecycleOperations) accept(operation daemon.LifecycleOperation) (daemo
 	defer s.mu.Unlock()
 	if s.records == nil {
 		s.records = make(map[string]daemon.LifecycleOperation)
+	}
+	if operation.Kind == "mode" {
+		for id := range s.records {
+			if s.records[id].Kind == "mode" && s.records[id].FinishedAt == nil {
+				for _, name := range operation.Resources {
+					for _, reserved := range s.records[id].Resources {
+						if name == reserved {
+							return operation, errLifecycleBusy
+						}
+					}
+				}
+			}
+		}
 	}
 	active := 0
 	for id := range s.records {
@@ -65,6 +80,18 @@ func (s *lifecycleOperations) accept(operation daemon.LifecycleOperation) (daemo
 	s.records[operation.ID] = operation
 	s.order = append(s.order, operation.ID)
 	return operation, nil
+}
+
+func (s *lifecycleOperations) discardAdmission(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.records, id)
+	for index, value := range s.order {
+		if value == id {
+			s.order = append(s.order[:index], s.order[index+1:]...)
+			break
+		}
+	}
 }
 
 func (s *lifecycleOperations) read(id string) (daemon.LifecycleOperation, bool) {
@@ -136,6 +163,11 @@ func (s *Server) acceptLifecycle(request *http.Request, kind string, names []str
 	if err != nil {
 		return operation, err
 	}
+	s.dispatchLifecycle(operation, work)
+	return operation, nil
+}
+
+func (s *Server) dispatchLifecycle(operation daemon.LifecycleOperation, work func(string) error) {
 	s.startBackground(func() {
 		s.environmentTransitionMu.Lock()
 		defer s.environmentTransitionMu.Unlock()
@@ -149,7 +181,6 @@ func (s *Server) acceptLifecycle(request *http.Request, kind string, names []str
 		err := work(operation.ID)
 		s.lifecycle.finish(operation.ID, "lifecycle_failed", err)
 	})
-	return operation, nil
 }
 
 func (s *Server) handleLifecycleOperation(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +230,9 @@ func lifecycleAcceptanceError(w http.ResponseWriter, err error) {
 	code := "lifecycle_acceptance_failed"
 	status := http.StatusServiceUnavailable
 	switch {
+	case errors.Is(err, errLifecycleBusy):
+		code = "operation_busy"
+		status = http.StatusConflict
 	case errors.Is(err, errLifecycleCapacity):
 		code = "operation_capacity"
 	case errors.Is(err, errLifecycleEnvironmentChanged):

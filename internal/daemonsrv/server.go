@@ -391,9 +391,7 @@ func (s *Server) buildState() *DaemonState {
 		Services:   make(map[string]ServiceStateEntry),
 	}
 
-	// Snapshot service states against one immutable config snapshot.
 	snapshot := s.app.Orchestrator.GetAllServices()
-	cfg := s.holder.Load()
 	for i := range snapshot {
 		svc := &snapshot[i]
 		state.Services[svc.Name] = ServiceStateEntry{
@@ -407,13 +405,8 @@ func (s *Server) buildState() *DaemonState {
 
 		// Record process info for services
 		if svc.Kind == "service" {
-			if pid, pgid, ok := s.app.ProcessMgr.GetProcessInfo(svc.Name); ok {
-				rec := ProcessRecord{PID: pid, PGID: pgid}
-				if svcCfg, ok := cfg.Services[svc.Name]; ok {
-					rec.Command = svcCfg.Command
-					rec.Dir = svcCfg.Path
-				}
-				state.Processes[svc.Name] = rec
+			if owned, ok := s.app.ProcessMgr.Ownership(svc.Name); ok {
+				state.Processes[svc.Name] = ProcessRecord{PID: owned.PID, PGID: owned.PGID, Command: owned.Command, Dir: owned.Dir, Stage: owned.Stage}
 			}
 		}
 	}
