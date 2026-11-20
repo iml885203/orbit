@@ -7,6 +7,10 @@ on:
         description: Released semantic version tag
         required: true
         type: string
+      existing_run_id:
+        description: Accepted updater run to verify without dispatching another update
+        required: false
+        type: string
     secrets:
       PACKAGE_SYNC_APP_PRIVATE_KEY:
         description: Private key for the package-sync GitHub App
@@ -16,6 +20,10 @@ on:
       version:
         description: Released semantic version tag to verify
         required: true
+        type: string
+      existing_run_id:
+        description: Accepted updater run to verify without dispatching another update
+        required: false
         type: string
 
 permissions:
@@ -49,6 +57,7 @@ jobs:
           repository: iml885203/homebrew-tap
           token: ${{ steps.app-token.outputs.token }}
           version: ${{ inputs.version }}
+          existing_run_id: ${{ inputs.existing_run_id || '' }}
       - name: Verify the formula
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
