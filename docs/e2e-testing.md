@@ -36,20 +36,32 @@ by a person, wrong as an implicit side effect of running tests. Orbit
 enforces this — with resources running, `switch` asks for confirmation and a
 non-interactive caller must pass `--yes`.
 
-A harness should instead *verify* before it runs:
+![A read-only guard checks required resources before tests; failures leave provisioning to an explicit step.](./assets/e2e-readiness-guard.svg)
 
-1. Read `orbit env info --json`. It reports the env's identity and, per
-   resource, ports and URL with provenance — `declared` from the environment
-   file, `observed` from the running daemon. Observed values are withheld when
-   the daemon serves a different environment, so a harness can never mistake
-   another stack's ports for its own. Credentials-bearing environment values
-   require `--show-secrets`.
-2. Check that the resources the suite needs exist and are healthy
-   (`orbit status --json` has the full lifecycle detail).
-3. If they are not, fail fast with an actionable message — name the missing
-   resources and print the exact `orbit switch <env>` / `orbit up` command a
-   human (or the pipeline's provisioning stage) should run. Do not run it
-   yourself.
+A harness should verify only the resources its suite requires. First check
+`orbit ready --help`. If the installed CLI lacks this command, report its
+`orbit version --json` and require an explicit CLI update before adopting the
+example below. Existing harnesses may retain their own read-only identity and
+required-resource checks over `orbit env info --json` and `orbit status --json`.
+Those queries alone do not assert readiness. Never treat an unsupported command
+as an unhealthy resource or silently continue without a guard.
+
+```bash
+# Provision explicitly in a separate setup step, if needed.
+orbit ready postgres redis --json > readiness.json || exit 1
+# Use data.resources[].ports / url from readiness.json to configure the app.
+# Seed isolated test data, then run the suite's real application assertions.
+```
+
+A stopped frontend does not block a database-only suite. The guard never starts,
+switches or waits for resources. On failure, retain its reasons and exact
+config/instance-targeted recovery actions for the person or provisioning stage;
+do not execute those actions as an implicit test side effect.
+
+The [readiness assertion contract](agent-cli.md#required-resource-readiness-assertion)
+owns the result shape and global blockers, including pending config changes.
+Use `orbit env info --json` separately when you need declared metadata; use
+`orbit status --json` for full lifecycle detail. Neither is an assertion guard.
 
 On failure, `orbit up --json` carries its own evidence: `data.failed_resources`
 lists each resource that did not become healthy with its state, reason, and a
@@ -63,8 +75,8 @@ give the run a unique named instance:
 
 ```bash
 orbit up --instance ci-$BUILD_ID --infra --json
-orbit status --instance ci-$BUILD_ID --json
-# run tests against the resolved endpoints returned above
+orbit ready postgres redis --instance ci-$BUILD_ID --json
+# run tests against data.resources resolved endpoints returned above
 orbit instance clean ci-$BUILD_ID --json
 ```
 

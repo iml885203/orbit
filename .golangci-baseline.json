@@ -1657,15 +1657,6 @@
       "count": 1
     },
     {
-      "path": "internal/app/environment_selection.go",
-      "rule": "gocritic",
-      "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",
-      "scope": "func readEnvironmentSelection() environmentSelection {",
-      "source": "for _, source := range registry.List() {",
-      "metric": null,
-      "count": 1
-    },
-    {
       "path": "internal/app/source.go",
       "rule": "gocritic",
       "message": "rangeValCopy: each iteration copies 168 bytes (consider pointers or indexing)",

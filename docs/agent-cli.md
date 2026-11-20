@@ -269,11 +269,12 @@ caller (or its operator) intends the destruction.
 | Code | Meaning |
 |---|---|
 | `agent_plugin_failed` | a coding agent's plugin command failed; the replacement actions are the commands to run by hand |
-| `checks_failed` | doctor checks failed; resolve them, then run doctor again |
+| `checks_failed` | doctor checks or required-resource readiness failed; resolve the reported conditions, then repeat the command |
 | `canceled` | the caller or a supported catchable signal canceled the operation |
 | `command_failed` | unclassified failure; act on the hint |
 | `confirmation_required` | a destructive step needs `--yes` |
 | `daemon_unreachable` | Orbit is not running |
+| `readiness_unavailable` | the readiness assertion cannot trust runtime identity or version evidence |
 | `dashboard_port_conflict` | the dashboard port is owned by another process |
 | `dependency_blocked` | a required dependency cannot become healthy |
 | `env_mismatch` | the selected config differs from the running daemon's; `next_command` is `orbit up -c <config> --json`, which asks for `--yes` before stopping running resources |
@@ -311,6 +312,7 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 |---|---|
 | `orbit version --json` | Returns the installed Orbit version. |
 | `orbit doctor --json` | Returns diagnostic checks in `data`. |
+| `orbit ready <resource>... --json` | Asserts readiness for explicit required resources; see [the assertion contract](#required-resource-readiness-assertion). |
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, release-update state, and recommended follow-up commands. Read-only inspection remains available during an update transaction. |
 | `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon and release-update state, and configured resource state in `data.resources`. Read-only status remains available during an update transaction. |
 | `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
@@ -742,6 +744,46 @@ defines the inspect, action, verification, failure-recovery, instance-targeting,
 and destructive-operation workflow. Agents should follow response
 `recommended_actions` before falling back to ad hoc debugging.
 
+## Required-resource readiness assertion
+
+Use `orbit ready api postgres --json` as a test harness guard. It checks the
+explicit configured container or host-service names once, deduplicates repeats,
+and exits zero only when every
+required resource is `healthy`. Unrelated stopped resources or missing host
+SDKs do not block this assertion. Dependencies are not expanded automatically.
+`inspect` keeps its whole-environment reporting behavior.
+
+Both successful and failed assertions return one `orbit.cli.v1` envelope.
+`data.ready` is the assertion result; `required_resources` retains request order.
+Each `data.resources[]` entry contains `name`, `state`, `reason`, and available
+observed `ports` and `url`. Reasons are safe readiness summaries derived from
+lifecycle state and known failure categories; raw runtime messages are withheld
+because health-check URLs or process output may contain credentials.
+`data.observation` records the matching `config_path`,
+optional `instance`, daemon `epoch`/`generation`, observation time, and
+`endpoint_source: "daemon_status"`. Ports are resolved runtime values, including
+named-instance relocation; they are never copied from YAML preferences.
+Environment variable values are not included. URLs retain the observed scheme,
+host, port and path; userinfo, query strings and fragments are withheld.
+`url_redacted: true` marks a sanitized or withheld URL. Supply credentials through
+the harness's own configuration, not this report.
+
+The assertion fails for an unknown or missing resource, any state other than
+`healthy`, invalid configuration or schema, unresolved selection, unavailable
+status/version evidence, another config/instance, pending configuration changes
+(`ConfigStale`), or a daemon build different from the invoked CLI. Untrusted
+runtime endpoints are withheld. `checks_failed` means the matched required
+resources are not healthy; `readiness_unavailable` means runtime identity or
+version evidence could not be trusted. Other failures keep their existing codes.
+Errors retain diagnostic data when preparation reached the assertion.
+
+This is a read-only snapshot: it does not start a daemon, create an instance,
+switch environments, apply configuration, recover an update transaction, wait
+for readiness, or prepare test data. Follow-up commands retain config/instance
+but require an explicit provisioning decision. A pass proves infrastructure
+state at observation time; it does not prove application E2E behavior. See the
+[runnable harness example](e2e-testing.md#readiness-checks).
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -749,8 +791,8 @@ and destructive-operation workflow. Agents should follow response
 | `0` | Success. |
 | `1` | Error. In `--json` mode, converted commands still emit structured JSON. |
 
-Exit status reports whether the command itself succeeded, not whether the
-reported environment is ready. In particular, `orbit inspect --json` exits
+Reporting commands describe whether the query itself succeeded. `orbit ready`
+is an assertion: its exit status also reflects required-resource readiness. In particular, `orbit inspect --json` exits
 `0` with `ok: true` when it successfully reports `readiness.blocked: true`.
 Agents must inspect `data.readiness.blocked`; `orbit status --json` may instead
 exit `1` when the selected state prevents status from being produced.
