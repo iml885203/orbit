@@ -71,7 +71,7 @@ Examples:
 	cmd.AddCommand(dbDiffCmd())
 	cmd.AddCommand(dbPublishCmd())
 	cmd.AddCommand(dbResetCmd())
-	return cmd
+	return cli.WithDaemonAffinity(cmd, cli.DaemonMatchingReconciledConfig)
 }
 
 func dbListCmd() *cobra.Command {

@@ -60,7 +60,7 @@ local directory that provides shared environments; manage those with
 		RunE:   runEnvToggle,
 		Hidden: true,
 	}
-	cmd.AddCommand(toggleCmd)
+	cmd.AddCommand(cli.WithDaemonAffinity(toggleCmd, cli.DaemonReconciledConfig))
 	return cmd
 }
 

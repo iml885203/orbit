@@ -20,7 +20,7 @@ func TunnelCmd() *cobra.Command {
 			"must configure `claim`; switching environments or stopping the daemon releases local claims.",
 	}
 	cmd.AddCommand(tunnelClaimCmd(), tunnelReleaseCmd(), tunnelListCmd())
-	return cmd
+	return cli.WithDaemonAffinity(cmd, cli.DaemonMatchingReconciledConfig)
 }
 
 func tunnelClaimCmd() *cobra.Command {
