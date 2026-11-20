@@ -12,6 +12,12 @@ existing_network="orbit-harness-existing-$$"
 new_network="orbit-harness-new-$$"
 late_failure_namespace="harness-late-failure-$$"
 cleanup() {
+  local status="$1"
+  local failed_line="$2"
+  trap - EXIT
+  if [ "$status" -ne 0 ]; then
+    printf 'Journey harness failed at scripts/test-journey-port-reliability.sh:%s (exit %s)\n' "$failed_line" "$status" >&2
+  fi
   if [ -n "${release_watcher_pid:-}" ]; then
     kill "$release_watcher_pid" >/dev/null 2>&1 || true
     wait "$release_watcher_pid" >/dev/null 2>&1 || true
@@ -22,9 +28,15 @@ cleanup() {
   fi
   docker network rm "$new_network" "$existing_network" >/dev/null 2>&1 || true
   docker network rm "orbit-$late_failure_namespace" >/dev/null 2>&1 || true
-  rm -rf "$test_root"
+  local cleanup_status=0
+  rm -rf "$test_root" || cleanup_status=$?
+  if [ "$status" -eq 0 ] && [ "$cleanup_status" -ne 0 ]; then
+    status="$cleanup_status"
+    printf 'Journey harness cleanup failed at scripts/test-journey-port-reliability.sh:%s (exit %s)\n' "$LINENO" "$status" >&2
+  fi
+  exit "$status"
 }
-trap cleanup EXIT
+trap 'cleanup "$?" "$LINENO"' EXIT
 
 cat >"$test_root/transient-conflict.sh" <<'SH'
 #!/usr/bin/env bash

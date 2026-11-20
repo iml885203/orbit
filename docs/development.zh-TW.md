@@ -65,10 +65,16 @@ make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
 
 ![先定驗收，修改並跑 focused checks，完成 review 後在 commit 前執行全新完整驗證](./assets/development-checks.svg)
 
+runner 會把來源快照、依賴、產物、log、快取與 runtime homes 留在工作區；
+短 socket 路徑別名也指向這裡，結束時移除。macOS 會在 task 內產生
+`mktemp` adapter，將預設及 `-t` shell 暫存導入工作區，保留呼叫端明確指定的
+目錄與 template。runner 先確認導向成功才開始檢查，不需要個人 shim。
+
 模式與參數以 `python3 scripts/dev_check.py --help` 為準。
 `go`、`ui`、`docs` 用於編輯迴圈；`full` 執行完整 `make preflight`，每次
 commit 前、最後一次修改後都必須重新跑。完整檢查不能重用；快速檢查只有在
 來源、Git tags、工具、選項與繼承環境相符時，才可用 `--reuse` 重用成功結果。
+macOS 工具證據也包含解析後的原生 `mktemp` 與 adapter。
 執行期間來源改變會使結果失效。這是本機證據，發布仍須通過 CI 與交付門檻。
 
 報告與各階段 log 留在 workspace 的 `reports/` 與 `runs/`。

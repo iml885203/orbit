@@ -72,6 +72,9 @@ make check-full CHECK_WORKSPACE=/path/to/task CHECK_JOBS=2
 The runner copies tracked and non-ignored new files, including local edits.
 It keeps dependencies, generated files, logs, caches and runtime homes in the
 workspace. A short temporary socket alias points there and is removed on exit.
+On macOS, a task-local `mktemp` adapter routes default and `-t` shell
+temporaries there while preserving explicit directories and templates. The
+runner checks routing before starting checks; no personal shim is needed.
 Your installed Orbit and daemon are not part of these checks. Tests still need
 available local ports; run Docker journeys separately with their prerequisites.
 
@@ -80,6 +83,7 @@ Use `python3 scripts/dev_check.py --help` for modes, timeouts and JSON reports.
 `make preflight`; run it fresh before **every commit**, after the last edit.
 Full checks never reuse a previous success. Narrow checks accept `--reuse`
 only when source, Git tags, tools, options and inherited environment match.
+The macOS tool evidence includes the resolved native `mktemp` and adapter.
 Changes during a run invalidate its success. This is local evidence, not
 release approval or a substitute for CI.
 

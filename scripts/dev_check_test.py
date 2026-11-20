@@ -65,6 +65,60 @@ sys.exit(0 if Path('subject.txt').read_text()=='pass' else 2)
         self.assertEqual(self.proof.read_text().count("run"), 2)
         self.assertEqual((self.source / "subject.txt").read_text(), "pass")
 
+    @unittest.skipUnless(sys.platform == "darwin", "native Darwin mktemp contract")
+    def test_native_shell_temporaries_stay_in_workspace_and_preserve_explicit_paths(self):
+        self.executable("make", """import os,subprocess,sys
+from pathlib import Path
+if '--version' in sys.argv:print('make fixture');sys.exit(0)
+root=Path(os.environ['TMPDIR']).resolve()
+explicit=root/'explicit';explicit.mkdir(exist_ok=True)
+cases=[([],root),(['-d'],root),(['-t','orbit-prefix'],root),(['-dtcombined'],root),
+       (['-p',str(explicit)],explicit),(['-p'+str(explicit),'-t','named'],explicit),
+       ([str(explicit/'template.XXXXXX')],explicit),(['--',str(explicit/'dash.XXXXXX')],explicit)]
+for args,parent in cases:
+    result=subprocess.run(['mktemp',*args],capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+    path=Path(result.stdout.strip())
+    assert path.resolve().parent==parent,(args,path,parent)
+    assert path.exists()
+    path.rmdir() if path.is_dir() else path.unlink()
+for args in (['-t'],['-z'],[str(root/'absent/literal')],['-p',str(root/'absent'),'literal']):
+    adapted=subprocess.run(['mktemp',*args],capture_output=True,text=True)
+    native=subprocess.run(['/usr/bin/mktemp',*args],capture_output=True,text=True)
+    assert adapted.returncode==native.returncode!=0,(args,adapted,native)
+    assert adapted.stderr==native.stderr,(args,adapted.stderr,native.stderr)
+""")
+        for _ in range(2):
+            result = self.run_check()
+            self.assertEqual(result["status"], "passed")
+            run = self.workspace / "runs" / result["run"]
+            self.assertTrue((run / "tools/mktemp").is_file())
+            self.assertFalse((run / "source/tools/mktemp").exists())
+            self.assertIn("adapter_sha256", result["inputs"]["tools"]["mktemp"])
+        self.assertEqual(list((self.workspace / "temporary/explicit").iterdir()), [])
+
+    def test_mktemp_identity_changes_invalidate_reuse_and_routing_failure_stops_stage(self):
+        native = self.tools / "mktemp"
+        self.executable("mktemp", "import sys;from pathlib import Path;print(Path(sys.argv[sys.argv.index('-p')+1])/'probe.XXXXXX')")
+        with mock.patch("dev_check.sys.platform", "darwin"):
+            self.assertEqual(self.run_check()["status"], "passed")
+            self.assertTrue(self.run_check(reuse=True)["reused"])
+            native.write_text(native.read_text() + "\n")
+            self.assertFalse(self.run_check(reuse=True)["reused"])
+            adapter = dev_check.mktemp_adapter()
+            adapter["content"] += "\n"
+            adapter["identity"]["adapter_sha256"] = __import__("hashlib").sha256(adapter["content"].encode()).hexdigest()
+            with mock.patch("dev_check.mktemp_adapter", return_value=adapter):
+                self.assertFalse(self.run_check(reuse=True)["reused"])
+            self.executable("mktemp", "print('/outside/task/not-created')")
+            runs = self.proof.read_text().count("run")
+            with self.assertRaisesRegex(ValueError, "cannot route shell temporaries"):
+                self.run_check(reuse=True)
+            self.assertEqual(self.proof.read_text().count("run"), runs)
+            import json
+            reports = [json.loads(path.read_text()) for path in (self.workspace / "runs").glob("*/report.json")]
+            self.assertEqual(sum(report["status"] == "failed" for report in reports), 1)
+
     def test_external_build_inputs_and_full_reuse_rejected(self):
         for name, value in (("GOWORK", "/external/go.work"), ("GOFLAGS", "-overlay=/external/map.json"),
                             ("GOFLAGS", "-modfile /external/go.mod")):
