@@ -26,6 +26,8 @@
 container 已經啟動，但 health check 一直沒成功。
 
 - **看 logs**：`orbit logs <resource>`。大部分啟動失敗都會在這裡出現。
+- **對照多個資源**：`orbit logs web api --follow --lines 50` 會在每行標示資源名稱。
+  Ctrl-C 一次停止全部追蹤；JSON 與失敗行為見 [Logs](agent-cli.zh-TW.md#logs)。
 - **第一次初始化很慢**：database 還原許多 schema 之類的重型 container,在空 volume 上可能需要幾分鐘。先持續查看 log,再判斷是否真的卡住。
 - **Apple Silicon 上的 Rosetta 模擬**：任何標 `platform: linux/amd64` 的 container 都會跑在 Rosetta 上 —— 啟動時間預期會多一倍。可以用 `docker inspect --format '{{.Platform}}'` 確認。
 - **超過 health budget 仍是 `starting`**：`orbit status --json` 會顯示該 resource 的 `starting_phase` 與 `health_progress`；判讀方式見 [agent-cli.zh-TW.md](agent-cli.zh-TW.md)。重啟任何東西之前，先用 `kill -USR1 <daemon pid>`（macOS/Linux）取得 daemon 的 goroutine stack；它們會附加到 `~/.orbit/daemon.log`，daemon 會繼續執行。

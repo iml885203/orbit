@@ -314,8 +314,8 @@ These commands currently use the `orbit.cli.v1` envelope when `--json` is set:
 | `orbit inspect --json` | Returns an agent-ready state snapshot with readiness, daemon/env summaries, resource risks, release-update state, and recommended follow-up commands. Read-only inspection remains available during an update transaction. |
 | `orbit status --json` | Returns setup/selection readiness, the selected and available environments, managed repository URL/ref/commit when applicable, daemon and release-update state, and configured resource state in `data.resources`. Read-only status remains available during an update transaction. |
 | `orbit env info --json` | Returns the env's identity and, per resource, ports and URL with provenance: `declared` comes from the environment file, `observed` from the running daemon. Observed values are withheld when the daemon serves a different environment (`data.daemon.config_match: false`). Resource environment values appear only with `--show-secrets`; key names are always listed. |
-| `orbit logs <resource> --json` | Returns recent log lines in one JSON object. |
-| `orbit logs <resource> -f --json` | Streams NDJSON events, one JSON object per line, starting with the last `--lines` lines (default 100). |
+| `orbit logs <resource> [resource...] --json` | Returns recent log lines in one JSON envelope. |
+| `orbit logs <resource> [resource...] -f --json` | Streams NDJSON events, one JSON object per line, starting with the last `--lines` lines (default 100). |
 | `orbit up --json` | Returns the resources actually selected by the daemon (including dependencies and group filtering), observed final states, degraded/timed-out resources, and recommended follow-up commands. When it applies pending config edits, `data.environment_changes` reports running intent preserved across the handoff. An environment with no enabled resources succeeds immediately with empty arrays. |
 | `orbit down --json` | Returns final lifecycle result after stopping resources. It is a successful no-op with empty arrays when Orbit is already stopped. Before setup it recommends `orbit init`; after setup it recommends the next normal `orbit up`. |
 | `orbit down <resources...> --json` | Returns the final lifecycle result for the requested resources. If that stop degrades running dependents, they are included in `resources` and `degraded_resources` with the one dependency-restoration action. `--group` and `--infra` use the same mutually exclusive selection modes as `orbit up`; group shutdown stops members without stopping shared dependencies. |
@@ -535,24 +535,49 @@ Non-streaming logs return one envelope:
 orbit logs redis --json
 ```
 
-The success payload includes the service name, requested line count, a non-null
-`lines` array, and whether output was truncated.
+The single-resource success payload includes `resource`, `lines_requested`,
+a non-null `lines` array and `truncated` (true when the returned count reaches
+a positive requested limit).
+
+Select several resources to correlate frontend and backend output:
+
+```bash
+orbit logs web api --lines 50 --json
+orbit logs web api --follow --lines 50 --json
+```
+
+A multi-resource snapshot still returns exactly one envelope. Its
+`data.resources` array contains the same snapshot fields for each resource,
+in selection order. Repeated names are read once. Every target is validated
+before any log output; an unknown target fails the whole request.
+
+![Two selected resource streams feed one attributed terminal output.](./assets/multiple-resource-logs.svg)
+
+The line limit applies **per resource**, including history before follow.
+Human multi-resource output prefixes each line with `[resource]`; single-resource
+output keeps its existing format. Snapshots are collected before writing output;
+a failed resource prevents a partial successful snapshot.
 
 Streaming logs use newline-delimited JSON:
 
 ```bash
-orbit logs redis -f --json
+orbit logs web api -f --json
 ```
 
-Each emitted line is a complete JSON object. Agents should parse it as NDJSON,
-not as one JSON array. The stream starts with the last `--lines` (or `--tail`)
-lines, default 100, as ordinary `log` events, then follows new lines. No line
-is lost or repeated between the backlog and the live lines; a reader that falls
-far behind can still miss live lines. `--lines 0` streams only new lines.
+Each line is a complete `log` object with `resource` and `line`, rather than an
+envelope or JSON array. One writer serializes all events. Each resource retains
+its own order; events across resources have no global chronological guarantee.
+The stream starts with each resource's last `--lines` (or `--tail`) lines,
+default 100, then follows new lines. No line is lost or repeated between its
+backlog and live lines; a reader that falls far behind can still miss live lines.
+`--lines 0` streams only new lines.
 
-If a followed log stream fails after NDJSON output has begun, Orbit emits a
-final NDJSON event with `type: "error"` instead of appending an envelope in a
-different format, then exits non-zero.
+A failed stream emits an attributed `type: "error"` NDJSON
+event, stops all selected subscriptions, and exits non-zero. It never appends an
+envelope to the stream. A broken output pipe also stops all subscriptions and
+fails, although that pipe cannot receive an error event. A clean end of one
+stream leaves the others following; when all end, the command succeeds. Ctrl-C keeps the CLI’s normal signal termination and closes every subscription,
+including quiet ones and streams blocked by a full output pipe.
 
 ## Traces
 
