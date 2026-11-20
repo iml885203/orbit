@@ -150,30 +150,18 @@ func (c *Client) Health() error {
 
 // Doctor runs health checks via the daemon.
 func (c *Client) Doctor() (*DoctorResponse, error) {
-	resp, err := c.get("http://orbit/api/doctor")
-	if err != nil {
-		return nil, fmt.Errorf("doctor request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
 	var result DoctorResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding doctor: %w", err)
+	if err := c.GetDecode("/api/doctor", &result); err != nil {
+		return nil, fmt.Errorf("doctor request failed: %w", err)
 	}
 	return &result, nil
 }
 
 // Status returns all service statuses.
 func (c *Client) Status() (*StatusResponse, error) {
-	resp, err := c.get("http://orbit/api/status")
-	if err != nil {
-		return nil, fmt.Errorf("status request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
 	var result StatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding status: %w", err)
+	if err := c.GetDecode("/api/status", &result); err != nil {
+		return nil, fmt.Errorf("status request failed: %w", err)
 	}
 	return &result, nil
 }
@@ -199,30 +187,18 @@ func (c *Client) TraceLogs(id string) ([]TraceLogLine, error) {
 
 // Envs returns the list of available env configs and which is current.
 func (c *Client) Envs() (*EnvsResponse, error) {
-	resp, err := c.get("http://orbit/api/envs")
-	if err != nil {
-		return nil, fmt.Errorf("envs request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
 	var result EnvsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding envs: %w", err)
+	if err := c.GetDecode("/api/envs", &result); err != nil {
+		return nil, fmt.Errorf("envs request failed: %w", err)
 	}
 	return &result, nil
 }
 
 // Version returns the daemon's build version and upgrade info.
 func (c *Client) Version() (*VersionResponse, error) {
-	resp, err := c.get("http://orbit/api/version")
-	if err != nil {
-		return nil, fmt.Errorf("version request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
 	var result VersionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding version: %w", err)
+	if err := c.GetDecode("/api/version", &result); err != nil {
+		return nil, fmt.Errorf("version request failed: %w", err)
 	}
 	return &result, nil
 }
@@ -420,6 +396,14 @@ func (e *apiError) ErrorCode() string {
 }
 
 func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]string) (*APIResponse, error) {
+	return c.requestJSON(http.MethodPost, path, body, headers)
+}
+
+func (c *Client) putJSON(path string, body any) (*APIResponse, error) {
+	return c.requestJSON(http.MethodPut, path, body, map[string]string{CLIOriginHeader: "cli"})
+}
+
+func (c *Client) requestJSON(method, path string, body any, headers map[string]string) (*APIResponse, error) {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -431,7 +415,7 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 		reader = bytes.NewReader([]byte("{}"))
 	}
 
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodPost, "http://orbit"+path, reader)
+	req, err := http.NewRequestWithContext(c.ctx, method, "http://orbit"+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("building request to %s: %w", path, err)
 	}
@@ -449,45 +433,8 @@ func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]s
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
-	if result.Error != "" {
-		if result.Code != "" {
-			return &result, &apiError{Code: result.Code, Message: result.Error}
-		}
-		return &result, fmt.Errorf("%s", result.Error)
-	}
-	return &result, nil
-}
-
-func (c *Client) putJSON(path string, body any) (*APIResponse, error) {
-	var reader io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("marshaling request: %w", err)
-		}
-		reader = bytes.NewReader(data)
-	} else {
-		reader = bytes.NewReader([]byte("{}"))
-	}
-
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodPut, "http://orbit"+path, reader)
-	if err != nil {
-		return nil, fmt.Errorf("building request to %s: %w", path, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(CLIOriginHeader, "cli")
-	resp, err := c.do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request to %s failed: %w", path, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var result APIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-	if result.Error != "" {
-		return &result, fmt.Errorf("%s", result.Error)
+	if result.Error != "" || resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return &result, apiResponseError(resp.StatusCode, result)
 	}
 	return &result, nil
 }
@@ -553,11 +500,15 @@ func readError(resp *http.Response) error {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("HTTP %d: decode response: %w", resp.StatusCode, err)
 	}
+	return apiResponseError(resp.StatusCode, result)
+}
+
+func apiResponseError(status int, result APIResponse) error {
 	if result.Error != "" {
 		if result.Code != "" {
 			return &apiError{Code: result.Code, Message: result.Error}
 		}
 		return errors.New(result.Error)
 	}
-	return fmt.Errorf("HTTP %d", resp.StatusCode)
+	return fmt.Errorf("HTTP %d", status)
 }
