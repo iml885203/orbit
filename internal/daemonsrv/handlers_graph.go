@@ -27,7 +27,8 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // GraphResponse is the response for GET /api/graph.
 type GraphResponse struct {
-	Env string `json:"env"`
+	Env     string               `json:"env"`
+	Runtime *GraphRuntimeContext `json:"runtime,omitempty"`
 	// Groups maps group name → service names declared in that group. The UI
 	// uses it to cluster service nodes by group.
 	// Only groups with at least one service are included. Order is
@@ -36,6 +37,14 @@ type GraphResponse struct {
 	Groups []GroupInfo `json:"groups,omitempty"`
 	Nodes  []GraphNode `json:"nodes"`
 	Edges  []GraphEdge `json:"edges"`
+}
+
+// GraphRuntimeContext binds live graph nodes to the same daemon/config snapshot as status.
+// Preview graphs omit it because their nodes have no live runtime owner.
+type GraphRuntimeContext struct {
+	Epoch      int64  `json:"epoch"`
+	Generation uint64 `json:"generation"`
+	ConfigPath string `json:"config_path"`
 }
 
 type EdgeDetachResponse struct {
@@ -59,12 +68,13 @@ type GroupInfo struct {
 // category (frontend|backend|infra), not the daemon's topology Kind which
 // is "service" vs "container".
 type GraphNode struct {
-	Name  string `json:"name"`
-	Kind  string `json:"kind"` // frontend | backend | infra | external
-	Icon  string `json:"icon,omitempty"`
-	Label string `json:"label,omitempty"` // externals only; display name
-	Color string `json:"color,omitempty"` // externals only; hex color tint
-	State string `json:"state"`
+	Name        string       `json:"name"`
+	Kind        string       `json:"kind"` // frontend | backend | infra | external
+	RuntimeKind ResourceKind `json:"runtime_kind,omitempty"`
+	Icon        string       `json:"icon,omitempty"`
+	Label       string       `json:"label,omitempty"` // externals only; display name
+	Color       string       `json:"color,omitempty"` // externals only; hex color tint
+	State       string       `json:"state"`
 	// StateReason says why the node is degraded; empty otherwise.
 	StateReason          string              `json:"stateReason,omitempty"`
 	FailureKind          string              `json:"failureKind,omitempty"`
@@ -161,10 +171,11 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 func (s *Server) liveGraph(cfg *config.Config, envName string) GraphResponse {
 	statuses := statusesByName(s.computeStatuses(cfg))
 	return GraphResponse{
-		Env:    envName,
-		Groups: buildGroupInfos(cfg),
-		Nodes:  buildGraphNodes(cfg, statuses),
-		Edges:  append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
+		Env:     envName,
+		Runtime: &GraphRuntimeContext{Epoch: s.epoch(), Generation: s.environmentGeneration.Load(), ConfigPath: s.ConfigPath()},
+		Groups:  buildGroupInfos(cfg),
+		Nodes:   buildGraphNodes(cfg, statuses),
+		Edges:   append(buildGraphEdges(cfg, s.settings, envName), buildAsyncEdges(cfg)...),
 	}
 }
 
@@ -238,6 +249,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			State: "pending",
 		}
 		if st, ok := statuses[name]; ok {
+			n.RuntimeKind = st.Kind
 			n.State = st.State
 			n.StateReason = resourceFailureSummary(st)
 			n.FailureKind = st.FailureKind
@@ -265,6 +277,7 @@ func buildGraphNodes(cfg *config.Config, statuses map[string]ResourceStatus) []G
 			n.Kafka = &k
 		}
 		if st, ok := statuses[name]; ok {
+			n.RuntimeKind = st.Kind
 			n.State = st.State
 			n.StateReason = resourceFailureSummary(st)
 			n.FailureKind = st.FailureKind
@@ -493,9 +506,12 @@ func (s *Server) handleEdgeDetach(w http.ResponseWriter, r *http.Request) {
 	if req.Detached {
 		message = from + "→" + to + " detached. Dashboard actions updated immediately; future starts ignore this dependency."
 	}
+	s.snapshotMu.RLock()
+	graph := s.liveGraph(s.holder.Load(), s.currentEnvName())
+	s.snapshotMu.RUnlock()
 	writeJSON(w, http.StatusOK, EdgeDetachResponse{
 		OK:      true,
 		Message: message,
-		Graph:   s.liveGraph(s.holder.Load(), envName),
+		Graph:   graph,
 	})
 }

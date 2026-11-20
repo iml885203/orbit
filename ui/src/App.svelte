@@ -19,12 +19,8 @@
   import HistoryBar from './components/HistoryBar.svelte'
   import { routes } from './routes'
 
-  // The graph render only depends on these status fields (state, reason,
-  // mode, ports, url, health progress) — NOT on the uptime strings that tick
-  // every 2s. Refetching the graph only when this key changes turns the
-  // steady-state 2s fetch+deep-compare loop into a no-op.
   function graphKeyOf(resp: StatusResponse): string {
-    return (resp.resources ?? [])
+    const resources = (resp.resources ?? [])
       .map((s) => [
         s.name, s.state, s.state_reason ?? '', s.mode ?? '', s.url ?? '',
         s.logs_available ? 'logs' : '',
@@ -32,6 +28,7 @@
         s.health_progress ? `${s.health_progress.attempts}/${s.health_progress.last_err ?? ''}` : '',
       ].join('|'))
       .join(';')
+    return JSON.stringify([resp.epoch, resp.generation, resp.config_path, resources])
   }
   let lastGraphKey = ''
 
@@ -69,7 +66,7 @@
       }
       store.daemon.instanceName = resp.instance ?? ''
       store.daemon.connected = true
-      replaceServices(resp.resources || [])
+      replaceServices(resp.resources || [], { epoch: resp.epoch, generation: resp.generation, config_path: resp.config_path })
       const key = graphKeyOf(resp)
       if (key !== lastGraphKey || !store.graph.data) {
         lastGraphKey = key

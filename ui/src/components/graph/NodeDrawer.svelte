@@ -237,28 +237,36 @@
     if (activeGraph?.nodes.find(n => n.name === depName)) store.graph.selectedNode = depName
   }
 
-  // ServiceControls only consumes a strict subset of ResourceStatus. Define
-  // that subset here so a future ResourceStatus field rename surfaces as a
-  // type error at the adapter rather than a runtime mismatch.
   type ServiceControlsInput = Pick<ResourceStatus, 'name' | 'state' | 'mode' | 'url' | 'ports' | 'restart_count' | 'external_restart_count' | 'last_restart' | 'startup_time' | 'uptime' | 'health_progress' | 'kind'>
 
-  // Adapt GraphNode → ResourceStatus shape ServiceControls expects.
-  // GraphNode carries `health` where ResourceStatus has `health_progress`.
+  const resourceKind = $derived(node?.runtime_kind ?? (node?.kind === 'infra' ? 'container' : 'service'))
+  const liveRuntime = $derived.by(() => {
+    const graph = store.graph.data
+    const owner = graph?.runtime
+    const statusOwner = store.daemon.runtimeContext
+    if (!node || isPreviewing || store.graph.envSwitching || !store.daemon.connected ||
+        !owner || !statusOwner || !owner.config_path ||
+        owner.epoch !== store.daemon.daemonEpoch || owner.epoch !== statusOwner.epoch ||
+        owner.generation !== statusOwner.generation || owner.config_path !== statusOwner.config_path ||
+        !graph.nodes.includes(node)) return null
+    const status = store.daemon.services[node.name]
+    return status?.kind === resourceKind && status.mode === node.mode ? status : null
+  })
   const svc = $derived<ServiceControlsInput | null>(
     node
       ? {
           name: node.name,
-          kind: (node.kind === 'infra' ? 'container' : 'service') as ResourceStatus['kind'],
+          kind: resourceKind,
           state: node.state,
           mode: node.mode,
           url: node.url,
           ports: node.ports,
           health_progress: node.health,
-          restart_count: node.restart_count ?? 0,
-          external_restart_count: node.external_restart_count ?? 0,
-          last_restart: node.last_restart,
-          startup_time: node.startup_time,
-          uptime: node.uptime,
+          restart_count: liveRuntime ? liveRuntime.restart_count : node.restart_count ?? 0,
+          external_restart_count: liveRuntime ? liveRuntime.external_restart_count : node.external_restart_count ?? 0,
+          last_restart: liveRuntime ? liveRuntime.last_restart : node.last_restart,
+          startup_time: liveRuntime ? liveRuntime.startup_time : node.startup_time,
+          uptime: liveRuntime ? liveRuntime.uptime : node.uptime,
         }
       : null
   )

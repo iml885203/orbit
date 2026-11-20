@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/iml885203/orbit/internal/config"
+	"github.com/iml885203/orbit/internal/extension"
 )
 
 func TestHandleGraph_HappyPath(t *testing.T) {
@@ -423,6 +424,12 @@ services:
 	if len(resp.Nodes) != 1 || resp.Nodes[0].Name != "frontend" {
 		t.Errorf("nodes = %+v, want [frontend]", resp.Nodes)
 	}
+	if resp.Runtime != nil {
+		t.Errorf("preview borrowed live runtime ownership: %+v", resp.Runtime)
+	}
+	if resp.Nodes[0].RuntimeKind != "" {
+		t.Errorf("preview runtime kind = %q, want empty", resp.Nodes[0].RuntimeKind)
+	}
 	if resp.Nodes[0].State != "pending" {
 		t.Errorf("preview state = %q, want pending", resp.Nodes[0].State)
 	}
@@ -686,4 +693,45 @@ func readGraphResponse(t *testing.T, server *Server) GraphResponse {
 		t.Fatalf("decode graph: %v", err)
 	}
 	return graph
+}
+
+func TestHandleGraphRuntimeOwnershipFollowsPublishedContext(t *testing.T) {
+	initial := &config.Config{Services: map[string]*config.Service{"old-api": {Name: "old-api", Kind: "backend"}}}
+	srv := newTestServer(t, initial)
+	srv.SetConfigPath(filepath.Join(t.TempDir(), "local.yaml"))
+	previous := readGraphResponse(t, srv)
+	if previous.Runtime == nil {
+		t.Fatal("live graph has no runtime owner")
+	}
+	if len(previous.Nodes) != 1 || previous.Nodes[0].RuntimeKind != ResourceKindService {
+		t.Fatalf("live service runtime kind missing: %+v", previous.Nodes)
+	}
+	replacement := &config.Config{Containers: map[string]*config.Container{"new-cache": {Name: "new-cache", Kind: "infra", Image: "redis:7.4"}}}
+	path := filepath.Join(t.TempDir(), "local.yaml")
+	if err := srv.UpdateConfig(func(tx extension.ConfigTx) error { tx.Store(replacement); tx.SetConfigPath(path); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	current := readGraphResponse(t, srv)
+	w := httptest.NewRecorder()
+	srv.handleStatus(w, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+	var status StatusResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if current.Runtime == nil {
+		t.Fatal("replacement graph has no runtime owner")
+	}
+	owner := current.Runtime
+	if owner.Epoch != status.Epoch || owner.Generation != status.Generation || owner.ConfigPath != status.ConfigPath {
+		t.Fatalf("graph owner %+v does not match published status %+v", owner, status)
+	}
+	if owner.ConfigPath != path || owner.Generation <= previous.Runtime.Generation || owner.Epoch != previous.Runtime.Epoch {
+		t.Fatalf("runtime ownership did not follow context publication: old=%+v new=%+v", previous.Runtime, owner)
+	}
+	if current.Env != previous.Env {
+		t.Fatalf("test requires same display name: old=%q new=%q", previous.Env, current.Env)
+	}
+	if len(current.Nodes) != 1 || current.Nodes[0].Name != "new-cache" {
+		t.Fatalf("graph nodes do not belong to replacement snapshot: %+v", current.Nodes)
+	}
 }

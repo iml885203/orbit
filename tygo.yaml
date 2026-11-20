@@ -48,7 +48,7 @@ packages:
     output_path: "ui/src/lib/types/daemon.gen.ts"
     # KafkaIO lives in config.gen.ts — the one cross-package reference.
     frontmatter: |
-      import type { HealthProgressInfo, SidecarInfo } from './wire.gen'
+      import type { HealthProgressInfo, SidecarInfo, ResourceKind } from './wire.gen'
       import type { KafkaIO } from "./config.gen";
     type_mappings:
       time.Time: "string"

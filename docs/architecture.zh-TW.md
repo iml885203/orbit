@@ -93,6 +93,10 @@ Build 的 stdout 與 stderr 同時排空。超過 64 KiB 的診斷行會切成�
 Status、SSE 與 graph 的 mode 標示來自同一份 orchestrator kind snapshot。
 已保存的 mode 設定在 runtime 視圖發布前代表意圖；磁碟保存不持有 snapshot lock。
 
+Live graph response 會攜帶該 snapshot 的 daemon epoch、環境 generation 與 config
+路徑。Drawer 的 runtime 詳細資料只在這個擁有者與 status 相符時使用即時狀態；
+preview 保留自己的 snapshot 值。Runtime 更新不會替換結構相同的 graph reference。
+
 非同步 down、指定目標的 stop 與 restart 使用有數量上限的身分與結果紀錄。完成與否取決於
 operation 結果，包含 stop 與 sweep 錯誤，不依賴觀測者剛好看見中間狀態。
 CLI request deadline 與取消控制的是觀測；detach 不會撤銷 daemon 已接受的工作。
