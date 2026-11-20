@@ -387,17 +387,42 @@ Daemon HTTP API 屬於 Orbit CLI 與 dashboard 的內部通道，不是相容性
 orbit logs redis --json
 ```
 
-成功時的 payload 包含 service 名稱、請求的行數、一個非 null 的 `lines` array，以及輸出是否被截斷。
+單一資源的 payload 包含 `resource`、`lines_requested`、非 null 的 `lines`
+array 與 `truncated`；正數行數上限被用滿時，`truncated` 為 true。
 
-串流的 logs 使用 newline-delimited JSON：
+可以同時選取前端與 API，對照同一個請求的輸出：
 
 ```bash
-orbit logs redis -f --json
+orbit logs web api --lines 50 --json
+orbit logs web api --follow --lines 50 --json
 ```
 
-每一行都是一個完整的 JSON 物件。Agent 應當作 NDJSON 解析，而不是一整個 JSON array。串流先以一般的 `log` event 輸出最後 `--lines`（或 `--tail`）行，預設 100 行，接著追蹤新行；backlog 與新行之間不會遺漏或重複；讀取端落後太多時，仍可能漏掉新行。`--lines 0` 只串流新行。
+多資源 snapshot 仍只回傳一個 envelope；`data.resources` 依選取順序包含各資源的
+上述欄位。重複名稱只讀一次。輸出前會驗證所有名稱；任何未知名稱都讓整個請求失敗。
+所有 snapshot 收集成功才輸出，不會把部分成功當成完整結果。
 
-如果 followed log stream 在 NDJSON 輸出開始後失敗，Orbit 會輸出最後一筆 `type: "error"` 的 NDJSON event，而不是追加另一種格式的 envelope，然後以非 0 exit code 結束。
+![兩個指定資源的串流匯入同一個終端，每行保留來源。](./assets/multiple-resource-logs.svg)
+
+行數上限以**每個資源**計算，也適用於 follow 前的歷史行。人類格式在多資源的每行
+加上 `[resource]`；單一資源保留原格式。
+
+串流使用 NDJSON：
+
+```bash
+orbit logs web api -f --json
+```
+
+每行都是含 `resource` 與 `line` 的完整 `log` 物件，不是 envelope 或 JSON array。
+輸出由同一個 writer 寫入，各資源內的順序保持不變，但不保證跨資源的全域時間排序。
+串流先輸出每個資源最後 `--lines`（或 `--tail`）行，預設 100 行，再追蹤新行。
+歷史與新行之間不會遺漏或重複；讀取端落後太多時仍可能漏掉新行。
+`--lines 0` 只追蹤新行。
+
+任何串流失敗時，會輸出包含該資源的 `type: "error"` NDJSON event，
+停止全部訂閱並以非 0 結束，不會追加 envelope。輸出 pipe 損壞也會停止全部訂閱並失敗，
+但無法透過已損壞的 pipe 寫入錯誤 event。單一串流正常結束不會停止其他串流；
+全部正常結束時命令成功。Ctrl-C 保留 CLI 原本的訊號終止行為，
+也會關閉沒有新輸出或因輸出 pipe 滿載而阻塞的訂閱。
 
 ## Traces
 

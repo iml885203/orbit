@@ -212,7 +212,13 @@ and destructive-operation rules. Deeper references live in the repository's
   editing the environment; otherwise report the correction without mutating
   project intent.
 - Prefer `orbit logs <resource> --json` over reading process files directly;
-  use `-f --json` only when an NDJSON stream is useful.
+  use `-f --json` when an NDJSON stream is useful. Use multiple names such as
+  `orbit logs web api --json` only after `orbit version --json` confirms a
+  released CLI v1.5.0 or later. For older or unknown/development builds, run
+  separate single-resource commands; an upgrade is not required to read logs.
+  The line limit is per resource; a failed stream stops its peers and requires
+  a new command.
+  Payload and stream contracts live in `docs/agent-cli.md#logs`.
 - Use history and trace commands only when the task needs correlation or an
   audit trail; they are not startup prerequisites.
 - To find a request that already happened, use `orbit trace --search <path or
