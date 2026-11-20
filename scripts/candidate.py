@@ -108,13 +108,29 @@ def verify_selected_receipts(root, candidate, manifest_sha, artifact_id, run_id,
     for value in values:
         if value.get('schema') != 'orbit.native-receipt.v1' or value.get('result') != 'passed' or value.get('suite') != 'native':
             raise ValueError('native receipt is incomplete')
-        for name, wanted in {'manifest_sha256': manifest_sha, 'artifact_id': artifact_id, 'run_id': run_id,
-                             'commit': candidate['commit'], 'version': candidate['version'],
-                             'producer_attempt': candidate['producer_attempt'],
-                             'binary_sha256': candidate['assets'][asset(value['target'])]}.items():
-            if value.get(name) != wanted:
-                raise ValueError('native receipt identity mismatch: ' + name)
+        _verify_receipt_binding(value, candidate, manifest_sha, artifact_id, run_id)
     return values
+
+
+def _verify_receipt_binding(value, candidate, manifest_sha, artifact_id, run_id):
+    for name, wanted in {'manifest_sha256': manifest_sha, 'artifact_id': artifact_id, 'run_id': run_id,
+                         'commit': candidate['commit'], 'version': candidate['version'],
+                         'producer_attempt': candidate['producer_attempt'],
+                         'binary_sha256': candidate['assets'][asset(value['target'])]}.items():
+        if value.get(name) != wanted:
+            raise ValueError('receipt identity mismatch: ' + name)
+
+
+def verify_sql_receipt(root, candidate, manifest_sha, artifact_id, run_id):
+    paths = list(root.glob('*.json'))
+    if len(paths) != 1:
+        raise ValueError('one SQL Server receipt is required')
+    value = json.loads(paths[0].read_text())
+    if (value.get('schema') != 'orbit.native-receipt.v1' or value.get('suite') != 'sqlserver'
+            or value.get('target') != 'linux/amd64' or value.get('result') != 'passed'):
+        raise ValueError('SQL Server receipt is incomplete')
+    _verify_receipt_binding(value, candidate, manifest_sha, artifact_id, run_id)
+    return value
 
 
 def identity(version, attempt=None, workflow_ref=None):
@@ -312,16 +328,7 @@ def main():
                 receipt(value, args.target, binary, args.receipts, args.manifest_sha256, args.artifact_id, args.suite)
             elif args.command == 'promote':
                 verify_receipts(args.receipts, value, args.manifest_sha256, args.artifact_id, expected['run_id'])
-                sql = list(args.sql_receipts.glob('*.json'))
-                if len(sql) != 1:
-                    raise ValueError('one SQL Server receipt is required')
-                evidence = json.loads(sql[0].read_text())
-                if any(evidence.get(key) != wanted for key, wanted in {
-                    'schema': 'orbit.native-receipt.v1', 'suite': 'sqlserver', 'target': 'linux/amd64',
-                    'result': 'passed', 'artifact_id': args.artifact_id, 'manifest_sha256': args.manifest_sha256,
-                    'commit': value['commit'], 'version': value['version'], 'run_id': expected['run_id'],
-                    'binary_sha256': value['assets']['orbit-linux-amd64']}.items()):
-                    raise ValueError('SQL Server evidence does not match the candidate')
+                verify_sql_receipt(args.sql_receipts, value, args.manifest_sha256, args.artifact_id, expected['run_id'])
                 shutil.copytree(root / 'dist', args.publish_directory)
                 if tree(args.publish_directory) != value['assets']:
                     raise ValueError('promotion changed candidate bytes')
