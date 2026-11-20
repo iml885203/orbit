@@ -22,12 +22,8 @@ async function fetchDevMeta({ quiet = false } = {}): Promise<DevDBMetaResponse |
   return getJSON('/api/devdb/meta', quiet ? undefined : 'devdb metadata unavailable')
 }
 
-// refreshDevMeta owns the store-update contract for devMeta: a null response
-// (fetch failed) keeps the previous value, because dbWorkflowHidden() reads
-// this and a null overwrite would flash the SQL Server tab out.
 export async function refreshDevMeta(opts: { quiet?: boolean } = {}): Promise<void> {
-  const meta = await fetchDevMeta(opts)
-  if (meta) devStore.devMeta = meta
+  await devStore.refreshMeta(() => fetchDevMeta(opts))
 }
 
 // Returns null on fetch failure (so callers can distinguish "request

@@ -46,9 +46,8 @@ export function onAppMount(): () => void {
 // onDaemonState runs whenever the core refetches daemon-derived state.
 export function onDaemonState(_settings: SettingsWire) {}
 
-// onEnvChanged keeps the DB-workflow gate in sync when the live graph
-// lands on a different env (a switch can add/remove the sqlserver section).
 export function onEnvChanged() {
+  devStore.resetMeta()
   resetBigQuery()
   void refreshBigQuery()
   void refreshDevMeta({ quiet: true })
