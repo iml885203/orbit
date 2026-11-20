@@ -107,6 +107,23 @@ func environmentSelectionHint(selection environmentSelection) string {
 
 func readEnvironmentSelection() environmentSelection {
 	selectedPath := readCurrentEnv()
+	registry, err := sourceRegistry()
+	if err != nil {
+		registry = nil
+	}
+	return buildEnvironmentSelection(selectedPath, registry)
+}
+
+func readOnlyEnvironmentSelection() (environmentSelection, error) {
+	selectedPath := readCurrentEnv()
+	registry, err := envsource.Load(envsource.RegistryPath(daemon.OrbitDir()))
+	if err != nil {
+		return environmentSelection{}, err
+	}
+	return buildEnvironmentSelection(selectedPath, registry), nil
+}
+
+func buildEnvironmentSelection(selectedPath string, registry *envsource.Registry) environmentSelection {
 	selection := environmentSelection{
 		State:        environmentSelectionNone,
 		SelectedName: daemonsrv.EnvShortName(selectedPath),
@@ -114,12 +131,13 @@ func readEnvironmentSelection() environmentSelection {
 		Sources:      []environmentSourceChoice{},
 		Environments: []environmentChoice{},
 	}
-	registry, err := sourceRegistry()
-	if err == nil {
+	if registry != nil {
 		if _, identity, found := registry.SourceForPath(daemon.OrbitDir(), selectedPath); found {
 			selection.SelectedIdentity = identity
 		}
-		for _, source := range registry.List() {
+		sources := registry.List()
+		for i := range sources {
+			source := &sources[i]
 			sourceChoice := environmentSourceChoice{
 				Name: source.Name, Type: source.Type, Location: source.Location(), Workspace: source.Workspace,
 				Ref: source.Ref, ResolvedRef: source.ResolvedRef, Commit: source.Commit,

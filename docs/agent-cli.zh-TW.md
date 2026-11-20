@@ -550,6 +550,24 @@ workflow 的唯一來源。JSON response 帶有 `recommended_actions` 時，agen
 `inspect` blocked readiness 與 exit status 的精確關係只維護在英文版
 [Exit Codes](agent-cli.md#exit-codes)。
 
+## 指定資源的就緒斷言
+
+測試 harness 可執行 `orbit ready api postgres --json`，一次檢查明確指定、已設定的
+container 或 host service。
+重複名稱會去重，只有全部為 `healthy` 才退出零。其他已停止的資源或未安裝的
+host SDK 不會阻擋；不會自動展開依賴。原有 `inspect` 仍回報整個環境。
+
+成功時，harness 可使用回報的 runtime endpoints，包含 named instance 重新分配
+的 ports。失敗會回傳非零退出碼及診斷證據；端點不會冒用其他環境的觀測值。
+環境變數值及 URL 憑證不會輸出；需要的認證由 harness 自己設定。
+完整 payload、URL 脫敏、錯誤碼及全域阻擋條件統一維護在
+[英文契約](agent-cli.md#required-resource-readiness-assertion)。
+
+這是唯讀快照：不啟動 daemon、不建立 instance、不切換環境、不套用設定、
+不恢復 update transaction、不等待就緒，也不準備資料。恢復指令保留 config／
+instance，是否 provisioning 必須明確決定。通過只證明觀測時的基礎設施狀態，
+不等於應用程式 E2E 成功。見 [harness 範例](e2e-testing.zh-TW.md#環境就緒檢查)。
+
 ## BigQuery
 
 [BigQuery 開發與整合測試](./bigquery.zh-TW.md) 說明選用環境設定、CLI prepare/inspect/list/clean、ADC 身分、只讀 dashboard，以及離線證據與真實 GCP E2E 的差異。`orbit bq` 使用標準 `orbit.cli.v1` JSON envelope；sandbox inspect/list 不連雲端。明確 clean 需 `--yes --app-stopped --restricted-writers`，停止環境不會刪除 dataset。

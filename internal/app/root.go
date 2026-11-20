@@ -87,14 +87,14 @@ func Main(versionLD, buildTimeLD string, ui fs.FS, exts []extension.Extension) {
 		err = contextualizeDaemonUnavailable(err)
 		printExecutionError(os.Stderr, err)
 		finalizeCLIHistory(err)
-		if !environmentApplyPreviewCommand(executed) {
+		if !readOnlyEnvironmentCommand(executed) {
 			scheduleAutomaticUpdateCheck()
 		}
 		os.Exit(1)
 	}
 	finalizeCLIHistory(nil)
 	showUpdateNotification(executed)
-	if !environmentApplyPreviewCommand(executed) {
+	if !readOnlyEnvironmentCommand(executed) {
 		scheduleAutomaticUpdateCheck()
 	}
 }
@@ -121,6 +121,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(downCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(inspectCmd())
+	rootCmd.AddCommand(readyCmd())
 	rootCmd.AddCommand(operationCmd())
 	rootCmd.AddCommand(restartCmd())
 	rootCmd.AddCommand(logsCmd())
@@ -200,7 +201,7 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 	if err := waitForPendingAutomaticUpdate(cmd); err != nil {
 		return err
 	}
-	if !environmentApplyPreviewCommand(cmd) {
+	if !readOnlyEnvironmentCommand(cmd) {
 		showAutomaticUpdateDisclosure(cmd)
 	}
 	// Apply saved settings (workspace root, SQL mode) to env for all commands
@@ -234,8 +235,8 @@ func prepareRootCommand(cmd *cobra.Command, args []string) (err error) {
 }
 
 func prepareRootEnvironment(cmd *cobra.Command) error {
-	if environmentApplyPreviewCommand(cmd) {
-		return prepareEnvironmentApplyPreviewContext(cmd)
+	if readOnlyEnvironmentCommand(cmd) {
+		return prepareReadOnlyEnvironmentContext(cmd)
 	}
 	explicitConfig := cmd.Root().PersistentFlags().Changed("config")
 	configFlagGiven = explicitConfig
@@ -344,6 +345,11 @@ func isDaemonRestartCommand(cmd *cobra.Command) bool {
 // Unavailable diagnostic history cannot be recovered by provisioning a runtime.
 // Other daemon-backed commands retain the setup/start recovery path.
 func contextualizeDaemonUnavailable(err error) error {
+	var jsonRendered errCLIJSONAlreadyRendered
+	var humanRendered errCLIHumanAlreadyRendered
+	if errors.As(err, &jsonRendered) || errors.As(err, &humanRendered) {
+		return err
+	}
 	var query operationQueryError
 	if errors.As(err, &query) {
 		return err
@@ -588,7 +594,7 @@ func commandRequiresAvailableEnvironment(cmd *cobra.Command) bool {
 }
 
 func shouldRecordCLI(cmd *cobra.Command) bool {
-	if environmentApplyPreviewCommand(cmd) {
+	if readOnlyEnvironmentCommand(cmd) {
 		return false
 	}
 	for c := cmd; c != nil; c = c.Parent() {

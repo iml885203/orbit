@@ -201,7 +201,7 @@ func (e updateInProgressError) CLIJSONReplacementActions() []cli.JSONAction {
 }
 
 func updateMutationCommand(cmd *cobra.Command) bool {
-	if environmentApplyPreviewCommand(cmd) {
+	if readOnlyEnvironmentCommand(cmd) {
 		return false
 	}
 	top := cmd
